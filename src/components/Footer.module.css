@@ -1,0 +1,97 @@
+.footer {
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  padding: 4rem 8rem 2rem;
+}
+
+.top {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1fr;
+  gap: 3rem;
+  padding-bottom: 3rem;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 2rem;
+}
+
+.brand p {
+  font-size: 0.8rem;
+  color: var(--muted);
+  line-height: 1.9;
+  margin-top: 1rem;
+  font-weight: 300;
+  max-width: 300px;
+}
+
+.logo {
+  font-family: 'Cinzel', serif;
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  color: var(--gold);
+  text-decoration: none;
+  text-transform: uppercase;
+}
+
+.logo span {
+  color: var(--cream);
+  font-weight: 400;
+}
+
+.col h4 {
+  font-family: 'Cinzel', serif;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--gold);
+  margin-bottom: 1.5rem;
+}
+
+.col ul { list-style: none; }
+
+.col ul li { margin-bottom: 0.8rem; }
+
+.col ul li a {
+  font-size: 0.78rem;
+  color: var(--muted);
+  text-decoration: none;
+  font-weight: 300;
+  transition: color 0.3s;
+}
+
+.col ul li a:hover { color: var(--gold); }
+
+.bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.7rem;
+  color: var(--muted);
+  font-weight: 300;
+  letter-spacing: 0.05em;
+}
+
+.diamond { color: var(--gold-dk); }
+
+@media (max-width: 960px) {
+  .footer { padding: 3rem 2rem 1.5rem; }
+  .top { grid-template-columns: 1fr 1fr; gap: 2rem; }
+  .bottom { flex-direction: column; gap: 0.5rem; text-align: center; }
+}
+
+@media (max-width: 600px) {
+  .top { grid-template-columns: 1fr; }
+}
+
+.logoWrap {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+  margin-bottom: 0.5rem;
+}
+
+.logoImg {
+  height: 80px;
+  width: auto;
+  object-fit: contain;
+}
