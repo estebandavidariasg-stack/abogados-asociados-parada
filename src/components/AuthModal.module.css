@@ -155,3 +155,23 @@
 }
 
 .hintLink:hover { text-decoration: underline; }
+
+.msgError {
+  background: rgba(220, 50, 50, 0.1);
+  border: 1px solid rgba(220, 50, 50, 0.3);
+  color: #ff6b6b;
+  padding: 0.75rem 1rem;
+  font-size: 0.78rem;
+  margin-bottom: 1rem;
+  line-height: 1.5;
+}
+
+.msgSuccess {
+  background: rgba(29, 168, 81, 0.1);
+  border: 1px solid rgba(29, 168, 81, 0.3);
+  color: #51cf66;
+  padding: 0.75rem 1rem;
+  font-size: 0.78rem;
+  margin-bottom: 1rem;
+  line-height: 1.5;
+}
