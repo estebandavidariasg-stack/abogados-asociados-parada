@@ -17,7 +17,7 @@ export default function HomePage() {
       <CTASection />
       <LawyersSection />
       <Footer />
-      <WhatsAppButton phone="573001234567" />
+      <WhatsAppButton phone="573108886571" />
       {modal && <AuthModal initialTab={modal} onClose={() => setModal(null)} />}
     </>
   )
