@@ -5,6 +5,7 @@ import styles from './Navbar.module.css'
 export default function Navbar({ onLogin, onRegister }) {
   const [scrolled, setScrolled] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [mobileOpen, setMobileOpen] = useState(false)
   const { user, profile, signOut } = useAuth()
   const menuRef = useRef(null)
 
@@ -37,12 +38,12 @@ export default function Navbar({ onLogin, onRegister }) {
         <img src="/logo.png" alt="Abogados y Asociados Parada" className={styles.logoImg} />
       </a>
 
-      <ul className={styles.links}>
-        <li><a href="#lawyers">Abogados</a></li>
-        <li><a href="#practicas">Áreas</a></li>
-        <li><a href="#contacto">Contacto</a></li>
-      </ul>
+      <div className={styles.firmTitle}>
+        <span className={styles.firmName}>Abogados y Asociados</span>
+        <span className={styles.firmHighlight}>Parada</span>
+      </div>
 
+      {/* ── Desktop actions ── */}
       <div className={styles.actions}>
         {user ? (
           <div className={styles.userMenu} ref={menuRef}>
@@ -97,6 +98,58 @@ export default function Navbar({ onLogin, onRegister }) {
           </>
         )}
       </div>
+
+      {/* ── Hamburguesa móvil ── */}
+      <button
+        className={`${styles.burger} ${mobileOpen ? styles.burgerOpen : ''}`}
+        onClick={() => setMobileOpen((o) => !o)}
+        aria-label="Menú"
+      >
+        <span /><span /><span />
+      </button>
+
+      {/* ── Menú móvil desplegable ── */}
+      {mobileOpen && (
+        <div className={styles.mobileMenu}>
+          {user ? (
+            <>
+              <div className={styles.mobileUser}>
+                <span className={styles.avatar}>
+                  {profile?.foto_url
+                    ? <img src={profile.foto_url} alt={displayName} className={styles.avatarImg} />
+                    : (
+                      <svg viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z" />
+                      </svg>
+                    )
+                  }
+                </span>
+                <span className={styles.mobileUserName}>{displayName}</span>
+              </div>
+              {isSuperAdmin && (
+                <button className={styles.mobileItem} onClick={() => { window.location.href = '/admin'; setMobileOpen(false) }}>
+                  ⚙ Panel Admin
+                </button>
+              )}
+              <button className={styles.mobileItem} onClick={() => { window.location.href = '/perfil'; setMobileOpen(false) }}>
+                Mi perfil
+              </button>
+              <button className={styles.mobileItem} onClick={() => { signOut(); setMobileOpen(false) }}>
+                Cerrar sesión
+              </button>
+            </>
+          ) : (
+            <>
+              <button className={styles.mobileItem} onClick={() => { onLogin(); setMobileOpen(false) }}>
+                Iniciar sesión
+              </button>
+              <button className={styles.mobileItemGold} onClick={() => { onRegister(); setMobileOpen(false) }}>
+                Registrarse
+              </button>
+            </>
+          )}
+        </div>
+      )}
     </nav>
   )
 }

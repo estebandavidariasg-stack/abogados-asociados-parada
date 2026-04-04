@@ -1,20 +1,21 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import styles from './AuthModal.module.css'
+import ReCAPTCHA from "react-google-recaptcha";
 
 export default function AuthModal({ initialTab = 'login', onClose }) {
   const { signIn, signUp } = useAuth()
+
   const [tab, setTab]         = useState(initialTab)
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState(null)
   const [success, setSuccess] = useState(null)
 
-  // Login — acepta correo o usuario
   const [loginIdentifier, setLoginIdentifier] = useState('')
   const [loginPassword, setLoginPassword]     = useState('')
+  const [captchaValue, setCaptchaValue]       = useState(null)
 
-  // Registro
   const [nombre, setNombre]       = useState('')
   const [apellido, setApellido]   = useState('')
   const [username, setUsername]   = useState('')
@@ -22,20 +23,22 @@ export default function AuthModal({ initialTab = 'login', onClose }) {
   const [regEmail, setRegEmail]   = useState('')
   const [regPassword, setRegPassword] = useState('')
 
+  const recaptchaRef = useRef()
+
   useEffect(() => {
     const handleKey = (e) => { if (e.key === 'Escape') onClose() }
     document.addEventListener('keydown', handleKey)
     document.body.style.overflow = 'hidden'
+
     return () => {
       document.removeEventListener('keydown', handleKey)
       document.body.style.overflow = ''
     }
   }, [onClose])
 
-  // Determina si es correo o username y obtiene el email
   async function resolveEmail(identifier) {
     if (identifier.includes('@')) return identifier
-    // Buscar el correo por username en profiles
+
     const res = await fetch(
       `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/profiles?username=eq.${identifier}&select=email`,
       {
@@ -45,22 +48,41 @@ export default function AuthModal({ initialTab = 'login', onClose }) {
         }
       }
     )
+
     const data = await res.json()
     if (!data || data.length === 0) throw new Error('Usuario no encontrado')
     return data[0].email
   }
 
   async function handleLogin() {
+    if (!captchaValue) {
+      setError("Por favor completa el captcha")
+      return
+    }
+
     setLoading(true)
     setError(null)
+
     try {
       const email = await resolveEmail(loginIdentifier.trim())
-      await signIn({ email, password: loginPassword })
+
+      await signIn({
+        email,
+        password: loginPassword
+      })
+
       onClose()
+
     } catch (err) {
-      setError(err.message === 'Usuario no encontrado'
-        ? 'Usuario no encontrado'
-        : 'Correo, usuario o contraseña incorrectos')
+      setError(
+        err.message === 'Usuario no encontrado'
+          ? 'Usuario no encontrado'
+          : 'Correo, usuario o contraseña incorrectos'
+      )
+
+      recaptchaRef.current.reset()
+      setCaptchaValue(null)
+
     } finally {
       setLoading(false)
     }
@@ -68,10 +90,16 @@ export default function AuthModal({ initialTab = 'login', onClose }) {
 
   async function handleRegister(e) {
     e.preventDefault()
+
+    if (!captchaValue) {
+      setError("Por favor completa el captcha")
+      return
+    }
+
     setError(null)
     setLoading(true)
+
     try {
-      // Verificar que el username no esté tomado
       if (username) {
         const res = await fetch(
           `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/profiles?username=eq.${username}&select=id`,
@@ -82,13 +110,30 @@ export default function AuthModal({ initialTab = 'login', onClose }) {
             }
           }
         )
+
         const data = await res.json()
-        if (data && data.length > 0) throw new Error('Ese nombre de usuario ya está en uso')
+        if (data && data.length > 0) {
+          throw new Error('Ese nombre de usuario ya está en uso')
+        }
       }
-      await signUp({ nombre, apellido, username, telefono, email: regEmail, password: regPassword })
+
+      await signUp({
+        nombre,
+        apellido,
+        username,
+        telefono,
+        email: regEmail,
+        password: regPassword
+      })
+
       setSuccess('¡Registro exitoso! Ya puedes iniciar sesión.')
+
     } catch (err) {
       setError(err.message || 'Error al registrarse')
+
+      recaptchaRef.current.reset()
+      setCaptchaValue(null)
+
     } finally {
       setLoading(false)
     }
@@ -98,6 +143,8 @@ export default function AuthModal({ initialTab = 'login', onClose }) {
     setTab(t)
     setError(null)
     setSuccess(null)
+    setCaptchaValue(null)
+    recaptchaRef.current?.reset()
   }
 
   return (
@@ -111,20 +158,26 @@ export default function AuthModal({ initialTab = 'login', onClose }) {
         </h3>
 
         <div className={styles.tabs}>
-          <button className={`${styles.tabBtn} ${tab === 'login' ? styles.active : ''}`} onClick={() => switchTab('login')}>
+          <button
+            className={`${styles.tabBtn} ${tab === 'login' ? styles.active : ''}`}
+            onClick={() => switchTab('login')}
+          >
             Iniciar sesión
           </button>
-          <button className={`${styles.tabBtn} ${tab === 'register' ? styles.active : ''}`} onClick={() => switchTab('register')}>
+          <button
+            className={`${styles.tabBtn} ${tab === 'register' ? styles.active : ''}`}
+            onClick={() => switchTab('register')}
+          >
             Registrarse
           </button>
         </div>
 
-        {error   && <p className={styles.msgError}>{error}</p>}
+        {error && <p className={styles.msgError}>{error}</p>}
         {success && <p className={styles.msgSuccess}>{success}</p>}
 
         {/* LOGIN */}
         {tab === 'login' && !success && (
-          <form className={styles.form} onSubmit={e => e.preventDefault()}>
+          <form className={styles.form} onSubmit={(e) => e.preventDefault()}>
             <div className={styles.field}>
               <label className={styles.label}>Correo o usuario</label>
               <input
@@ -132,10 +185,11 @@ export default function AuthModal({ initialTab = 'login', onClose }) {
                 className={styles.input}
                 placeholder="correo@ejemplo.com o @usuario"
                 value={loginIdentifier}
-                onChange={e => setLoginIdentifier(e.target.value)}
+                onChange={(e) => setLoginIdentifier(e.target.value)}
                 required
               />
             </div>
+
             <div className={styles.field}>
               <label className={styles.label}>Contraseña</label>
               <input
@@ -143,18 +197,28 @@ export default function AuthModal({ initialTab = 'login', onClose }) {
                 className={styles.input}
                 placeholder="••••••••"
                 value={loginPassword}
-                onChange={e => setLoginPassword(e.target.value)}
+                onChange={(e) => setLoginPassword(e.target.value)}
                 required
               />
             </div>
+
+            <div style={{ textAlign: "center", margin: "20px 0" }}>
+              <ReCAPTCHA
+                ref={recaptchaRef}
+                sitekey="6Ldy56UsAAAAAPZLPFfuKP-AK3IxwEThjY3fXDsm"
+                onChange={(value) => setCaptchaValue(value)}
+              />
+            </div>
+
             <button
               type="button"
               className={`btn-solid ${styles.submit}`}
-              disabled={loading}
+              disabled={loading || !captchaValue}
               onClick={handleLogin}
             >
               {loading ? 'Ingresando...' : 'Ingresar →'}
             </button>
+
             <p className={styles.hint}>
               ¿Olvidó su contraseña? <a href="#" className={styles.hintLink}>Recuperar</a>
             </p>
@@ -167,40 +231,95 @@ export default function AuthModal({ initialTab = 'login', onClose }) {
             <div className={styles.row}>
               <div className={styles.field}>
                 <label className={styles.label}>Nombre</label>
-                <input type="text" className={styles.input} placeholder="Nombre"
-                  value={nombre} onChange={e => setNombre(e.target.value)} required />
+                <input
+                  type="text"
+                  className={styles.input}
+                  placeholder="Nombre"
+                  value={nombre}
+                  onChange={(e) => setNombre(e.target.value)}
+                  required
+                />
               </div>
+
               <div className={styles.field}>
                 <label className={styles.label}>Apellido</label>
-                <input type="text" className={styles.input} placeholder="Apellido"
-                  value={apellido} onChange={e => setApellido(e.target.value)} required />
+                <input
+                  type="text"
+                  className={styles.input}
+                  placeholder="Apellido"
+                  value={apellido}
+                  onChange={(e) => setApellido(e.target.value)}
+                  required
+                />
               </div>
             </div>
+
             <div className={styles.field}>
               <label className={styles.label}>Nombre de usuario</label>
-              <input type="text" className={styles.input} placeholder="@usuario"
-                value={username} onChange={e => setUsername(e.target.value.replace(/\s/g, '').toLowerCase())}
-                required />
+              <input
+                type="text"
+                className={styles.input}
+                placeholder="@usuario"
+                value={username}
+                onChange={(e) =>
+                  setUsername(e.target.value.replace(/\s/g, '').toLowerCase())
+                }
+                required
+              />
             </div>
+
             <div className={styles.field}>
               <label className={styles.label}>Teléfono</label>
-              <input type="tel" className={styles.input} placeholder="+57 300 000 0000"
-                value={telefono} onChange={e => setTelefono(e.target.value)} />
+              <input
+                type="tel"
+                className={styles.input}
+                placeholder="+57 300 000 0000"
+                value={telefono}
+                onChange={(e) => setTelefono(e.target.value)}
+              />
             </div>
+
             <div className={styles.field}>
               <label className={styles.label}>Correo electrónico</label>
-              <input type="email" className={styles.input} placeholder="correo@ejemplo.com"
-                value={regEmail} onChange={e => setRegEmail(e.target.value)} required />
+              <input
+                type="email"
+                className={styles.input}
+                placeholder="correo@ejemplo.com"
+                value={regEmail}
+                onChange={(e) => setRegEmail(e.target.value)}
+                required
+              />
             </div>
+
             <div className={styles.field}>
               <label className={styles.label}>Contraseña</label>
-              <input type="password" className={styles.input} placeholder="Mínimo 6 caracteres"
-                value={regPassword} onChange={e => setRegPassword(e.target.value)}
-                required minLength={6} />
+              <input
+                type="password"
+                className={styles.input}
+                placeholder="Mínimo 6 caracteres"
+                value={regPassword}
+                onChange={(e) => setRegPassword(e.target.value)}
+                required
+                minLength={6}
+              />
             </div>
-            <button type="submit" className={`btn-solid ${styles.submit}`} disabled={loading}>
+
+            <div style={{ textAlign: "center" , margin: "10px 0" }}>
+              <ReCAPTCHA
+                ref={recaptchaRef}
+                sitekey="6Ldy56UsAAAAAPZLPFfuKP-AK3IxwEThjY3fXDsm"
+                onChange={(value) => setCaptchaValue(value)}
+              />
+            </div>
+
+            <button
+              type="submit"
+              className={`btn-solid ${styles.submit}`}
+              disabled={loading || !captchaValue}
+            >
               {loading ? 'Creando cuenta...' : 'Crear cuenta →'}
             </button>
+
             <p className={styles.hint}>
               Al registrarse, su perfil quedará pendiente de aprobación.
             </p>

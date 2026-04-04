@@ -90,6 +90,30 @@ const DEPARTAMENTOS_CIUDADES = [
   'Vichada - Puerto Carreño',
 ]
 
+const AREAS_DERECHO = [
+  'Derecho Penal',
+  'Derecho Civil',
+  'Derecho de Familia',
+  'Derecho Laboral',
+  'Derecho Comercial',
+  'Derecho Corporativo',
+  'Derecho Administrativo',
+  'Derecho Constitucional',
+  'Derecho Tributario',
+  'Derecho Ambiental',
+  'Derecho Internacional',
+  'Derecho Migratorio',
+  'Derecho Inmobiliario',
+  'Derecho de Seguros',
+  'Derecho de Tránsito',
+  'Derecho Disciplinario',
+  'Derecho Minero y Energético',
+  'Derecho de Propiedad Intelectual',
+  'Derecho Informático',
+  'Derecho Médico',
+  'Otro',
+]
+
 const EXPERIENCIA_OPTIONS = [
   'Menos de 1 año',
   '1 - 3 años',
@@ -127,6 +151,8 @@ export default function ProfilePage() {
   const [fotoPreview, setFotoPreview] = useState(null)
   const [uploadingFoto, setUploadingFoto]   = useState(false)
   const [uploadingVideo, setUploadingVideo] = useState(false)
+  const [departamento, setDepartamento] = useState('')
+  const [areaDerecho, setAreaDerecho] = useState('')
   
 
   useEffect(() => {
@@ -138,11 +164,14 @@ export default function ProfilePage() {
     setTelefono(profile.telefono || '')
     setUniversidad(profile.universidad || '')
     setExperiencia(profile.experiencia || '')
+    setAreaDerecho(profile.area_derecho || '')
     setDireccion(profile.direccion || '')
+    setDepartamento(profile.departamento || '')
     setCiudad(profile.ciudad || '')
     setDescripcion(profile.descripcion || '')
     setFotoUrl(profile.foto_url || null)
     setVideoUrl(profile.video_url || null)
+    
     if (profile.foto_url) setFotoPreview(profile.foto_url)
   }
 }, [user, profile, loading, navigate])
@@ -228,7 +257,8 @@ export default function ProfilePage() {
           },
           body: JSON.stringify({
             nombre, apellido, telefono, universidad,
-            experiencia, direccion, ciudad,
+            experiencia, direccion, ciudad, departamento,
+            area_derecho: areaDerecho,
             descripcion, foto_url: fotoUrl, video_url: videoUrl,
           }),
         }
@@ -344,31 +374,37 @@ export default function ProfilePage() {
                 </select>
               </div>
 
-              {/* Fila 4: Ciudad + Dirección */}
+              {/* Fila 4: Área de derecho + Departamento + Ciudad */}
               <div className={styles.field}>
-                <label className={styles.label}>Departamento — Ciudad</label>
+                <label className={styles.label}>Área de derecho</label>
+                <select className={styles.input} value={areaDerecho} onChange={e => setAreaDerecho(e.target.value)}>
+                  <option value="">Seleccionar...</option>
+                  {AREAS_DERECHO.map(a => <option key={a} value={a}>{a}</option>)}
+                </select>
+              </div>
+              <div className={styles.field}>
+                <label className={styles.label}>Departamento</label>
+                <select className={styles.input} value={departamento} onChange={e => setDepartamento(e.target.value)}>
+                  <option value="">Seleccionar...</option>
+                  {[...new Set(DEPARTAMENTOS_CIUDADES.map(dc => dc.split(' - ')[0]))].map(d => (
+                    <option key={d} value={d}>{d}</option>
+                  ))}
+                </select>
+              </div>
+              <div className={styles.field}>
+                <label className={styles.label}>Ciudad</label>
                 <select className={styles.input} value={ciudad} onChange={e => setCiudad(e.target.value)}>
                   <option value="">Seleccionar...</option>
-                  {DEPARTAMENTOS_CIUDADES.map(c => <option key={c} value={c}>{c}</option>)}
+                  {DEPARTAMENTOS_CIUDADES
+                    .filter(dc => !departamento || dc.startsWith(departamento))
+                    .map(dc => dc.split(' - ')[1])
+                    .map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>
               <div className={styles.field}>
                 <label className={styles.label}>Dirección de oficina</label>
                 <input type="text" className={styles.input} placeholder="Calle 123 # 45-67, Of. 101"
                   value={direccion} onChange={e => setDireccion(e.target.value)} />
-              </div>
-
-              {/* Perfil profesional — ancho completo */}
-              <div className={`${styles.field} ${styles.fullWidth}`}>
-                <label className={styles.label}>
-                  Perfil profesional <span className={styles.required}>*</span>
-                  <span className={styles.charCount}>{descripcion.length}/500</span>
-                </label>
-                <textarea className={styles.textarea} rows={4}
-                  placeholder="Describa su experiencia, especialidades y enfoque profesional..."
-                  value={descripcion}
-                  onChange={e => { if (e.target.value.length <= 500) setDescripcion(e.target.value) }}
-                  required />
               </div>
 
               {/* Video — ancho completo */}

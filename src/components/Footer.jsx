@@ -30,8 +30,7 @@ export default function Footer() {
       </div>
 
       <div className={styles.bottom}>
-        <span>© 2025 Abogados y Asociados Parada. Todos los derechos reservados.</span>
-        <span>Diseñado con <span className={styles.diamond}>♦</span> para la excelencia jurídica</span>
+        <span>© 2026 Abogados y Asociados Parada. Todos los derechos reservados.</span>
       </div>
     </footer>
   )

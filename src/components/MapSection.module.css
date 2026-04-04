@@ -1,0 +1,51 @@
+.section {
+  position: relative;
+  padding: 5rem 0 3rem;
+  overflow: hidden;
+  opacity: 0;
+  transform: translateY(30px);
+  transition: opacity 1s, transform 1s;
+}
+.visible { opacity: 1; transform: translateY(0); }
+
+.header { text-align: center; margin-bottom: 1rem; position: relative; z-index: 2; }
+.label { display: inline-block; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 3px; color: #c9a84c; font-weight: 600; margin-bottom: 0.8rem; }
+.title { font-family: 'Cinzel', serif; font-size: clamp(1.6rem, 4vw, 2.4rem); font-weight: 700; color: #fff; margin: 0; }
+.title em { font-style: normal; color: #c9a84c; }
+
+.glowA { position: absolute; top: 30%; left: 20%; width: 400px; height: 400px; background: radial-gradient(circle, rgba(201,168,76,0.04) 0%, transparent 70%); pointer-events: none; }
+.glowB { position: absolute; top: 25%; right: 15%; width: 300px; height: 300px; background: radial-gradient(circle, rgba(201,168,76,0.03) 0%, transparent 70%); pointer-events: none; }
+
+.svg { display: block; width: 100%; max-width: 1400px; margin: 0 auto; height: auto; position: relative; z-index: 1; }
+
+.land { transition: fill 0.5s, stroke 0.5s; }
+.land:hover { fill: rgba(201,168,76,0.09); stroke: rgba(201,168,76,0.28); }
+
+.line { stroke-dasharray: 400; stroke-dashoffset: 400; animation: draw 4.5s ease-in-out infinite; }
+@keyframes draw {
+  0%   { stroke-dashoffset: 400; opacity: 0; }
+  10%  { opacity: 1; }
+  50%  { stroke-dashoffset: 0; opacity: 1; }
+  90%  { opacity: 1; }
+  100% { stroke-dashoffset: -400; opacity: 0; }
+}
+
+.pulse { animation: pls 3s ease-in-out infinite; }
+@keyframes pls { 0%,100% { opacity: 0.3; } 50% { opacity: 0.75; } }
+
+.ring { animation: rng 2.5s ease-out infinite; }
+@keyframes rng { 0% { r: 8; opacity: 0.4; } 100% { r: 22; opacity: 0; } }
+
+.stats { display: flex; justify-content: center; align-items: center; gap: 2.5rem; margin-top: 2rem; position: relative; z-index: 2; }
+.stat { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.num { font-family: 'Cinzel', serif; font-size: 1.8rem; font-weight: 700; color: #c9a84c; }
+.lbl { font-size: 0.6rem; text-transform: uppercase; letter-spacing: 2.5px; color: rgba(255,255,255,0.3); }
+.div { width: 1px; height: 40px; background: linear-gradient(180deg, transparent, rgba(201,168,76,0.2), transparent); }
+
+@media (max-width: 768px) {
+  .section { padding: 3rem 0 2rem; }
+  .stats { gap: 1.5rem }
+  .num { font-size: 1.3rem; }
+  .lbl { font-size: 0.5rem; }
+  .div { height: 30px; }
+}

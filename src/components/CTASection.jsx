@@ -22,12 +22,13 @@ export default function CTASection() {
         Hablemos sobre <br /> su caso hoy
       </h2>
       <div className={`${styles.actions} fade-up`}>
-        <a href="https://wa.me/573108886571" className="btn-solid btn-lg">
+        <a 
+          href="https://wa.me/573108886571" 
+          className={styles.ctaButton}
+        >
           WhatsApp directo
         </a>
-        <a href="mailto:contacto@lexdorado.co" className="btn-ghost btn-lg">
-          Enviar correo
-        </a>
+
       </div>
     </section>
   )
