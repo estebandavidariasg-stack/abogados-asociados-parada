@@ -3,6 +3,7 @@ import { useAuth } from '../../context/AuthContext'
 import { supabase } from '../../lib/supabase'
 import { useNavigate } from 'react-router-dom'
 import styles from './AdminPage.module.css'
+import SuperAdminChatViewer from '../../components/SuperAdminChatViewer'
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
@@ -135,6 +136,7 @@ export default function AdminPage() {
         {[
           { key: 'pending', label: `Solicitudes (${pending.length})` },
           { key: 'approved', label: `Aprobados (${approved.length})` },
+          { key: 'chats',    label: 'Historial de chats' },  
         ].map((t) => (
           <button
             key={t.key}
@@ -228,9 +230,7 @@ export default function AdminPage() {
                 </div>
 
                 <div className={styles.cardInfo}>
-                  <h3>
-                    {p.nombre} {p.apellido}
-                  </h3>
+                  <h3>{p.nombre} {p.apellido}</h3>
                   <span className={styles.cardMeta}>
                     @{p.username} · {p.email}
                   </span>
@@ -257,6 +257,14 @@ export default function AdminPage() {
           )}
         </div>
       )}
+
+      {/* ── Historial de chats ── */}
+      {activeTab === 'chats' && (
+        <div className={styles.section}>
+          <SuperAdminChatViewer />
+        </div>
+      )}
+
     </div>
   )
 }

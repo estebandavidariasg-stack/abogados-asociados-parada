@@ -2,8 +2,8 @@ import Navbar from '../components/Navbar'
 import Hero from '../components/Hero'
 import LawyersSection from '../components/LawyersSection'
 import CTASection from '../components/CTASection'
-import ForoSection from '../components/ForoSection'
 import MapSection from '../components/MapSection'
+import ChatSection from '../components/ChatSection'
 import Footer from '../components/Footer'
 import WhatsAppButton from '../components/WhatsAppButton'
 import AuthModal from '../components/AuthModal'
@@ -26,7 +26,7 @@ export default function HomePage() {
         isSuperAdmin={isSuperAdmin}
       />
       <CTASection />
-      <ForoSection /> 
+      <ChatSection />
       <LawyersSection />
       <MapSection />
       <Footer />

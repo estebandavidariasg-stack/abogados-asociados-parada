@@ -205,7 +205,7 @@ export default function AuthModal({ initialTab = 'login', onClose }) {
             <div style={{ textAlign: "center", margin: "20px 0" }}>
               <ReCAPTCHA
                 ref={recaptchaRef}
-                sitekey="6Ldy56UsAAAAAPZLPFfuKP-AK3IxwEThjY3fXDsm"
+                sitekey="6Lf6UK4sAAAAAEE4SLHdcd6LqHVSoiFYrckCcwKS"
                 onChange={(value) => setCaptchaValue(value)}
               />
             </div>
@@ -307,7 +307,7 @@ export default function AuthModal({ initialTab = 'login', onClose }) {
             <div style={{ textAlign: "center" , margin: "10px 0" }}>
               <ReCAPTCHA
                 ref={recaptchaRef}
-                sitekey="6Ldy56UsAAAAAPZLPFfuKP-AK3IxwEThjY3fXDsm"
+                sitekey="6Lf6UK4sAAAAAEE4SLHdcd6LqHVSoiFYrckCcwKS"
                 onChange={(value) => setCaptchaValue(value)}
               />
             </div>

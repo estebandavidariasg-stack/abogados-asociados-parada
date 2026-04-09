@@ -1,0 +1,620 @@
+/* ── ChatSection.module.css ─────────────────────────────────────────────── */
+
+.section {
+  background: #0d0d0d;
+  padding: 80px 20px;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* ── Encabezado ── */
+.header {
+  text-align: center;
+  margin-bottom: 48px;
+  max-width: 640px;
+  width: 100%;
+}
+
+.title {
+  font-family: 'Cinzel', serif;
+  font-size: clamp(1.6rem, 4vw, 2.4rem);
+  color: #c9a84c;
+  margin-bottom: 12px;
+  letter-spacing: 0.05em;
+}
+
+.subtitle {
+  color: #aaa;
+  font-size: 1rem;
+  line-height: 1.7;
+  margin: 0;
+}
+
+/* ── Tarjeta base ── */
+.card {
+  background: #111;
+  border: 1px solid #222;
+  border-radius: 12px;
+  padding: 32px;
+  width: 100%;
+  max-width: 420px;
+}
+
+/* ── Paso: Cédula ── */
+.cedulaTitle {
+  color: #c9a84c;
+  font-family: 'Cinzel', serif;
+  font-size: 1rem;
+  margin: 0 0 6px;
+}
+
+.cedulaHint {
+  color: #666;
+  font-size: 0.83rem;
+  line-height: 1.6;
+  margin: 0 0 22px;
+}
+
+/* ── Paso: Formulario ── */
+.form {
+  max-width: 520px;
+  width: 100%;
+}
+
+.formCard {
+  background: #111;
+  border: 1px solid #222;
+  border-radius: 12px;
+  padding: 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.label {
+  color: #888;
+  font-size: 0.8rem;
+}
+
+.input {
+  background: #0d0d0d;
+  border: 1px solid #2a2a2a;
+  border-radius: 8px;
+  padding: 11px 14px;
+  color: #ccc;
+  font-size: 0.9rem;
+  outline: none;
+  width: 100%;
+  box-sizing: border-box;
+  transition: border-color 0.2s;
+  font-family: inherit;
+}
+
+.input:focus {
+  border-color: #c9a84c55;
+}
+
+.input::placeholder {
+  color: #444;
+}
+
+.textarea {
+  composes: input;
+  resize: vertical;
+  line-height: 1.6;
+  min-height: 100px;
+}
+
+.select {
+  composes: input;
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23666' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  padding-right: 36px;
+}
+
+.inputHint {
+  color: #444;
+  font-size: 0.75rem;
+  margin: 0;
+}
+
+.formError {
+  color: #e05555;
+  font-size: 0.83rem;
+  background: #1a0a0a;
+  border: 1px solid #5a1a1a;
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin: 0;
+}
+
+/* ── Botones ── */
+.btnGold {
+  background: #c9a84c;
+  border: none;
+  border-radius: 8px;
+  padding: 13px 22px;
+  color: #000;
+  font-weight: 700;
+  font-size: 0.9rem;
+  cursor: pointer;
+  font-family: 'Cinzel', serif;
+  letter-spacing: 0.03em;
+  width: 100%;
+  transition: opacity 0.2s, transform 0.1s;
+}
+
+.btnGold:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.btnGold:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.btnGold:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.btnOutline {
+  background: none;
+  border: 1px solid #333;
+  border-radius: 8px;
+  padding: 9px 20px;
+  color: #888;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: border-color 0.2s, color 0.2s;
+}
+
+.btnOutline:hover {
+  border-color: #555;
+  color: #aaa;
+}
+
+.btnBack {
+  background: none;
+  border: none;
+  color: #555;
+  cursor: pointer;
+  font-size: 0.85rem;
+  padding: 0 0 20px 0;
+  display: block;
+  transition: color 0.2s;
+}
+
+.btnBack:hover {
+  color: #888;
+}
+
+/* ── Paso: Abogados ── */
+.lawyersWrap {
+  max-width: 680px;
+  width: 100%;
+}
+
+.areaTitle {
+  color: #c9a84c;
+  font-family: 'Cinzel', serif;
+  font-size: 1.1rem;
+  margin: 0 0 4px;
+}
+
+.areaSubtitle {
+  color: #666;
+  font-size: 0.875rem;
+  margin: 0 0 24px;
+}
+
+.lawyersList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.lawyerCard {
+  background: #111;
+  border: 1px solid #222;
+  border-radius: 10px;
+  padding: 16px 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  transition: background 0.2s, border-color 0.2s;
+}
+
+.lawyerCard:hover {
+  border-color: #3a3a3a;
+}
+
+.lawyerCardSelected {
+  composes: lawyerCard;
+  background: #1a1508;
+  border-color: #c9a84c;
+}
+
+.lawyerAvatar {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.lawyerInfo {
+  flex: 1;
+  min-width: 0;
+}
+
+.lawyerName {
+  color: #ccc;
+  font-weight: 600;
+  margin: 0 0 3px;
+  font-size: 0.95rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.lawyerNameSelected {
+  composes: lawyerName;
+  color: #c9a84c;
+}
+
+.lawyerArea {
+  color: #666;
+  font-size: 0.8rem;
+  margin: 0 0 2px;
+}
+
+.lawyerCity {
+  color: #555;
+  font-size: 0.75rem;
+  margin: 0;
+}
+
+.checkCircle {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid #444;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.2s;
+}
+
+.checkCircleSelected {
+  composes: checkCircle;
+  border-color: #c9a84c;
+  background: #c9a84c;
+}
+
+.checkMark {
+  color: #000;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.emptyLawyers {
+  text-align: center;
+  padding: 40px 20px;
+}
+
+.emptyText {
+  color: #555;
+  margin: 0 0 12px;
+}
+
+.loadingText {
+  color: #555;
+  text-align: center;
+  padding: 40px 0;
+}
+
+/* ── Chat ── */
+.chatWrap {
+  max-width: 680px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  height: 70vh;
+  min-height: 400px;
+}
+
+.chatHeader {
+  background: #111;
+  border: 1px solid #222;
+  border-bottom: none;
+  border-radius: 12px 12px 0 0;
+  padding: 14px 20px;
+}
+
+.chatTitle {
+  color: #c9a84c;
+  font-family: 'Cinzel', serif;
+  font-size: 0.9rem;
+  margin: 0 0 4px;
+}
+
+.chatStatus {
+  color: #555;
+  font-size: 0.75rem;
+  margin: 0;
+}
+
+.chatMessages {
+  flex: 1;
+  background: #0a0a0a;
+  border: 1px solid #222;
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  scroll-behavior: smooth;
+}
+
+.chatEmpty {
+  text-align: center;
+  color: #333;
+  margin-top: 40px;
+  padding: 0 20px;
+}
+
+.chatEmptyText {
+  font-size: 0.875rem;
+  margin: 0 0 6px;
+}
+
+.chatEmptyHint {
+  font-size: 0.8rem;
+  margin: 0;
+  color: #2a2a2a;
+}
+
+.msgRow {
+  display: flex;
+}
+
+.msgRowMine {
+  composes: msgRow;
+  justify-content: flex-end;
+}
+
+.msgRowOther {
+  composes: msgRow;
+  justify-content: flex-start;
+}
+
+.msgBubble {
+  max-width: 75%;
+  padding: 10px 14px;
+}
+
+.msgBubbleMine {
+  composes: msgBubble;
+  background: #1a1508;
+  border: 1px solid #c9a84c22;
+  border-radius: 12px 12px 2px 12px;
+}
+
+.msgBubbleOther {
+  composes: msgBubble;
+  background: #141414;
+  border: 1px solid #2a2a2a;
+  border-radius: 12px 12px 12px 2px;
+}
+
+.msgText {
+  color: #ddd;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  word-break: break-word;
+  white-space: pre-wrap;
+  margin: 0;
+}
+
+.msgMeta {
+  font-size: 0.7rem;
+  color: #444;
+  margin: 4px 0 0;
+}
+
+.msgMetaMine {
+  composes: msgMeta;
+  text-align: right;
+}
+
+.msgMetaOther {
+  composes: msgMeta;
+  text-align: left;
+}
+
+/* Archivo adjunto en burbuja */
+.fileBtn {
+  background: none;
+  border: 1px solid #333;
+  border-radius: 6px;
+  padding: 8px 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #c9a84c;
+  font-size: 0.85rem;
+  width: 100%;
+  text-align: left;
+  transition: border-color 0.2s;
+}
+
+.fileBtn:hover {
+  border-color: #c9a84c55;
+}
+
+.fileName {
+  flex: 1;
+  word-break: break-all;
+}
+
+.fileSize {
+  color: #555;
+  font-size: 0.75rem;
+  flex-shrink: 0;
+}
+
+/* ── Input del chat ── */
+.chatInputBar {
+  background: #111;
+  border: 1px solid #222;
+  border-top: none;
+  border-radius: 0 0 12px 12px;
+  padding: 12px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.chatClosed {
+  background: #111;
+  border: 1px solid #222;
+  border-top: none;
+  border-radius: 0 0 12px 12px;
+  padding: 16px;
+  text-align: center;
+  color: #555;
+  font-size: 0.85rem;
+}
+
+.attachBtn {
+  background: none;
+  border: 1px solid #2a2a2a;
+  border-radius: 8px;
+  padding: 10px 12px;
+  cursor: pointer;
+  color: #888;
+  font-size: 1rem;
+  flex-shrink: 0;
+  transition: color 0.2s, border-color 0.2s;
+  line-height: 1;
+}
+
+.attachBtn:hover:not(:disabled) {
+  color: #c9a84c;
+  border-color: #c9a84c44;
+}
+
+.attachBtn:disabled {
+  color: #444;
+  cursor: not-allowed;
+}
+
+.chatInput {
+  flex: 1;
+  background: #0d0d0d;
+  border: 1px solid #2a2a2a;
+  border-radius: 8px;
+  padding: 10px 14px;
+  color: #ccc;
+  font-size: 0.9rem;
+  outline: none;
+  font-family: inherit;
+  transition: border-color 0.2s;
+}
+
+.chatInput:focus {
+  border-color: #c9a84c44;
+}
+
+.chatInput::placeholder {
+  color: #444;
+}
+
+.sendBtn {
+  background: #c9a84c;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 18px;
+  color: #000;
+  font-weight: 700;
+  font-size: 0.85rem;
+  cursor: pointer;
+  font-family: 'Cinzel', serif;
+  flex-shrink: 0;
+  transition: opacity 0.2s;
+}
+
+.sendBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ── Mobile ── */
+@media (max-width: 600px) {
+  .section {
+    padding: 60px 16px;
+  }
+
+  .card,
+  .formCard {
+    padding: 24px 18px;
+  }
+
+  .chatWrap {
+    height: 80vh;
+  }
+
+  .msgBubble {
+    max-width: 90%;
+  }
+
+  .lawyerAvatar {
+    width: 42px;
+    height: 42px;
+  }
+
+  .sendBtn {
+    padding: 10px 14px;
+    font-size: 0.8rem;
+  }
+}
+
+/* ── Panel de calificación ── */
+.ratingCard {
+  max-width: 480px;
+  width: 100%;
+  background: #111;
+  border: 1px solid #222;
+  border-radius: 12px;
+  padding: 32px;
+}
+
+.ratingTitle {
+  color: #c9a84c;
+  font-family: 'Cinzel', serif;
+  font-size: 1.2rem;
+  margin: 0 0 8px;
+}
+
+.ratingSubtitle {
+  color: #666;
+  font-size: 0.875rem;
+  margin: 0;
+  line-height: 1.6;
+}

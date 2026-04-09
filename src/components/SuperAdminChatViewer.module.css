@@ -1,0 +1,428 @@
+/* ── SuperAdminChatViewer.module.css ────────────────────────────────────── */
+
+.viewer {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* ── Filtros ── */
+.filters {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.searchInput {
+  background: #111;
+  border: 1px solid #222;
+  border-radius: 8px;
+  padding: 9px 14px;
+  color: #ccc;
+  font-size: 0.85rem;
+  outline: none;
+  flex: 1;
+  min-width: 160px;
+  font-family: inherit;
+  transition: border-color 0.2s;
+}
+
+.searchInput:focus { border-color: #c9a84c44; }
+.searchInput::placeholder { color: #444; }
+
+.filterSelect {
+  background: #111;
+  border: 1px solid #222;
+  border-radius: 8px;
+  padding: 9px 12px;
+  color: #ccc;
+  font-size: 0.85rem;
+  outline: none;
+  cursor: pointer;
+  font-family: inherit;
+  transition: border-color 0.2s;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23666' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 32px;
+}
+
+.filterSelect:focus { border-color: #c9a84c44; }
+
+.refreshBtn {
+  background: none;
+  border: 1px solid #333;
+  border-radius: 8px;
+  padding: 9px 14px;
+  color: #888;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: border-color 0.2s, color 0.2s;
+  white-space: nowrap;
+}
+
+.refreshBtn:hover {
+  border-color: #555;
+  color: #aaa;
+}
+
+/* ── Estadísticas ── */
+.stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+
+.statCard {
+  background: #111;
+  border: 1px solid #1e1e1e;
+  border-radius: 8px;
+  padding: 12px 16px;
+}
+
+.statNumber {
+  font-size: 1.4rem;
+  font-weight: 700;
+  margin: 0 0 4px;
+  font-family: 'Cinzel', serif;
+}
+
+.statLabel {
+  color: #555;
+  font-size: 0.75rem;
+  margin: 0;
+}
+
+/* ── Grid principal ── */
+.grid {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  border: 1px solid #1e1e1e;
+  border-radius: 12px;
+  overflow: hidden;
+  height: 65vh;
+  min-height: 400px;
+}
+
+/* ── Sidebar ── */
+.sidebar {
+  background: #0a0a0a;
+  border-right: 1px solid #1e1e1e;
+  overflow-y: auto;
+}
+
+.sidebarEmpty {
+  color: #333;
+  font-size: 0.8rem;
+  padding: 20px 16px;
+  margin: 0;
+}
+
+.roomRow {
+  padding: 14px 16px;
+  cursor: pointer;
+  border-bottom: 1px solid #111;
+  border-left: 2px solid transparent;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.roomRow:hover { background: #0f0f0f; }
+
+.roomRowActive {
+  composes: roomRow;
+  background: #141414;
+  border-left-color: #c9a84c;
+}
+
+.roomTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+  gap: 6px;
+}
+
+.roomArea {
+  color: #bbb;
+  font-size: 0.8rem;
+  font-weight: 600;
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.roomStatus {
+  font-size: 0.68rem;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.roomLawyers {
+  color: #555;
+  font-size: 0.72rem;
+  margin: 0 0 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.roomDate {
+  color: #444;
+  font-size: 0.7rem;
+  margin: 0;
+}
+
+/* ── Panel derecho ── */
+.main {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.placeholder {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 12px;
+  color: #2a2a2a;
+}
+
+.placeholderText {
+  font-size: 0.85rem;
+  margin: 0;
+  text-align: center;
+  padding: 0 20px;
+}
+
+/* Header del chat */
+.chatHeader {
+  background: #111;
+  padding: 12px 18px;
+  border-bottom: 1px solid #1e1e1e;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.chatTitle {
+  color: #c9a84c;
+  font-family: 'Cinzel', serif;
+  font-size: 0.85rem;
+  margin: 0 0 6px;
+}
+
+.lawyerTags {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.lawyerTag {
+  background: #1a1a1a;
+  border: 1px solid #2a2a2a;
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 0.72rem;
+}
+
+.btnForceClose {
+  background: #1a0a0a;
+  border: 1px solid #5a1a1a;
+  border-radius: 6px;
+  color: #e05555;
+  font-size: 0.72rem;
+  cursor: pointer;
+  padding: 5px 10px;
+  flex-shrink: 0;
+  transition: background 0.2s;
+  white-space: nowrap;
+}
+
+.btnForceClose:hover { background: #2a0a0a; }
+
+/* Mensajes */
+.messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  scroll-behavior: smooth;
+}
+
+.messagesEmpty {
+  color: #2a2a2a;
+  font-size: 0.8rem;
+  text-align: center;
+  margin-top: 40px;
+}
+
+.msgOuter {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.msgOuterMine  { composes: msgOuter; justify-content: flex-end; }
+.msgOuterOther { composes: msgOuter; justify-content: flex-start; }
+
+.deleteBtn {
+  background: none;
+  border: none;
+  color: #2a2a2a;
+  cursor: pointer;
+  font-size: 0.75rem;
+  padding: 4px;
+  flex-shrink: 0;
+  margin-top: 6px;
+  transition: color 0.2s;
+}
+
+.deleteBtn:hover { color: #e05555; }
+
+.bubble {
+  max-width: 70%;
+  padding: 10px 14px;
+}
+
+.bubbleMine {
+  composes: bubble;
+  background: #1a1508;
+  border: 1px solid #c9a84c22;
+  border-radius: 12px 12px 2px 12px;
+}
+
+.bubbleOther {
+  composes: bubble;
+  background: #111;
+  border: 1px solid #222;
+  border-radius: 12px 12px 12px 2px;
+}
+
+.msgText {
+  color: #ddd;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  word-break: break-word;
+  margin: 0;
+}
+
+.msgMeta {
+  font-size: 0.68rem;
+  color: #444;
+  margin: 4px 0 0;
+}
+
+.msgMetaMine  { composes: msgMeta; text-align: right; }
+.msgMetaOther { composes: msgMeta; text-align: left; }
+
+.fileBtn {
+  background: none;
+  border: 1px solid #333;
+  border-radius: 6px;
+  padding: 6px 10px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #c9a84c;
+  font-size: 0.8rem;
+  width: 100%;
+  text-align: left;
+  transition: border-color 0.2s;
+}
+
+.fileBtn:hover { border-color: #c9a84c55; }
+.fileName { flex: 1; word-break: break-all; }
+.fileSize { color: #555; font-size: 0.7rem; flex-shrink: 0; }
+
+/* Footer */
+.chatFooter {
+  padding: 10px 16px;
+  border-top: 1px solid #1e1e1e;
+  background: #0a0a0a;
+  flex-shrink: 0;
+}
+
+.footerText {
+  color: #333;
+  font-size: 0.75rem;
+  text-align: center;
+  margin: 0;
+}
+
+/* ── Mobile ── */
+@media (max-width: 768px) {
+  .stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .filters {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .filterSelect,
+  .searchInput {
+    width: 100%;
+  }
+
+  .grid {
+    grid-template-columns: 1fr;
+    grid-template-rows: 200px 1fr;
+    height: auto;
+    min-height: 80vh;
+  }
+
+  .sidebar {
+    border-right: none;
+    border-bottom: 1px solid #1e1e1e;
+    overflow-x: auto;
+    overflow-y: hidden;
+    display: flex;
+    flex-direction: row;
+  }
+
+  .roomRow,
+  .roomRowActive {
+    min-width: 180px;
+    border-bottom: none;
+    border-left: none;
+    border-bottom: 2px solid transparent;
+    flex-shrink: 0;
+  }
+
+  .roomRowActive {
+    border-bottom-color: #c9a84c;
+  }
+
+  .main {
+    min-height: 60vh;
+  }
+
+  .bubble {
+    max-width: 88%;
+  }
+
+  .chatHeader {
+    flex-direction: column;
+  }
+}
+
+@media (max-width: 480px) {
+  .stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .statNumber {
+    font-size: 1.1rem;
+  }
+}
