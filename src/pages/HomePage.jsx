@@ -9,6 +9,8 @@ import WhatsAppButton from '../components/WhatsAppButton'
 import AuthModal from '../components/AuthModal'
 import { useState } from 'react'
 import { useAuth } from '../context/AuthContext'
+import VideoCarousel from '../components/VideoCarousel'
+
 
 export default function HomePage() {
   const [modal, setModal] = useState(null)
@@ -25,6 +27,7 @@ export default function HomePage() {
         onToggleEdit={() => setEditMode((v) => !v)}
         isSuperAdmin={isSuperAdmin}
       />
+      <VideoCarousel/>
       <CTASection />
       <ChatSection />
       <LawyersSection />

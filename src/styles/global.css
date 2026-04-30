@@ -3,24 +3,30 @@
 
 /* ── VARIABLES ─────────────────────────────────────────── */
 :root {
-  --black:    #080808;
-  --dark:     #111111;
-  --surface:  #181818;
-  --surface2: #1f1f1f;
+  --navy:     #0d2d5e;
+  --navy-md:  #1a5276;
+  --navy-lt:  #2a6496;
+  --surface:  #e8f2fc;
+  --surface2: #f0f6fc;
   --gold:     #C9A84C;
   --gold-lt:  #E8C96A;
   --gold-dk:  #8A6A28;
-  --cream:    #F0EBE0;
-  --muted:    #7A7060;
-  --border:   rgba(201, 168, 76, 0.18);
+  --ivory:    #faf7f2;
+  --muted:    #4a6080;
+  --border:   rgba(13, 45, 94, 0.15);
+
+  /* aliases para no romper module.css que usen los nombres viejos */
+  --black:    #0d2d5e;
+  --dark:     #1a5276;
+  --cream:    #faf7f2;
 }
 
 /* ── BASE ───────────────────────────────────────────────── */
 html { scroll-behavior: smooth; }
 
 body {
-  background: var(--black);
-  color: var(--cream);
+  background: var(--ivory);
+  color: var(--navy);
   font-family: 'Raleway', sans-serif;
   font-weight: 400;
   overflow-x: hidden;
@@ -28,8 +34,8 @@ body {
 
 /* ── SCROLLBAR ──────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 6px; }
-::-webkit-scrollbar-track { background: var(--dark); }
-::-webkit-scrollbar-thumb { background: var(--gold-dk); border-radius: 3px; }
+::-webkit-scrollbar-track { background: var(--surface); }
+::-webkit-scrollbar-thumb { background: var(--navy-md); border-radius: 3px; }
 
 /* ── UTILITY CLASSES ────────────────────────────────────── */
 .fade-up {
@@ -50,9 +56,9 @@ body {
   font-weight: 600;
   letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: var(--gold);
+  color: var(--navy-md);
   background: transparent;
-  border: 1px solid var(--gold-dk);
+  border: 1px solid var(--navy-md);
   padding: 0.5rem 1.4rem;
   cursor: pointer;
   transition: background 0.3s, border-color 0.3s, color 0.3s;
@@ -61,8 +67,9 @@ body {
 }
 
 .btn-ghost:hover {
-  background: rgba(201, 168, 76, 0.08);
-  border-color: var(--gold);
+  background: rgba(13, 45, 94, 0.08);
+  border-color: var(--navy);
+  color: var(--navy);
 }
 
 .btn-solid {
@@ -71,9 +78,9 @@ body {
   font-weight: 600;
   letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: var(--black);
-  background: var(--gold);
-  border: 1px solid var(--gold);
+  color: #ffffff;
+  background: var(--navy);
+  border: 1px solid var(--navy);
   padding: 0.5rem 1.4rem;
   cursor: pointer;
   transition: background 0.3s;
@@ -81,7 +88,7 @@ body {
   display: inline-block;
 }
 
-.btn-solid:hover { background: var(--gold-lt); }
+.btn-solid:hover { background: var(--navy-md); }
 
 .btn-lg {
   font-size: 0.75rem;

@@ -10,6 +10,31 @@ function getHeaders() {
   }
 }
 
+async function refreshSession() {
+  const refreshToken = localStorage.getItem('sb_refresh_token')
+  if (!refreshToken) return false
+  const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY },
+    body: JSON.stringify({ refresh_token: refreshToken }),
+  })
+  if (!res.ok) return false
+  const data = await res.json()
+  localStorage.setItem('sb_token', data.access_token)
+  localStorage.setItem('sb_refresh_token', data.refresh_token)
+  localStorage.setItem('sb_token_exp', data.expires_at || (Math.floor(Date.now() / 1000) + 3600))
+  return true
+}
+
+export async function getAuthHeaders() {
+  const exp = parseInt(localStorage.getItem('sb_token_exp') || '0')
+  const now = Math.floor(Date.now() / 1000)
+  if (exp && now >= exp - 300) {
+    await refreshSession()
+  }
+  return getHeaders()
+}
+
 // ── Query builder encadenable ─────────────────────────────────────────────
 function buildQuery(table, cols = '*') {
   const filters = []
@@ -17,15 +42,15 @@ function buildQuery(table, cols = '*') {
   let _limit = null
 
   const builder = {
-    eq(col, val)   { filters.push(`${col}=eq.${encodeURIComponent(val)}`); return builder },
-    neq(col, val)  { filters.push(`${col}=neq.${encodeURIComponent(val)}`); return builder },
-    ilike(col, val){ filters.push(`${col}=ilike.${encodeURIComponent(val)}`); return builder },
+    eq(col, val)    { filters.push(`${col}=eq.${encodeURIComponent(val)}`); return builder },
+    neq(col, val)   { filters.push(`${col}=neq.${encodeURIComponent(val)}`); return builder },
+    ilike(col, val) { filters.push(`${col}=ilike.${encodeURIComponent(val)}`); return builder },
     order(col, opts = {}) { _order = `${col}.${opts.ascending === false ? 'desc' : 'asc'}`; return builder },
-    limit(n)       { _limit = n; return builder },
-    select(newCols){ if (newCols) cols = newCols; return builder },
+    limit(n)        { _limit = n; return builder },
+    select(newCols) { if (newCols) cols = newCols; return builder },
 
-    single()     { return execSingle() },
-    maybeSingle(){ return execSingle(true) },
+    single()      { return execSingle() },
+    maybeSingle() { return execSingle(true) },
 
     async then(resolve) {
       try {
@@ -62,59 +87,115 @@ const WS_URL = SUPABASE_URL.replace('https://', 'wss://').replace('http://', 'ws
 
 class RealtimeChannel {
   constructor(name) {
-    this.name     = name
-    this.handlers = []
-    this.ws       = null
-    this.ref      = 1
+    this.name       = name
+    this.pgHandlers = []   // postgres_changes handlers
+    this.bcHandlers = {}   // broadcast handlers: { eventName: [cb, ...] }
+    this._queue     = []   // sends queued before WS opens
+    this.ws         = null
+    this.ref        = 1
   }
 
   on(event, opts, cb) {
-    this.handlers.push({ event, opts, cb })
+    if (event === 'broadcast') {
+      const key = opts?.event || '*'
+      ;(this.bcHandlers[key] = this.bcHandlers[key] || []).push(cb)
+    } else {
+      this.pgHandlers.push({ event, opts, cb })
+    }
     return this
   }
 
-  subscribe() {
+  // Public send for broadcast messages: { type: 'broadcast', event, payload }
+  send({ type, event, payload }) {
+    if (type !== 'broadcast') return this
+    const msg = {
+      topic:   `realtime:${this.name}`,
+      event:   'broadcast',
+      payload: { event, payload },
+      ref:     null,
+    }
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify(msg))
+    } else {
+      this._queue.push(msg)
+    }
+    return this
+  }
+
+  subscribe(statusCb) {
     const token = localStorage.getItem('sb_token') || SUPABASE_KEY
     this.ws = new WebSocket(`${WS_URL}/realtime/v1/websocket?apikey=${SUPABASE_KEY}&vsn=1.0.0`)
+    const hasBroadcast = Object.keys(this.bcHandlers).length > 0
 
     this.ws.onopen = () => {
-      // Autenticar
       this._send({ topic: 'phoenix', event: 'phx_join', payload: {}, ref: this._ref() })
 
-      // Suscribirse a cada handler
-      this.handlers.forEach(h => {
-        const { schema, table, filter, event } = h.opts
-        const pgEvent = event === 'INSERT' ? 'INSERT' : event === 'UPDATE' ? 'UPDATE' : event === 'DELETE' ? 'DELETE' : '*'
-        let config = `realtime:${schema || 'public'}:${table || '*'}`
-        if (filter) config += `:${filter}`
-
+      // Subscribe to broadcast channel if needed
+      if (hasBroadcast) {
         this._send({
-          topic:   config,
+          topic:   `realtime:${this.name}`,
           event:   'phx_join',
           payload: {
             config: {
-              broadcast:  { self: false },
-              presence:   { key: '' },
+              broadcast:        { ack: false, self: true },
+              presence:         { key: '' },
+              postgres_changes: [],
+            },
+            access_token: token,
+          },
+          ref: this._ref(),
+        })
+      }
+
+      // Subscribe to postgres_changes topics
+      this.pgHandlers.forEach(h => {
+        const { schema, table, filter, event } = h.opts
+        const pgEvent = event === 'INSERT' ? 'INSERT' : event === 'UPDATE' ? 'UPDATE' : event === 'DELETE' ? 'DELETE' : '*'
+        let topicName = `realtime:${schema || 'public'}:${table || '*'}`
+        if (filter) topicName += `:${filter}`
+
+        this._send({
+          topic:   topicName,
+          event:   'phx_join',
+          payload: {
+            config: {
+              broadcast:        { self: false },
+              presence:         { key: '' },
               postgres_changes: [{
                 event:  pgEvent,
                 schema: schema || 'public',
                 table:  table  || '*',
                 filter: filter || undefined,
-              }]
+              }],
             },
             access_token: token,
           },
-          ref: this._ref()
+          ref: this._ref(),
         })
       })
+
+      // Flush queued sends
+      this._queue.forEach(m => this.ws.send(JSON.stringify(m)))
+      this._queue = []
+
+      if (statusCb) statusCb('SUBSCRIBED')
     }
 
     this.ws.onmessage = (e) => {
       try {
         const msg = JSON.parse(e.data)
+
+        // Broadcast events
+        if (msg.event === 'broadcast' && msg.payload?.event) {
+          const key = msg.payload.event
+          const cbs = [...(this.bcHandlers[key] || []), ...(this.bcHandlers['*'] || [])]
+          cbs.forEach(cb => cb({ payload: msg.payload.payload ?? msg.payload }))
+        }
+
+        // Postgres changes
         if (msg.event === 'postgres_changes' && msg.payload?.data) {
           const change = msg.payload.data
-          this.handlers.forEach(h => {
+          this.pgHandlers.forEach(h => {
             if (
               (h.opts.event === '*' || h.opts.event === change.type) &&
               (!h.opts.table  || h.opts.table  === change.table)
@@ -123,14 +204,14 @@ class RealtimeChannel {
             }
           })
         }
-        // Heartbeat
+
         if (msg.event === 'phx_reply' && msg.payload?.status === 'ok') {
           setTimeout(() => this._send({ topic: 'phoenix', event: 'heartbeat', payload: {}, ref: this._ref() }), 25000)
         }
       } catch (_) {}
     }
 
-    this.ws.onerror = () => {}
+    this.ws.onerror = () => { if (statusCb) statusCb('CHANNEL_ERROR') }
     this.ws.onclose = () => {}
     return this
   }
@@ -160,6 +241,8 @@ export const supabase = {
       const data = await res.json()
       if (!res.ok) return { data: null, error: data }
       localStorage.setItem('sb_token', data.access_token)
+      localStorage.setItem('sb_refresh_token', data.refresh_token)
+      localStorage.setItem('sb_token_exp', data.expires_at || (Math.floor(Date.now() / 1000) + 3600))
       localStorage.setItem('sb_user', JSON.stringify(data.user))
       return { data: { user: data.user }, error: null }
     },
@@ -177,6 +260,8 @@ export const supabase = {
 
     async signOut() {
       localStorage.removeItem('sb_token')
+      localStorage.removeItem('sb_refresh_token')
+      localStorage.removeItem('sb_token_exp')
       localStorage.removeItem('sb_user')
       return { error: null }
     },
@@ -185,7 +270,13 @@ export const supabase = {
       const token   = localStorage.getItem('sb_token')
       const userStr = localStorage.getItem('sb_user')
       if (!token || !userStr) return { data: { session: null } }
-      return { data: { session: { access_token: token, user: JSON.parse(userStr) } } }
+
+      const exp = parseInt(localStorage.getItem('sb_token_exp') || '0')
+      const now = Math.floor(Date.now() / 1000)
+      if (exp && now >= exp - 300) await refreshSession()
+
+      const freshToken = localStorage.getItem('sb_token')
+      return { data: { session: { access_token: freshToken, user: JSON.parse(userStr) } } }
     },
 
     onAuthStateChange() {

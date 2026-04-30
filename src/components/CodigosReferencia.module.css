@@ -1,0 +1,432 @@
+.wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.topBar {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.pageTitle {
+  font-family: 'Cinzel', serif;
+  font-size: 1rem;
+  color: var(--gold);
+  margin: 0 0 4px;
+  letter-spacing: 0.05em;
+}
+
+.pageSubtitle {
+  font-size: 0.78rem;
+  color: rgba(240,235,224,0.4);
+  margin: 0;
+}
+
+.btnNew {
+  padding: 10px 22px;
+  background: linear-gradient(135deg, var(--gold), #a0822e);
+  color: #0d0d0d;
+  border: none;
+  border-radius: 20px;
+  font-weight: 700;
+  font-size: 0.82rem;
+  cursor: pointer;
+  font-family: inherit;
+  transition: opacity 0.2s;
+  white-space: nowrap;
+}
+.btnNew:hover { opacity: 0.9; }
+
+.error {
+  font-size: 0.82rem;
+  color: rgba(220,80,80,0.9);
+  padding: 10px 16px;
+  background: rgba(220,80,80,0.08);
+  border: 1px solid rgba(220,80,80,0.2);
+  border-radius: 6px;
+}
+
+.successMsg {
+  font-size: 0.82rem;
+  color: rgba(46,204,113,0.9);
+  padding: 10px 16px;
+  background: rgba(46,204,113,0.08);
+  border: 1px solid rgba(46,204,113,0.2);
+  border-radius: 6px;
+}
+
+/* ── Formulario ── */
+.form {
+  background: rgba(255,255,255,0.02);
+  border: 1px solid rgba(201,168,76,0.2);
+  border-radius: 10px;
+  padding: 24px;
+}
+
+.formTitle {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: rgba(201,168,76,0.7);
+  margin: 0 0 20px;
+}
+
+.formGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+@media (max-width: 600px) {
+  .formGrid { grid-template-columns: 1fr; }
+}
+
+.fullWidth { grid-column: 1 / -1; }
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.label {
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(240,235,224,0.45);
+}
+
+.req { color: var(--gold); }
+
+.input, .textarea {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 6px;
+  color: #f0ebe0;
+  padding: 10px 14px;
+  font-family: inherit;
+  font-size: 0.85rem;
+  outline: none;
+  transition: border-color 0.2s;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.input:focus, .textarea:focus { border-color: rgba(201,168,76,0.4); }
+.textarea { resize: vertical; min-height: 80px; }
+
+.formActions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 20px;
+}
+
+.btnSave {
+  padding: 11px 28px;
+  background: linear-gradient(135deg, var(--gold), #a0822e);
+  color: #0d0d0d;
+  border: none;
+  border-radius: 20px;
+  font-weight: 700;
+  font-size: 0.85rem;
+  cursor: pointer;
+  font-family: inherit;
+  transition: opacity 0.2s;
+}
+.btnSave:hover { opacity: 0.9; }
+.btnSave:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ── Lista de códigos ── */
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.empty {
+  color: rgba(255,255,255,0.25);
+  font-size: 0.85rem;
+  text-align: center;
+  padding: 40px 0;
+}
+
+.codigoCard {
+  background: rgba(255,255,255,0.02);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 10px;
+  padding: 18px 20px;
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  flex-wrap: wrap;
+  transition: border-color 0.2s;
+}
+
+.codigoCard:hover { border-color: rgba(201,168,76,0.2); }
+
+.codigoInactivo {
+  opacity: 0.45;
+}
+
+.codigoInfo {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  flex: 1;
+  min-width: 200px;
+}
+
+.codigoBadge {
+  font-family: 'Courier New', monospace;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--gold);
+  letter-spacing: 3px;
+  background: rgba(201,168,76,0.08);
+  border: 1px solid rgba(201,168,76,0.2);
+  border-radius: 6px;
+  padding: 6px 12px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.codigoDetails { display: flex; flex-direction: column; gap: 3px; }
+
+.codigoNombre {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: rgba(240,235,224,0.85);
+  margin: 0;
+}
+
+.codigoMeta {
+  font-size: 0.74rem;
+  color: rgba(240,235,224,0.4);
+  margin: 0;
+}
+
+.codigoFecha {
+  font-size: 0.7rem;
+  color: rgba(240,235,224,0.25);
+  margin: 4px 0 0;
+}
+
+.codigoActions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.btnQR, .btnDownload, .btnDeactivate, .btnActivate {
+  padding: 7px 14px;
+  border: none;
+  border-radius: 14px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.btnQR {
+  background: rgba(201,168,76,0.1);
+  border: 1px solid rgba(201,168,76,0.3);
+  color: var(--gold);
+}
+.btnQR:hover { background: rgba(201,168,76,0.2); }
+
+.btnDownload {
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1);
+  color: rgba(240,235,224,0.7);
+}
+.btnDownload:hover { background: rgba(255,255,255,0.12); }
+
+.btnDeactivate {
+  background: rgba(220,50,50,0.1);
+  border: 1px solid rgba(220,50,50,0.25);
+  color: rgba(220,80,80,0.8);
+}
+.btnDeactivate:hover { background: rgba(220,50,50,0.18); }
+
+.btnActivate {
+  background: rgba(46,204,113,0.1);
+  border: 1px solid rgba(46,204,113,0.25);
+  color: rgba(46,204,113,0.8);
+}
+.btnActivate:hover { background: rgba(46,204,113,0.18); }
+
+/* ── QR expandido ── */
+.qrExpanded {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  padding-top: 24px;
+  border-top: 1px solid rgba(201,168,76,0.12);
+  margin-top: 10px;
+}
+
+/* Tarjeta de preview — replica visual del PNG descargable */
+.qrCardPreview {
+  width: 248px;
+  background: linear-gradient(170deg, #060f28 0%, #0c1d4a 50%, #060f28 100%);
+  border: 1px solid rgba(201,168,76,0.3);
+  border-radius: 14px;
+  padding: 22px 18px 18px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  position: relative;
+  box-shadow:
+    0 12px 48px rgba(0,0,0,0.65),
+    0 0 0 1px rgba(201,168,76,0.08) inset,
+    0 0 60px rgba(201,168,76,0.04) inset;
+}
+
+/* Esquinas decorativas — top-left */
+.qrCornerTL {
+  position: absolute;
+  top: 10px; left: 10px;
+  width: 18px; height: 18px;
+  border-top: 1.5px solid rgba(201,168,76,0.55);
+  border-left: 1.5px solid rgba(201,168,76,0.55);
+  border-radius: 2px 0 0 0;
+}
+
+/* Esquinas decorativas — bottom-right */
+.qrCornerBR {
+  position: absolute;
+  bottom: 10px; right: 10px;
+  width: 18px; height: 18px;
+  border-bottom: 1.5px solid rgba(201,168,76,0.55);
+  border-right: 1.5px solid rgba(201,168,76,0.55);
+  border-radius: 0 0 2px 0;
+}
+
+.qrCardHeader {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  text-align: center;
+}
+
+.qrCardDespacho {
+  font-size: 0.44rem;
+  font-weight: 600;
+  letter-spacing: 0.28em;
+  color: rgba(201,168,76,0.5);
+  text-transform: uppercase;
+}
+
+.qrCardFirm {
+  font-family: 'Cinzel', serif;
+  font-size: 0.58rem;
+  font-weight: 700;
+  color: #C9A84C;
+  letter-spacing: 0.08em;
+  line-height: 1.35;
+  text-align: center;
+}
+
+.qrDivider {
+  width: 75%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(201,168,76,0.35), transparent);
+  flex-shrink: 0;
+}
+
+/* Contenedor blanco del QR — alto contraste para escaneabilidad */
+.qrImageWrap {
+  background: #FAFAFA;
+  border-radius: 8px;
+  padding: 7px;
+  box-shadow:
+    0 0 0 1px rgba(201,168,76,0.25),
+    0 4px 20px rgba(0,0,0,0.4);
+}
+
+.qrImg {
+  width: 154px;
+  height: 154px;
+  display: block;
+  border-radius: 3px;
+}
+
+.qrCodeDisplay {
+  font-family: 'Courier New', monospace;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #C9A84C;
+  letter-spacing: 0.22em;
+  background: rgba(201,168,76,0.07);
+  border: 1px solid rgba(201,168,76,0.2);
+  border-radius: 5px;
+  padding: 4px 12px;
+}
+
+.qrCardName {
+  font-family: 'Cinzel', serif;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: rgba(240,235,224,0.9);
+  text-align: center;
+  letter-spacing: 0.04em;
+  line-height: 1.3;
+}
+
+.qrCardRole {
+  font-size: 0.42rem;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  color: rgba(240,235,224,0.3);
+  text-transform: uppercase;
+}
+
+.qrCardUrl {
+  font-size: 0.5rem;
+  color: rgba(201,168,76,0.55);
+  letter-spacing: 0.1em;
+}
+
+.qrHint {
+  font-size: 0.68rem;
+  color: rgba(240,235,224,0.25);
+  text-align: center;
+  margin: 0;
+  line-height: 1.6;
+}
+
+.btnDownloadBig {
+  padding: 12px 26px;
+  background: linear-gradient(135deg, var(--gold), #a0822e);
+  color: #0d0d0d;
+  border: none;
+  border-radius: 20px;
+  font-weight: 700;
+  font-size: 0.8rem;
+  cursor: pointer;
+  font-family: inherit;
+  transition: opacity 0.2s, transform 0.15s, box-shadow 0.2s;
+  box-shadow: 0 4px 20px rgba(201,168,76,0.28);
+  white-space: nowrap;
+}
+.btnDownloadBig:hover {
+  opacity: 0.92;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 28px rgba(201,168,76,0.38);
+}
+.btnDownloadBig:active {
+  transform: translateY(0);
+}

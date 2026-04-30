@@ -22,11 +22,21 @@ export function AuthProvider({ children }) {
       const { data: { session } } = await supabase.auth.getSession()
       if (session?.user) {
         setUser(session.user)
-        await loadProfile(session.user.id) // espera a que cargue el perfil
+        await loadProfile(session.user.id)
       }
-      setLoading(false) // solo después de tener todo
+      setLoading(false)
     }
     init()
+
+    // Refresca el token cada 50 minutos automáticamente
+    const interval = setInterval(async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (session?.user) {
+        setUser(session.user)
+      }
+    }, 50 * 60 * 1000)
+
+    return () => clearInterval(interval)
   }, [])
 
   async function signUp({ nombre, apellido, username, telefono, email, password }) {

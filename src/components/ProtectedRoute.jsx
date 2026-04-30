@@ -15,9 +15,9 @@ export default function ProtectedRoute({ children, requireAdmin = false }) {
   // Mientras carga, mostrar pantalla de espera
   if (loading) return (
     <div style={{
-      minHeight: '100vh', background: '#080808',
+      minHeight: '100vh', background: 'var(--navy)',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
-      color: '#C9A84C', fontFamily: 'Cinzel, serif', letterSpacing: '0.3em',
+      color: 'var(--gold)', fontFamily: 'Cinzel, serif', letterSpacing: '0.3em',
       fontSize: '0.8rem'
     }}>
       CARGANDO...
@@ -27,9 +27,9 @@ export default function ProtectedRoute({ children, requireAdmin = false }) {
   // Si está cargando el perfil pero ya hay usuario, esperar
   if (user && requireAdmin && !profile) return (
     <div style={{
-      minHeight: '100vh', background: '#080808',
+      minHeight: '100vh', background: 'var(--navy)',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
-      color: '#C9A84C', fontFamily: 'Cinzel, serif', letterSpacing: '0.3em',
+      color: 'var(--gold)', fontFamily: 'Cinzel, serif', letterSpacing: '0.3em',
       fontSize: '0.8rem'
     }}>
       CARGANDO...

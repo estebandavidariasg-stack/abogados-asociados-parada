@@ -4,6 +4,8 @@ import { supabase } from '../lib/supabase'
 import { useNavigate } from 'react-router-dom'
 import styles from './ProfilePage.module.css'
 import LawyerChatDashboard from '../components/LawyerChatDashboard'
+import MisContratos from '../components/MisContratos'
+import { getAuthHeaders } from '../lib/supabase'
 
 const UNIVERSIDADES = [
   'Universidad Nacional de Colombia',
@@ -135,7 +137,7 @@ export default function ProfilePage() {
   const [uploadingFoto, setUploadingFoto]   = useState(false)
   const [uploadingVideo, setUploadingVideo] = useState(false)
   const [departamento, setDepartamento]     = useState('')
-  const [areaDerecho, setAreaDerecho]       = useState('')
+  const [areasDerecho, setAreasDerecho] = useState([])  
 
   // ── Redes sociales ────────────────────────────────────────────────────
   const [instagram, setInstagram] = useState('')
@@ -154,7 +156,11 @@ export default function ProfilePage() {
       setTelefono(profile.telefono   || '')
       setUniversidad(profile.universidad || '')
       setExperiencia(profile.experiencia || '')
-      setAreaDerecho(profile.area_derecho || '')
+      setAreasDerecho(
+        profile.area_derecho
+          ? profile.area_derecho.split(',').map(a => a.trim()).filter(Boolean)
+          : []
+      )
       setDireccion(profile.direccion  || '')
       setDepartamento(profile.departamento || '')
       setCiudad(profile.ciudad       || '')
@@ -249,7 +255,7 @@ export default function ProfilePage() {
           body: JSON.stringify({
             nombre, apellido, telefono, universidad,
             experiencia, direccion, ciudad, departamento,
-            area_derecho: areaDerecho,
+            area_derecho: areasDerecho.join(', '),
             descripcion, foto_url: fotoUrl, video_url: videoUrl,
             // Redes sociales
             instagram, linkedin, facebook, twitter, whatsapp, tiktok,
@@ -358,12 +364,35 @@ export default function ProfilePage() {
               </select>
             </div>
 
-            <div className={styles.field}>
-              <label className={styles.label}>Área de derecho</label>
-              <select className={styles.input} value={areaDerecho} onChange={e => setAreaDerecho(e.target.value)}>
-                <option value="">Seleccionar...</option>
-                {AREAS_DERECHO.map(a => <option key={a} value={a}>{a}</option>)}
-              </select>
+            <div className={`${styles.field} ${styles.fullWidth}`}>
+              <label className={styles.label}>
+                Áreas de derecho
+                <span className={styles.optional}>(puedes seleccionar varias)</span>
+              </label>
+              <div className={styles.checkboxGrid}>
+                {AREAS_DERECHO.map(area => (
+                  <label key={area} className={styles.checkboxLabel}>
+                    <input
+                      type="checkbox"
+                      className={styles.checkbox}
+                      checked={areasDerecho.includes(area)}
+                      onChange={e => {
+                        if (e.target.checked) {
+                          setAreasDerecho(prev => [...prev, area])
+                        } else {
+                          setAreasDerecho(prev => prev.filter(a => a !== area))
+                        }
+                      }}
+                    />
+                    <span>{area}</span>
+                  </label>
+                ))}
+              </div>
+              {areasDerecho.length > 0 && (
+                <p className={styles.selectedAreas}>
+                  Seleccionadas: <strong>{areasDerecho.join(' · ')}</strong>
+                </p>
+              )}
             </div>
             <div className={styles.field}>
               <label className={styles.label}>Departamento</label>
@@ -445,19 +474,25 @@ export default function ProfilePage() {
           </div>
         </form>
 
-        {/* ── Sección de Chat ── */}
-        <div style={{ marginTop: 60 }}>
-          <div style={{ marginBottom: 24 }}>
-            <h2 style={{ fontFamily: 'Cinzel, serif', color: '#c9a84c', fontSize: '1.4rem', marginBottom: 6 }}>
-              Consultas de clientes
+       {/* ── Sección de Chat ── */}
+        <div className={styles.sectionBlock}>
+          <div className={styles.sectionHeader}>
+            <h2 className={styles.sectionTitle}>
+              Consultas de <em>clientes</em>
             </h2>
-            <p style={{ color: '#666', fontSize: '0.875rem' }}>
+            <p className={styles.sectionSub}>
               Aquí aparecen los chats de clientes asignados a tu área.
             </p>
           </div>
           <LawyerChatDashboard lawyerId={user?.id} />
         </div>
 
+        {/* ── Mis Contratos ── */}
+        <div className={styles.sectionBlock}>
+          <div className={styles.contractsWrap}>
+            <MisContratos abogadoId={user?.id} isSuperAdmin={false} />
+          </div>
+        </div>
       </div>
     </div>
   )

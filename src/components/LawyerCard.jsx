@@ -5,21 +5,26 @@ import styles from './LawyerCard.module.css'
 
 
 // Muestra estrellas doradas (solo lectura)
-function StarDisplay({ rating, total }) {
+function StarDisplay({ rating, total, dark = false }) {
   if (!rating) return null
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
       <div style={{ display: 'flex', gap: 2 }}>
         {[1,2,3,4,5].map(s => (
-          <span key={s} style={{ color: s <= Math.round(rating) ? '#c9a84c' : '#2a2a2a', fontSize: '0.85rem' }}>★</span>
+          <span key={s} style={{
+            color: s <= Math.round(rating) ? 'var(--gold)' : (dark ? 'rgba(13,45,94,0.18)' : 'rgba(255,255,255,0.2)'),
+            fontSize: '0.85rem'
+          }}>★</span>
         ))}
       </div>
-      <span style={{ color: '#888', fontSize: '0.75rem' }}>{rating} ({total})</span>
+      <span style={{ color: dark ? '#888' : 'rgba(255,255,255,0.55)', fontSize: '0.73rem' }}>
+        {rating} ({total})
+      </span>
     </div>
   )
 }
 
-export default function LawyerCard({ lawyer, delay = 0 }) {
+export default function LawyerCard({ lawyer, delay = 0, isSuperAdmin = false }) {
   const [open, setOpen] = useState(false)
   const [rating, setRating] = useState(null) // { promedio, total }
 
@@ -79,7 +84,15 @@ export default function LawyerCard({ lawyer, delay = 0 }) {
         </div>
 
         <div className={styles.info}>
-          {lawyer.especialidad && <span className={styles.area}>{lawyer.especialidad}</span>}
+          {lawyer.area_derecho && (
+            <p className={styles.areas}>
+              {lawyer.area_derecho.split(',').map((a, i, arr) => (
+                <span key={i}>
+                  {a.trim()}{i < arr.length - 1 && <span className={styles.areaDot}> · </span>}
+                </span>
+              ))}
+            </p>
+          )}
           <h3 className={styles.name}>{lawyer.nombre} {lawyer.apellido}</h3>
           {(lawyer.ciudad || lawyer.departamento) && (
             <p className={styles.location}>
@@ -91,14 +104,16 @@ export default function LawyerCard({ lawyer, delay = 0 }) {
           {/* Estrellas en la tarjeta */}
           {rating && (
             <div style={{ marginTop: 8 }}>
-              <StarDisplay rating={rating.promedio} total={rating.total} />
+              <StarDisplay rating={rating.promedio} total={rating.total} dark={false} />
             </div>
           )}
 
           {/* Iconos de redes en la tarjeta (pequeños) */}
-          <div style={{ marginTop: 10 }} onClick={e => e.stopPropagation()}>
-            <SocialLinks profile={lawyer} size="sm" />
-          </div>
+          {isSuperAdmin && (
+            <div style={{ marginTop: 10 }} onClick={e => e.stopPropagation()}>
+              <SocialLinks profile={lawyer} size="sm" />
+            </div>
+          )}
         </div>
 
         <div className={styles.cardHint}>Ver perfil →</div>
@@ -120,7 +135,15 @@ export default function LawyerCard({ lawyer, delay = 0 }) {
                 }
               </div>
               <div className={styles.modalHeaderText}>
-                {lawyer.especialidad && <span className={styles.modalArea}>{lawyer.especialidad}</span>}
+                {lawyer.area_derecho && (
+                  <p className={styles.modalAreas}>
+                    {lawyer.area_derecho.split(',').map((a, i, arr) => (
+                      <span key={i}>
+                        {a.trim()}{i < arr.length - 1 && <span className={styles.areaDot}> · </span>}
+                      </span>
+                    ))}
+                  </p>
+                )}
                 <h2 className={styles.modalName}>{lawyer.nombre} {lawyer.apellido}</h2>
                 {(lawyer.ciudad || lawyer.departamento) && (
                   <p className={styles.modalLocation}>
@@ -130,7 +153,7 @@ export default function LawyerCard({ lawyer, delay = 0 }) {
                 {/* Calificación en el modal */}
                 {rating && (
                   <div style={{ marginTop: 8 }}>
-                    <StarDisplay rating={rating.promedio} total={rating.total} />
+                    <StarDisplay rating={rating.promedio} total={rating.total} dark={true} />
                   </div>
                 )}
               </div>
@@ -138,13 +161,6 @@ export default function LawyerCard({ lawyer, delay = 0 }) {
 
             <div className={styles.modalDivider} />
 
-            {/* Redes sociales */}
-            {(lawyer.instagram || lawyer.linkedin || lawyer.facebook || lawyer.twitter || lawyer.tiktok) && (
-              <div className={styles.modalSection}>
-                <h4 className={styles.modalSectionTitle}>Redes sociales</h4>
-                <SocialLinks profile={lawyer} size="md" />
-              </div>
-            )}
 
             {/* Video */}
             {lawyer.video_url && (
@@ -164,20 +180,20 @@ export default function LawyerCard({ lawyer, delay = 0 }) {
 
             {/* Info detallada */}
             <div className={styles.modalDetails}>
-              <InfoRow icon={<svg viewBox="0 0 24 24" fill="none" stroke="#c9a84c" strokeWidth="1.5" width="18" height="18"><path d="M12 3L1 9l11 6 11-6-11-6z"/><path d="M1 9v6"/><path d="M5 11.18v5.64L12 21l7-4.18v-5.64"/></svg>} label="Universidad" value={lawyer.universidad} />
-              <InfoRow icon={<svg viewBox="0 0 24 24" fill="none" stroke="#c9a84c" strokeWidth="1.5" width="18" height="18"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/><path d="M2 12h20"/></svg>} label="Área de derecho" value={lawyer.area_derecho} />
-              <InfoRow icon={<svg viewBox="0 0 24 24" fill="none" stroke="#c9a84c" strokeWidth="1.5" width="18" height="18"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 1 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>} label="Ciudad" value={lawyer.ciudad} />
-              <InfoRow icon={<svg viewBox="0 0 24 24" fill="none" stroke="#c9a84c" strokeWidth="1.5" width="18" height="18"><path d="M3 21h18M3 7v14M21 7v14M7 7V3h10v4M7 11h2v2H7zM15 11h2v2h-2zM7 16h2v2H7zM15 16h2v2h-2zM11 11h2v6h-2z"/></svg>} label="Departamento" value={lawyer.departamento} />
-              <InfoRow icon={<svg viewBox="0 0 24 24" fill="none" stroke="#c9a84c" strokeWidth="1.5" width="18" height="18"><path d="M22 16.92v3a2 2 0 0 1-2.18 2A19.86 19.86 0 0 1 3.09 5.18 2 2 0 0 1 5.08 3h3a2 2 0 0 1 2 1.72c.13.81.36 1.6.68 2.34a2 2 0 0 1-.45 2.11L8.91 10.6a16 16 0 0 0 6.49 6.49l1.43-1.43a2 2 0 0 1 2.11-.45c.74.32 1.53.55 2.34.68A2 2 0 0 1 22 16.92z"/></svg>} label="Teléfono" value={lawyer.telefono} />
-              <InfoRow icon={<svg viewBox="0 0 24 24" fill="none" stroke="#c9a84c" strokeWidth="1.5" width="18" height="18"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>} label="Email" value={lawyer.email} />
-              <InfoRow icon={<svg viewBox="0 0 24 24" fill="none" stroke="#c9a84c" strokeWidth="1.5" width="18" height="18"><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/></svg>} label="Años de experiencia" value={lawyer.experiencia} />
-              <InfoRow icon={<svg viewBox="0 0 24 24" fill="none" stroke="#c9a84c" strokeWidth="1.5" width="18" height="18"><rect x="2" y="3" width="20" height="18" rx="2"/><path d="M2 8h20M8 3v5"/></svg>} label="Tarjeta profesional" value={lawyer.tarjeta_profesional} />
+              <InfoRow icon={<svg viewBox="0 0 24 24" fill="none" stroke="var(--gold)" strokeWidth="1.5" width="18" height="18"><path d="M12 3L1 9l11 6 11-6-11-6z"/><path d="M1 9v6"/><path d="M5 11.18v5.64L12 21l7-4.18v-5.64"/></svg>} label="Universidad" value={lawyer.universidad} />
+              <InfoRow icon={<svg viewBox="0 0 24 24" fill="none" stroke="var(--gold)" strokeWidth="1.5" width="18" height="18"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/><path d="M2 12h20"/></svg>} label="Área de derecho" value={lawyer.area_derecho} />
+              <InfoRow icon={<svg viewBox="0 0 24 24" fill="none" stroke="var(--gold)" strokeWidth="1.5" width="18" height="18"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 1 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>} label="Ciudad" value={lawyer.ciudad} />
+              <InfoRow icon={<svg viewBox="0 0 24 24" fill="none" stroke="var(--gold)" strokeWidth="1.5" width="18" height="18"><path d="M3 21h18M3 7v14M21 7v14M7 7V3h10v4M7 11h2v2H7zM15 11h2v2h-2zM7 16h2v2H7zM15 16h2v2h-2zM11 11h2v6h-2z"/></svg>} label="Departamento" value={lawyer.departamento} />
+              {isSuperAdmin && <InfoRow icon={<svg viewBox="0 0 24 24" fill="none" stroke="var(--gold)" strokeWidth="1.5" width="18" height="18"><path d="M22 16.92v3a2 2 0 0 1-2.18 2A19.86 19.86 0 0 1 3.09 5.18 2 2 0 0 1 5.08 3h3a2 2 0 0 1 2 1.72c.13.81.36 1.6.68 2.34a2 2 0 0 1-.45 2.11L8.91 10.6a16 16 0 0 0 6.49 6.49l1.43-1.43a2 2 0 0 1 2.11-.45c.74.32 1.53.55 2.34.68A2 2 0 0 1 22 16.92z"/></svg>} label="Teléfono" value={lawyer.telefono} />}
+              {isSuperAdmin && <InfoRow icon={<svg viewBox="0 0 24 24" fill="none" stroke="var(--gold)" strokeWidth="1.5" width="18" height="18"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>} label="Email" value={lawyer.email} />}
+              <InfoRow icon={<svg viewBox="0 0 24 24" fill="none" stroke="var(--gold)" strokeWidth="1.5" width="18" height="18"><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/></svg>} label="Años de experiencia" value={lawyer.experiencia} />
+              <InfoRow icon={<svg viewBox="0 0 24 24" fill="none" stroke="var(--gold)" strokeWidth="1.5" width="18" height="18"><rect x="2" y="3" width="20" height="18" rx="2"/><path d="M2 8h20M8 3v5"/></svg>} label="Tarjeta profesional" value={lawyer.tarjeta_profesional} />
             </div>
 
             {/* CTA WhatsApp */}
             {lawyer.telefono && (
               <a
-                href={`https://wa.me/57${lawyer.telefono.replace(/\D/g, '')}`}
+                href="https://wa.me/573108886571"
                 target="_blank"
                 rel="noopener noreferrer"
                 className={styles.modalCta}

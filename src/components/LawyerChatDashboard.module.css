@@ -5,16 +5,17 @@
   grid-template-columns: 260px 1fr;
   height: 75vh;
   min-height: 420px;
-  border: 1px solid #1e1e1e;
+  border: 1px solid rgba(13,45,94,0.1);
   border-radius: 12px;
   overflow: hidden;
-  background: #0d0d0d;
+  background: #ffffff;
+  box-shadow: 0 2px 20px rgba(13,45,94,0.08);
 }
 
 /* ── Panel izquierdo: lista de salas ── */
 .sidebar {
-  background: #0a0a0a;
-  border-right: 1px solid #1e1e1e;
+  background: #f5f7fb;
+  border-right: 1px solid rgba(13,45,94,0.08);
   overflow-y: auto;
   display: flex;
   flex-direction: column;
@@ -22,19 +23,19 @@
 
 .sidebarHeader {
   padding: 14px 16px;
-  border-bottom: 1px solid #1e1e1e;
+  border-bottom: 1px solid rgba(13,45,94,0.08);
   flex-shrink: 0;
 }
 
 .sidebarTitle {
-  color: #c9a84c;
+  color: #0d2d5e;
   font-family: 'Cinzel', serif;
   font-size: 0.85rem;
   margin: 0;
 }
 
 .empty {
-  color: #333;
+  color: #8a9ab5;
   font-size: 0.8rem;
   padding: 20px 16px;
   margin: 0;
@@ -44,23 +45,23 @@
 .roomRow {
   padding: 14px 16px;
   cursor: pointer;
-  border-bottom: 1px solid #111;
+  border-bottom: 1px solid rgba(13,45,94,0.06);
   border-left: 2px solid transparent;
   transition: background 0.15s, border-color 0.15s;
 }
 
 .roomRow:hover {
-  background: #0f0f0f;
+  background: rgba(13,45,94,0.03);
 }
 
 .roomRowActive {
   composes: roomRow;
-  background: #141414;
-  border-left-color: #c9a84c;
+  background: rgba(201,168,76,0.06);
+  border-left-color: var(--gold);
 }
 
 .roomArea {
-  color: #bbb;
+  color: #1a2a4a;
   font-size: 0.8rem;
   font-weight: 600;
   margin: 0 0 6px;
@@ -83,7 +84,7 @@
 
 .roomDate {
   font-size: 0.7rem;
-  color: #444;
+  color: #8a9ab5;
 }
 
 /* ── Panel derecho: chat ── */
@@ -100,7 +101,7 @@
   justify-content: center;
   flex-direction: column;
   gap: 12px;
-  color: #2a2a2a;
+  color: #b0bdd4;
 }
 
 .placeholderText {
@@ -110,9 +111,9 @@
 
 /* Header del chat */
 .chatHeader {
-  background: #111;
+  background: #ffffff;
   padding: 12px 18px;
-  border-bottom: 1px solid #1e1e1e;
+  border-bottom: 1px solid rgba(13,45,94,0.08);
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -125,14 +126,14 @@
 }
 
 .chatTitle {
-  color: #c9a84c;
+  color: #0d2d5e;
   font-family: 'Cinzel', serif;
   font-size: 0.85rem;
   margin: 0 0 4px;
 }
 
 .chatSubtitle {
-  color: #444;
+  color: #8a9ab5;
   font-size: 0.75rem;
   margin: 0;
 }
@@ -146,33 +147,35 @@
 }
 
 .btnClose {
-  background: none;
-  border: 1px solid #333;
+  background: rgba(220, 60, 60, 0.1);
+  border: 1px solid rgba(220, 60, 60, 0.3);
   border-radius: 6px;
-  color: #666;
-  font-size: 0.75rem;
+  color: rgba(220, 100, 100, 0.9);
+  font-family: inherit;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 0.5rem 0.9rem;
   cursor: pointer;
-  padding: 5px 12px;
-  transition: border-color 0.2s, color 0.2s;
+  transition: background 0.2s;
   white-space: nowrap;
 }
-
-.btnClose:hover {
-  border-color: #555;
-  color: #999;
-}
+.btnClose:hover { background: rgba(220, 60, 60, 0.2); }
 
 .confirmText {
-  color: #888;
-  font-size: 0.75rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: rgba(240, 235, 224, 0.85);
   white-space: nowrap;
 }
 
+
 .btnConfirm {
-  background: #8b1a1a;
+  background: rgba(180,40,40,0.9);
   border: none;
   border-radius: 6px;
-  color: #fcc;
+  color: #fff;
   font-size: 0.75rem;
   cursor: pointer;
   padding: 5px 12px;
@@ -180,21 +183,27 @@
   transition: opacity 0.2s;
   white-space: nowrap;
 }
+.btnConfirm:disabled { opacity: 0.6; cursor: not-allowed; }
 
-.btnConfirm:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
 
 .btnCancel {
-  background: none;
-  border: 1px solid #333;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 6px;
-  color: #666;
-  font-size: 0.75rem;
+  color: rgba(240, 235, 224, 0.85);
+  font-family: inherit;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  padding: 0.45rem 0.8rem;
   cursor: pointer;
-  padding: 5px 10px;
+  transition: background 0.2s, border-color 0.2s;
   white-space: nowrap;
+}
+
+.btnCancel:hover {
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.32);
 }
 
 /* Mensajes */
@@ -205,12 +214,12 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
-  scroll-behavior: smooth;
+  background: #fafbfd;
 }
 
 .messagesEmpty {
   text-align: center;
-  color: #2a2a2a;
+  color: #b0bdd4;
   margin-top: 40px;
   font-size: 0.8rem;
 }
@@ -229,116 +238,113 @@
 
 .bubbleMine {
   composes: bubble;
-  background: #1a1508;
-  border: 1px solid #c9a84c22;
+  background: #0d2d5e;
   border-radius: 12px 12px 2px 12px;
 }
 
 .bubbleOther {
   composes: bubble;
-  background: #111;
-  border: 1px solid #222;
+  background: #ffffff;
+  border: 1px solid rgba(13,45,94,0.1);
   border-radius: 12px 12px 12px 2px;
+  box-shadow: 0 1px 4px rgba(13,45,94,0.06);
 }
 
 .msgText {
-  color: #ddd;
   font-size: 0.9rem;
   line-height: 1.5;
   word-break: break-word;
   margin: 0;
 }
 
+.bubbleMine .msgText { color: rgba(255,255,255,0.92); }
+.bubbleOther .msgText { color: #1a2a4a; }
+
 .msgMeta {
   font-size: 0.7rem;
-  color: #444;
   margin: 4px 0 0;
 }
 
-.msgMetaMine  { composes: msgMeta; text-align: right; }
-.msgMetaOther { composes: msgMeta; text-align: left; }
+.msgMetaMine  { composes: msgMeta; text-align: right; color: rgba(255,255,255,0.4); }
+.msgMetaOther { composes: msgMeta; text-align: left; color: #8a9ab5; }
 
 .fileBtn {
   background: none;
-  border: 1px solid #333;
+  border: 1px solid rgba(13,45,94,0.15);
   border-radius: 6px;
   padding: 8px 12px;
   cursor: pointer;
   display: flex;
   align-items: center;
   gap: 8px;
-  color: #c9a84c;
+  color: #0d2d5e;
   font-size: 0.85rem;
   width: 100%;
   text-align: left;
   transition: border-color 0.2s;
 }
-
-.fileBtn:hover { border-color: #c9a84c55; }
+.fileBtn:hover { border-color: var(--gold); }
 .fileName { flex: 1; word-break: break-all; }
-.fileSize { color: #555; font-size: 0.75rem; flex-shrink: 0; }
+.fileSize { color: #8a9ab5; font-size: 0.75rem; flex-shrink: 0; }
 
 /* Input */
 .inputBar {
   padding: 12px;
-  border-top: 1px solid #1e1e1e;
+  border-top: 1px solid rgba(13,45,94,0.08);
   display: flex;
   gap: 8px;
   align-items: center;
-  background: #0a0a0a;
+  background: #ffffff;
   flex-shrink: 0;
 }
 
 .attachBtn {
   background: none;
-  border: 1px solid #2a2a2a;
+  border: 1px solid rgba(13,45,94,0.14);
   border-radius: 8px;
   padding: 10px 12px;
   cursor: pointer;
-  color: #888;
+  color: #6b7fa3;
   font-size: 1rem;
   flex-shrink: 0;
   line-height: 1;
   transition: color 0.2s, border-color 0.2s;
 }
-
 .attachBtn:hover:not(:disabled) {
-  color: #c9a84c;
-  border-color: #c9a84c44;
+  color: var(--gold);
+  border-color: rgba(201,168,76,0.45);
 }
-
-.attachBtn:disabled { color: #444; cursor: not-allowed; }
+.attachBtn:disabled { color: #b0bdd4; cursor: not-allowed; }
 
 .chatInput {
   flex: 1;
-  background: #111;
-  border: 1px solid #222;
+  background: #f5f7fb;
+  border: 1px solid rgba(13,45,94,0.12);
   border-radius: 8px;
   padding: 10px 14px;
-  color: #ccc;
+  color: #1a2a4a;
   font-size: 0.9rem;
   outline: none;
   font-family: inherit;
   transition: border-color 0.2s;
 }
-
-.chatInput:focus { border-color: #c9a84c44; }
-.chatInput::placeholder { color: #444; }
+.chatInput:focus { border-color: rgba(13,45,94,0.35); }
+.chatInput::placeholder { color: #b0bdd4; }
 
 .sendBtn {
-  background: #c9a84c;
+  background: #0d2d5e;
   border: none;
   border-radius: 8px;
   padding: 10px 18px;
-  color: #000;
+  color: #ffffff;
   font-weight: 700;
   font-size: 0.85rem;
   cursor: pointer;
   font-family: 'Cinzel', serif;
   flex-shrink: 0;
-  transition: opacity 0.2s;
+  transition: background 0.2s;
 }
-
+.sendBtn:hover { background: #1a4d8a; }
 .sendBtn:disabled { opacity: 0.4; cursor: not-allowed; }
 
 /* ── Mobile ── */
@@ -352,17 +358,15 @@
 
   .sidebar {
     border-right: none;
-    border-bottom: 1px solid #1e1e1e;
-    max-height: 200px;
+    border-bottom: 1px solid rgba(13,45,94,0.08);
+    max-height: 180px;
     overflow-x: auto;
     overflow-y: hidden;
     flex-direction: row;
     flex-wrap: nowrap;
   }
 
-  .sidebarHeader {
-    display: none;
-  }
+  .sidebarHeader { display: none; }
 
   .roomRow,
   .roomRowActive {
@@ -375,17 +379,13 @@
   }
 
   .roomRowActive {
-    border-bottom-color: #c9a84c;
+    border-bottom-color: var(--gold);
     border-left-color: transparent;
   }
 
-  .main {
-    min-height: 60vh;
-  }
+  .main { min-height: 60vh; }
 
-  .bubble {
-    max-width: 88%;
-  }
+  .bubble { max-width: 88%; }
 
   .chatHeader {
     flex-direction: column;
@@ -396,4 +396,248 @@
     width: 100%;
     justify-content: flex-end;
   }
+}
+
+/* ── Videollamada ── */
+.videoCallBtn {
+  background: rgba(13,45,94,0.06);
+  border: 1px solid rgba(13,45,94,0.18);
+  border-radius: 8px;
+  color: #0d2d5e;
+  font-size: 1.1rem;
+  width: 38px;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+.videoCallBtn:hover {
+  background: rgba(201,168,76,0.1);
+  border-color: rgba(201,168,76,0.45);
+  color: var(--gold);
+}
+
+.incomingCallBanner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  background: rgba(201,168,76,0.06);
+  border-bottom: 1px solid rgba(201,168,76,0.2);
+  font-size: 0.85rem;
+  color: #0d2d5e;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+
+.btnAcceptCall {
+  padding: 7px 18px;
+  background: linear-gradient(135deg, #2ecc71, #27ae60);
+  color: #fff;
+  border: none;
+  border-radius: 20px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+  transition: opacity 0.2s;
+}
+.btnAcceptCall:hover { opacity: 0.9; }
+
+.btnRejectCall {
+  padding: 7px 18px;
+  background: rgba(220,50,50,0.85);
+  color: #fff;
+  border: none;
+  border-radius: 20px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+  transition: opacity 0.2s;
+}
+.btnRejectCall:hover { opacity: 0.9; }
+
+/* ── Dot de grabación ── */
+.recordDot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #e05555;
+  margin-right: 5px;
+  animation: pulse 1s infinite;
+  flex-shrink: 0;
+}
+
+/* ── Grabación de voz ── */
+.recordingBtn {
+  background: rgba(220,50,50,0.08);
+  border: 1px solid rgba(220,50,50,0.35);
+  border-radius: 8px;
+  color: #c0392b;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0 10px;
+  height: 36px;
+  cursor: pointer;
+  font-family: inherit;
+  white-space: nowrap;
+  transition: all 0.2s;
+  animation: pulse 1s infinite;
+  display: flex;
+  align-items: center;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.6; }
+}
+
+/* ── Mensaje de audio ── */
+.audioMsg {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+}
+
+/* ── Mensajes de sistema (llamada) ── */
+.callSystemMsg {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 6px 16px;
+  margin: 4px auto;
+  background: rgba(13,45,94,0.04);
+  border: 1px solid rgba(13,45,94,0.08);
+  border-radius: 20px;
+  font-size: 0.72rem;
+  color: #8a9ab5;
+  width: fit-content;
+  max-width: 80%;
+}
+
+.callSystemTime {
+  font-size: 0.65rem;
+  color: #b0bdd4;
+}
+/* ── Header actions ── */
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  flex-wrap: nowrap;
+}
+
+/* ── Botón Verificar ── */
+.btnVerificar {
+  background: rgba(201, 168, 76, 0.12);
+  border: 1px solid rgba(201, 168, 76, 0.4);
+  border-radius: 7px;
+  color: #C9A84C;
+  font-family: inherit;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 0.5rem 0.9rem;
+  cursor: pointer;
+  transition: background 0.2s;
+  white-space: nowrap;
+}
+.btnVerificar:hover { background: rgba(201, 168, 76, 0.22); }
+
+/* ── Tag verificado ── */
+.verificadoTag {
+  font-size: 0.68rem;
+  color: rgba(80, 220, 130, 0.9);
+  background: rgba(80, 220, 130, 0.08);
+  border: 1px solid rgba(80, 220, 130, 0.22);
+  border-radius: 6px;
+  padding: 0.4rem 0.8rem;
+  white-space: nowrap;
+}
+
+/* ── Confirmar fila (cierre) ── */
+.confirmRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* ── Panel de verificación (debajo del header) ── */
+.verificarPanel {
+  background: rgba(13, 45, 94, 0.06);
+  border-bottom: 1px solid rgba(13, 45, 94, 0.14);
+  padding: 12px 18px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.verificarTxt {
+  flex: 1;
+  font-size: 0.76rem;
+  color: #3a4a6b;
+  margin: 0;
+  line-height: 1.5;
+  min-width: 180px;
+  font-weight: 500;
+}
+
+.verificarBtns {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.btnConfirmVerificar {
+  background: rgba(201, 168, 76, 0.15);
+  border: 1px solid rgba(201, 168, 76, 0.5);
+  border-radius: 6px;
+  color: #7a5c10;
+  font-family: inherit;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 0.45rem 1rem;
+  cursor: pointer;
+  transition: background 0.2s;
+  white-space: nowrap;
+}
+.btnConfirmVerificar:disabled { opacity: 0.45; cursor: not-allowed; }
+.btnConfirmVerificar:not(:disabled):hover { background: rgba(201, 168, 76, 0.28); }
+
+.btnCancelVerificar {
+  background: rgba(13, 45, 94, 0.06);
+  border: 1px solid rgba(13, 45, 94, 0.2);
+  border-radius: 6px;
+  color: #5a6f96;
+  font-family: inherit;
+  font-size: 0.68rem;
+  font-weight: 600;
+  padding: 0.45rem 0.8rem;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s;
+  white-space: nowrap;
+}
+.btnCancelVerificar:hover {
+  background: rgba(13, 45, 94, 0.12);
+  border-color: rgba(13, 45, 94, 0.35);
+  color: #3a4a6b;
+}
+
+@media (max-width: 600px) {
+  .headerActions { flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+  .verificarPanel { flex-direction: column; align-items: flex-start; }
+  .verificarBtns { width: 100%; }
+  .btnConfirmVerificar { flex: 1; text-align: center; }
 }

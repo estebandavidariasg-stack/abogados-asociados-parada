@@ -3,57 +3,64 @@ import { useAuth } from '../context/AuthContext'
 import styles from './Navbar.module.css'
 
 export default function Navbar({ onLogin, onRegister }) {
-  const [scrolled, setScrolled] = useState(false)
-  const [menuOpen, setMenuOpen] = useState(false)
+  const [scrolled, setScrolled]   = useState(false)
+  const [menuOpen, setMenuOpen]   = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
   const { user, profile, signOut } = useAuth()
   const menuRef = useRef(null)
 
   useEffect(() => {
-    const handleScroll = () => setScrolled(window.scrollY > 40)
-    window.addEventListener('scroll', handleScroll)
+    const handleScroll = () => setScrolled(window.scrollY > 50)
+    window.addEventListener('scroll', handleScroll, { passive: true })
     return () => window.removeEventListener('scroll', handleScroll)
   }, [])
 
   useEffect(() => {
     const handleClickOutside = (e) => {
-      if (menuRef.current && !menuRef.current.contains(e.target)) {
-        setMenuOpen(false)
-      }
+      if (menuRef.current && !menuRef.current.contains(e.target)) setMenuOpen(false)
     }
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
-  const displayName = profile?.nombre
-    ?? user?.user_metadata?.nombre
-    ?? user?.email
-    ?? 'Usuario'
+  // Close mobile menu on resize
+  useEffect(() => {
+    const handleResize = () => { if (window.innerWidth > 768) setMobileOpen(false) }
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
 
+  const displayName = profile?.nombre ?? user?.user_metadata?.nombre ?? user?.email ?? 'Usuario'
   const isSuperAdmin = profile?.rol === 'superadmin'
 
   return (
-    <nav className={`${styles.nav} ${scrolled ? styles.scrolled : ''}`}>
+    <nav className={`${styles.nav} ${scrolled ? styles.navScrolled : ''}`}>
+      {/* Logo */}
       <a href="/" className={styles.logoWrap}>
-        <img src="/logo.png" alt="Abogados y Asociados Parada" className={styles.logoImg} />
+        <img src="/favicon.png" alt="Abogados y Asociados Parada" className={styles.logoImg} />
       </a>
 
-      <div className={styles.firmTitle}>
-        <span className={styles.firmName}>Abogados y Asociados</span>
-        <span className={styles.firmHighlight}>Parada</span>
+      {/* Firm name — centered on desktop */}
+      <div className={`${styles.firmTitle} ${scrolled ? styles.firmTitleScrolled : ''}`}>
+        <span className={`${styles.firmName} ${scrolled ? styles.firmNameDark : ''}`}>
+          Abogados y Asociados
+        </span>
+        <span className={`${styles.firmHighlight} ${scrolled ? styles.firmHighlightDark : ''}`}>
+          Parada
+        </span>
       </div>
 
-      {/* ── Desktop actions ── */}
+      {/* Desktop actions */}
       <div className={styles.actions}>
         {user ? (
           <div className={styles.userMenu} ref={menuRef}>
             <button
-              className={styles.userBtn}
-              onClick={() => setMenuOpen((o) => !o)}
+              className={`${styles.userBtn} ${scrolled ? styles.userBtnDark : ''}`}
+              onClick={() => setMenuOpen(o => !o)}
               aria-expanded={menuOpen}
               aria-haspopup="true"
             >
-              <span className={styles.avatar}>
+              <span className={`${styles.avatar} ${scrolled ? styles.avatarDark : ''}`}>
                 {profile?.foto_url
                   ? <img src={profile.foto_url} alt={displayName} className={styles.avatarImg} />
                   : (
@@ -63,7 +70,9 @@ export default function Navbar({ onLogin, onRegister }) {
                   )
                 }
               </span>
-              <span className={styles.userName}>{displayName}</span>
+              <span className={`${styles.userName} ${scrolled ? styles.userNameDark : ''}`}>
+                {displayName}
+              </span>
             </button>
 
             {menuOpen && (
@@ -71,7 +80,7 @@ export default function Navbar({ onLogin, onRegister }) {
                 {isSuperAdmin && (
                   <li>
                     <button className={`${styles.dropdownItem} ${styles.adminItem}`}
-                      onClick={() => { window.location.href = '/admin'; }}>
+                      onClick={() => { window.location.href = '/admin' }}>
                       ⚙ Panel Admin
                     </button>
                   </li>
@@ -93,22 +102,32 @@ export default function Navbar({ onLogin, onRegister }) {
           </div>
         ) : (
           <>
-            <button className="btn-ghost" onClick={onLogin}>Iniciar sesión</button>
-            <button className="btn-solid" onClick={onRegister}>Registrarse</button>
+            <button
+              className={`${styles.btnLogin} ${scrolled ? styles.btnLoginDark : ''}`}
+              onClick={onLogin}
+            >
+              Iniciar sesión
+            </button>
+            <button
+              className={`${styles.btnRegister} ${scrolled ? styles.btnRegisterDark : ''}`}
+              onClick={onRegister}
+            >
+              Registrarse como abogado
+            </button>
           </>
         )}
       </div>
 
-      {/* ── Hamburguesa móvil ── */}
+      {/* Hamburger — mobile */}
       <button
-        className={`${styles.burger} ${mobileOpen ? styles.burgerOpen : ''}`}
-        onClick={() => setMobileOpen((o) => !o)}
+        className={`${styles.burger} ${scrolled ? styles.burgerDark : ''} ${mobileOpen ? styles.burgerOpen : ''}`}
+        onClick={() => setMobileOpen(o => !o)}
         aria-label="Menú"
       >
         <span /><span /><span />
       </button>
 
-      {/* ── Menú móvil desplegable ── */}
+      {/* Mobile dropdown */}
       {mobileOpen && (
         <div className={styles.mobileMenu}>
           {user ? (
@@ -127,14 +146,17 @@ export default function Navbar({ onLogin, onRegister }) {
                 <span className={styles.mobileUserName}>{displayName}</span>
               </div>
               {isSuperAdmin && (
-                <button className={styles.mobileItem} onClick={() => { window.location.href = '/admin'; setMobileOpen(false) }}>
+                <button className={styles.mobileItem}
+                  onClick={() => { window.location.href = '/admin'; setMobileOpen(false) }}>
                   ⚙ Panel Admin
                 </button>
               )}
-              <button className={styles.mobileItem} onClick={() => { window.location.href = '/perfil'; setMobileOpen(false) }}>
+              <button className={styles.mobileItem}
+                onClick={() => { window.location.href = '/perfil'; setMobileOpen(false) }}>
                 Mi perfil
               </button>
-              <button className={styles.mobileItem} onClick={() => { signOut(); setMobileOpen(false) }}>
+              <button className={styles.mobileItem}
+                onClick={() => { signOut(); setMobileOpen(false) }}>
                 Cerrar sesión
               </button>
             </>
@@ -144,7 +166,7 @@ export default function Navbar({ onLogin, onRegister }) {
                 Iniciar sesión
               </button>
               <button className={styles.mobileItemGold} onClick={() => { onRegister(); setMobileOpen(false) }}>
-                Registrarse
+                Registrarse como abogado
               </button>
             </>
           )}

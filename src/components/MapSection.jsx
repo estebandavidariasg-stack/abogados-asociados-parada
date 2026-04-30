@@ -1,151 +1,283 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState, useMemo } from 'react'
+import * as d3 from 'd3'
+import * as topojson from 'topojson-client'
 import styles from './MapSection.module.css'
 
-/* ── Continent SVG paths (generated from real geographic coordinates) ── */
-const CONTINENTS = [
-  /* North America */
-  "M 33.3,69.4 L 47.2,77.8 63.9,83.3 75,80.6 86.1,80.6 105.6,83.3 119.4,86.1 125,91.7 130.6,97.2 138.9,102.8 147.2,108.3 152.8,113.9 155.6,122.2 158.3,127.8 161.1,133.3 163.9,141.7 166.7,147.2 172.2,155.6 175,158.3 180.6,166.7 186.1,172.2 191.7,180.6 197.2,186.1 202.8,191.7 208.3,194.4 213.9,197.2 222.2,202.8 230.6,205.6 236.1,202.8 241.7,205.6 247.2,208.3 252.8,211.1 258.3,213.9 263.9,216.7 269.4,222.2 272.2,225 272.2,208.3 272.2,200 275,183.3 275,177.8 272.2,172.2 269.4,166.7 263.9,166.7 258.3,166.7 252.8,166.7 247.2,169.4 241.7,166.7 236.1,169.4 230.6,175 230.6,177.8 233.3,177.8 236.1,172.2 238.9,166.7 244.4,166.7 250,166.7 252.8,166.7 255.6,166.7 263.9,166.7 272.2,166.7 275,172.2 277.8,177.8 277.8,180.6 275,180.6 272.2,175 269.4,166.7 272.2,163.9 275,161.1 277.8,158.3 280.6,155.6 286.1,150 288.9,147.2 291.7,141.7 294.4,136.1 300,133.3 302.8,133.3 305.6,130.6 311.1,127.8 313.9,125 316.7,127.8 319.4,127.8 325,125 330.6,122.2 333.3,119.4 336.1,119.4 344.4,119.4 352.8,119.4 355.6,116.7 344.4,111.1 338.9,108.3 336.1,105.6 330.6,102.8 325,100 322.2,94.4 327.8,88.9 333.3,83.3 325,77.8 311.1,77.8 300,77.8 288.9,75 277.8,75 269.4,77.8 261.1,75 250,75 238.9,75 236.1,83.3 238.9,88.9 244.4,94.4 255.6,94.4 261.1,91.7 269.4,91.7 275,94.4 280.6,97.2 277.8,105.6 272.2,111.1 266.7,116.7 261.1,119.4 255.6,116.7 250,113.9 244.4,113.9 236.1,113.9 222.2,111.1 213.9,105.6 202.8,100 194.4,94.4 188.9,88.9 180.6,83.3 172.2,77.8 166.7,75 152.8,77.8 138.9,75 125,72.2 111.1,69.4 97.2,72.2 83.3,75 69.4,77.8 55.6,75 41.7,72.2 33.3,69.4 Z",
-  /* Central America */
-  "M 269.4,222.2 L 272.2,225 277.8,225 280.6,227.8 283.3,227.8 286.1,230.6 286.1,236.1 288.9,238.9 288.9,244.4 283.3,244.4 277.8,247.2 277.8,238.9 275,233.3 272.2,227.8 269.4,225 266.7,222.2 263.9,219.4 261.1,216.7 258.3,213.9 263.9,216.7 269.4,222.2 Z",
-  /* South America */
-  "M 286.1,236.1 L 291.7,233.3 297.2,227.8 302.8,222.2 305.6,219.4 311.1,219.4 316.7,219.4 322.2,222.2 327.8,222.2 333.3,227.8 338.9,230.6 347.2,236.1 355.6,238.9 361.1,244.4 366.7,250 372.2,252.8 377.8,255.6 383.3,258.3 388.9,258.3 394.4,263.9 400,269.4 402.8,272.2 402.8,277.8 400,283.3 397.2,288.9 394.4,294.4 391.7,300 388.9,305.6 386.1,311.1 380.6,313.9 377.8,313.9 372.2,316.7 366.7,322.2 363.9,327.8 361.1,330.6 358.3,336.1 355.6,341.7 352.8,341.7 347.2,344.4 341.7,347.2 338.9,350 336.1,352.8 333.3,355.6 327.8,358.3 325,363.9 322.2,369.4 319.4,375 316.7,380.6 313.9,386.1 311.1,388.9 308.3,394.4 305.6,397.2 300,394.4 297.2,388.9 294.4,380.6 294.4,375 297.2,369.4 300,361.1 300,355.6 302.8,347.2 302.8,341.7 302.8,333.3 302.8,327.8 305.6,319.4 305.6,311.1 305.6,302.8 305.6,297.2 302.8,294.4 300,291.7 294.4,288.9 288.9,286.1 286.1,283.3 283.3,277.8 280.6,272.2 277.8,263.9 277.8,258.3 277.8,252.8 277.8,247.2 283.3,244.4 286.1,241.7 286.1,236.1 Z",
-  /* Europe */
-  "M 472.2,150 L 477.8,147.2 475,141.7 475,136.1 477.8,130.6 486.1,127.8 494.4,127.8 500,127.8 502.8,130.6 508.3,130.6 513.9,127.8 516.7,122.2 516.7,119.4 519.4,116.7 522.2,116.7 525,113.9 527.8,116.7 533.3,122.2 536.1,127.8 538.9,130.6 544.4,133.3 547.2,136.1 550,138.9 555.6,138.9 561.1,141.7 566.7,144.4 572.2,144.4 577.8,147.2 577.8,144.4 583.3,138.9 583.3,133.3 583.3,127.8 583.3,122.2 583.3,116.7 577.8,111.1 572.2,105.6 572.2,100 577.8,94.4 583.3,88.9 588.9,83.3 594.4,77.8 600,72.2 605.6,66.7 611.1,61.1 605.6,61.1 600,61.1 594.4,61.1 588.9,61.1 583.3,61.1 575,63.9 566.7,66.7 558.3,69.4 550,72.2 541.7,75 533.3,77.8 525,75 516.7,77.8 513.9,80.6 513.9,86.1 516.7,91.7 522.2,97.2 522.2,100 516.7,100 511.1,102.8 508.3,105.6 505.6,108.3 500,108.3 494.4,108.3 488.9,105.6 486.1,102.8 483.3,100 477.8,100 472.2,105.6 472.2,111.1 477.8,113.9 483.3,116.7 486.1,119.4 488.9,122.2 491.7,125 494.4,127.8 488.9,130.6 483.3,133.3 480.6,136.1 477.8,141.7 475,144.4 472.2,150 Z",
-  /* UK */
-  "M 483.3,111.1 L 486.1,111.1 491.7,108.3 497.2,108.3 500,105.6 502.8,102.8 500,100 497.2,97.2 494.4,94.4 491.7,91.7 488.9,88.9 486.1,88.9 483.3,91.7 486.1,94.4 488.9,97.2 491.7,100 488.9,102.8 486.1,105.6 486.1,108.3 483.3,111.1 Z",
-  /* Africa */
-  "M 452.8,208.3 L 455.6,202.8 455.6,197.2 455.6,191.7 461.1,186.1 463.9,180.6 469.4,175 475,169.4 480.6,163.9 486.1,158.3 491.7,152.8 497.2,150 502.8,150 508.3,147.2 513.9,147.2 519.4,147.2 525,147.2 527.8,147.2 530.6,152.8 533.3,158.3 536.1,163.9 541.7,161.1 547.2,161.1 555.6,161.1 561.1,161.1 569.4,161.1 577.8,163.9 583.3,163.9 588.9,163.9 591.7,166.7 594.4,166.7 597.2,169.4 600,172.2 602.8,175 605.6,180.6 608.3,186.1 611.1,191.7 616.7,200 619.4,205.6 622.2,211.1 625,216.7 627.8,222.2 630.6,227.8 633.3,236.1 636.1,241.7 638.9,247.2 638.9,252.8 636.1,258.3 633.3,263.9 630.6,269.4 627.8,275 622.2,280.6 616.7,286.1 613.9,291.7 611.1,297.2 608.3,302.8 605.6,308.3 602.8,313.9 600,319.4 597.2,325 594.4,330.6 591.7,336.1 588.9,341.7 586.1,344.4 580.6,344.4 575,341.7 572.2,338.9 569.4,336.1 566.7,333.3 563.9,330.6 561.1,327.8 558.3,325 555.6,322.2 552.8,316.7 550,311.1 547.2,305.6 544.4,300 541.7,294.4 538.9,288.9 536.1,283.3 533.3,277.8 530.6,272.2 527.8,266.7 525,261.1 522.2,258.3 519.4,252.8 516.7,247.2 513.9,241.7 513.9,236.1 511.1,236.1 508.3,236.1 505.6,236.1 502.8,236.1 500,236.1 497.2,236.1 491.7,236.1 486.1,236.1 480.6,236.1 477.8,236.1 472.2,233.3 466.7,230.6 463.9,227.8 461.1,222.2 458.3,219.4 455.6,216.7 452.8,213.9 452.8,208.3 Z",
-  /* Asia */
-  "M 577.8,147.2 L 583.3,147.2 588.9,147.2 594.4,147.2 600,147.2 605.6,144.4 611.1,141.7 616.7,136.1 622.2,133.3 627.8,133.3 633.3,138.9 638.9,144.4 644.4,147.2 650,152.8 655.6,161.1 661.1,172.2 666.7,180.6 672.2,186.1 677.8,188.9 683.3,188.9 688.9,183.3 694.4,186.1 700,188.9 702.8,194.4 705.6,200 708.3,205.6 711.1,211.1 713.9,216.7 716.7,222.2 719.4,227.8 722.2,230.6 722.2,222.2 722.2,213.9 719.4,205.6 716.7,200 713.9,194.4 711.1,188.9 708.3,183.3 711.1,177.8 716.7,172.2 722.2,172.2 727.8,175 733.3,177.8 738.9,177.8 744.4,183.3 747.2,188.9 750,188.9 752.8,188.9 755.6,188.9 758.3,194.4 761.1,200 763.9,205.6 766.7,211.1 769.4,216.7 772.2,222.2 775,227.8 777.8,233.3 780.6,238.9 783.3,241.7 786.1,244.4 788.9,247.2 791.7,244.4 794.4,238.9 797.2,233.3 800,227.8 802.8,222.2 800,216.7 797.2,211.1 794.4,205.6 797.2,200 800,194.4 802.8,191.7 805.6,188.9 811.1,188.9 816.7,188.9 822.2,186.1 827.8,183.3 830.6,177.8 833.3,172.2 836.1,166.7 838.9,161.1 838.9,155.6 838.9,150 841.7,144.4 844.4,141.7 850,144.4 855.6,147.2 861.1,150 863.9,155.6 861.1,161.1 858.3,166.7 855.6,172.2 858.3,177.8 861.1,183.3 866.7,188.9 872.2,191.7 877.8,188.9 883.3,183.3 886.1,177.8 888.9,172.2 891.7,166.7 894.4,161.1 897.2,155.6 900,150 902.8,144.4 900,138.9 894.4,133.3 888.9,127.8 883.3,122.2 877.8,116.7 875,111.1 872.2,105.6 866.7,100 861.1,94.4 855.6,88.9 861.1,83.3 866.7,77.8 875,72.2 883.3,66.7 888.9,61.1 894.4,58.3 902.8,55.6 916.7,52.8 930.6,50 944.4,50 958.3,55.6 972.2,61.1 986.1,66.7 1000,69.4 1000,111.1 994.4,116.7 986.1,122.2 977.8,127.8 972.2,133.3 966.7,138.9 958.3,133.3 950,127.8 944.4,122.2 938.9,116.7 930.6,111.1 922.2,105.6 916.7,100 911.1,94.4 902.8,88.9 894.4,83.3 888.9,77.8 875,72.2 861.1,69.4 847.2,66.7 833.3,63.9 819.4,61.1 805.6,61.1 791.7,63.9 777.8,66.7 763.9,69.4 750,72.2 736.1,75 722.2,77.8 708.3,77.8 694.4,75 680.6,72.2 666.7,69.4 652.8,66.7 638.9,63.9 625,61.1 611.1,61.1 605.6,66.7 600,72.2 594.4,77.8 588.9,83.3 583.3,88.9 577.8,94.4 572.2,100 572.2,105.6 577.8,111.1 583.3,116.7 583.3,122.2 583.3,127.8 583.3,133.3 583.3,138.9 577.8,144.4 577.8,147.2 Z",
-  /* Australia */
-  "M 816.7,311.1 L 822.2,305.6 827.8,300 833.3,294.4 838.9,288.9 844.4,286.1 850,286.1 855.6,288.9 861.1,286.1 866.7,283.3 872.2,283.3 877.8,283.3 883.3,288.9 888.9,294.4 894.4,288.9 900,288.9 905.6,294.4 911.1,300 916.7,305.6 922.2,311.1 925,316.7 925,322.2 925,327.8 922.2,333.3 916.7,338.9 911.1,344.4 905.6,350 900,355.6 894.4,355.6 888.9,352.8 883.3,350 877.8,347.2 872.2,344.4 866.7,341.7 861.1,338.9 855.6,338.9 850,341.7 844.4,344.4 838.9,344.4 833.3,341.7 827.8,338.9 822.2,333.3 816.7,327.8 813.9,322.2 813.9,316.7 816.7,311.1 Z",
-  /* Japan */
-  "M 861.1,163.9 L 863.9,158.3 866.7,155.6 869.4,152.8 872.2,150 877.8,147.2 883.3,144.4 888.9,138.9 891.7,133.3 894.4,130.6 897.2,127.8 900,125 902.8,127.8 900,133.3 894.4,138.9 891.7,144.4 888.9,150 886.1,155.6 883.3,158.3 877.8,161.1 872.2,163.9 866.7,166.7 861.1,163.9 Z",
-  /* Greenland */
-  "M 355.6,83.3 L 366.7,77.8 377.8,72.2 388.9,66.7 400,61.1 411.1,55.6 422.2,50 433.3,44.4 444.4,38.9 450,33.3 444.4,27.8 433.3,22.2 416.7,22.2 400,22.2 383.3,27.8 372.2,33.3 361.1,38.9 355.6,44.4 350,50 347.2,55.6 350,61.1 355.6,66.7 361.1,72.2 355.6,77.8 355.6,83.3 Z",
-  /* Madagascar */
-  "M 622.2,283.3 L 627.8,288.9 630.6,294.4 633.3,300 633.3,305.6 630.6,311.1 627.8,316.7 625,319.4 622.2,316.7 619.4,311.1 619.4,305.6 619.4,300 622.2,294.4 622.2,288.9 622.2,283.3 Z",
-  /* Indonesia */
-  "M 763.9,233.3 L 772.2,238.9 777.8,244.4 783.3,247.2 788.9,250 794.4,252.8 800,255.6 805.6,261.1 811.1,266.7 816.7,269.4 822.2,272.2 827.8,272.2 833.3,269.4 827.8,266.7 822.2,263.9 816.7,261.1 811.1,258.3 805.6,255.6 800,250 794.4,247.2 788.9,244.4 783.3,241.7 777.8,238.9 772.2,236.1 763.9,233.3 Z",
-  /* New Zealand */
-  "M 977.8,347.2 L 983.3,352.8 988.9,355.6 994.4,361.1 991.7,366.7 988.9,372.2 983.3,377.8 977.8,377.8 972.2,372.2 972.2,366.7 977.8,361.1 980.6,355.6 977.8,350 977.8,347.2 Z",
+const W = 1000, H = 500
+
+// ── Ciudades en [lng, lat] ────────────────────────────────────────────────
+const CITIES = [
+  { id: 0,  name: 'Bogotá',        coords: [-74.1,   4.7],  main: true  },
+  { id: 1,  name: 'Medellín',      coords: [-75.6,   6.2],  main: false },
+  { id: 2,  name: 'Cali',          coords: [-76.5,   3.4],  main: false },
+  { id: 3,  name: 'Barranquilla',  coords: [-74.8,  11.0],  main: false },
+  { id: 4,  name: 'Miami',         coords: [-80.2,  25.8],  main: false },
+  { id: 5,  name: 'New York',      coords: [-74.0,  40.7],  main: false },
+  { id: 6,  name: 'Ciudad México', coords: [-99.1,  19.4],  main: false },
+  { id: 7,  name: 'Madrid',        coords: [ -3.7,  40.4],  main: false },
+  { id: 8,  name: 'Lima',          coords: [-77.0, -12.0],  main: false },
+  { id: 9,  name: 'Buenos Aires',  coords: [-58.4, -34.6],  main: false },
+  { id: 10, name: 'São Paulo',     coords: [-46.6, -23.5],  main: false },
+  { id: 11, name: 'Londres',       coords: [ -0.1,  51.5],  main: false },
+  { id: 12, name: 'Lagos',         coords: [  3.4,   6.5],  main: false },
+  { id: 13, name: 'Tokio',         coords: [139.7,  35.7],  main: false },
+  { id: 14, name: 'Sídney',        coords: [151.2, -33.9],  main: false },
+  { id: 15, name: 'París',         coords: [  2.3,  48.9],  main: false },
+  { id: 16, name: 'Dubai',         coords: [ 55.3,  25.2],  main: false },
+  { id: 17, name: 'Toronto',       coords: [-79.4,  43.7],  main: false },
 ]
 
-/* ── Points (no labels) ── */
-const POINTS = [
-  { x: 294, y: 236, main: true },   /* Bogotá */
-  { x: 289, y: 233 },               /* Medellín */
-  { x: 289, y: 242 },               /* Cali */
-  { x: 292, y: 219 },               /* Barranquilla */
-  { x: 278, y: 178 },               /* Miami */
-  { x: 294, y: 136 },               /* New York */
-  { x: 225, y: 197 },               /* CDMX */
-  { x: 489, y: 139 },               /* Madrid */
-  { x: 286, y: 283 },               /* Lima */
-  { x: 339, y: 347 },               /* Buenos Aires */
-  { x: 369, y: 314 },               /* São Paulo */
-  { x: 500, y: 108 },               /* London */
-  { x: 508, y: 233 },               /* Lagos */
-  { x: 889, y: 150 },               /* Tokyo */
-  { x: 919, y: 344 },               /* Sydney */
-]
-
-/* ── Connections ── */
 const CONNECTIONS = [
-  { from: 0, to: 4, d: 0 },     /* Bogotá → Miami */
-  { from: 0, to: 5, d: 1.5 },   /* Bogotá → NY */
-  { from: 0, to: 7, d: 3.0 },   /* Bogotá → Madrid */
-  { from: 0, to: 6, d: 0.8 },   /* Bogotá → CDMX */
-  { from: 0, to: 8, d: 2.0 },   /* Bogotá → Lima */
-  { from: 0, to: 9, d: 4.0 },   /* Bogotá → Buenos Aires */
-  { from: 0, to: 10, d: 2.5 },  /* Bogotá → São Paulo */
-  { from: 4, to: 7, d: 1.2 },   /* Miami → Madrid */
-  { from: 5, to: 11, d: 3.5 },  /* NY → London */
-  { from: 7, to: 12, d: 4.2 },  /* Madrid → Lagos */
-  { from: 11, to: 13, d: 2.8 }, /* London → Tokyo */
-  { from: 13, to: 14, d: 1.0 }, /* Tokyo → Sydney */
+  { from: 0, to: 4,  delay: 0   },
+  { from: 0, to: 5,  delay: 1.5 },
+  { from: 0, to: 7,  delay: 3.0 },
+  { from: 0, to: 6,  delay: 0.8 },
+  { from: 0, to: 8,  delay: 2.0 },
+  { from: 0, to: 9,  delay: 4.0 },
+  { from: 0, to: 10, delay: 2.5 },
+  { from: 4, to: 7,  delay: 1.2 },
+  { from: 5, to: 11, delay: 3.5 },
+  { from: 7, to: 15, delay: 0.5 },
+  { from: 7, to: 12, delay: 4.2 },
+  { from: 11, to: 13, delay: 2.8 },
+  { from: 13, to: 14, delay: 1.0 },
+  { from: 16, to: 13, delay: 3.2 },
+  { from: 0, to: 17, delay: 1.8 },
+  { from: 5, to: 17, delay: 0.4 },
 ]
 
 function curvePath(x1, y1, x2, y2) {
   const dx = x2 - x1, dy = y2 - y1
   const dist = Math.sqrt(dx * dx + dy * dy)
-  const curve = dist * 0.3
+  const curve = dist * 0.28
   const mx = (x1 + x2) / 2, my = (y1 + y2) / 2
-  const cx = mx - (dy / dist) * curve
-  const cy = my + (dx / dist) * curve
+  const nx = -dy / dist, ny = dx / dist
+  const cx = mx + nx * curve
+  const cy = my + ny * curve
   return `M ${x1} ${y1} Q ${cx} ${cy} ${x2} ${y2}`
 }
 
 export default function MapSection() {
-  const ref = useRef(null)
+  const sectionRef = useRef(null)
+  const [worldPaths, setWorldPaths] = useState([])
+  const [projected,  setProjected]  = useState([])
+  const [paths,      setPaths]      = useState([])
+  const [loading,    setLoading]    = useState(true)
 
+  // ── Proyección Natural Earth ──────────────────────────────────────────────
+  const projection = useMemo(() =>
+    d3.geoNaturalEarth1().scale(158).translate([W / 2, H / 2 + 25])
+  , [])
+
+  const pathGen = useMemo(() => d3.geoPath().projection(projection), [projection])
+
+  // ── Cargar TopoJSON ───────────────────────────────────────────────────────
+  useEffect(() => {
+    fetch('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json')
+      .then(r => r.json())
+      .then(world => {
+        const countries = topojson.feature(world, world.objects.countries)
+        const dPaths = countries.features.map(f => ({
+          id: f.id,
+          d: pathGen(f),
+        })).filter(p => p.d)
+        setWorldPaths(dPaths)
+
+        // Proyectar ciudades
+        const pts = CITIES.map(c => {
+          const [x, y] = projection(c.coords) || [0, 0]
+          return { ...c, x, y }
+        })
+        setProjected(pts)
+
+        // Calcular paths de conexiones
+        const cPaths = CONNECTIONS.map((c, i) => {
+          const a = pts[c.from], b = pts[c.to]
+          return { ...c, i, path: curvePath(a.x, a.y, b.x, b.y) }
+        })
+        setPaths(cPaths)
+        setLoading(false)
+      })
+      .catch(() => setLoading(false))
+  }, [pathGen, projection])
+
+  // ── IntersectionObserver ──────────────────────────────────────────────────
   useEffect(() => {
     const obs = new IntersectionObserver(
       ([e]) => { if (e.isIntersecting) e.target.classList.add(styles.visible) },
-      { threshold: 0.1 },
+      { threshold: 0.08 }
     )
-    if (ref.current) obs.observe(ref.current)
+    if (sectionRef.current) obs.observe(sectionRef.current)
     return () => obs.disconnect()
   }, [])
 
   return (
-    <section className={styles.section} ref={ref}>
+    <section className={styles.section} ref={sectionRef}>
+
       <div className={styles.header}>
         <span className={styles.label}>Alcance</span>
         <h2 className={styles.title}>PRESENCIA <em>GLOBAL</em></h2>
+        <p className={styles.subtitle}>Asesoría legal colombiana con conexiones internacionales</p>
       </div>
 
-      <div className={styles.glowA} />
-      <div className={styles.glowB} />
+      <div className={styles.mapWrap}>
 
-      <svg viewBox="0 0 1000 500" className={styles.svg} xmlns="http://www.w3.org/2000/svg">
-        <defs>
-          <linearGradient id="lg" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stopColor="#c9a84c" stopOpacity="0" />
-            <stop offset="50%" stopColor="#c9a84c" stopOpacity="0.85" />
-            <stop offset="100%" stopColor="#c9a84c" stopOpacity="0" />
-          </linearGradient>
-          <radialGradient id="pg">
-            <stop offset="0%" stopColor="#c9a84c" stopOpacity="0.5" />
-            <stop offset="100%" stopColor="#c9a84c" stopOpacity="0" />
-          </radialGradient>
-          <filter id="gl"><feGaussianBlur stdDeviation="1.5" result="b" /><feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge></filter>
-          <filter id="gls"><feGaussianBlur stdDeviation="3" result="b" /><feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge></filter>
-        </defs>
+        {/* Glow ambiental */}
+        <div className={styles.glowCenter} />
+        <div className={styles.glowLeft}   />
+        <div className={styles.glowRight}  />
 
-        {/* Continents */}
-        {CONTINENTS.map((d, i) => (
-          <path key={i} d={d} fill="rgba(201,168,76,0.05)" stroke="rgba(201,168,76,0.18)" strokeWidth="0.7" className={styles.land} />
-        ))}
+        <svg
+          viewBox={`0 0 ${W} ${H}`}
+          className={styles.svg}
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <defs>
+            {/* Gradiente para líneas de conexión */}
+            <linearGradient id="lineGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%"   stopColor="#C9A84C" stopOpacity="0"    />
+              <stop offset="45%"  stopColor="#C9A84C" stopOpacity="0.9"  />
+              <stop offset="55%"  stopColor="#e8c96a" stopOpacity="1"    />
+              <stop offset="100%" stopColor="#C9A84C" stopOpacity="0"    />
+            </linearGradient>
 
-        {/* Connections */}
-        {CONNECTIONS.map((c, i) => {
-          const a = POINTS[c.from], b = POINTS[c.to]
-          const p = curvePath(a.x, a.y, b.x, b.y)
-          return (
-            <g key={`c${i}`}>
-              <path d={p} fill="none" stroke="rgba(201,168,76,0.04)" strokeWidth="0.6" />
-              <path d={p} fill="none" stroke="url(#lg)" strokeWidth="1" className={styles.line} style={{ animationDelay: `${c.d}s` }} />
-              <circle r="2" fill="#c9a84c" opacity="0.85" filter="url(#gl)">
-                <animateMotion dur="4s" repeatCount="indefinite" begin={`${c.d}s`} path={p} />
+            {/* Fondo del mapa — degradado azul navy */}
+            <linearGradient id="mapBg" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%"   stopColor="#06122e" />
+              <stop offset="40%"  stopColor="#0a1e4a" />
+              <stop offset="100%" stopColor="#071535" />
+            </linearGradient>
+
+            {/* Brillo central sobre el fondo */}
+            <radialGradient id="mapGlow" cx="30%" cy="50%" r="55%">
+              <stop offset="0%"   stopColor="#142d6e" stopOpacity="1" />
+              <stop offset="100%" stopColor="#06122e" stopOpacity="1" />
+            </radialGradient>
+
+            {/* Glow de puntos */}
+            <radialGradient id="dotGlow">
+              <stop offset="0%"   stopColor="#C9A84C" stopOpacity="0.6" />
+              <stop offset="100%" stopColor="#C9A84C" stopOpacity="0"   />
+            </radialGradient>
+
+            {/* Glow principal (Bogotá) */}
+            <radialGradient id="mainGlow">
+              <stop offset="0%"   stopColor="#e8c96a" stopOpacity="0.8" />
+              <stop offset="40%"  stopColor="#C9A84C" stopOpacity="0.3" />
+              <stop offset="100%" stopColor="#C9A84C" stopOpacity="0"   />
+            </radialGradient>
+
+            {/* Filtros blur */}
+            <filter id="softGlow" x="-50%" y="-50%" width="200%" height="200%">
+              <feGaussianBlur stdDeviation="2" result="blur" />
+              <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+            </filter>
+            <filter id="strongGlow" x="-100%" y="-100%" width="300%" height="300%">
+              <feGaussianBlur stdDeviation="4" result="blur" />
+              <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+            </filter>
+            <filter id="countryGlow" x="-5%" y="-5%" width="110%" height="110%">
+              <feGaussianBlur stdDeviation="0.6" result="blur" />
+              <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+            </filter>
+          </defs>
+
+          {/* ── Países ── */}
+          {!loading && worldPaths.map(p => (
+            <path
+              key={p.id}
+              d={p.d}
+              className={styles.country}
+              filter="url(#countryGlow)"
+            />
+          ))}
+
+          {/* ── Líneas base estáticas ── */}
+          {!loading && paths.map(c => (
+            <path
+              key={`base-${c.i}`}
+              d={c.path}
+              fill="none"
+              stroke="rgba(201,168,76,0.08)"
+              strokeWidth="0.7"
+            />
+          ))}
+
+          {/* ── Líneas animadas + partícula ── */}
+          {!loading && paths.map(c => (
+            <g key={`anim-${c.i}`}>
+              <path
+                d={c.path}
+                fill="none"
+                stroke="url(#lineGrad)"
+                strokeWidth="1.2"
+                className={styles.line}
+                style={{ animationDelay: `${c.delay}s` }}
+              />
+              <circle r="2.2" fill="#e8c96a" opacity="0.9" filter="url(#softGlow)">
+                <animateMotion dur="4.5s" repeatCount="indefinite" begin={`${c.delay}s`} path={c.path} />
+              </circle>
+              <circle r="1" fill="#ffffff" opacity="0.6">
+                <animateMotion dur="4.5s" repeatCount="indefinite" begin={`${c.delay + 0.05}s`} path={c.path} />
               </circle>
             </g>
-          )
-        })}
+          ))}
 
-        {/* Points */}
-        {POINTS.map((p, i) => (
-          <g key={`p${i}`}>
-            <circle cx={p.x} cy={p.y} r={p.main ? 18 : 9} fill="url(#pg)" className={styles.pulse} style={{ animationDelay: `${i * 0.25}s` }} />
-            <circle cx={p.x} cy={p.y} r={p.main ? 4.5 : 2.5} fill="#c9a84c" filter={p.main ? 'url(#gls)' : 'url(#gl)'} />
-            {p.main && <circle cx={p.x} cy={p.y} r="10" fill="none" stroke="rgba(201,168,76,0.25)" strokeWidth="0.5" className={styles.ring} />}
-          </g>
-        ))}
-      </svg>
+          {/* ── Puntos de ciudad ── */}
+          {!loading && projected.map(p => (
+            <g key={`pt-${p.id}`}>
+              <circle
+                cx={p.x} cy={p.y}
+                r={p.main ? 20 : 10}
+                fill="url(#dotGlow)"
+                className={styles.pulse}
+                style={{ animationDelay: `${p.id * 0.22}s` }}
+              />
+              {p.main && (
+                <>
+                  <circle cx={p.x} cy={p.y} r="14"
+                    fill="none" stroke="rgba(201,168,76,0.3)" strokeWidth="0.8"
+                    className={styles.ring} />
+                  <circle cx={p.x} cy={p.y} r="9"
+                    fill="none" stroke="rgba(201,168,76,0.18)" strokeWidth="0.5" />
+                </>
+              )}
+              <circle
+                cx={p.x} cy={p.y}
+                r={p.main ? 5 : 2.8}
+                fill={p.main ? '#e8c96a' : '#C9A84C'}
+                filter={p.main ? 'url(#strongGlow)' : 'url(#softGlow)'}
+              />
+              <circle
+                cx={p.x} cy={p.y}
+                r={p.main ? 2 : 1}
+                fill="#ffffff"
+                opacity={p.main ? 1 : 0.7}
+              />
+            </g>
+          ))}
 
-      <div className={styles.stats}>
-        <div className={styles.stat}><span className={styles.num}>20+</span><span className={styles.lbl}>Ciudades</span></div>
+        </svg>
       </div>
+
+      {/* Stats */}
+      <div className={styles.stats}>
+        <div className={styles.stat}>
+          <span className={styles.num}>18+</span>
+          <span className={styles.lbl}>Ciudades</span>
+        </div>
+        <div className={styles.divider} />
+        <div className={styles.stat}>
+          <span className={styles.num}>2</span>
+          <span className={styles.lbl}>Continente</span>
+        </div>
+        <div className={styles.divider} />
+        <div className={styles.stat}>
+          <span className={styles.num}>+1000</span>
+          <span className={styles.lbl}>Casos nacionales</span>
+        </div>
+      </div>
+
     </section>
   )
 }
