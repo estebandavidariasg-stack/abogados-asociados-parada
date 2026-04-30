@@ -190,7 +190,7 @@ export default function AuthModal({ initialTab = 'login', onClose }) {
                 onChange={(e) => setLoginPassword(e.target.value)} required />
             </div>
             <div style={{ textAlign:'center', margin:'20px 0' }}>
-              <ReCAPTCHA ref={recaptchaRef} sitekey="6Lf0A7osAAAAAFvW-s4AvAfMJPvxm_ajcDWvdO0W"
+              <ReCAPTCHA ref={recaptchaRef} sitekey="6Lc50NEsAAAAANHXeDejrPO9up93HP9tlMDzFXON"
                 onChange={(v) => setCaptchaValue(v)} />
             </div>
             <button type="button" className={`btn-solid ${styles.submit}`}
@@ -344,7 +344,7 @@ export default function AuthModal({ initialTab = 'login', onClose }) {
 
             {/* Captcha */}
             <div style={{ textAlign:'center', margin:'10px 0' }}>
-              <ReCAPTCHA ref={recaptchaRef} sitekey="6Lf0A7osAAAAAFvW-s4AvAfMJPvxm_ajcDWvdO0W"
+              <ReCAPTCHA ref={recaptchaRef} sitekey="6Lc50NEsAAAAANHXeDejrPO9up93HP9tlMDzFXON"
                 onChange={(v) => setCaptchaValue(v)} />
             </div>
 
