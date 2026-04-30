@@ -130,6 +130,7 @@
   stroke: rgba(201, 168, 76, 0.4);
   cursor: pointer;
 }
+
 /* ── Líneas animadas ── */
 .line {
   stroke-dasharray: 600;
