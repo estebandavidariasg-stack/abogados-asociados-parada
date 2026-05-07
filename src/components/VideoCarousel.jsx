@@ -291,10 +291,11 @@ export default function VideoCarousel() {
 
   /* ── IntersectionObserver: detectar visibilidad y pre-aviso ──
      Dos observers:
-       · `near`    → rootMargin 800px → dispara ANTES de entrar al viewport
-                     para que la red empiece a bajar el video y el primer frame
-                     ya esté listo cuando el usuario llegue.
-       · `visible` → threshold 0.35 → controla mute/unmute y autoplay.
+       · `near`    → rootMargin 1500 px → dispara MUCHO antes de entrar al
+                     viewport. Damos tiempo a que el video descargue y arranque
+                     muted offscreen, así cuando el usuario llegue ya está
+                     reproduciéndose (ver effect de play/pause más abajo).
+       · `visible` → threshold 0.35 → controla mute/unmute (no el play).
   */
   useEffect(() => {
     if (!sectionRef.current) return
@@ -306,29 +307,12 @@ export default function VideoCarousel() {
     )
     const obsNear = new IntersectionObserver(
       ([entry]) => setSectionNear(entry.isIntersecting),
-      { rootMargin: '800px 0px' }
+      { rootMargin: '1500px 0px' }
     )
     obsVisible.observe(target)
     obsNear.observe(target)
     return () => { obsVisible.disconnect(); obsNear.disconnect() }
   }, [])
-
-  /* ── Mute/unmute + play/pause del video activo según visibilidad ── */
-  useEffect(() => {
-    const videoEl = videoRefs.current[current]
-    if (!videoEl) return
-
-    if (sectionVisible) {
-      // Intentar reproducir con audio; si el navegador lo bloquea, mute y retry
-      videoEl.muted = false
-      videoEl.play().catch(() => {
-        videoEl.muted = true
-        videoEl.play().catch(() => {})
-      })
-    } else {
-      videoEl.muted = true
-    }
-  }, [sectionVisible, current])
 
   /* ── Detectar ratio del video ── */
   function handleVideoMeta(e, i) {
@@ -338,26 +322,43 @@ export default function VideoCarousel() {
     }
   }
 
-  /* ── Play/pause + mute de todos los slides ── */
+  /* ── Play / pause / mute de todos los videos según estado ──
+     Estrategia de "pre-roll silencioso":
+       · sectionNear (800 px antes del viewport)  → arranca muted offscreen.
+         El video se descarga y reproduce silencioso mientras el usuario
+         hace scroll. Cuando llega, ya está en marcha.
+       · sectionVisible (35% en pantalla)         → quita el mute.
+         (Si el browser bloquea el unmute por política de autoplay, el video
+         se queda muted y el usuario puede activar el sonido con el botón.)
+       · ni near ni visible                        → pausa el video activo.
+       · slides inactivos                          → siempre pausados, muted, en t=0.
+  */
   useEffect(() => {
     Object.entries(videoRefs.current).forEach(([idx, videoEl]) => {
       if (!videoEl) return
       const isActive = parseInt(idx) === current
-      if (isActive) {
-        // El efecto de sectionVisible ya maneja el muted/play del activo
-        // Solo actualizamos muted si cambió el slide
+
+      if (!isActive) {
+        videoEl.pause()
+        videoEl.currentTime = 0
+        videoEl.muted = true
+        return
+      }
+
+      if (sectionNear) {
+        // Pre-roll: empieza muted apenas estamos cerca.
+        // Cuando esté visible, además quitamos el mute.
         videoEl.muted = !sectionVisible
         videoEl.play().catch(() => {
+          // Política de autoplay con audio puede bloquear: forzar mute y reintentar.
           videoEl.muted = true
           videoEl.play().catch(() => {})
         })
       } else {
         videoEl.pause()
-        videoEl.currentTime = 0
-        videoEl.muted = true
       }
     })
-  }, [current, activeVideos.length]) // sectionVisible NO va aquí para evitar conflictos con el effect anterior
+  }, [current, activeVideos.length, sectionNear, sectionVisible])
 
   /* ── Avance automático al terminar ── */
   function handleVideoEnded() {
