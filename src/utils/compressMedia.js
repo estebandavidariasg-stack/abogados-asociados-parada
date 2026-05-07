@@ -2,21 +2,48 @@
    Utilidades de compresión / validación de media para subidas del admin.
    Sin librerías externas — solo Canvas API y validaciones nativas.
 
-   compressImage(file, maxWidthPx, qualityJpeg) → Promise<File>
-   compressVideo(file, maxMb)                   → File   (NO comprime, valida)
+   compressImage(file, maxWidthPx, quality) → Promise<File>
+   compressVideo(file, maxMb)               → File   (NO comprime, valida)
 ──────────────────────────────────────────────────────────────────────── */
 
 const SKIP_THRESHOLD_BYTES = 300 * 1024 // 300KB
 
+// Detección perezosa y cacheada del formato más eficiente que el canvas
+// puede encodear. Orden de preferencia: AVIF > WebP > JPEG.
+//   · AVIF da ~30% menos peso que WebP a igual calidad pero el soporte de
+//     canvas.toDataURL('image/avif') es limitado (Chrome/Edge desde ~v126).
+//   · WebP soporte universal moderno.
+//   · JPEG último fallback.
+let _bestFormat = null
+function bestCanvasFormat() {
+  if (_bestFormat !== null) return _bestFormat
+  try {
+    const c = document.createElement('canvas')
+    c.width = 1; c.height = 1
+    if (c.toDataURL('image/avif').startsWith('data:image/avif')) {
+      _bestFormat = { mime: 'image/avif', ext: 'avif' }
+    } else if (c.toDataURL('image/webp').startsWith('data:image/webp')) {
+      _bestFormat = { mime: 'image/webp', ext: 'webp' }
+    } else {
+      _bestFormat = { mime: 'image/jpeg', ext: 'jpg' }
+    }
+  } catch {
+    _bestFormat = { mime: 'image/jpeg', ext: 'jpg' }
+  }
+  return _bestFormat
+}
+
 /**
  * Redimensiona y comprime una imagen client-side usando Canvas.
+ * Salida: WebP (~25% más liviano que JPEG) si el navegador lo soporta,
+ * JPEG en otro caso.
  *
  * @param {File|Blob} file        Archivo de imagen a comprimir.
- * @param {number}    maxWidthPx  Ancho máximo en px (mantiene aspect ratio). Default 1400.
- * @param {number}    qualityJpeg Calidad JPEG 0..1. Default 0.82.
- * @returns {Promise<File>} Archivo JPEG nuevo (o el original si < 300KB / formato no compatible).
+ * @param {number}    maxWidthPx  Ancho máximo en px (mantiene aspect ratio). Default 1200.
+ * @param {number}    quality     Calidad 0..1 para WebP/JPEG. Default 0.82.
+ * @returns {Promise<File>} Archivo nuevo (o el original si < 300KB / formato no compatible / re-encode resultaría mayor).
  */
-export async function compressImage(file, maxWidthPx = 1400, qualityJpeg = 0.82) {
+export async function compressImage(file, maxWidthPx = 1200, quality = 0.82) {
   if (!file || (!(file instanceof File) && !(file instanceof Blob))) {
     throw new Error('compressImage: se esperaba un File o Blob')
   }
@@ -36,13 +63,12 @@ export async function compressImage(file, maxWidthPx = 1400, qualityJpeg = 0.82)
   const srcWidth  = bitmap.width
   const srcHeight = bitmap.height
   if (!srcWidth || !srcHeight) {
-    // No pudimos leer dimensiones — devolvemos el original
     if (typeof bitmap.close === 'function') bitmap.close()
     return file
   }
 
   // Mantener aspect ratio. Si la imagen ya es más estrecha que maxWidthPx,
-  // no upscaleamos — solo recomprimimos a JPEG.
+  // no upscaleamos — solo recomprimimos.
   const targetWidth  = Math.min(maxWidthPx, srcWidth)
   const targetHeight = Math.round(targetWidth * (srcHeight / srcWidth))
 
@@ -57,11 +83,17 @@ export async function compressImage(file, maxWidthPx = 1400, qualityJpeg = 0.82)
   ctx.drawImage(bitmap, 0, 0, targetWidth, targetHeight)
   if (typeof bitmap.close === 'function') bitmap.close()
 
+  const { mime, ext } = bestCanvasFormat()
+
+  // AVIF rinde mejor a calidad menor: ajustamos al vuelo para mantener tamaños
+  // razonables sin sobre-comprimir (q=0.55 AVIF ≈ q=0.82 JPEG visualmente).
+  const effectiveQuality = mime === 'image/avif' ? Math.min(quality, 0.55) : quality
+
   const blob = await new Promise((resolve, reject) => {
     canvas.toBlob(
       b => b ? resolve(b) : reject(new Error('Canvas toBlob devolvió null')),
-      'image/jpeg',
-      qualityJpeg,
+      mime,
+      effectiveQuality,
     )
   })
 
@@ -71,8 +103,8 @@ export async function compressImage(file, maxWidthPx = 1400, qualityJpeg = 0.82)
   if (blob.size >= file.size) return file
 
   const baseName = (file.name || 'image').replace(/\.[^.]+$/, '')
-  return new File([blob], `${baseName}.jpg`, {
-    type: 'image/jpeg',
+  return new File([blob], `${baseName}.${ext}`, {
+    type: mime,
     lastModified: Date.now(),
   })
 }

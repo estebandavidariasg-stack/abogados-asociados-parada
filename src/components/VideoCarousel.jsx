@@ -2,6 +2,8 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import { compressVideo } from '../utils/compressMedia'
+import { transcodeVideo }       from '../utils/transcodeVideo'
+import { extractPosterFromVideo } from '../utils/extractPoster'
 import styles from './VideoCarousel.module.css'
 import { IconVideoCamera } from './Icons'
 
@@ -255,10 +257,16 @@ export default function VideoCarousel() {
   const [editVideos,  setEditVideos]  = useState([])
   const [saving,      setSaving]      = useState(false)
   const [uploading,   setUploading]   = useState(null)
+  const [uploadStage, setUploadStage] = useState(null)  // 'loading' | 'transcoding' | 'poster' | 'uploading'
+  const [uploadPct,   setUploadPct]   = useState(0)     // 0..100 dentro del stage actual
   const [videoRatios, setVideoRatios] = useState({})
 
   /* Controla si la sección es visible en viewport (para mute/unmute automático) */
   const [sectionVisible, setSectionVisible] = useState(false)
+  /* Pre-aviso: el usuario está cerca de llegar al carrusel — ya podemos
+     empezar a precargar el video activo y su vecino para que cuando entre
+     en viewport ya esté buffereado (no se vea cargando). */
+  const [sectionNear,    setSectionNear]    = useState(false)
 
   const videoInputRef   = useRef(null)
   const uploadTargetRef = useRef(null)
@@ -281,15 +289,28 @@ export default function VideoCarousel() {
 
   const activeVideos = editing ? editVideos : videos
 
-  /* ── IntersectionObserver: detectar visibilidad de la sección ── */
+  /* ── IntersectionObserver: detectar visibilidad y pre-aviso ──
+     Dos observers:
+       · `near`    → rootMargin 800px → dispara ANTES de entrar al viewport
+                     para que la red empiece a bajar el video y el primer frame
+                     ya esté listo cuando el usuario llegue.
+       · `visible` → threshold 0.35 → controla mute/unmute y autoplay.
+  */
   useEffect(() => {
     if (!sectionRef.current) return
-    const observer = new IntersectionObserver(
+    const target = sectionRef.current
+
+    const obsVisible = new IntersectionObserver(
       ([entry]) => setSectionVisible(entry.isIntersecting),
       { threshold: 0.35 }
     )
-    observer.observe(sectionRef.current)
-    return () => observer.disconnect()
+    const obsNear = new IntersectionObserver(
+      ([entry]) => setSectionNear(entry.isIntersecting),
+      { rootMargin: '800px 0px' }
+    )
+    obsVisible.observe(target)
+    obsNear.observe(target)
+    return () => { obsVisible.disconnect(); obsNear.disconnect() }
   }, [])
 
   /* ── Mute/unmute + play/pause del video activo según visibilidad ── */
@@ -377,44 +398,100 @@ export default function VideoCarousel() {
   }
 
   async function handleVideoUpload(e) {
-    const file = e.target.files?.[0]
-    if (!file) return
+    const rawFile = e.target.files?.[0]
+    if (!rawFile) return
     const index = uploadTargetRef.current
+
     // Validación de tamaño (50MB max). Lanza Error si supera.
-    try { compressVideo(file) }
+    try { compressVideo(rawFile) }
     catch (err) {
       alert(err.message)
       e.target.value = ''
       return
     }
+
     setUploading(index)
+    setUploadStage('loading')
+    setUploadPct(0)
+
     try {
       const { data } = await supabase.auth.getSession()
       const token = data?.session?.access_token
-      const ext   = file.name.split('.').pop()
-      const path  = `carousel/${Date.now()}.${ext}`
-      const res   = await fetch(
-        `${SUPABASE_URL}/storage/v1/object/carousel-videos/${path}`,
-        {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${token}`,
-            apikey: SUPABASE_KEY,
-            'Content-Type': file.type,
-            'x-upsert': 'true',
-          },
-          body: file,
-        }
+      const authHeaders = {
+        Authorization: `Bearer ${token}`,
+        apikey:        SUPABASE_KEY,
+        'x-upsert':    'true',
+      }
+
+      // 1) Transcoding a MP4 H.264 720p (lazy-load de ffmpeg.wasm).
+      //    Si el video es chico o el transcoding falla, devuelve el original.
+      const file = await transcodeVideo(rawFile, {
+        onProgress: (stage, p) => {
+          setUploadStage(stage === 'loading' ? 'loading' : 'transcoding')
+          setUploadPct(Math.round(p * 100))
+        },
+      })
+
+      // 2) Extraer poster (primera frame visible) en paralelo a la subida del
+      //    video para no bloquear: arrancamos ambas y esperamos al final.
+      setUploadStage('poster')
+      setUploadPct(0)
+      const posterPromise = extractPosterFromVideo(file).catch(err => {
+        console.warn('No se pudo generar poster:', err)
+        return null
+      })
+
+      // 3) Subir video.
+      setUploadStage('uploading')
+      setUploadPct(0)
+      const stamp     = Date.now()
+      const videoPath = `carousel/${stamp}.mp4`
+      const videoUrl  = await uploadToBucket(
+        'carousel-videos', videoPath,
+        file, file.type || 'video/mp4',
+        authHeaders,
       )
-      if (!res.ok) throw new Error('Error subiendo video')
-      const url = `${SUPABASE_URL}/storage/v1/object/public/carousel-videos/${path}`
-      setEditVideos(prev => prev.map((v, i) => i === index ? { ...v, video_url: url } : v))
+
+      // 4) Subir poster (puede haber resuelto en paralelo).
+      const poster = await posterPromise
+      let posterUrl = null
+      if (poster?.blob) {
+        const posterPath = `carousel/${stamp}-poster.${poster.ext}`
+        posterUrl = await uploadToBucket(
+          'carousel-videos', posterPath,
+          poster.blob, poster.mime,
+          authHeaders,
+        )
+      }
+
+      setEditVideos(prev => prev.map((v, i) =>
+        i === index
+          ? { ...v, video_url: videoUrl, poster_url: posterUrl }
+          : v
+      ))
     } catch (err) {
       alert('Error al subir video: ' + err.message)
     } finally {
       setUploading(null)
+      setUploadStage(null)
+      setUploadPct(0)
       e.target.value = ''
     }
+  }
+
+  /* Helper de subida directa al Storage REST de Supabase (sin SDK).
+     Devuelve la public URL si ok; lanza si falla. */
+  async function uploadToBucket(bucket, path, body, contentType, authHeaders) {
+    const res = await fetch(
+      `${SUPABASE_URL}/storage/v1/object/${bucket}/${path}`,
+      {
+        method: 'POST',
+        headers: { ...authHeaders, 'Content-Type': contentType },
+        body,
+      }
+    )
+    if (!res.ok) throw new Error(`Error subiendo a ${bucket}`)
+    return `${SUPABASE_URL}/storage/v1/object/public/${bucket}/${path}`
   }
 
   /* ── Agregar / Eliminar ── */
@@ -453,7 +530,12 @@ export default function VideoCarousel() {
       for (let i = 0; i < editVideos.length; i++) {
         const v = editVideos[i]
         if (!v.video_url) continue
-        const payload = { video_url: v.video_url, orden: i, activo: true }
+        const payload = {
+          video_url:  v.video_url,
+          poster_url: v.poster_url ?? null,
+          orden:      i,
+          activo:     true,
+        }
         if (v.id && !v._isNew) {
           await fetch(`${SUPABASE_URL}/rest/v1/videos_carrusel?id=eq.${v.id}`, {
             method: 'PATCH', headers, body: JSON.stringify(payload),
@@ -550,15 +632,24 @@ export default function VideoCarousel() {
                     <>
                       <video
                         ref={el => videoRefs.current[i] = el}
-                        src={vid.video_url}
+                        /* Si hay poster persistido (los uploads nuevos lo generan
+                           automáticamente), lo usamos como cartel: aparece al
+                           instante sin descargar nada del MP4. Para videos viejos
+                           sin poster, el media-fragment `#t=0.1` hace que el
+                           navegador pinte el primer frame del propio video. */
+                        src={vid.poster_url ? vid.video_url : `${vid.video_url}#t=0.1`}
+                        poster={vid.poster_url || undefined}
                         className={`${styles.video} ${isActive ? styles.videoActive : ''}`}
-                        /*
-                          LAZY LOADING / OPTIMIZACIÓN:
-                          · preload="none"     → videos inactivos no descargan nada al cargar la página
-                          · preload="metadata" → video activo solo carga metadatos (duración, dimensiones)
-                          El navegador cargará el contenido real cuando el usuario interactúe o el slide sea activo
+                        /* Preload escalonado:
+                           · slide activo + sección cerca → 'auto' (buffer agresivo)
+                           · slide activo o vecino directo → 'metadata' (poster + dimensiones)
+                           · resto                          → 'none'    (no toca red)
                         */
-                        preload={isActive ? 'metadata' : 'none'}
+                        preload={
+                          (isActive && sectionNear) ? 'auto'
+                          : (absOffset <= 1)        ? 'metadata'
+                          :                           'none'
+                        }
                         playsInline
                         loop={false}
                         onLoadedMetadata={e => handleVideoMeta(e, i)}
@@ -593,7 +684,15 @@ export default function VideoCarousel() {
                         <IconVideoCamera size={20} />
                       </div>
                       <span className={styles.editText}>
-                        {uploading === i ? 'Subiendo...' : 'Cambiar video'}
+                        {uploading === i
+                          ? (
+                              uploadStage === 'loading'      ? `Cargando optimizador… ${uploadPct}%` :
+                              uploadStage === 'transcoding'  ? `Optimizando video… ${uploadPct}%`    :
+                              uploadStage === 'poster'       ? 'Generando portada…'                  :
+                              uploadStage === 'uploading'    ? 'Subiendo…'                           :
+                              'Procesando…'
+                            )
+                          : 'Cambiar video'}
                       </span>
                     </div>
                   )}

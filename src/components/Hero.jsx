@@ -8,13 +8,55 @@ import { IconPencil, IconCamera } from './Icons'
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
 
+// Las defaults ahora son una clave base ('/hero-1') y `deriveImgSources` arma
+// las 9 variantes (3 anchos × 3 formatos) generadas por scripts/optimize-hero.js.
 const DEFAULT_SLIDES = [
-  { imagen_url: '/hero-1.png' },
-  { imagen_url: '/hero-2.png' },
-  { imagen_url: '/hero-3.png' },
-  { imagen_url: '/hero-4.png' },
-  { imagen_url: '/hero-5.png' },
+  { imagen_url: '/hero-1' },
+  { imagen_url: '/hero-2' },
+  { imagen_url: '/hero-3' },
+  { imagen_url: '/hero-4' },
+  { imagen_url: '/hero-5' },
 ]
+
+const RESPONSIVE_WIDTHS = [480, 800, 1200]
+// Le decimos al browser qué ancho renderizamos para que pueda elegir el archivo
+// correcto del srcset. Coincide con los breakpoints de Hero.module.css.
+const RESPONSIVE_SIZES = '(max-width: 600px) 480px, (max-width: 1024px) 800px, 1200px'
+
+function buildSrcSet(base, ext) {
+  return RESPONSIVE_WIDTHS.map(w => `${base}-${w}.${ext} ${w}w`).join(', ')
+}
+
+/**
+ * Para una imagen del slide devuelve los srcset AVIF/WebP/JPG cuando es local
+ * (tenemos las 9 variantes); para URLs remotas (lo que sube el admin) usa la
+ * URL única — el upload ya entrega un único archivo optimizado.
+ */
+function deriveImgSources(url) {
+  if (typeof url === 'string' && url.startsWith('/') && /^\/hero-\d+$/.test(url)) {
+    return {
+      isResponsive: true,
+      avif:    buildSrcSet(url, 'avif'),
+      webp:    buildSrcSet(url, 'webp'),
+      jpg:     buildSrcSet(url, 'jpg'),
+      sizes:   RESPONSIVE_SIZES,
+      // src del <img>: el de 800w es buen punto medio (mobile usa 480, desktop 1200)
+      fallback: `${url}-800.jpg`,
+      // Para el <link rel="preload"> usamos el AVIF más probable según viewport
+      preloadHref: `${url}-1200.avif`,
+      preloadType: 'image/avif',
+      preloadSrcSet: buildSrcSet(url, 'avif'),
+      preloadSizes:  RESPONSIVE_SIZES,
+    }
+  }
+  return {
+    isResponsive: false,
+    webp:     url,
+    fallback: url,
+    preloadHref: url,
+    preloadType: typeof url === 'string' && url.endsWith('.webp') ? 'image/webp' : null,
+  }
+}
 
 export default function Hero() {
   const { profile } = useAuth()
@@ -45,14 +87,20 @@ export default function Hero() {
     finally { setLoading(false) }
   }
 
-  // Preload de la primera imagen real (la que va con fetchpriority=high) en
-  // cuanto conocemos su URL — gana ~100-300ms vs esperar al render del <img>.
+  // Preload del primer slide (el que va con fetchpriority=high) en cuanto
+  // conocemos su URL — gana ~100-300 ms vs esperar al render del <img>.
+  // Para defaults usamos imagesrcset/imagesizes para que el browser preload
+  // SOLO el ancho que va a renderizar (480/800/1200 según viewport).
   useEffect(() => {
     if (loading || !slides[0]?.imagen_url) return
+    const s = deriveImgSources(slides[0].imagen_url)
     const link = document.createElement('link')
     link.rel  = 'preload'
     link.as   = 'image'
-    link.href = slides[0].imagen_url
+    link.href = s.preloadHref
+    if (s.preloadType) link.type = s.preloadType
+    if (s.preloadSrcSet) link.setAttribute('imagesrcset', s.preloadSrcSet)
+    if (s.preloadSizes)  link.setAttribute('imagesizes',  s.preloadSizes)
     link.fetchPriority = 'high'
     document.head.appendChild(link)
     return () => { try { document.head.removeChild(link) } catch {} }
@@ -262,16 +310,33 @@ export default function Hero() {
               }}
               onClick={() => !isActive && setCurrent(i)}
             >
-              <img
-                src={slide.imagen_url}
-                alt={`Slide ${i + 1}`}
-                className={`${styles.slideImg} ${isActive ? styles.slideImgActive : ''}`}
-                width="580"
-                height="740"
-                decoding="async"
-                loading={i === 0 ? 'eager' : 'lazy'}
-                fetchpriority={i === 0 ? 'high' : 'auto'}
-              />
+              {(() => {
+                const s = deriveImgSources(slide.imagen_url)
+                return (
+                  <picture>
+                    {s.isResponsive && (
+                      <source type="image/avif" srcSet={s.avif} sizes={s.sizes} />
+                    )}
+                    <source
+                      type="image/webp"
+                      srcSet={s.webp}
+                      sizes={s.isResponsive ? s.sizes : undefined}
+                    />
+                    <img
+                      src={s.fallback}
+                      srcSet={s.isResponsive ? s.jpg : undefined}
+                      sizes={s.isResponsive ? s.sizes : undefined}
+                      alt={`Slide ${i + 1}`}
+                      className={`${styles.slideImg} ${isActive ? styles.slideImgActive : ''}`}
+                      width="580"
+                      height="740"
+                      decoding="async"
+                      loading={i === 0 ? 'eager' : 'lazy'}
+                      fetchpriority={i === 0 ? 'high' : 'auto'}
+                    />
+                  </picture>
+                )
+              })()}
 
               {/* Overlay edición — solo en slide activo */}
               {editing && isActive && (
