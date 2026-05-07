@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import { compressImage } from '../utils/compressMedia'
+import { lqipHero }     from '../lqip-hero'
 import styles from './Hero.module.css'
 import { IconPencil, IconCamera } from './Icons'
 
@@ -54,6 +55,8 @@ function deriveImgSources(url) {
         preloadType: 'image/avif',
         preloadSrcSet: buildSrcSet(base, 'avif'),
         preloadSizes:  RESPONSIVE_SIZES,
+        // LQIP base64 inline — sin red, aparece en el primer paint.
+        lqip: lqipHero[base] || null,
       }
     }
   }
@@ -63,6 +66,7 @@ function deriveImgSources(url) {
     fallback: url,
     preloadHref: url,
     preloadType: typeof url === 'string' && url.endsWith('.webp') ? 'image/webp' : null,
+    lqip: null,
   }
 }
 
@@ -77,6 +81,8 @@ export default function Hero() {
   const [editSlides, setEditSlides] = useState([])
   const [saving, setSaving]       = useState(false)
   const [uploading, setUploading] = useState(null) // índice que se está subiendo
+  // Trackea qué imagen real ya cargó (para fade-in sobre el LQIP).
+  const [imgLoaded, setImgLoaded] = useState({})
 
   const imgInputRef      = useRef(null)
   const uploadTargetRef  = useRef(null)
@@ -302,6 +308,8 @@ export default function Hero() {
           const absOffset = Math.abs(offset)
           const isActive  = offset === 0
           const visible   = absOffset <= 3
+          const s         = deriveImgSources(slide.imagen_url)
+          const isLoaded  = !!imgLoaded[i]
 
           return (
             <div
@@ -315,11 +323,15 @@ export default function Hero() {
                 pointerEvents: visible ? 'auto' : 'none',
                 visibility:    visible ? 'visible' : 'hidden',
                 cursor:    isActive ? 'default' : 'pointer',
+                // LQIP base64 como background — aparece en el primer paint,
+                // sin esperar red. La <img> hace fade-in encima cuando carga.
+                backgroundImage:    s.lqip ? `url(${s.lqip})` : undefined,
+                backgroundSize:     'cover',
+                backgroundPosition: 'center',
               }}
               onClick={() => !isActive && setCurrent(i)}
             >
               {(() => {
-                const s = deriveImgSources(slide.imagen_url)
                 return (
                   <picture>
                     {s.isResponsive && (
@@ -341,6 +353,11 @@ export default function Hero() {
                       decoding="async"
                       loading={i === 0 ? 'eager' : 'lazy'}
                       fetchpriority={i === 0 ? 'high' : 'auto'}
+                      onLoad={() => setImgLoaded(prev => prev[i] ? prev : { ...prev, [i]: true })}
+                      style={{
+                        opacity:    isLoaded ? 1 : 0,
+                        transition: 'opacity 0.4s ease-out',
+                      }}
                     />
                   </picture>
                 )

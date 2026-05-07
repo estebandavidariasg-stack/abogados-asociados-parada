@@ -13,7 +13,7 @@
 */
 
 import sharp from 'sharp'
-import { readdir, mkdir } from 'node:fs/promises'
+import { readdir, mkdir, writeFile } from 'node:fs/promises'
 import { existsSync, statSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
@@ -21,10 +21,15 @@ import path from 'node:path'
 const ROOT       = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const SRC_DIR    = path.join(ROOT, 'assets-source', 'hero')
 const OUT_DIR    = path.join(ROOT, 'public')
+const LQIP_OUT   = path.join(ROOT, 'src', 'lqip-hero.js')
 const WIDTHS     = [480, 800, 1200]
 const AVIF_Q     = 50      // AVIF rinde mejor a calidad menor que WebP/JPG
 const WEBP_Q     = 78
 const JPG_Q      = 82
+// LQIP (placeholder borroso embebido en base64 dentro del bundle JS).
+// 24px de ancho con blur fuerte → ~200-400 bytes por imagen.
+const LQIP_WIDTH = 24
+const LQIP_BLUR  = 1.2
 
 if (!existsSync(SRC_DIR)) {
   console.error(`No existe ${SRC_DIR}. Coloca los PNG fuente ahí.`)
@@ -40,7 +45,9 @@ if (files.length === 0) {
 }
 
 const fmt = b => (b / 1024).toFixed(1) + 'KB'
-const totals = { src: 0, avif: 0, webp: 0, jpg: 0 }
+const totals = { src: 0, avif: 0, webp: 0, jpg: 0, lqip: 0 }
+
+const lqipMap = {}
 
 for (const file of files.sort()) {
   const srcPath = path.join(SRC_DIR, file)
@@ -69,18 +76,35 @@ for (const file of files.sort()) {
     lineParts.push(`${w}w[${fmt(a)}/${fmt(b)}/${fmt(j)}]`)
   }
 
+  // LQIP: thumb 24px con blur, codificado a WebP base64 — embebido en el JS.
+  const lqipBuffer = await sharp(srcPath)
+    .resize({ width: LQIP_WIDTH, withoutEnlargement: true })
+    .blur(LQIP_BLUR)
+    .webp({ quality: 30, effort: 6 })
+    .toBuffer()
+  lqipMap[`/${base}`] = `data:image/webp;base64,${lqipBuffer.toString('base64')}`
+  totals.lqip += lqipBuffer.length
+  lineParts.push(`lqip[${fmt(lqipBuffer.length)}]`)
+
   console.log(lineParts.join(' '))
 }
+
+// Emitir el módulo JS con los placeholders. Se importa desde Hero.jsx.
+await writeFile(
+  LQIP_OUT,
+  `// Auto-generado por scripts/optimize-hero.js — no editar a mano.\n` +
+  `// Placeholders borrosos (~200-400 bytes c/u) embebidos en el bundle\n` +
+  `// para que el primer slide aparezca instantáneamente sin esperar red.\n` +
+  `export const lqipHero = ${JSON.stringify(lqipMap, null, 2)}\n`,
+)
 
 console.log('─'.repeat(72))
 console.log(
   `TOTAL  src ${fmt(totals.src)}  →  ` +
-  `avif ${fmt(totals.avif)}  ·  webp ${fmt(totals.webp)}  ·  jpg ${fmt(totals.jpg)}`
+  `avif ${fmt(totals.avif)}  ·  webp ${fmt(totals.webp)}  ·  jpg ${fmt(totals.jpg)}  ·  lqip ${fmt(totals.lqip)}`
 )
 console.log(
   `Reducción AVIF: ${(100 - (totals.avif / totals.src) * 100).toFixed(1)}%  ·  ` +
   `WebP: ${(100 - (totals.webp / totals.src) * 100).toFixed(1)}%`
 )
-console.log(
-  `(AVIF/WebP/JPG por talla — el browser elige automáticamente vía <picture> + srcset)`
-)
+console.log(`LQIP escrito en src/lqip-hero.js (${fmt(totals.lqip)} total inline en el bundle)`)
