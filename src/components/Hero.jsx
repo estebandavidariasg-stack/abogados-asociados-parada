@@ -31,22 +31,30 @@ function buildSrcSet(base, ext) {
  * Para una imagen del slide devuelve los srcset AVIF/WebP/JPG cuando es local
  * (tenemos las 9 variantes); para URLs remotas (lo que sube el admin) usa la
  * URL única — el upload ya entrega un único archivo optimizado.
+ *
+ * Reconoce defaults guardadas en la tabla `carrusel` aunque tengan extensión
+ * antigua (`/hero-1.png`, `/hero-1.webp`…) y las normaliza a `/hero-1` para
+ * que carguen las variantes responsive nuevas.
  */
 function deriveImgSources(url) {
-  if (typeof url === 'string' && url.startsWith('/') && /^\/hero-\d+$/.test(url)) {
-    return {
-      isResponsive: true,
-      avif:    buildSrcSet(url, 'avif'),
-      webp:    buildSrcSet(url, 'webp'),
-      jpg:     buildSrcSet(url, 'jpg'),
-      sizes:   RESPONSIVE_SIZES,
-      // src del <img>: el de 800w es buen punto medio (mobile usa 480, desktop 1200)
-      fallback: `${url}-800.jpg`,
-      // Para el <link rel="preload"> usamos el AVIF más probable según viewport
-      preloadHref: `${url}-1200.avif`,
-      preloadType: 'image/avif',
-      preloadSrcSet: buildSrcSet(url, 'avif'),
-      preloadSizes:  RESPONSIVE_SIZES,
+  if (typeof url === 'string') {
+    const heroMatch = url.match(/^(\/hero-\d+)(?:-\d+)?(?:\.(?:png|jpe?g|webp|avif))?$/i)
+    if (heroMatch) {
+      const base = heroMatch[1] // p.ej. "/hero-1"
+      return {
+        isResponsive: true,
+        avif:    buildSrcSet(base, 'avif'),
+        webp:    buildSrcSet(base, 'webp'),
+        jpg:     buildSrcSet(base, 'jpg'),
+        sizes:   RESPONSIVE_SIZES,
+        // src del <img>: el de 800w es buen punto medio (mobile usa 480, desktop 1200)
+        fallback: `${base}-800.jpg`,
+        // Para el <link rel="preload"> usamos el AVIF más probable según viewport
+        preloadHref: `${base}-1200.avif`,
+        preloadType: 'image/avif',
+        preloadSrcSet: buildSrcSet(base, 'avif'),
+        preloadSizes:  RESPONSIVE_SIZES,
+      }
     }
   }
   return {
@@ -187,7 +195,7 @@ export default function Hero() {
 
   /* ── Agregar / Eliminar ──────────────────────────── */
   function addSlide() {
-    setEditSlides(prev => [...prev, { imagen_url: '/hero-1.png', activo: true, _isNew: true }])
+    setEditSlides(prev => [...prev, { imagen_url: '/hero-1', activo: true, _isNew: true }])
     setCurrent(editSlides.length)
   }
 
