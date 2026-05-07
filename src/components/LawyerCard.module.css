@@ -367,26 +367,32 @@
   line-height: 1.5;
 }
 
-/* ── CTA WhatsApp ────────────────────────────── */
+/* ── CTA — lleva a la sección de consulta privada ─ */
 .modalCta {
   display: block;
   width: 100%;
   text-align: center;
   padding: 13px 24px;
-  background: #25d366;
-  color: #fff;
+  background: var(--gold);
+  color: var(--navy);
+  border: none;
   border-radius: 12px;
+  font-family: inherit;
   font-weight: 700;
   font-size: 0.88rem;
   letter-spacing: 0.04em;
   text-decoration: none;
+  cursor: pointer;
   transition: transform 0.2s, box-shadow 0.2s, background 0.2s;
-  box-shadow: 0 4px 16px rgba(37,211,102,0.2);
+  box-shadow: 0 4px 16px rgba(201, 168, 76, 0.28);
 }
 .modalCta:hover {
-  background: #128c7e;
+  background: var(--gold-lt);
   transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(37,211,102,0.28);
+  box-shadow: 0 8px 24px rgba(201, 168, 76, 0.4);
+}
+.modalCta:active {
+  transform: translateY(0);
 }
 
 .modalVideo {
@@ -410,4 +416,32 @@
   .modalPhotoWrap { width: 72px; height: 72px; }
   .modalName { font-size: 1.05rem; }
   .modalCta { padding: 11px 18px; font-size: 0.82rem; }
+  .rolPill { font-size: 0.5rem; padding: 1px 6px; }
+}
+
+/* ── Pill de rol (Abogado / Contador) ───────────── */
+.rolPill {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-family: 'Raleway', sans-serif;
+  font-size: 0.55rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.rolPillAbogado {
+  background: rgba(13, 45, 94, 0.1);
+  color: var(--navy, #0d2d5e);
+  border: 1px solid rgba(13, 45, 94, 0.22);
+}
+
+.rolPillContador {
+  background: rgba(201, 168, 76, 0.18);
+  color: var(--gold-dk, #8a6a28);
+  border: 1px solid rgba(201, 168, 76, 0.45);
 }

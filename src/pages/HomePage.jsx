@@ -7,13 +7,16 @@ import ChatSection from '../components/ChatSection'
 import Footer from '../components/Footer'
 import WhatsAppButton from '../components/WhatsAppButton'
 import AuthModal from '../components/AuthModal'
+import RegisterContadorModal from '../components/RegisterContadorModal'
 import { useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import VideoCarousel from '../components/VideoCarousel'
+import ModelosContractualesSection from '../components/ModelosContractualesSection'
 
 
 export default function HomePage() {
   const [modal, setModal] = useState(null)
+  const [contadorOpen, setContadorOpen] = useState(false)
   const [editMode, setEditMode] = useState(false)
   const { profile } = useAuth()
 
@@ -21,7 +24,11 @@ export default function HomePage() {
 
   return (
     <>
-      <Navbar onLogin={() => setModal('login')} onRegister={() => setModal('register')} />
+      <Navbar
+        onLogin={() => setModal('login')}
+        onRegister={() => setModal('register')}
+        onRegisterContador={() => setContadorOpen(true)}
+      />
       <Hero
         editMode={editMode}
         onToggleEdit={() => setEditMode((v) => !v)}
@@ -31,10 +38,12 @@ export default function HomePage() {
       <CTASection />
       <ChatSection />
       <LawyersSection />
+      <ModelosContractualesSection />
       <MapSection />
       <Footer />
       <WhatsAppButton phone="573108886571" />
       {modal && <AuthModal initialTab={modal} onClose={() => setModal(null)} />}
+      {contadorOpen && <RegisterContadorModal onClose={() => setContadorOpen(false)} />}
     </>
   )
 }

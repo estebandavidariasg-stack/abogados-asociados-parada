@@ -1,0 +1,287 @@
+/* LawyerInternalChat.module.css */
+
+.wrap {
+  display: flex;
+  flex-direction: column;
+  height: 520px;
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid rgba(201, 168, 76, 0.18);
+  background: #0f0f0f;
+}
+
+/* ── Header ── */
+.head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px;
+  background: #111;
+  border-bottom: 1px solid rgba(201, 168, 76, 0.15);
+  flex-shrink: 0;
+}
+
+.headAvatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #c9a84c 0%, #8a6a20 100%);
+  color: #000;
+  font-weight: 700;
+  font-size: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Cinzel', serif;
+  flex-shrink: 0;
+}
+
+.headNombre {
+  color: #e8dfc0;
+  font-size: 0.88rem;
+  font-weight: 600;
+  font-family: 'Cinzel', serif;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.headSub {
+  color: rgba(240, 235, 224, 0.35);
+  font-size: 0.72rem;
+  margin: 2px 0 0;
+}
+
+.badge {
+  background: #c9a84c;
+  color: #000;
+  font-size: 0.68rem;
+  font-weight: 700;
+  border-radius: 10px;
+  padding: 1px 7px;
+  font-family: monospace;
+}
+
+/* ── Mensajes ── */
+.mensajes {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  scroll-behavior: smooth;
+}
+
+.mensajes::-webkit-scrollbar { width: 4px; }
+.mensajes::-webkit-scrollbar-track { background: transparent; }
+.mensajes::-webkit-scrollbar-thumb { background: rgba(201,168,76,0.2); border-radius: 2px; }
+
+.cargando {
+  color: rgba(240, 235, 224, 0.3);
+  font-size: 0.8rem;
+  text-align: center;
+  padding: 20px 0;
+}
+
+.vacio {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 40px 20px;
+  color: rgba(240, 235, 224, 0.25);
+  font-size: 0.8rem;
+  text-align: center;
+}
+
+.vacioIcon { font-size: 2rem; }
+
+/* ── Burbujas ── */
+.burbuja {
+  display: flex;
+  flex-direction: column;
+  max-width: 75%;
+  gap: 3px;
+}
+
+.mia {
+  align-self: flex-end;
+  align-items: flex-end;
+}
+
+.suya {
+  align-self: flex-start;
+  align-items: flex-start;
+}
+
+.burbujaTexto {
+  margin: 0;
+  padding: 9px 13px;
+  border-radius: 14px;
+  font-size: 0.85rem;
+  line-height: 1.45;
+  word-break: break-word;
+}
+
+.mia .burbujaTexto {
+  background: rgba(201, 168, 76, 0.18);
+  border: 1px solid rgba(201, 168, 76, 0.3);
+  color: #e8dfc0;
+  border-bottom-right-radius: 4px;
+}
+
+.suya .burbujaTexto {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: rgba(240, 235, 224, 0.85);
+  border-bottom-left-radius: 4px;
+}
+
+.burbujaHora {
+  font-size: 0.68rem;
+  color: rgba(240, 235, 224, 0.28);
+  padding: 0 4px;
+}
+
+/* ── Input ── */
+.inputArea {
+  display: flex;
+  gap: 8px;
+  padding: 12px 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  background: #111;
+  flex-shrink: 0;
+}
+
+.inputMsg {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 22px;
+  padding: 9px 16px;
+  color: #e8dfc0;
+  font-size: 0.85rem;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.inputMsg:focus {
+  border-color: rgba(201, 168, 76, 0.4);
+}
+
+.inputMsg::placeholder {
+  color: rgba(240, 235, 224, 0.25);
+}
+
+.btnEnviar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: none;
+  background: #c9a84c;
+  color: #000;
+  font-size: 1rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: opacity 0.2s, transform 0.15s;
+}
+
+.btnEnviar:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.btnEnviar:not(:disabled):hover {
+  opacity: 0.85;
+  transform: scale(1.05);
+}
+
+/* ── Botón micrófono (idle) — paleta dark dorada ── */
+.attachBtn {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: rgba(240, 235, 224, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  font-family: inherit;
+  transition: background 0.2s, border-color 0.2s, color 0.2s;
+}
+.attachBtn:hover:not(:disabled) {
+  background: rgba(201, 168, 76, 0.12);
+  border-color: rgba(201, 168, 76, 0.35);
+  color: #c9a84c;
+}
+.attachBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ── Botón micrófono (grabando) ── */
+.recordingBtn {
+  height: 40px;
+  padding: 0 14px;
+  border-radius: 20px;
+  background: rgba(220, 50, 50, 0.15);
+  border: 1px solid rgba(220, 50, 50, 0.4);
+  color: #e8704a;
+  font-size: 0.75rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  white-space: nowrap;
+  transition: background 0.2s;
+}
+.recordingBtn:hover { background: rgba(220, 50, 50, 0.22); }
+
+.recordDot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #e05555;
+  margin-right: 6px;
+  animation: pulse 1s infinite;
+  flex-shrink: 0;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.45; }
+}
+
+/* ── Wrapper para AudioPlayer en burbujas (espeja a .burbujaTexto) ── */
+.audioWrap {
+  padding: 6px 10px;
+  border-radius: 14px;
+  min-width: 220px;
+}
+.mia .audioWrap {
+  background: rgba(201, 168, 76, 0.18);
+  border: 1px solid rgba(201, 168, 76, 0.3);
+  border-bottom-right-radius: 4px;
+}
+.suya .audioWrap {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom-left-radius: 4px;
+}
+
+@media (max-width: 600px) {
+  .wrap { height: 460px; border-radius: 10px; }
+  .burbuja { max-width: 88%; }
+}

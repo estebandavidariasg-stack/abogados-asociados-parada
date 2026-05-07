@@ -7,6 +7,7 @@ import SuperAdminChatViewer from '../../components/SuperAdminChatViewer'
 import CodigosReferencia from '../../components/CodigosReferencia'
 import MisContratos from '../../components/MisContratos'
 import AdminInternalChat from '../../components/AdminInternalChat'
+import ProfileDetailModal from '../../components/ProfileDetailModal'
 import { IconCheck, IconX, IconArrowLeft } from '../../components/Icons'
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
@@ -33,6 +34,10 @@ export default function AdminPage() {
   const [alertas, setAlertas]                 = useState([])
   const [chatsCerrados, setChatsCerrados]     = useState([])
   const [abogadoContrato, setAbogadoContrato] = useState(null)
+  // Sub-filtro por rol dentro de Solicitudes/Aprobados/Contratos
+  const [rolFilter, setRolFilter]             = useState('todos') // 'todos' | 'abogado' | 'contador'
+  // Vista detalle del perfil (modal)
+  const [previewProfile, setPreviewProfile]   = useState(null)
 
   useEffect(() => {
     if (loading) return
@@ -50,8 +55,9 @@ export default function AdminPage() {
 
   async function fetchPending() {
     const headers = await getAuthHeaders()
+    // Trae abogados y contadores pendientes — el filtro por rol se aplica en cliente
     const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/profiles?aprobado=eq.false&rol=eq.abogado&select=*`,
+      `${SUPABASE_URL}/rest/v1/profiles?aprobado=eq.false&rol=in.(abogado,contador)&select=*`,
       { headers }
     )
     const data = await res.json()
@@ -61,7 +67,7 @@ export default function AdminPage() {
   async function fetchApproved() {
     const headers = await getAuthHeaders()
     const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/profiles?aprobado=eq.true&rol=eq.abogado&select=*`,
+      `${SUPABASE_URL}/rest/v1/profiles?aprobado=eq.true&rol=in.(abogado,contador)&select=*`,
       { headers }
     )
     const data = await res.json()
@@ -140,6 +146,47 @@ export default function AdminPage() {
     fetchAlertas()
   }
 
+  // ── Filtrados derivados por rol ───────────────────────────────────────
+  const filterByRol = arr => rolFilter === 'todos'
+    ? arr
+    : arr.filter(p => p.rol === rolFilter)
+
+  const pendingFiltered  = filterByRol(pending)
+  const approvedFiltered = filterByRol(approved)
+
+  // Conteos por rol (para los stats)
+  const pendingAbogados   = pending.filter(p => p.rol === 'abogado').length
+  const pendingContadores = pending.filter(p => p.rol === 'contador').length
+  const approvedAbogados   = approved.filter(p => p.rol === 'abogado').length
+  const approvedContadores = approved.filter(p => p.rol === 'contador').length
+
+  // Chip-row reutilizable para filtrar Solicitudes/Aprobados/Contratos por rol
+  const RolChips = () => (
+    <div className={styles.rolChipsRow}>
+      <button
+        type="button"
+        className={`${styles.rolChip} ${rolFilter === 'todos' ? styles.rolChipActive : ''}`}
+        onClick={() => setRolFilter('todos')}
+      >
+        Todos
+      </button>
+      <button
+        type="button"
+        className={`${styles.rolChip} ${rolFilter === 'abogado' ? styles.rolChipActive : ''}`}
+        onClick={() => setRolFilter('abogado')}
+      >
+        Abogados
+      </button>
+      <button
+        type="button"
+        className={`${styles.rolChip} ${rolFilter === 'contador' ? styles.rolChipActive : ''}`}
+        onClick={() => setRolFilter('contador')}
+      >
+        Contadores
+      </button>
+    </div>
+  )
+
   if (loading || loadingData)
     return (
       <div className={styles.loading}>
@@ -185,11 +232,25 @@ export default function AdminPage() {
         <div className={styles.stats}>
           <div className={styles.stat}>
             <span className={styles.statNum}>{pending.length}</span>
-            <span className={styles.statLabel}>Solicitudes pendientes</span>
+            <span className={styles.statLabel}>
+              Solicitudes pendientes
+              {(pendingAbogados > 0 || pendingContadores > 0) && (
+                <span className={styles.statSub}>
+                  {pendingAbogados} ab. · {pendingContadores} cont.
+                </span>
+              )}
+            </span>
           </div>
           <div className={styles.stat}>
             <span className={styles.statNum}>{approved.length}</span>
-            <span className={styles.statLabel}>Abogados aprobados</span>
+            <span className={styles.statLabel}>
+              Profesionales aprobados
+              {(approvedAbogados > 0 || approvedContadores > 0) && (
+                <span className={styles.statSub}>
+                  {approvedAbogados} ab. · {approvedContadores} cont.
+                </span>
+              )}
+            </span>
           </div>
           <div className={styles.stat}>
             <span className={styles.statNum}>{approved.length + pending.length}</span>
@@ -227,14 +288,26 @@ export default function AdminPage() {
           {/* ── Solicitudes pendientes ── */}
           {activeTab === 'pending' && (
             <div className={styles.section}>
-              {pending.length === 0 ? (
+              <RolChips />
+              {pendingFiltered.length === 0 ? (
                 <div className={styles.emptyState}>
                   <span className={styles.emptyIcon}>📋</span>
-                  <p className={styles.emptyTxt}>No hay solicitudes pendientes</p>
-                  <p className={styles.emptySub}>Cuando un abogado se registre aparecerá aquí</p>
+                  <p className={styles.emptyTxt}>
+                    No hay solicitudes pendientes
+                    {rolFilter !== 'todos' ? ` de ${rolFilter}es` : ''}
+                  </p>
+                  <p className={styles.emptySub}>Cuando alguien se registre aparecerá aquí</p>
                 </div>
-              ) : pending.map(p => (
-                <div key={p.id} className={styles.card}>
+              ) : pendingFiltered.map(p => (
+                <div
+                  key={p.id}
+                  className={styles.card}
+                  onClick={() => setPreviewProfile(p)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setPreviewProfile(p) } }}
+                  title="Click para ver perfil completo"
+                >
                   <div className={styles.cardPhoto}>
                     {p.foto_url
                       ? <img src={p.foto_url} alt={p.nombre} />
@@ -242,22 +315,44 @@ export default function AdminPage() {
                     }
                   </div>
                   <div className={styles.cardInfo}>
-                    <h3 className={styles.cardName}>{p.nombre} {p.apellido}</h3>
+                    <h3 className={styles.cardName}>
+                      {p.nombre} {p.apellido}
+                      <span className={`${styles.cardRolBadge} ${p.rol === 'contador' ? styles.cardRolBadgeContador : styles.cardRolBadgeAbogado}`}>
+                        {p.rol === 'contador' ? 'Contador' : 'Abogado'}
+                      </span>
+                    </h3>
                     <span className={styles.cardMeta}>@{p.username} · {p.email}</span>
-                    {p.especialidad && <span className={styles.cardBadge}>{p.especialidad}</span>}
+                    {p.area_derecho && <span className={styles.cardBadge}>{p.area_derecho}</span>}
                     {p.universidad  && <span className={styles.cardMeta}>{p.universidad}</span>}
                     {p.ciudad && (
                       <span className={styles.cardMeta}>
                         {p.ciudad}{p.departamento ? `, ${p.departamento}` : ''}
                       </span>
                     )}
+                    {p.tarjeta_archivo_url && (
+                      <a
+                        href={p.tarjeta_archivo_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={e => e.stopPropagation()}
+                        className={styles.cardTarjetaLink}
+                      >
+                        📎 Ver tarjeta profesional
+                      </a>
+                    )}
                     {p.descripcion && <p className={styles.cardDesc}>{p.descripcion}</p>}
                   </div>
                   <div className={styles.cardActions}>
-                    <button className={styles.btnApprove} onClick={() => approveProfile(p.id)}>
+                    <button
+                      className={styles.btnApprove}
+                      onClick={e => { e.stopPropagation(); approveProfile(p.id) }}
+                    >
                       <IconCheck /> Aprobar
                     </button>
-                    <button className={styles.btnReject} onClick={() => rejectProfile(p.id)}>
+                    <button
+                      className={styles.btnReject}
+                      onClick={e => { e.stopPropagation(); rejectProfile(p.id) }}
+                    >
                       <IconX /> Rechazar
                     </button>
                   </div>
@@ -269,13 +364,24 @@ export default function AdminPage() {
           {/* ── Aprobados ── */}
           {activeTab === 'approved' && (
             <div className={styles.section}>
-              {approved.length === 0 ? (
+              <RolChips />
+              {approvedFiltered.length === 0 ? (
                 <div className={styles.emptyState}>
                   <span className={styles.emptyIcon}>👨‍⚖️</span>
-                  <p className={styles.emptyTxt}>No hay abogados aprobados aún</p>
+                  <p className={styles.emptyTxt}>
+                    No hay {rolFilter === 'contador' ? 'contadores' : rolFilter === 'abogado' ? 'abogados' : 'profesionales'} aprobados aún
+                  </p>
                 </div>
-              ) : approved.map(p => (
-                <div key={p.id} className={styles.card}>
+              ) : approvedFiltered.map(p => (
+                <div
+                  key={p.id}
+                  className={styles.card}
+                  onClick={() => setPreviewProfile(p)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setPreviewProfile(p) } }}
+                  title="Click para ver perfil completo"
+                >
                   <div className={styles.cardPhoto}>
                     {p.foto_url
                       ? <img src={p.foto_url} alt={p.nombre} />
@@ -283,17 +389,36 @@ export default function AdminPage() {
                     }
                   </div>
                   <div className={styles.cardInfo}>
-                    <h3 className={styles.cardName}>{p.nombre} {p.apellido}</h3>
+                    <h3 className={styles.cardName}>
+                      {p.nombre} {p.apellido}
+                      <span className={`${styles.cardRolBadge} ${p.rol === 'contador' ? styles.cardRolBadgeContador : styles.cardRolBadgeAbogado}`}>
+                        {p.rol === 'contador' ? 'Contador' : 'Abogado'}
+                      </span>
+                    </h3>
                     <span className={styles.cardMeta}>@{p.username} · {p.email}</span>
-                    {p.especialidad && <span className={styles.cardBadge}>{p.especialidad}</span>}
+                    {p.area_derecho && <span className={styles.cardBadge}>{p.area_derecho}</span>}
                     {p.ciudad && (
                       <span className={styles.cardMeta}>
                         {p.ciudad}{p.departamento ? `, ${p.departamento}` : ''}
                       </span>
                     )}
+                    {p.tarjeta_archivo_url && (
+                      <a
+                        href={p.tarjeta_archivo_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={e => e.stopPropagation()}
+                        className={styles.cardTarjetaLink}
+                      >
+                        📎 Ver tarjeta profesional
+                      </a>
+                    )}
                   </div>
                   <div className={styles.cardActions}>
-                    <button className={styles.btnReject} onClick={() => removeApproved(p.id)}>
+                    <button
+                      className={styles.btnReject}
+                      onClick={e => { e.stopPropagation(); removeApproved(p.id) }}
+                    >
                       <IconX /> Quitar de la página
                     </button>
                   </div>
@@ -390,7 +515,7 @@ export default function AdminPage() {
           {activeTab === 'chat_interno' && (
             <div className={styles.section}>
               <div className={styles.sectionHeader}>
-                <h3 className={styles.sectionTitle}>Chat interno con abogados</h3>
+                <h3 className={styles.sectionTitle}>Chat interno con profesionales</h3>
               </div>
               <div className={styles.darkWrap}>
                 <AdminInternalChat miId={user?.id} />
@@ -402,19 +527,24 @@ export default function AdminPage() {
           {activeTab === 'contratos' && (
             <div className={styles.section}>
               <div className={styles.sectionHeader}>
-                <h3 className={styles.sectionTitle}>Contratos por abogado</h3>
+                <h3 className={styles.sectionTitle}>Contratos por profesional</h3>
               </div>
               <p className={styles.contratosHint}>
-                Selecciona un abogado aprobado para ver o gestionar sus contratos:
+                Selecciona un profesional aprobado para ver o gestionar sus contratos:
               </p>
+              <RolChips />
               <div className={styles.abogadoSelector}>
-                {approved.map(a => (
+                {approvedFiltered.map(a => (
                   <button
                     key={a.id}
                     className={`${styles.abogadoChip} ${abogadoContrato?.id === a.id ? styles.chipActivo : ''}`}
                     onClick={() => setAbogadoContrato(a)}
+                    title={a.rol === 'contador' ? 'Contador' : 'Abogado'}
                   >
                     {a.nombre} {a.apellido}
+                    <span className={`${styles.cardRolBadge} ${a.rol === 'contador' ? styles.cardRolBadgeContador : styles.cardRolBadgeAbogado}`}>
+                      {a.rol === 'contador' ? 'C' : 'A'}
+                    </span>
                   </button>
                 ))}
               </div>
@@ -425,7 +555,7 @@ export default function AdminPage() {
               ) : (
                 <div className={styles.emptyState}>
                   <span className={styles.emptyIcon}>📂</span>
-                  <p className={styles.emptyTxt}>Selecciona un abogado arriba</p>
+                  <p className={styles.emptyTxt}>Selecciona un profesional arriba</p>
                   <p className={styles.emptySub}>Sus contratos aparecerán aquí</p>
                 </div>
               )}
@@ -442,6 +572,14 @@ export default function AdminPage() {
           )}
 
         </div>
+
+        {/* ── Modal de detalle de perfil (Solicitudes / Aprobados) ── */}
+        {previewProfile && (
+          <ProfileDetailModal
+            profile={previewProfile}
+            onClose={() => setPreviewProfile(null)}
+          />
+        )}
       </div>
     </div>
   )

@@ -1,4 +1,9 @@
-/* ── LawyerChatDashboard.module.css ─────────────────────────────────────── */
+/* ── ContadorChatDashboard.module.css ────────────────────────────────────
+   Clon del CSS de LawyerChatDashboard. Los CSS Modules generan nombres
+   únicos por archivo automáticamente, así que no necesitamos prefijar las
+   clases — `styles.bubbleMine` aquí no choca con `styles.bubbleMine`
+   importado desde LawyerChatDashboard.module.css.
+─────────────────────────────────────────────────────────────────────── */
 
 .dashboard {
   display: grid;
@@ -174,10 +179,9 @@
 .confirmText {
   font-size: 0.72rem;
   font-weight: 600;
-  color: #1a2a4a; /* inferido — paleta SuperAdmin (navy del .roomArea / .msgText) */
+  color: #1a2a4a;
   white-space: nowrap;
 }
-
 
 .btnConfirm {
   background: rgba(180,40,40,0.9);
@@ -192,7 +196,6 @@
   white-space: nowrap;
 }
 .btnConfirm:disabled { opacity: 0.6; cursor: not-allowed; }
-
 
 .btnCancel {
   background: #ffffff;
@@ -260,8 +263,6 @@
   box-shadow: 0 1px 4px rgba(13,45,94,0.06);
 }
 
-/* Cuando la burbuja contiene un AudioPlayer, dejamos que el player
-   sea su propio "contenedor" — sin fondo navy/blanco que choque. */
 .bubbleAudio {
   background: transparent !important;
   border: none !important;
@@ -271,8 +272,6 @@
   max-width: none !important;
 }
 
-/* Primer mensaje del cliente — destacado en navy con texto blanco
-   (replica el estilo de bubble Mine que ve el cliente en ChatSection). */
 .bubbleFirst {
   background: #0d2d5e !important;
   border: none !important;
@@ -439,70 +438,6 @@
   }
 }
 
-/* ── Videollamada ── */
-.videoCallBtn {
-  background: rgba(13,45,94,0.06);
-  border: 1px solid rgba(13,45,94,0.18);
-  border-radius: 8px;
-  color: #0d2d5e;
-  font-size: 1.1rem;
-  width: 38px;
-  height: 38px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: all 0.2s;
-  flex-shrink: 0;
-}
-.videoCallBtn:hover {
-  background: rgba(201,168,76,0.1);
-  border-color: rgba(201,168,76,0.45);
-  color: var(--gold);
-}
-
-.incomingCallBanner {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 12px 16px;
-  background: rgba(201,168,76,0.06);
-  border-bottom: 1px solid rgba(201,168,76,0.2);
-  font-size: 0.85rem;
-  color: #0d2d5e;
-  flex-wrap: wrap;
-  flex-shrink: 0;
-}
-
-.btnAcceptCall {
-  padding: 7px 18px;
-  background: linear-gradient(135deg, #2ecc71, #27ae60);
-  color: #fff;
-  border: none;
-  border-radius: 20px;
-  font-size: 0.78rem;
-  font-weight: 700;
-  cursor: pointer;
-  font-family: inherit;
-  transition: opacity 0.2s;
-}
-.btnAcceptCall:hover { opacity: 0.9; }
-
-.btnRejectCall {
-  padding: 7px 18px;
-  background: rgba(220,50,50,0.85);
-  color: #fff;
-  border: none;
-  border-radius: 20px;
-  font-size: 0.78rem;
-  font-weight: 700;
-  cursor: pointer;
-  font-family: inherit;
-  transition: opacity 0.2s;
-}
-.btnRejectCall:hover { opacity: 0.9; }
-
 /* ── Dot de grabación ── */
 .recordDot {
   display: inline-block;
@@ -539,73 +474,6 @@
   50%       { opacity: 0.6; }
 }
 
-/* ── Mensaje de audio ── */
-.audioMsg {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 4px 0;
-}
-
-/* ── Mensajes de sistema (llamada) ── */
-.callSystemMsg {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  padding: 6px 16px;
-  margin: 4px auto;
-  background: rgba(13,45,94,0.04);
-  border: 1px solid rgba(13,45,94,0.08);
-  border-radius: 20px;
-  font-size: 0.72rem;
-  color: #8a9ab5;
-  width: fit-content;
-  max-width: 80%;
-}
-
-.callSystemTime {
-  font-size: 0.65rem;
-  color: #b0bdd4;
-}
-/* ── Header actions ── */
-.headerActions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
-  flex-wrap: nowrap;
-}
-
-/* ── Botón Verificar ── */
-.btnVerificar {
-  background: rgba(201, 168, 76, 0.12);
-  border: 1px solid rgba(201, 168, 76, 0.4);
-  border-radius: 7px;
-  color: #C9A84C;
-  font-family: inherit;
-  font-size: 0.68rem;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  padding: 0.5rem 0.9rem;
-  cursor: pointer;
-  transition: background 0.2s;
-  white-space: nowrap;
-}
-.btnVerificar:hover { background: rgba(201, 168, 76, 0.22); }
-
-/* ── Tag verificado ── */
-.verificadoTag {
-  font-size: 0.68rem;
-  color: rgba(80, 220, 130, 0.9);
-  background: rgba(80, 220, 130, 0.08);
-  border: 1px solid rgba(80, 220, 130, 0.22);
-  border-radius: 6px;
-  padding: 0.4rem 0.8rem;
-  white-space: nowrap;
-}
-
 /* ── Confirmar fila (cierre) ── */
 .confirmRow {
   display: flex;
@@ -613,82 +481,12 @@
   gap: 6px;
 }
 
-/* ── Panel de verificación (debajo del header) ── */
-.verificarPanel {
-  background: rgba(13, 45, 94, 0.06);
-  border-bottom: 1px solid rgba(13, 45, 94, 0.14);
-  padding: 12px 18px;
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  flex-wrap: wrap;
-}
-
-.verificarTxt {
-  flex: 1;
-  font-size: 0.76rem;
-  color: #3a4a6b;
-  margin: 0;
-  line-height: 1.5;
-  min-width: 180px;
-  font-weight: 500;
-}
-
-.verificarBtns {
-  display: flex;
-  gap: 8px;
-  flex-shrink: 0;
-}
-.btnConfirmVerificar {
-  background: rgba(201, 168, 76, 0.15);
-  border: 1px solid rgba(201, 168, 76, 0.5);
-  border-radius: 6px;
-  color: #7a5c10;
-  font-family: inherit;
-  font-size: 0.68rem;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  padding: 0.45rem 1rem;
-  cursor: pointer;
-  transition: background 0.2s;
-  white-space: nowrap;
-}
-.btnConfirmVerificar:disabled { opacity: 0.45; cursor: not-allowed; }
-.btnConfirmVerificar:not(:disabled):hover { background: rgba(201, 168, 76, 0.28); }
-
-.btnCancelVerificar {
-  background: rgba(13, 45, 94, 0.06);
-  border: 1px solid rgba(13, 45, 94, 0.2);
-  border-radius: 6px;
-  color: #5a6f96;
-  font-family: inherit;
-  font-size: 0.68rem;
-  font-weight: 600;
-  padding: 0.45rem 0.8rem;
-  cursor: pointer;
-  transition: background 0.2s, border-color 0.2s;
-  white-space: nowrap;
-}
-.btnCancelVerificar:hover {
-  background: rgba(13, 45, 94, 0.12);
-  border-color: rgba(13, 45, 94, 0.35);
-  color: #3a4a6b;
-}
-
-@media (max-width: 600px) {
-  .headerActions { flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
-  .verificarPanel { flex-direction: column; align-items: flex-start; }
-  .verificarBtns { width: 100%; }
-  .btnConfirmVerificar { flex: 1; text-align: center; }
-}
-
 /* ── Sidebar items renovados ── */
 .itemIcon {
   font-size: 1.1rem;
   flex-shrink: 0;
   opacity: 0.6;
-  color: #6b7fa3; /* inferido — paleta SuperAdmin */
+  color: #6b7fa3;
 }
 .itemInfo {
   flex: 1;
@@ -756,16 +554,18 @@
   margin: 0;
   text-align: center;
 }
+
 /* ── Sala cerrada ── */
 .closedBanner {
   background: #f8f9fc;
   border-bottom: 1px solid rgba(13,45,94,0.06);
   color: #8a9ab5;
-  font-size: 0.72rem; /* inferido — alineado con .footerText de SuperAdmin */
+  font-size: 0.72rem;
   text-align: center;
   padding: 8px;
   flex-shrink: 0;
 }
+
 /* ── Panel rating — banda full-width debajo del header ── */
 .ratingPanel {
   display: flex;
@@ -805,5 +605,6 @@
   .ratingPanel { padding: 10px 14px; gap: 10px; }
   .ratingActions { width: 100%; margin-left: 0; justify-content: flex-end; }
 }
+
 /* ── Audio ── */
 .audioMsg { width: 100%; max-width: 240px; height: 36px; }

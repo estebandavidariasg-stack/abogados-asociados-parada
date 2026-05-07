@@ -266,6 +266,46 @@ export const supabase = {
       return { error: null }
     },
 
+    /* ── Reset de contraseña ──
+       Dispara el correo de recovery de Supabase (template configurado en
+       Auth > Email Templates > Reset Password). El usuario llega a
+       redirectTo con #access_token=...&type=recovery en el hash. */
+    async resetPasswordForEmail(email, { redirectTo } = {}) {
+      const url = `${SUPABASE_URL}/auth/v1/recover${redirectTo ? `?redirect_to=${encodeURIComponent(redirectTo)}` : ''}`
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { apikey: SUPABASE_KEY, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      })
+      if (!res.ok) {
+        const detail = await res.json().catch(() => ({}))
+        return { data: null, error: { message: detail.msg || detail.error_description || `HTTP ${res.status}` } }
+      }
+      return { data: {}, error: null }
+    },
+
+    /* ── Actualizar el usuario autenticado ──
+       Usado en /nueva-contrasena para cambiar la contraseña usando el
+       access_token de tipo recovery que Supabase puso en el hash. */
+    async updateUser({ password }) {
+      const token = localStorage.getItem('sb_token')
+      if (!token) return { data: null, error: { message: 'No hay sesión activa' } }
+      const res = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+        method: 'PUT',
+        headers: {
+          apikey: SUPABASE_KEY,
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ password }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        return { data: null, error: { message: data.msg || data.error_description || `HTTP ${res.status}` } }
+      }
+      return { data: { user: data }, error: null }
+    },
+
     async getSession() {
       const token   = localStorage.getItem('sb_token')
       const userStr = localStorage.getItem('sb_user')
@@ -376,6 +416,20 @@ export const supabase = {
           const data = await res.json()
           const signedUrl = data.signedURL ? `${SUPABASE_URL}/storage/v1${data.signedURL}` : null
           return { data: signedUrl ? { signedUrl } : null, error: res.ok ? null : data }
+        },
+
+        async remove(paths) {
+          const list = Array.isArray(paths) ? paths : [paths]
+          const headers = {
+            apikey: SUPABASE_KEY,
+            Authorization: `Bearer ${localStorage.getItem('sb_token') || SUPABASE_KEY}`,
+          }
+          const results = await Promise.all(list.map(p =>
+            fetch(`${SUPABASE_URL}/storage/v1/object/${bucket}/${p}`, { method: 'DELETE', headers })
+          ))
+          const failed = results.filter(r => !r.ok)
+          if (failed.length) return { data: null, error: { message: 'Failed to remove some files' } }
+          return { data: list.map(name => ({ name })), error: null }
         },
 
         getPublicUrl(path) {

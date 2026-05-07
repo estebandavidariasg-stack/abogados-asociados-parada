@@ -15,9 +15,30 @@ export default function AudioPlayer({ src, mine }) {
     if (!audio) return
     setError(false); setLoaded(false)
 
+    let durationFixTimer = null
+    const onDurationFix = () => {
+      if (audio.duration !== Infinity && !isNaN(audio.duration)) {
+        setDuration(audio.duration)
+      }
+      audio.removeEventListener('timeupdate', onDurationFix)
+      clearTimeout(durationFixTimer)
+      try { audio.currentTime = 0 } catch {}
+    }
+
     const onLoaded = () => {
       setLoaded(true)
-      if (audio.duration !== Infinity && !isNaN(audio.duration)) setDuration(audio.duration)
+      if (audio.duration !== Infinity && !isNaN(audio.duration)) {
+        setDuration(audio.duration)
+        return
+      }
+      // WebM blobs de MediaRecorder llegan con duration=Infinity. Truco:
+      // forzar seek a un valor imposible para que el navegador recalcule.
+      // Firefox a veces no dispara timeupdate → timeout de seguridad.
+      audio.addEventListener('timeupdate', onDurationFix)
+      durationFixTimer = setTimeout(() => {
+        audio.removeEventListener('timeupdate', onDurationFix)
+      }, 1500)
+      try { audio.currentTime = 1e101 } catch {}
     }
     const onTime = () => {
       setCurrent(audio.currentTime)
@@ -37,9 +58,11 @@ export default function AudioPlayer({ src, mine }) {
     return () => {
       audio.removeEventListener('loadedmetadata', onLoaded)
       audio.removeEventListener('timeupdate', onTime)
+      audio.removeEventListener('timeupdate', onDurationFix)
       audio.removeEventListener('ended', onEnded)
       audio.removeEventListener('error', onError)
       audio.removeEventListener('canplay', onCanPlay)
+      clearTimeout(durationFixTimer)
     }
   }, [src])
 

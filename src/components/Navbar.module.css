@@ -381,8 +381,9 @@
   font-family: inherit;
   font-size: 0.85rem;
   font-weight: 500;
-  letter-spacing: 0.06em;
-  text-align: left;
+  letter-spacing: 0.1em;
+  text-align: center;
+  text-transform: uppercase;
   cursor: pointer;
   transition: color 0.2s;
 }
@@ -404,6 +405,7 @@
   font-weight: 700;
   letter-spacing: 0.1em;
   text-align: center;
+  text-transform: uppercase;
   cursor: pointer;
   transition: background 0.2s, transform 0.2s;
 }
@@ -527,4 +529,34 @@
   align-items: baseline;
   flex-direction: row;
   gap: 6px;
+}
+
+/* ══════════════════════════════════════════
+   DROPDOWN DE REGISTRO — solo "Contador" debajo del botón
+   ══════════════════════════════════════════ */
+.registerWrap {
+  position: relative;
+  display: inline-block;
+}
+
+/* Wrapper del dropdown: top: 100% (sin gap real) + padding-top para el
+   espacio visual. La hit area queda continua del botón al ítem,
+   evitando el flicker que cierra el dropdown al cruzar la separación. */
+.registerDropdownWrap {
+  position: absolute;
+  top: 100%;
+  right: -5px;            /* desplazado un poco a la derecha del botón */
+  padding-top: 6px;
+  z-index: 1000;
+  animation: registerSlide 180ms ease-out;
+}
+
+/* El botón del dropdown debe expandirse a su ancho natural sin envolver */
+.registerDropdownWrap > button {
+  white-space: nowrap;
+}
+
+@keyframes registerSlide {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
 }

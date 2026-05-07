@@ -241,3 +241,53 @@
   .section { padding: 3.5rem 0.85rem; }
   .grid    { grid-template-columns: 1fr; }
 }
+
+/* ══════════════════════════════════════════
+   SWITCH PROFESIÓN — chips Abogados / Contadores
+   ══════════════════════════════════════════ */
+.profesionRow {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin: 0 auto 2rem;
+  padding: 0 1rem;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;       /* Firefox */
+  -ms-overflow-style: none;    /* Edge antiguo */
+  -webkit-overflow-scrolling: touch;
+}
+.profesionRow::-webkit-scrollbar { display: none; }
+
+.profesionChip {
+  flex-shrink: 0;
+  background: transparent;
+  border: 1px solid var(--gold);
+  color: var(--navy);
+  padding: 8px 22px;
+  border-radius: 999px;
+  font-family: 'Cinzel', serif;
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s, transform 0.12s;
+  min-height: 36px;
+  white-space: nowrap;
+}
+.profesionChip:hover  { background: rgba(201, 168, 76, 0.08); }
+.profesionChip:active { transform: scale(0.97); }
+
+.profesionChipActive {
+  background: var(--gold);
+  color: var(--navy);
+  font-weight: 700;
+  border-color: var(--gold);
+}
+.profesionChipActive:hover { background: var(--gold-lt); }
+
+@media (max-width: 600px) {
+  .profesionRow {
+    justify-content: flex-start;
+    padding: 0 1rem 4px;
+  }
+}

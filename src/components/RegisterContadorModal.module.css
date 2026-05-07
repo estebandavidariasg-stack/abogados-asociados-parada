@@ -13,10 +13,7 @@
   animation: fadeIn 0.22s ease;
 }
 
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to   { opacity: 1; }
-}
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
 /* ── MODAL ───────────────────────────────────────────────── */
 .modal {
@@ -24,7 +21,9 @@
   border: 1px solid rgba(13, 45, 94, 0.1);
   border-radius: 20px;
   width: 100%;
-  max-width: 440px;
+  max-width: 480px;
+  max-height: 92vh;
+  overflow-y: auto;
   padding: 2.5rem 2.5rem 2rem;
   position: relative;
   animation: slideUp 0.32s cubic-bezier(0.16, 1, 0.3, 1);
@@ -38,7 +37,7 @@
   to   { opacity: 1; transform: translateY(0) scale(1); }
 }
 
-/* ── CLOSE BUTTON ────────────────────────────────────────── */
+/* ── CLOSE ───────────────────────────────────────────────── */
 .close {
   position: absolute;
   top: 1.1rem;
@@ -55,10 +54,7 @@
   height: 32px;
   border-radius: 50%;
 }
-.close:hover {
-  background: rgba(13, 45, 94, 0.12);
-  color: var(--navy);
-}
+.close:hover { background: rgba(13, 45, 94, 0.12); color: var(--navy); }
 
 /* ── HEADER ──────────────────────────────────────────────── */
 .eyebrow {
@@ -73,14 +69,14 @@
 
 .title {
   font-family: 'Cormorant Garamond', serif;
-  font-size: 2rem;
+  font-size: 1.85rem;
   font-weight: 400;
   color: var(--navy);
   margin-bottom: 1.6rem;
   line-height: 1.2;
 }
 
-/* ── TABS ────────────────────────────────────────────────── */
+/* ── TABS (login / registrarse) ──────────────────────────── */
 .tabs {
   display: flex;
   border-bottom: 1px solid rgba(13, 45, 94, 0.1);
@@ -109,6 +105,16 @@
   border-bottom-color: var(--navy-md);
 }
 
+.hintLink {
+  color: var(--navy-md);
+  text-decoration: none;
+  font-weight: 600;
+}
+.hintLink:hover {
+  color: var(--navy);
+  text-decoration: underline;
+}
+
 /* ── FORM ────────────────────────────────────────────────── */
 .form { display: flex; flex-direction: column; }
 
@@ -130,6 +136,15 @@
   margin-bottom: 0.45rem;
 }
 
+.labelHint {
+  font-size: 0.6rem;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  color: rgba(74, 96, 128, 0.6);
+  margin-left: 6px;
+  text-transform: none;
+}
+
 .input {
   width: 100%;
   background: #f8f9fc;
@@ -141,6 +156,8 @@
   font-size: 0.88rem;
   outline: none;
   transition: border-color 0.25s, box-shadow 0.25s, background 0.25s;
+  min-height: 44px;
+  box-sizing: border-box;
 }
 .input:focus {
   border-color: var(--navy-md);
@@ -149,7 +166,49 @@
 }
 .input::placeholder { color: rgba(74, 96, 128, 0.45); }
 
-/* ── SUBMIT BUTTON ───────────────────────────────────────── */
+/* ── ESPECIALIDADES — checkbox grid 2 columnas ───────────── */
+.especialidadesGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 14px;
+  background: #f8f9fc;
+  border: 1.5px solid rgba(13, 45, 94, 0.15);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+
+.especialidadItem {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 0.78rem;
+  color: var(--navy);
+  line-height: 1.35;
+  user-select: none;
+  min-height: 28px;
+}
+
+.especialidadItem input {
+  accent-color: var(--gold, #c9a84c);
+  flex-shrink: 0;
+  margin-top: 2px;
+  cursor: pointer;
+  width: 15px;
+  height: 15px;
+}
+
+.especialidadItem:hover { color: var(--navy-md); }
+
+.especialidadesCount {
+  font-size: 0.68rem;
+  color: var(--gold-dk, #8a6a28);
+  font-weight: 600;
+  margin: 6px 0 0;
+  font-style: italic;
+}
+
+/* ── SUBMIT ──────────────────────────────────────────────── */
 .submit {
   width: 100%;
   padding: 0.92rem;
@@ -166,6 +225,7 @@
   border-radius: 10px !important;
   cursor: pointer;
   transition: background 0.25s, transform 0.2s;
+  min-height: 44px;
 }
 .submit:hover:not(:disabled) {
   background: var(--navy-md) !important;
@@ -173,7 +233,7 @@
 }
 .submit:disabled { opacity: 0.4; cursor: not-allowed; }
 
-/* ── FOOTER ──────────────────────────────────────────────── */
+/* ── HINT / FOOTER ───────────────────────────────────────── */
 .hint {
   text-align: center;
   font-size: 0.72rem;
@@ -181,17 +241,7 @@
   line-height: 1.65;
 }
 
-.hintLink {
-  color: var(--navy-md);
-  text-decoration: none;
-  font-weight: 600;
-}
-.hintLink:hover {
-  color: var(--navy);
-  text-decoration: underline;
-}
-
-/* ── MESSAGES ────────────────────────────────────────────── */
+/* ── MENSAJES ────────────────────────────────────────────── */
 .msgError {
   background: #fff5f5;
   border: 1px solid rgba(220, 50, 50, 0.22);
@@ -214,25 +264,12 @@
   line-height: 1.5;
 }
 
-/* ── RESPONSIVE ──────────────────────────────────────────── */
-@media (max-width: 480px) {
-  .modal { padding: 2rem 1.4rem 1.5rem; border-radius: 16px; }
-  .title { font-size: 1.7rem; }
-  .row   { grid-template-columns: 1fr; }
-}
-
-/* ── Req asterisco ── */
 .req { color: var(--gold, #c9a84c); }
 
-/* ── Contraseña input + toggle ── */
-.pwWrap {
-  position: relative;
-  display: flex;
-  align-items: center;
-}
-.pwWrap .input {
-  padding-right: 44px;
-}
+/* ── PASSWORD ────────────────────────────────────────────── */
+.pwWrap { position: relative; display: flex; align-items: center; }
+.pwWrap .input { padding-right: 44px; }
+
 .pwToggle {
   position: absolute;
   right: 12px;
@@ -251,24 +288,9 @@
 }
 .pwToggle:hover { opacity: 1; }
 
-/* ── Barra de fortaleza ── */
-.strengthRow {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 6px;
-}
-.strengthBars {
-  display: flex;
-  gap: 4px;
-  flex: 1;
-}
-.strengthBar {
-  height: 4px;
-  flex: 1;
-  border-radius: 4px;
-  transition: background 0.3s;
-}
+.strengthRow { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+.strengthBars { display: flex; gap: 4px; flex: 1; }
+.strengthBar { height: 4px; flex: 1; border-radius: 4px; transition: background 0.3s; }
 .strengthLabel {
   font-size: 0.62rem;
   font-weight: 700;
@@ -278,19 +300,17 @@
   text-align: right;
 }
 
-/* ── Checklist contraseña ── */
 .pwChecklist {
   list-style: none;
   margin: 6px 0 0;
   padding: 10px 12px;
-  background: rgba(255,255,255,0.04);
-  border: 1px solid rgba(255,255,255,0.07);
+  background: rgba(13, 45, 94, 0.04);
+  border: 1px solid rgba(13, 45, 94, 0.08);
   border-radius: 8px;
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 5px 10px;
 }
-
 .pwItem {
   display: flex;
   align-items: center;
@@ -300,8 +320,7 @@
   transition: color 0.25s;
 }
 .pwItemOk      { color: rgba(46, 204, 113, 0.95); }
-.pwItemPending { color: rgba(240, 235, 224, 0.3); }
-
+.pwItemPending { color: rgba(13, 45, 94, 0.4); }
 .pwIcon {
   font-size: 0.65rem;
   font-weight: 700;
@@ -310,7 +329,7 @@
   flex-shrink: 0;
 }
 
-/* ── Términos y condiciones ── */
+/* ── TÉRMINOS ────────────────────────────────────────────── */
 .terminosRow {
   display: flex;
   align-items: flex-start;
@@ -341,6 +360,16 @@
 }
 .terminosLink:hover { opacity: 0.75; }
 
-@media (max-width: 480px) {
+/* ── RESPONSIVE ──────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .modal { padding: 2rem 1.4rem 1.5rem; border-radius: 16px; max-width: 100%; }
+  .title { font-size: 1.6rem; }
+  .row   { grid-template-columns: 1fr; }
   .pwChecklist { grid-template-columns: 1fr; }
+  /* Las especialidades MANTIENEN 2 columnas en móvil según spec */
+  .especialidadesGrid { grid-template-columns: 1fr 1fr; }
+}
+
+@media (max-width: 380px) {
+  .especialidadesGrid { grid-template-columns: 1fr; }
 }

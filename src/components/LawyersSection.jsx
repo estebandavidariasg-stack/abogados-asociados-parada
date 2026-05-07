@@ -11,28 +11,45 @@ export default function LawyersSection() {
   const sectionRef = useRef(null)
   const [lawyers, setLawyers]           = useState([])
   const [loading, setLoading]           = useState(true)
+  const [profesion, setProfesion]       = useState('abogado')   // 'abogado' | 'contador'
   const [areaDerecho, setAreaDerecho]   = useState('')
   const [departamento, setDepartamento] = useState('')
   const [ciudad, setCiudad]             = useState('')
   const { profile }                     = useAuth()
   const isSuperAdmin                    = profile?.rol === 'superadmin'
 
+  // Fetch reactivo a la profesión seleccionada
   useEffect(() => {
+    let cancelled = false
     async function fetchLawyers() {
+      setLoading(true)
       try {
         const { data } = await supabase.auth.getSession()
         const token = data?.session?.access_token
         const res = await fetch(
-          `${SUPABASE_URL}/rest/v1/profiles?aprobado=eq.true&rol=eq.abogado&select=*`,
+          `${SUPABASE_URL}/rest/v1/profiles?aprobado=eq.true&rol=eq.${profesion}&select=*`,
           { headers: { 'Content-Type':'application/json', apikey: SUPABASE_KEY, Authorization:`Bearer ${token||SUPABASE_KEY}` } }
         )
         const json = await res.json()
+        if (cancelled) return
         setLawyers(Array.isArray(json) ? json : [])
-      } catch { setLawyers([]) }
-      finally { setLoading(false) }
+      } catch {
+        if (!cancelled) setLawyers([])
+      }
+      finally {
+        if (!cancelled) setLoading(false)
+      }
     }
     fetchLawyers()
-  }, [])
+    return () => { cancelled = true }
+  }, [profesion])
+
+  // Al cambiar de profesión, resetear filtros secundarios
+  function changeProfesion(p) {
+    if (p === profesion) return
+    setProfesion(p)
+    setAreaDerecho(''); setDepartamento(''); setCiudad('')
+  }
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -70,84 +87,107 @@ export default function LawyersSection() {
 
       <div className={`${styles.header} fade-up`}>
         <span className={styles.label}>Nuestros Socios</span>
-        <h2 className={styles.title}>ABOGADOS DE <em>EXCELENCIA</em></h2>
+        <h2 className={styles.title}>
+          {profesion === 'contador'
+            ? <>CONTADORES <em>ALIADOS</em></>
+            : <>ABOGADOS DE <em>EXCELENCIA</em></>}
+        </h2>
         <p className={styles.desc}>
-          Profesionales especializados, comprometidos con cada caso y con la defensa de sus derechos.
+          {profesion === 'contador'
+            ? 'Profesionales contables aliados, especialistas en auditoría, tributaria y gestión financiera.'
+            : 'Profesionales especializados, comprometidos con cada caso y con la defensa de sus derechos.'}
         </p>
       </div>
 
-      {/* ── Filtros ── */}
-      {lawyers.length > 0 && (
-        <div className={`${styles.filtersWrap} fade-up`}>
-          <div className={styles.filters}>
+      {/* ── Switch de profesión (chips) ── */}
+      <div className={`${styles.profesionRow} fade-up`}>
+        <button
+          type="button"
+          className={`${styles.profesionChip} ${profesion === 'abogado'  ? styles.profesionChipActive : ''}`}
+          onClick={() => changeProfesion('abogado')}
+        >
+          Abogados
+        </button>
+        <button
+          type="button"
+          className={`${styles.profesionChip} ${profesion === 'contador' ? styles.profesionChipActive : ''}`}
+          onClick={() => changeProfesion('contador')}
+        >
+          Contadores
+        </button>
+      </div>
 
-            {todasAreas.length > 0 && (
-              <div className={styles.filterGroup}>
-                <label className={styles.filterLabel}>Área</label>
-                <div className={styles.selectWrap}>
-                  <select className={styles.filterSelect} value={areaDerecho}
-                    onChange={e => setAreaDerecho(e.target.value)}>
-                    <option value="">Todas</option>
-                    {todasAreas.map(a => <option key={a} value={a}>{a}</option>)}
-                  </select>
-                </div>
-              </div>
-            )}
+      {/* ── Filtros — siempre visibles para que la UI sea consistente entre
+          abogados y contadores, incluso si todavía no hay perfiles cargados. ── */}
+      <div className={`${styles.filtersWrap} fade-up`}>
+        <div className={styles.filters}>
 
-            {departamentos.length > 0 && (
-              <div className={styles.filterGroup}>
-                <label className={styles.filterLabel}>Departamento</label>
-                <div className={styles.selectWrap}>
-                  <select className={styles.filterSelect} value={departamento}
-                    onChange={e => { setDepartamento(e.target.value); setCiudad('') }}>
-                    <option value="">Todos</option>
-                    {departamentos.map(d => <option key={d} value={d}>{d}</option>)}
-                  </select>
-                </div>
-              </div>
-            )}
-
-            {ciudades.length > 0 && (
-              <div className={styles.filterGroup}>
-                <label className={styles.filterLabel}>Ciudad</label>
-                <div className={styles.selectWrap}>
-                  <select className={styles.filterSelect} value={ciudad}
-                    onChange={e => setCiudad(e.target.value)}>
-                    <option value="">Todas</option>
-                    {(departamento
-                      ? ciudades.filter(c => lawyers.some(l => l.departamento === departamento && l.ciudad === c))
-                      : ciudades
-                    ).map(c => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                </div>
-              </div>
-            )}
-
-            {hasFilters && (
-              <button className={styles.filterClear} onClick={clearFilters}>
-                ✕ Limpiar
-              </button>
-            )}
+          <div className={styles.filterGroup}>
+            <label className={styles.filterLabel}>
+              {profesion === 'contador' ? 'Especialidad' : 'Área'}
+            </label>
+            <div className={styles.selectWrap}>
+              <select className={styles.filterSelect} value={areaDerecho}
+                onChange={e => setAreaDerecho(e.target.value)}>
+                <option value="">Todas</option>
+                {todasAreas.map(a => <option key={a} value={a}>{a}</option>)}
+              </select>
+            </div>
           </div>
 
-          {/* Contador de resultados */}
+          <div className={styles.filterGroup}>
+            <label className={styles.filterLabel}>Departamento</label>
+            <div className={styles.selectWrap}>
+              <select className={styles.filterSelect} value={departamento}
+                onChange={e => { setDepartamento(e.target.value); setCiudad('') }}>
+                <option value="">Todos</option>
+                {departamentos.map(d => <option key={d} value={d}>{d}</option>)}
+              </select>
+            </div>
+          </div>
+
+          <div className={styles.filterGroup}>
+            <label className={styles.filterLabel}>Ciudad</label>
+            <div className={styles.selectWrap}>
+              <select className={styles.filterSelect} value={ciudad}
+                onChange={e => setCiudad(e.target.value)}>
+                <option value="">Todas</option>
+                {(departamento
+                  ? ciudades.filter(c => lawyers.some(l => l.departamento === departamento && l.ciudad === c))
+                  : ciudades
+                ).map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+          </div>
+
           {hasFilters && (
-            <p className={styles.filterCount}>
-              {filtered.length} abogado{filtered.length !== 1 ? 's' : ''} encontrado{filtered.length !== 1 ? 's' : ''}
-            </p>
+            <button className={styles.filterClear} onClick={clearFilters}>
+              ✕ Limpiar
+            </button>
           )}
         </div>
-      )}
+
+        {/* Contador de resultados */}
+        {hasFilters && (
+          <p className={styles.filterCount}>
+            {filtered.length} {profesion === 'contador'
+              ? `contador${filtered.length !== 1 ? 'es' : ''} encontrado${filtered.length !== 1 ? 's' : ''}`
+              : `abogado${filtered.length !== 1 ? 's' : ''} encontrado${filtered.length !== 1 ? 's' : ''}`}
+          </p>
+        )}
+      </div>
 
       {/* ── Grid ── */}
       {loading ? (
-        <p className={styles.empty}>Cargando abogados...</p>
+        <p className={styles.empty}>
+          Cargando {profesion === 'contador' ? 'contadores' : 'abogados'}...
+        </p>
       ) : filtered.length === 0 ? (
         <div className={styles.emptyWrap}>
           <p className={styles.empty}>
             {hasFilters
-              ? 'No hay abogados que coincidan con los filtros.'
-              : 'Próximamente se añadirán abogados a esta sección.'}
+              ? `No hay ${profesion === 'contador' ? 'contadores' : 'abogados'} que coincidan con los filtros.`
+              : `Próximamente se añadirán ${profesion === 'contador' ? 'contadores' : 'abogados'} a esta sección.`}
           </p>
           {hasFilters && (
             <button className={styles.filterClear} onClick={clearFilters}>

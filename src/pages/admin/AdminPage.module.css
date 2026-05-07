@@ -338,8 +338,14 @@
   border: 1.5px solid rgba(13, 45, 94, 0.1);
   border-radius: 14px;
   padding: 1.25rem 1.5rem;
-  transition: border-color 0.22s, box-shadow 0.22s;
+  transition: border-color 0.22s, box-shadow 0.22s, transform 0.18s;
   box-shadow: 0 2px 8px rgba(10, 30, 100, 0.05);
+  cursor: pointer;
+  outline: none;
+}
+.card:focus-visible {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 3px rgba(201, 168, 76, 0.25);
 }
 .card:hover {
   border-color: rgba(201, 168, 76, 0.35);
@@ -391,6 +397,9 @@
 }
 .cardBadge {
   display: inline-block;
+  align-self: flex-start;     /* evita que se estire al ancho del flex column */
+  width: fit-content;
+  max-width: 100%;
   font-size: 0.57rem;
   font-weight: 700;
   letter-spacing: 0.14em;
@@ -401,6 +410,7 @@
   border-radius: 5px;
   padding: 0.2rem 0.6rem;
   margin-top: 0.12rem;
+  word-break: break-word;
 }
 .cardDesc {
   font-size: 0.72rem;
@@ -1048,4 +1058,99 @@
 
 @media (max-width: 480px) {
   .darkWrap { padding: 16px 14px 20px; border-radius: 12px; }
+}
+
+/* ══════════════════════════════════════════
+   FILTRO POR ROL — Chips Todos/Abogados/Contadores
+   ══════════════════════════════════════════ */
+.rolChipsRow {
+  display: flex;
+  gap: 8px;
+  margin: 0 0 16px;
+  flex-wrap: wrap;
+}
+
+.rolChip {
+  background: transparent;
+  border: 1px solid rgba(13, 45, 94, 0.22);
+  color: var(--navy);
+  padding: 7px 16px;
+  border-radius: 999px;
+  font-family: 'Cinzel', serif;
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  transition: background 0.18s, color 0.18s, border-color 0.18s;
+  min-height: 34px;
+  white-space: nowrap;
+}
+.rolChip:hover { background: rgba(201, 168, 76, 0.06); }
+
+.rolChipActive {
+  background: var(--gold);
+  border-color: var(--gold);
+  color: var(--navy);
+  font-weight: 700;
+}
+.rolChipActive:hover { background: var(--gold-lt); }
+
+/* ══════════════════════════════════════════
+   BADGE DE ROL EN CARDS (Abogado / Contador)
+   ══════════════════════════════════════════ */
+.cardRolBadge {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 10px;
+  font-family: 'Raleway', sans-serif;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 999px;
+  vertical-align: middle;
+}
+
+.cardRolBadgeAbogado {
+  background: rgba(13, 45, 94, 0.1);
+  color: var(--navy);
+}
+
+.cardRolBadgeContador {
+  background: rgba(201, 168, 76, 0.18);
+  color: var(--gold-dk, #8a6a28);
+}
+
+/* ── Badge mini en chips de Contratos ── */
+.abogadoChip .cardRolBadge {
+  padding: 2px 6px;
+  margin-left: 6px;
+  font-size: 0.58rem;
+}
+
+/* ══════════════════════════════════════════
+   LINK A LA TARJETA PROFESIONAL EN CARDS
+   ══════════════════════════════════════════ */
+.cardTarjetaLink {
+  display: inline-block;
+  margin-top: 4px;
+  color: var(--gold-dk, #8a6a28);
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-decoration: none;
+  border-bottom: 1px dashed rgba(201, 168, 76, 0.5);
+  padding-bottom: 1px;
+  transition: color 0.18s;
+}
+.cardTarjetaLink:hover { color: var(--navy); }
+
+/* ── Sub-info de stats (desglose ab. / cont.) ── */
+.statSub {
+  display: block;
+  font-size: 0.62rem;
+  font-weight: 500;
+  color: rgba(13, 45, 94, 0.55);
+  letter-spacing: 0.05em;
+  margin-top: 2px;
+  text-transform: none;
 }

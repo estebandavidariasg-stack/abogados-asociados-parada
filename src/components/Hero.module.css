@@ -378,3 +378,26 @@
   .heroHeading { font-size: 2rem; }
   .heroCta { font-size: 0.65rem; padding: 0.8rem 1.8rem; }
 }
+
+/* ── Skeleton placeholder con shimmer (PASO 1 — perf) ──
+   Hereda dimensiones de .slide. Gradient navy ↔ gold sutil que se desliza
+   horizontalmente para indicar carga sin parpadeo agresivo. */
+.slideSkeleton {
+  background: linear-gradient(
+    90deg,
+    rgba(13, 45, 94, 0.55)   0%,
+    rgba(13, 45, 94, 0.78)  40%,
+    rgba(201, 168, 76, 0.18) 50%,
+    rgba(13, 45, 94, 0.78)  60%,
+    rgba(13, 45, 94, 0.55) 100%
+  );
+  background-size: 220% 100%;
+  border-radius: 12px;
+  animation: heroShimmer 1.6s linear infinite;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.4);
+}
+
+@keyframes heroShimmer {
+  0%   { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}

@@ -1,19 +1,17 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { getAuthHeaders } from '../lib/supabase'
-import styles from './LawyerChatDashboard.module.css'
+import styles from './ContadorChatDashboard.module.css'
 import AudioPlayer from './AudioPlayer'
 import { IconPaperclip, IconMic } from './Icons'
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
 
-/* ─────────────────────────────────────────────
-   Formatear fecha para el sidebar
-   · Si es hoy → solo hora "14:32"
-   · Si es ayer → "Ayer"
-   · Si es esta semana → "lun", "mar"…
-   · Si es más antiguo → "12 ene"
-───────────────────────────────────────────── */
+/* Clon de LawyerChatDashboard adaptado a contadores. La tabla
+   `chat_room_lawyers` se reutiliza (lawyer_id = contadorId en este contexto)
+   y aplicamos filtro extra `tipo_profesional=eq.contador` al consultar
+   chat_rooms para que un contador NUNCA vea salas creadas para abogado. */
+
 function fmtSidebar(ts) {
   if (!ts) return ''
   const d   = new Date(ts)
@@ -54,41 +52,41 @@ function formatSize(bytes) {
 const STATUS_LABEL = { waiting: 'En espera', active: 'Activo', closed: 'Cerrado' }
 const STATUS_COLOR = { waiting: '#e6a817', active: '#4caf50', closed: '#666' }
 
-export default function LawyerChatDashboard({ lawyerId }) {
-  const [rooms,       setRooms]       = useState([])
-  const [activeRoom,  setActiveRoom]  = useState(null)
-  const [messages,    setMessages]    = useState([])
-  const [input,       setInput]       = useState('')
-  const [sending,     setSending]     = useState(false)
-  const [uploading,   setUploading]   = useState(false)
-  const [closing,     setClosing]     = useState(false)
+export default function ContadorChatDashboard({ contadorId }) {
+  const [rooms,        setRooms]        = useState([])
+  const [activeRoom,   setActiveRoom]   = useState(null)
+  const [messages,     setMessages]     = useState([])
+  const [input,        setInput]        = useState('')
+  const [sending,      setSending]      = useState(false)
+  const [uploading,    setUploading]    = useState(false)
+  const [closing,      setClosing]      = useState(false)
   const [confirmClose, setConfirmClose] = useState(false)
-  const [rating,      setRating]      = useState(0)
-  const [showRating,  setShowRating]  = useState(false)
+  const [rating,       setRating]       = useState(0)
+  const [showRating,   setShowRating]   = useState(false)
   const [loadingRooms, setLoadingRooms] = useState(true)
 
-  const fileRef   = useRef(null)
-  const mensajesRef = useRef(null)
+  const fileRef      = useRef(null)
+  const mensajesRef  = useRef(null)
   const lastCountRef = useRef(0)
-  const pollRooms = useRef(null)
-  const pollMsgs  = useRef(null)
+  const pollRooms    = useRef(null)
+  const pollMsgs     = useRef(null)
 
   // ── Voz ──────────────────────────────────────────────────────────────────
-  const [recording, setRecording]           = useState(false)
-  const [recordingTime, setRecordingTime]   = useState(0)
+  const [recording,      setRecording]      = useState(false)
+  const [recordingTime,  setRecordingTime]  = useState(0)
   const [uploadingAudio, setUploadingAudio] = useState(false)
   const mediaRecorderRef  = useRef(null)
   const audioChunksRef    = useRef([])
   const recordingTimerRef = useRef(null)
 
-  /* ── Cargar salas ── */
+  /* ── Cargar salas asignadas a este contador ── */
   const fetchRooms = useCallback(async () => {
-    if (!lawyerId) return
+    if (!contadorId) return
     const headers = await getAuthHeaders()
 
-    // 1. Obtener IDs de salas asignadas al abogado
+    // 1. IDs de salas asignadas (lawyer_id = contadorId; la columna se reutiliza)
     const aRes = await fetch(
-      `${SUPABASE_URL}/rest/v1/chat_room_lawyers?lawyer_id=eq.${lawyerId}&select=room_id,status`,
+      `${SUPABASE_URL}/rest/v1/chat_room_lawyers?lawyer_id=eq.${contadorId}&select=room_id,status`,
       { headers }
     )
     const assignments = await aRes.json()
@@ -100,17 +98,19 @@ export default function LawyerChatDashboard({ lawyerId }) {
 
     const roomIds = assignments.map(a => a.room_id).join(',')
 
-    // 2. Obtener datos de esas salas — orden descendente por created_at
+    // 2. Datos de las salas — filtro extra tipo_profesional=eq.contador
+    //    como guardrail. Si el dato existe, evita que un contador vea
+    //    salas legacy de abogado por error de asignación.
     const rRes = await fetch(
       `${SUPABASE_URL}/rest/v1/chat_rooms` +
-      `?id=in.(${roomIds})&select=*&order=created_at.desc`,
+      `?id=in.(${roomIds})&tipo_profesional=eq.contador&select=*&order=created_at.desc`,
       { headers }
     )
     const roomData = await rRes.json()
 
     if (!Array.isArray(roomData)) { setLoadingRooms(false); return }
 
-    // 3. Obtener el último mensaje de cada sala para mostrarlo en el sidebar
+    // 3. Último mensaje de cada sala para mostrarlo en el sidebar
     const lastMsgMap = {}
     await Promise.all(
       roomData.map(async room => {
@@ -126,7 +126,6 @@ export default function LawyerChatDashboard({ lawyerId }) {
       })
     )
 
-    // 4. Mezclar estado de asignación con datos de sala
     const enriched = roomData.map(room => {
       const assignment = assignments.find(a => a.room_id === room.id)
       return {
@@ -136,7 +135,6 @@ export default function LawyerChatDashboard({ lawyerId }) {
       }
     })
 
-    // Ordenar: salas activas primero, luego por fecha desc
     enriched.sort((a, b) => {
       const order = { active: 0, waiting: 1, closed: 2 }
       const oa = order[a.status] ?? 3
@@ -147,7 +145,7 @@ export default function LawyerChatDashboard({ lawyerId }) {
 
     setRooms(enriched)
     setLoadingRooms(false)
-  }, [lawyerId])
+  }, [contadorId])
 
   useEffect(() => {
     fetchRooms()
@@ -155,7 +153,7 @@ export default function LawyerChatDashboard({ lawyerId }) {
     return () => clearInterval(pollRooms.current)
   }, [fetchRooms])
 
-  /* ── Cargar mensajes de la sala activa ── */
+  /* ── Mensajes de la sala activa ── */
   const fetchMessages = useCallback(async () => {
     if (!activeRoom) return
     const headers = await getAuthHeaders()
@@ -176,7 +174,6 @@ export default function LawyerChatDashboard({ lawyerId }) {
     return () => clearInterval(pollMsgs.current)
   }, [activeRoom, fetchMessages])
 
-  /* ── Scroll al fondo SOLO cuando el conteo cambia (no en cada poll) ── */
   useEffect(() => {
     if (messages.length === lastCountRef.current) return
     lastCountRef.current = messages.length
@@ -184,12 +181,10 @@ export default function LawyerChatDashboard({ lawyerId }) {
     if (c) c.scrollTop = c.scrollHeight
   }, [messages])
 
-  /* ── Reset de contador al cambiar de sala ── */
   useEffect(() => {
     lastCountRef.current = 0
   }, [activeRoom?.id])
 
-  /* ── Seleccionar sala y marcar como activo si estaba en espera ── */
   async function selectRoom(room) {
     setActiveRoom(room)
     setConfirmClose(false)
@@ -198,16 +193,14 @@ export default function LawyerChatDashboard({ lawyerId }) {
 
     if (room.my_status === 'invited' || room.status === 'waiting') {
       const headers = await getAuthHeaders()
-      // Marcar abogado como activo en la sala
       await fetch(
-        `${SUPABASE_URL}/rest/v1/chat_room_lawyers?room_id=eq.${room.id}&lawyer_id=eq.${lawyerId}`,
+        `${SUPABASE_URL}/rest/v1/chat_room_lawyers?room_id=eq.${room.id}&lawyer_id=eq.${contadorId}`,
         {
           method: 'PATCH',
           headers: { ...headers, 'Content-Type': 'application/json' },
           body: JSON.stringify({ status: 'active' }),
         }
       )
-      // Marcar sala como activa
       if (room.status === 'waiting') {
         await fetch(
           `${SUPABASE_URL}/rest/v1/chat_rooms?id=eq.${room.id}`,
@@ -222,7 +215,8 @@ export default function LawyerChatDashboard({ lawyerId }) {
     }
   }
 
-  /* ── Enviar mensaje ── */
+  /* sender_type = 'lawyer' aunque seamos contador — la columna sólo
+     distingue cliente vs profesional, no el rol del profesional. */
   async function enviar() {
     if (!input.trim() || sending || !activeRoom) return
     setSending(true)
@@ -231,9 +225,9 @@ export default function LawyerChatDashboard({ lawyerId }) {
       method: 'POST',
       headers: { ...headers, 'Content-Type': 'application/json', Prefer: 'return=representation' },
       body: JSON.stringify({
-        room_id:     activeRoom.id,
-        sender_type: 'lawyer',
-        content:     input.trim(),
+        room_id:      activeRoom.id,
+        sender_type:  'lawyer',
+        content:      input.trim(),
         message_type: 'text',
       }),
     })
@@ -242,7 +236,6 @@ export default function LawyerChatDashboard({ lawyerId }) {
     fetchMessages()
   }
 
-  /* ── Subir archivo ── */
   async function handleFile(e) {
     const file = e.target.files?.[0]
     if (!file || !activeRoom) return
@@ -254,17 +247,12 @@ export default function LawyerChatDashboard({ lawyerId }) {
         `${SUPABASE_URL}/storage/v1/object/chat-files/${path}`,
         {
           method: 'POST',
-          headers: {
-            ...headers,
-            'Content-Type': file.type,
-            'x-upsert': 'true',
-          },
+          headers: { ...headers, 'Content-Type': file.type, 'x-upsert': 'true' },
           body: file,
         }
       )
       if (!upRes.ok) throw new Error('Error subiendo archivo')
 
-      // Generar URL firmada (7 días)
       const signRes = await fetch(
         `${SUPABASE_URL}/storage/v1/object/sign/chat-files/${path}`,
         {
@@ -298,7 +286,7 @@ export default function LawyerChatDashboard({ lawyerId }) {
     }
   }
 
-  /* ── Grabación de voz (click toggle, igual que ChatSection) ─────────────── */
+  /* ── Grabación de voz ── */
   async function fixAudioDuration(blob) {
     return new Promise(resolve => {
       let done = false
@@ -308,8 +296,6 @@ export default function LawyerChatDashboard({ lawyerId }) {
         try { URL.revokeObjectURL(audio.src) } catch {}
         resolve(blob)
       }
-      // Firefox a veces no dispara `timeupdate` tras el seek a 1e101 — timeout
-      // para no colgar el flujo de subida.
       const timer = setTimeout(finish, 1500)
 
       const audio = document.createElement('audio')
@@ -375,12 +361,8 @@ export default function LawyerChatDashboard({ lawyerId }) {
     try {
       const ext  = mimeType.includes('ogg') ? 'ogg' : mimeType.includes('mp4') ? 'mp4' : 'webm'
       const path = `chats/${activeRoom.id}/audio_${Date.now()}.${ext}`
-
-      // Content-Type "limpio" — Firefox rechaza reproducir si lo guardamos
-      // con `audio/webm;codecs=opus` aunque el blob sí sea opus.
       const cleanMime = mimeType.split(';')[0] || 'audio/webm'
 
-      // 1) Upload con JWT del usuario autenticado
       const upHeaders = await getAuthHeaders()
       const upRes = await fetch(`${SUPABASE_URL}/storage/v1/object/chat-files/${path}`, {
         method: 'POST',
@@ -393,7 +375,6 @@ export default function LawyerChatDashboard({ lawyerId }) {
         return
       }
 
-      // 2) Firmar URL (7 días)
       const signHeaders = await getAuthHeaders()
       const signRes = await fetch(
         `${SUPABASE_URL}/storage/v1/object/sign/chat-files/${path}`,
@@ -414,7 +395,6 @@ export default function LawyerChatDashboard({ lawyerId }) {
         : null
       if (!signedUrl) { console.error('No se pudo obtener URL firmada', signData); return }
 
-      // 3) Insertar mensaje con metadata de audio
       const insHeaders = await getAuthHeaders()
       const insRes = await fetch(`${SUPABASE_URL}/rest/v1/chat_messages`, {
         method: 'POST',
@@ -442,7 +422,7 @@ export default function LawyerChatDashboard({ lawyerId }) {
     }
   }
 
-  /* ── Cerrar sala (abogado) ── */
+  /* ── Cerrar sala (contador) ── */
   async function closeRoom() {
     if (!activeRoom || closing) return
     setClosing(true)
@@ -453,14 +433,13 @@ export default function LawyerChatDashboard({ lawyerId }) {
       body: JSON.stringify({ status: 'closed' }),
     })
 
-    // Guardar calificación si la dio
     if (rating > 0) {
       await fetch(`${SUPABASE_URL}/rest/v1/chat_ratings`, {
         method: 'POST',
         headers: { ...headers, 'Content-Type': 'application/json', Prefer: 'return=representation' },
         body: JSON.stringify({
           room_id:   activeRoom.id,
-          lawyer_id: lawyerId,
+          lawyer_id: contadorId,
           rating,
         }),
       })
@@ -471,8 +450,6 @@ export default function LawyerChatDashboard({ lawyerId }) {
     setActiveRoom(null)
     fetchRooms()
   }
-
-  const hasVideos = activeRoom && messages.some(m => m.message_type === 'video_call')
 
   return (
     <div className={styles.dashboard}>
@@ -500,17 +477,15 @@ export default function LawyerChatDashboard({ lawyerId }) {
                 className={`${styles.roomRow} ${isActive ? styles.roomRowActive : ''} ${room.status === 'closed' ? styles.itemClosed : ''}`}
                 onClick={() => selectRoom(room)}
               >
-                {/* Ícono de área */}
-                <div className={styles.itemIcon}>⚖</div>
+                {/* Ícono representativo de contador (calculadora) */}
+                <div className={styles.itemIcon}>🧮</div>
 
                 <div className={styles.itemInfo}>
-                  {/* Fila superior: área + fecha/hora */}
                   <div className={styles.itemRow}>
                     <span className={styles.itemArea}>{room.area_derecho || 'Consulta'}</span>
                     <span className={styles.itemFecha}>{fmtSidebar(lastTs)}</span>
                   </div>
 
-                  {/* Fila inferior: último mensaje + estado */}
                   <div className={styles.itemRow}>
                     <span className={styles.itemUltimo}>
                       {room.lastMsg
@@ -537,13 +512,12 @@ export default function LawyerChatDashboard({ lawyerId }) {
       <div className={styles.main}>
         {!activeRoom ? (
           <div className={styles.placeholder}>
-            <span className={styles.placeholderIcon}>⚖</span>
+            <span className={styles.placeholderIcon}>🧮</span>
             <p className={styles.placeholderText}>Selecciona una consulta para responder</p>
             <p className={styles.placeholderSub}>Los chats aparecen ordenados por más reciente</p>
           </div>
         ) : (
           <>
-            {/* Header */}
             <div className={styles.chatHeader}>
               <div className={styles.chatMeta}>
                 <p className={styles.chatTitle}>{activeRoom.area_derecho}</p>
@@ -556,7 +530,6 @@ export default function LawyerChatDashboard({ lawyerId }) {
                 </p>
               </div>
 
-              {/* Botón de cierre — solo cuando NO está el panel rating activo */}
               {activeRoom.status !== 'closed' && !showRating && (
                 !confirmClose
                   ? <button className={styles.btnClose} onClick={() => setConfirmClose(true)}>
@@ -574,8 +547,7 @@ export default function LawyerChatDashboard({ lawyerId }) {
               )}
             </div>
 
-            {/* Panel de calificación — banda full-width debajo del header,
-                no compite con el botón "Finalizar consulta". */}
+            {/* Panel de calificación — banda full-width debajo del header. */}
             {showRating && (
               <div className={styles.ratingPanel}>
                 <p className={styles.ratingLabel}>Califica esta consulta</p>
@@ -606,14 +578,12 @@ export default function LawyerChatDashboard({ lawyerId }) {
               </div>
             )}
 
-            {/* Sala cerrada — banner */}
             {activeRoom.status === 'closed' && (
               <div className={styles.closedBanner}>
                 Consulta finalizada · Solo lectura
               </div>
             )}
 
-            {/* Mensajes */}
             <div className={styles.messages} ref={mensajesRef}>
               {messages.length === 0 && (
                 <p className={styles.messagesEmpty}>
@@ -631,8 +601,6 @@ export default function LawyerChatDashboard({ lawyerId }) {
                   >
                     <div className={`${esMio ? styles.bubbleMine : styles.bubbleOther} ${isAudio ? styles.bubbleAudio : ''} ${isFirstClientMsg ? styles.bubbleFirst : ''}`}>
                       {isAudio ? (
-                        // mine={true} fuerza el skin dorado: se ve bien sobre
-                        // fondo claro (skin "other" translúcido desaparece sobre ivory).
                         <AudioPlayer src={m.file_url} mine={true} />
                       ) : m.message_type === 'file' ? (
                         <button
@@ -655,7 +623,6 @@ export default function LawyerChatDashboard({ lawyerId }) {
               })}
             </div>
 
-            {/* Input — solo si la sala está abierta */}
             {activeRoom.status !== 'closed' && (
               <div className={styles.inputBar}>
                 <button

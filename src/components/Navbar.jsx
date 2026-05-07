@@ -2,12 +2,14 @@ import { useEffect, useState, useRef } from 'react'
 import { useAuth } from '../context/AuthContext'
 import styles from './Navbar.module.css'
 
-export default function Navbar({ onLogin, onRegister }) {
+export default function Navbar({ onLogin, onRegister, onRegisterContador }) {
   const [scrolled, setScrolled]   = useState(false)
   const [menuOpen, setMenuOpen]   = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [registerOpen, setRegisterOpen] = useState(false)
   const { user, profile, signOut } = useAuth()
-  const menuRef = useRef(null)
+  const menuRef     = useRef(null)
+  const registerRef = useRef(null)
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 50)
@@ -23,6 +25,15 @@ export default function Navbar({ onLogin, onRegister }) {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
+  // Click fuera cierra el dropdown de registro (necesario para tap en móvil)
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (registerRef.current && !registerRef.current.contains(e.target)) setRegisterOpen(false)
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
   // Close mobile menu on resize
   useEffect(() => {
     const handleResize = () => { if (window.innerWidth > 768) setMobileOpen(false) }
@@ -32,6 +43,7 @@ export default function Navbar({ onLogin, onRegister }) {
 
   const displayName = profile?.nombre ?? user?.user_metadata?.nombre ?? user?.email ?? 'Usuario'
   const isSuperAdmin = profile?.rol === 'superadmin'
+  const perfilHref = profile?.rol === 'contador' ? '/perfil-contador' : '/perfil'
 
   return (
     <nav className={`${styles.nav} ${scrolled ? styles.navScrolled : ''}`}>
@@ -87,7 +99,7 @@ export default function Navbar({ onLogin, onRegister }) {
                 )}
                 <li>
                   <button className={styles.dropdownItem}
-                    onClick={() => { window.location.href = '/perfil'; setMenuOpen(false) }}>
+                    onClick={() => { window.location.href = perfilHref; setMenuOpen(false) }}>
                     Mi perfil
                   </button>
                 </li>
@@ -108,12 +120,32 @@ export default function Navbar({ onLogin, onRegister }) {
             >
               Iniciar sesión
             </button>
-            <button
-              className={`${styles.btnRegister} ${scrolled ? styles.btnRegisterDark : ''}`}
-              onClick={onRegister}
+            <div
+              className={styles.registerWrap}
+              ref={registerRef}
+              onMouseEnter={() => setRegisterOpen(true)}
+              onMouseLeave={() => setRegisterOpen(false)}
             >
-              Registrarse como abogado
-            </button>
+              <button
+                className={`${styles.btnRegister} ${scrolled ? styles.btnRegisterDark : ''}`}
+                onClick={onRegister}
+                aria-haspopup="true"
+                aria-expanded={registerOpen}
+              >
+                Registrarse como abogado
+              </button>
+              {registerOpen && (
+                <div className={styles.registerDropdownWrap}>
+                  <button
+                    type="button"
+                    className={`${styles.btnRegister} ${scrolled ? styles.btnRegisterDark : ''}`}
+                    onClick={() => { onRegisterContador?.(); setRegisterOpen(false) }}
+                  >
+                    Registrarse como contador
+                  </button>
+                </div>
+              )}
+            </div>
           </>
         )}
       </div>
@@ -152,7 +184,7 @@ export default function Navbar({ onLogin, onRegister }) {
                 </button>
               )}
               <button className={styles.mobileItem}
-                onClick={() => { window.location.href = '/perfil'; setMobileOpen(false) }}>
+                onClick={() => { window.location.href = perfilHref; setMobileOpen(false) }}>
                 Mi perfil
               </button>
               <button className={styles.mobileItem}
@@ -165,8 +197,11 @@ export default function Navbar({ onLogin, onRegister }) {
               <button className={styles.mobileItem} onClick={() => { onLogin(); setMobileOpen(false) }}>
                 Iniciar sesión
               </button>
-              <button className={styles.mobileItemGold} onClick={() => { onRegister(); setMobileOpen(false) }}>
-                Registrarse como abogado
+              <button className={styles.mobileItemGold} onClick={() => { onRegister?.(); setMobileOpen(false) }}>
+                Registrarse como Abogado
+              </button>
+              <button className={styles.mobileItemGold} onClick={() => { onRegisterContador?.(); setMobileOpen(false) }}>
+                Registrarse como Contador
               </button>
             </>
           )}

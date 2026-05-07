@@ -1,15 +1,18 @@
 import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../context/AuthContext'
-import { supabase } from '../lib/supabase'
-import styles from './AuthModal.module.css'
-import ReCAPTCHA from "react-google-recaptcha"
+import { supabase, getAuthHeaders } from '../lib/supabase'
+import styles from './RegisterContadorModal.module.css'
+import ReCAPTCHA from 'react-google-recaptcha'
 import { IconX } from './Icons'
 import {
   PASSWORD_RULES, getPasswordStrength, isPasswordValid,
   validarCelular, validarCorreo, normalizarCelular,
 } from '../lib/validaciones'
 
-// ── Ícono ojo ─────────────────────────────────────────────────────────────
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
+const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
+
+// Ícono ojo — copiado de AuthModal para consistencia visual
 function EyeIcon({ open }) {
   return open ? (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" width="15" height="15">
@@ -24,7 +27,6 @@ function EyeIcon({ open }) {
   )
 }
 
-// ── Indicador de campo (correo / celular) ─────────────────────────────────
 function FieldHint({ valid, msg, touched }) {
   if (!touched || !msg) return null
   return (
@@ -38,74 +40,36 @@ function FieldHint({ valid, msg, touched }) {
   )
 }
 
-export default function AuthModal({ initialTab = 'login', onClose }) {
-  const { signIn, signUp } = useAuth()
+export default function RegisterContadorModal({ onClose }) {
+  const { signIn } = useAuth()
 
-  const [tab, setTab]         = useState(initialTab)
+  const [tab, setTab]         = useState('register')   // 'login' | 'register'
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState(null)
   const [success, setSuccess] = useState(null)
 
-  // ── Login ─────────────────────────────────────────────────────────────────
+  // Login
   const [loginIdentifier, setLoginIdentifier] = useState('')
   const [loginPassword,   setLoginPassword]   = useState('')
   const [showLoginPassword, setShowLoginPassword] = useState(false)
-  const [captchaValue,    setCaptchaValue]     = useState(null)
 
-  // ── Olvidaste tu contraseña ──
-  const [forgotMode,    setForgotMode]    = useState(false)   // false | 'form' | 'sent'
-  const [forgotEmail,   setForgotEmail]   = useState('')
-  const [forgotLoading, setForgotLoading] = useState(false)
-  const [forgotError,   setForgotError]   = useState('')
-
-  async function handleForgotSubmit(e) {
-    e?.preventDefault?.()
-    const email = forgotEmail.trim()
-    if (!email) { setForgotError('Ingresa tu correo registrado.'); return }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      setForgotError('Correo inválido.'); return
-    }
-    setForgotLoading(true); setForgotError('')
-    try {
-      // Endpoint custom: dispara el correo con estética AAP (mismo patrón
-      // que /api/send-contact-card). Por seguridad, el endpoint responde
-      // 200 incluso si el email no existe — no enumeramos usuarios.
-      const res = await fetch('/api/forgot-password', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email,
-          redirectTo: `${window.location.origin}/nueva-contrasena`,
-        }),
-      })
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}))
-        throw new Error(data.error || `Error ${res.status}`)
-      }
-      setForgotMode('sent')
-    } catch (err) {
-      setForgotError(err.message || 'No se pudo enviar el enlace.')
-    } finally {
-      setForgotLoading(false)
-    }
-  }
-
-  // ── Registro ──────────────────────────────────────────────────────────────
-  const [nombre,       setNombre]       = useState('')
-  const [apellido,     setApellido]     = useState('')
-  const [username,     setUsername]     = useState('')
-  const [telefono,     setTelefono]     = useState('')
-  const [regEmail,     setRegEmail]     = useState('')
-  const [regPassword,  setRegPassword]  = useState('')
-  const [showPassword, setShowPassword] = useState(false)
-  const [pwTouched,    setPwTouched]    = useState(false)
-  const [emailTouched, setEmailTouched] = useState(false)
-  const [telTouched,   setTelTouched]   = useState(false)
-  const [aceptaTerminos, setAceptaTerminos] = useState(false)
+  // Campos
+  const [nombre, setNombre]                       = useState('')
+  const [apellido, setApellido]                   = useState('')
+  const [username, setUsername]                   = useState('')
+  const [telefono, setTelefono]                   = useState('')
+  const [regEmail, setRegEmail]                   = useState('')
+  const [regPassword, setRegPassword]             = useState('')
+  const [showPassword, setShowPassword]           = useState(false)
+  const [pwTouched, setPwTouched]                 = useState(false)
+  const [emailTouched, setEmailTouched]           = useState(false)
+  const [telTouched, setTelTouched]               = useState(false)
+  const [aceptaTerminos, setAceptaTerminos]       = useState(false)
+  const [captchaValue, setCaptchaValue]           = useState(null)
 
   const recaptchaRef = useRef()
 
-  // Derivados de validación
+  // Validaciones derivadas
   const pwRules    = PASSWORD_RULES.map(r => ({ ...r, ok: r.test(regPassword) }))
   const pwStrength = getPasswordStrength(regPassword)
   const pwValid    = isPasswordValid(regPassword)
@@ -113,8 +77,9 @@ export default function AuthModal({ initialTab = 'login', onClose }) {
   const telVal     = validarCelular(telefono)
   const showPwList = pwTouched && regPassword.length > 0
 
-  // ── Puede enviar el registro ──────────────────────────────────────────────
-  const canRegister = pwValid && emailVal.valid === true && aceptaTerminos && captchaValue && !loading
+  const canRegister =
+    pwValid && emailVal.valid === true && aceptaTerminos &&
+    captchaValue && !loading
 
   useEffect(() => {
     const handleKey = (e) => { if (e.key === 'Escape') onClose() }
@@ -126,11 +91,27 @@ export default function AuthModal({ initialTab = 'login', onClose }) {
     }
   }, [onClose])
 
+  function borderFor(valid, touched, value) {
+    if (!touched || !value) return {}
+    return {
+      borderColor:
+        valid === true  ? 'rgba(46,204,113,0.55)' :
+        valid === false ? 'rgba(220,80,80,0.45)' :
+        undefined,
+    }
+  }
+
+  function switchTab(t) {
+    setTab(t); setError(null); setSuccess(null)
+    setCaptchaValue(null); recaptchaRef.current?.reset()
+  }
+
+  // Resolver de identifier — acepta correo o @username (idéntico al de AuthModal)
   async function resolveEmail(identifier) {
     if (identifier.includes('@')) return identifier
     const res = await fetch(
-      `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/profiles?username=eq.${identifier}&select=email`,
-      { headers: { 'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY, 'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` } }
+      `${SUPABASE_URL}/rest/v1/profiles?username=eq.${identifier}&select=email`,
+      { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } }
     )
     const data = await res.json()
     if (!data || data.length === 0) throw new Error('Usuario no encontrado')
@@ -148,49 +129,79 @@ export default function AuthModal({ initialTab = 'login', onClose }) {
       setError(err.message === 'Usuario no encontrado'
         ? 'Usuario no encontrado'
         : 'Correo, usuario o contraseña incorrectos')
-      recaptchaRef.current.reset(); setCaptchaValue(null)
+      recaptchaRef.current?.reset(); setCaptchaValue(null)
     } finally { setLoading(false) }
   }
 
   async function handleRegister(e) {
     e.preventDefault()
     if (!captchaValue)   { setError('Por favor completa el captcha'); return }
-    if (!pwValid)        { setError('La contraseña no cumple todos los requisitos'); setPwTouched(true); return }
+    if (!pwValid)        { setError('La contraseña no cumple los requisitos'); setPwTouched(true); return }
     if (!emailVal.valid) { setError('El correo no es válido'); setEmailTouched(true); return }
     if (!aceptaTerminos) { setError('Debes aceptar los términos y condiciones'); return }
 
     setError(null); setLoading(true)
     try {
+      // 0. Username único
       if (username) {
         const res = await fetch(
-          `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/profiles?username=eq.${username}&select=id`,
-          { headers: { 'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY, 'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` } }
+          `${SUPABASE_URL}/rest/v1/profiles?username=eq.${username}&select=id`,
+          { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } }
         )
         const data = await res.json()
         if (data && data.length > 0) throw new Error('Ese nombre de usuario ya está en uso')
       }
-      await signUp({ nombre, apellido, username, telefono, email: regEmail, password: regPassword })
-      setSuccess('¡Registro exitoso! Ya puedes iniciar sesión.')
+
+      // 1. signUp — crea auth.users (trigger BD probablemente crea profiles
+      // con rol='abogado' default; lo sobreescribimos en el paso 3)
+      const { error: signUpError } = await supabase.auth.signUp({
+        email: regEmail,
+        password: regPassword,
+        options: { data: { nombre, apellido, username, telefono } },
+      })
+      if (signUpError) throw new Error(signUpError.message || 'Error al crear cuenta')
+
+      // 2. Sign-in temporal para obtener token (necesario para UPSERT)
+      const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+        email: regEmail,
+        password: regPassword,
+      })
+      if (signInError || !signInData?.user?.id) {
+        // Email confirmation activada o flujo diferente: no podemos fijar rol
+        setSuccess('Cuenta creada. Cuando confirmes tu correo e inicies sesión, contacta al administrador para fijar tu rol como contador.')
+        return
+      }
+      const userId = signInData.user.id
+
+      // 3. UPSERT en profiles: fija rol='contador' (especialidades y tarjeta
+      // se completan luego en /perfil-contador)
+      const headers = await getAuthHeaders()
+      const upsertRes = await fetch(`${SUPABASE_URL}/rest/v1/profiles`, {
+        method: 'POST',
+        headers: { ...headers, 'Prefer': 'resolution=merge-duplicates,return=minimal' },
+        body: JSON.stringify({
+          id: userId,
+          nombre, apellido, username, telefono,
+          email: regEmail,
+          rol: 'contador',
+          aprobado: false,
+        }),
+      })
+      if (!upsertRes.ok) {
+        const errBody = await upsertRes.json().catch(() => ({}))
+        throw new Error(errBody.message || 'No se pudo crear el perfil de contador')
+      }
+
+      // 4. signOut — el usuario debe iniciar sesión formalmente
+      await supabase.auth.signOut()
+
+      setSuccess('¡Registro exitoso! Tu perfil quedó pendiente de aprobación. Ya puedes iniciar sesión.')
     } catch (err) {
       setError(err.message || 'Error al registrarse')
-      recaptchaRef.current.reset(); setCaptchaValue(null)
-    } finally { setLoading(false) }
-  }
-
-  function switchTab(t) {
-    setTab(t); setError(null); setSuccess(null)
-    setCaptchaValue(null); recaptchaRef.current?.reset()
-  }
-
-  // ── Border color helper ───────────────────────────────────────────────────
-  function borderFor(valid, touched, value) {
-    if (!touched || !value) return {}
-    return {
-      borderColor: valid === true
-        ? 'rgba(46,204,113,0.55)'
-        : valid === false
-        ? 'rgba(220,80,80,0.45)'
-        : undefined
+      recaptchaRef.current?.reset()
+      setCaptchaValue(null)
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -201,19 +212,31 @@ export default function AuthModal({ initialTab = 'login', onClose }) {
 
         <p className={styles.eyebrow}>Abogados y Asociados Parada</p>
         <h3 className={styles.title}>
-          {tab === 'login' ? 'Bienvenido' : 'Crear perfil como Abogado'}
+          {tab === 'login' ? 'Bienvenido' : 'Crear perfil como Contador'}
         </h3>
 
         <div className={styles.tabs}>
-          <button className={`${styles.tabBtn} ${tab === 'login'    ? styles.active : ''}`} onClick={() => switchTab('login')}>Iniciar sesión</button>
-          <button className={`${styles.tabBtn} ${tab === 'register' ? styles.active : ''}`} onClick={() => switchTab('register')}>Registrarse</button>
+          <button
+            type="button"
+            className={`${styles.tabBtn} ${tab === 'login' ? styles.active : ''}`}
+            onClick={() => switchTab('login')}
+          >
+            Iniciar sesión
+          </button>
+          <button
+            type="button"
+            className={`${styles.tabBtn} ${tab === 'register' ? styles.active : ''}`}
+            onClick={() => switchTab('register')}
+          >
+            Registrarse
+          </button>
         </div>
 
         {error   && <p className={styles.msgError}>{error}</p>}
         {success && <p className={styles.msgSuccess}>{success}</p>}
 
         {/* ══════════════════ LOGIN ══════════════════ */}
-        {tab === 'login' && !success && forgotMode === false && (
+        {tab === 'login' && !success && (
           <form className={styles.form} onSubmit={(e) => e.preventDefault()}>
             <div className={styles.field}>
               <label className={styles.label}>Correo o usuario</label>
@@ -241,7 +264,6 @@ export default function AuthModal({ initialTab = 'login', onClose }) {
                   title={showLoginPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
                 >
                   {showLoginPassword ? (
-                    /* ojo tachado — visible */
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
                       stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
@@ -250,7 +272,6 @@ export default function AuthModal({ initialTab = 'login', onClose }) {
                       <line x1="1" y1="1" x2="23" y2="23"/>
                     </svg>
                   ) : (
-                    /* ojo abierto — oculta */
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
                       stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
@@ -260,7 +281,7 @@ export default function AuthModal({ initialTab = 'login', onClose }) {
                 </button>
               </div>
             </div>
-            <div style={{ textAlign:'center', margin:'20px 0' }}>
+            <div style={{ textAlign: 'center', margin: '20px 0' }}>
               <ReCAPTCHA ref={recaptchaRef} sitekey="6Lc50NEsAAAAANHXeDejrPO9up93HP9tlMDzFXON"
                 onChange={(v) => setCaptchaValue(v)} />
             </div>
@@ -268,86 +289,8 @@ export default function AuthModal({ initialTab = 'login', onClose }) {
               disabled={loading || !captchaValue} onClick={handleLogin}>
               {loading ? 'Ingresando...' : 'Ingresar →'}
             </button>
-            <p className={styles.hint}>
-              ¿Olvidó su contraseña?{' '}
-              <button
-                type="button"
-                className={styles.hintLink}
-                onClick={() => {
-                  setForgotEmail(loginIdentifier.includes('@') ? loginIdentifier : '')
-                  setForgotError('')
-                  setForgotMode('form')
-                }}
-                style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
-              >
-                Recuperar
-              </button>
-            </p>
+            <p className={styles.hint}>¿Olvidó su contraseña? <a href="#" className={styles.hintLink}>Recuperar</a></p>
           </form>
-        )}
-
-        {/* ══════════════════ OLVIDÓ CONTRASEÑA — MICRO-FORM ══════════════════ */}
-        {tab === 'login' && !success && forgotMode === 'form' && (
-          <form className={styles.form} onSubmit={handleForgotSubmit}>
-            <p className={styles.hint} style={{ marginBottom: 16, textAlign: 'left' }}>
-              Te enviaremos un enlace para restablecer tu contraseña.
-            </p>
-            <div className={styles.field}>
-              <label className={styles.label}>Correo</label>
-              <input
-                type="email"
-                className={styles.input}
-                placeholder="Tu correo registrado"
-                value={forgotEmail}
-                onChange={(e) => { setForgotEmail(e.target.value); setForgotError('') }}
-                required
-                autoFocus
-              />
-            </div>
-            {forgotError && (
-              <p style={{ color: '#e07a7a', fontSize: '0.78rem', margin: '4px 0 8px' }}>
-                {forgotError}
-              </p>
-            )}
-            <button
-              type="submit"
-              className={`btn-solid ${styles.submit}`}
-              disabled={forgotLoading}
-            >
-              {forgotLoading ? 'Enviando…' : 'Enviar enlace'}
-            </button>
-            <p className={styles.hint} style={{ marginTop: 14 }}>
-              <button
-                type="button"
-                onClick={() => { setForgotMode(false); setForgotError(''); setForgotEmail('') }}
-                style={{
-                  background: 'none', border: 'none', padding: 0, cursor: 'pointer',
-                  color: '#c9a84c', fontFamily: 'inherit', fontSize: '0.8rem',
-                }}
-              >
-                ← Volver
-              </button>
-            </p>
-          </form>
-        )}
-
-        {/* ══════════════════ OLVIDÓ CONTRASEÑA — ENVIADO ══════════════════ */}
-        {tab === 'login' && !success && forgotMode === 'sent' && (
-          <div className={styles.form} style={{ textAlign: 'center', padding: '12px 0' }}>
-            <div style={{ fontSize: '2.4rem', color: '#c9a84c', lineHeight: 1, marginBottom: 14 }}>
-              ✉
-            </div>
-            <p style={{ color: 'var(--navy, #0d2d5e)', fontSize: '0.95rem', lineHeight: 1.55, margin: '0 0 18px', fontWeight: 500 }}>
-              Revisa tu correo. Te enviamos un enlace para restablecer tu contraseña.
-            </p>
-            <button
-              type="button"
-              className={`btn-solid ${styles.submit}`}
-              onClick={() => { setForgotMode(false); setForgotEmail('') }}
-            >
-              Volver al inicio de sesión
-            </button>
-          </div>
         )}
 
         {/* ══════════════════ REGISTRO ══════════════════ */}
@@ -373,10 +316,10 @@ export default function AuthModal({ initialTab = 'login', onClose }) {
               <label className={styles.label}>Nombre de usuario <span className={styles.req}>*</span></label>
               <input type="text" className={styles.input} placeholder="@usuario"
                 value={username}
-                onChange={(e) => setUsername(e.target.value.replace(/\s/g,'').toLowerCase())} required />
+                onChange={(e) => setUsername(e.target.value.replace(/\s/g, '').toLowerCase())} required />
             </div>
 
-            {/* Teléfono colombiano */}
+            {/* Teléfono */}
             <div className={styles.field}>
               <label className={styles.label}>Celular</label>
               <input
@@ -385,10 +328,7 @@ export default function AuthModal({ initialTab = 'login', onClose }) {
                 className={styles.input}
                 placeholder="3001234567"
                 value={telefono}
-                onChange={(e) => {
-                  const norm = normalizarCelular(e.target.value)
-                  setTelefono(norm)
-                }}
+                onChange={(e) => setTelefono(normalizarCelular(e.target.value))}
                 onBlur={() => setTelTouched(true)}
                 maxLength={10}
                 style={borderFor(telVal.valid, telTouched, telefono)}
@@ -412,13 +352,9 @@ export default function AuthModal({ initialTab = 'login', onClose }) {
               <FieldHint valid={emailVal.valid} msg={emailVal.msg} touched={emailTouched && !!regEmail} />
             </div>
 
-            {/* Contraseña con checklist */}
+            {/* Contraseña con checklist (idéntico al de abogado) */}
             <div className={styles.field}>
-              <label className={styles.label}>
-                Contraseña <span className={styles.req}>*</span>
-              </label>
-
-              {/* Input + toggle */}
+              <label className={styles.label}>Contraseña <span className={styles.req}>*</span></label>
               <div className={styles.pwWrap}>
                 <input
                   type={showPassword ? 'text' : 'password'}
@@ -433,7 +369,7 @@ export default function AuthModal({ initialTab = 'login', onClose }) {
                     paddingRight: '2.4rem',
                     ...(pwTouched && regPassword
                       ? { borderColor: pwValid ? 'rgba(46,204,113,0.55)' : 'rgba(220,80,80,0.4)' }
-                      : {})
+                      : {}),
                   }}
                 />
                 <button type="button" className={styles.pwToggle}
@@ -442,7 +378,6 @@ export default function AuthModal({ initialTab = 'login', onClose }) {
                 </button>
               </div>
 
-              {/* Barra de fortaleza */}
               {showPwList && pwStrength && (
                 <div className={styles.strengthRow}>
                   <div className={styles.strengthBars}>
@@ -457,7 +392,6 @@ export default function AuthModal({ initialTab = 'login', onClose }) {
                 </div>
               )}
 
-              {/* Checklist requisitos */}
               {showPwList && (
                 <ul className={styles.pwChecklist}>
                   {pwRules.map(rule => (
@@ -471,7 +405,7 @@ export default function AuthModal({ initialTab = 'login', onClose }) {
               )}
             </div>
 
-            {/* Términos y condiciones */}
+            {/* Términos */}
             <label className={styles.terminosRow}>
               <input
                 type="checkbox"
@@ -492,7 +426,7 @@ export default function AuthModal({ initialTab = 'login', onClose }) {
             </label>
 
             {/* Captcha */}
-            <div style={{ textAlign:'center', margin:'10px 0' }}>
+            <div style={{ textAlign: 'center', margin: '10px 0' }}>
               <ReCAPTCHA ref={recaptchaRef} sitekey="6Lc50NEsAAAAANHXeDejrPO9up93HP9tlMDzFXON"
                 onChange={(v) => setCaptchaValue(v)} />
             </div>

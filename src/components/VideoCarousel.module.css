@@ -317,3 +317,225 @@
   .section   { --slide-gap: 185px; }
   .filmstrip { height: 72vh; min-height: 360px; }
 }
+
+/* ═══════════════════════════════════════════════════
+   AGREGAR ESTOS ESTILOS AL FINAL DE VideoCarousel.module.css
+   (No reemplaza el archivo completo, solo agregar al final)
+═══════════════════════════════════════════════════ */
+
+/* ── Contenedor de controles ── */
+.controls {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  /* Mostrar cursor normal sobre los controles */
+  cursor: default;
+}
+
+.controlsVisible {
+  opacity: 1;
+}
+
+/* Gradiente oscuro en la parte inferior */
+.controlsGradient {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to top,
+    rgba(0, 0, 0, 0.85) 0%,
+    rgba(0, 0, 0, 0.35) 40%,
+    transparent 70%
+  );
+  pointer-events: none;
+  border-radius: inherit;
+}
+
+/* Contenido real de los controles */
+.controlsInner {
+  position: relative;
+  z-index: 1;
+  padding: 0 12px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* ── Barra de progreso ── */
+.progressBar {
+  position: relative;
+  height: 18px; /* área clickeable amplia */
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+.progressBg,
+.progressBuffered,
+.progressFill {
+  position: absolute;
+  left: 0;
+  height: 4px;
+  border-radius: 2px;
+  transition: height 0.15s ease;
+}
+
+.progressBar:hover .progressBg,
+.progressBar:hover .progressBuffered,
+.progressBar:hover .progressFill {
+  height: 6px;
+}
+
+.progressBg {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.progressBuffered {
+  background: rgba(255, 255, 255, 0.4);
+  max-width: 100%;
+}
+
+.progressFill {
+  background: #c9a84c; /* gold AAP */
+  max-width: 100%;
+}
+
+.progressThumb {
+  position: absolute;
+  width: 13px;
+  height: 13px;
+  background: #c9a84c;
+  border-radius: 50%;
+  transform: translate(-50%, -50%) scale(0);
+  top: 50%;
+  transition: transform 0.15s ease;
+  pointer-events: none;
+  box-shadow: 0 0 4px rgba(0,0,0,0.5);
+}
+
+.progressBar:hover .progressThumb {
+  transform: translate(-50%, -50%) scale(1);
+}
+
+/* ── Fila de botones ── */
+.controlsRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+}
+
+.controlsLeft,
+.controlsRight {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+/* ── Botones individuales ── */
+.ctrlBtn {
+  background: none;
+  border: none;
+  color: #ffffff;
+  padding: 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s ease, color 0.15s ease;
+  line-height: 1;
+}
+
+.ctrlBtn:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: #c9a84c;
+}
+
+.ctrlBtn:active {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+/* ── Grupo de volumen ── */
+.volumeGroup {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.volumeSlider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 0;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.4);
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+  overflow: hidden;
+  opacity: 0;
+  transition: width 0.2s ease, opacity 0.2s ease;
+}
+
+.volumeGroup:hover .volumeSlider,
+.volumeSlider:focus {
+  width: 70px;
+  opacity: 1;
+}
+
+.volumeSlider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  background: #ffffff;
+  border-radius: 50%;
+  cursor: pointer;
+  box-shadow: -70px 0 0 70px #c9a84c; /* rellena el track a la izquierda */
+}
+
+.volumeSlider::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  background: #ffffff;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.volumeSlider::-moz-range-progress {
+  background: #c9a84c;
+  height: 4px;
+  border-radius: 2px;
+}
+
+/* ── Display de tiempo ── */
+.timeDisplay {
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 12px;
+  font-family: monospace;
+  white-space: nowrap;
+  padding: 0 4px;
+  user-select: none;
+}
+
+/* ── Responsive: móvil ── */
+@media (max-width: 600px) {
+  .controlsInner {
+    padding: 0 8px 8px;
+  }
+
+  .timeDisplay {
+    font-size: 11px;
+  }
+
+  .volumeGroup:hover .volumeSlider,
+  .volumeSlider:focus {
+    width: 50px;
+  }
+}

@@ -1,28 +1,271 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
+import { compressVideo } from '../utils/compressMedia'
 import styles from './VideoCarousel.module.css'
 import { IconVideoCamera } from './Icons'
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
 
+/* ─────────────────────────────────────────────
+   Formatea segundos → "m:ss"
+───────────────────────────────────────────── */
+function fmtTime(s) {
+  if (!isFinite(s) || s < 0) return '0:00'
+  const m = Math.floor(s / 60)
+  const sec = Math.floor(s % 60)
+  return `${m}:${sec.toString().padStart(2, '0')}`
+}
+
+/* ─────────────────────────────────────────────
+   VideoControls – barra de controles estilo YouTube
+   Se muestra al hover y se oculta después de 3 s de inactividad
+───────────────────────────────────────────── */
+function VideoControls({ videoEl, onEnded }) {
+  const [playing,    setPlaying]    = useState(false)
+  const [muted,      setMuted]      = useState(false)
+  const [volume,     setVolume]     = useState(1)
+  const [current,    setCurrent]    = useState(0)
+  const [duration,   setDuration]   = useState(0)
+  const [buffered,   setBuffered]   = useState(0)
+  const [visible,    setVisible]    = useState(false)
+  const [fullscreen, setFullscreen] = useState(false)
+  const hideTimer = useRef(null)
+  const barRef    = useRef(null)
+
+  /* ── Sincronizar estado con el elemento video ── */
+  useEffect(() => {
+    const v = videoEl
+    if (!v) return
+
+    const onPlay    = () => setPlaying(true)
+    const onPause   = () => setPlaying(false)
+    const onVolume  = () => { setMuted(v.muted); setVolume(v.muted ? 0 : v.volume) }
+    const onTime    = () => {
+      setCurrent(v.currentTime)
+      if (v.buffered.length) setBuffered(v.buffered.end(v.buffered.length - 1))
+    }
+    const onMeta    = () => setDuration(v.duration)
+    const onEnd     = () => { setPlaying(false); onEnded?.() }
+    const onFullChg = () => setFullscreen(!!document.fullscreenElement)
+
+    v.addEventListener('play',              onPlay)
+    v.addEventListener('pause',             onPause)
+    v.addEventListener('volumechange',      onVolume)
+    v.addEventListener('timeupdate',        onTime)
+    v.addEventListener('loadedmetadata',    onMeta)
+    v.addEventListener('ended',             onEnd)
+    document.addEventListener('fullscreenchange', onFullChg)
+
+    // Estado inicial
+    setPlaying(!v.paused)
+    setMuted(v.muted)
+    setVolume(v.muted ? 0 : v.volume)
+    setDuration(v.duration || 0)
+
+    return () => {
+      v.removeEventListener('play',             onPlay)
+      v.removeEventListener('pause',            onPause)
+      v.removeEventListener('volumechange',     onVolume)
+      v.removeEventListener('timeupdate',       onTime)
+      v.removeEventListener('loadedmetadata',   onMeta)
+      v.removeEventListener('ended',            onEnd)
+      document.removeEventListener('fullscreenchange', onFullChg)
+    }
+  }, [videoEl, onEnded])
+
+  /* ── Mostrar/ocultar barra con inactividad ── */
+  const showControls = useCallback(() => {
+    setVisible(true)
+    clearTimeout(hideTimer.current)
+    hideTimer.current = setTimeout(() => setVisible(false), 3000)
+  }, [])
+
+  const hideControls = useCallback(() => {
+    clearTimeout(hideTimer.current)
+    hideTimer.current = setTimeout(() => setVisible(false), 500)
+  }, [])
+
+  useEffect(() => () => clearTimeout(hideTimer.current), [])
+
+  /* ── Acciones ── */
+  const togglePlay = () => {
+    if (!videoEl) return
+    videoEl.paused ? videoEl.play() : videoEl.pause()
+  }
+
+  const toggleMute = () => {
+    if (!videoEl) return
+    videoEl.muted = !videoEl.muted
+    if (!videoEl.muted && videoEl.volume === 0) videoEl.volume = 0.5
+  }
+
+  const changeVolume = (val) => {
+    if (!videoEl) return
+    const v = parseFloat(val)
+    videoEl.volume = v
+    videoEl.muted  = v === 0
+  }
+
+  const seek = (e) => {
+    if (!videoEl || !duration) return
+    const rect = barRef.current.getBoundingClientRect()
+    const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
+    videoEl.currentTime = ratio * duration
+  }
+
+  const toggleFullscreen = () => {
+    const container = videoEl?.closest?.('.' + styles.slide) || videoEl?.parentElement
+    if (!document.fullscreenElement) {
+      container?.requestFullscreen?.()
+    } else {
+      document.exitFullscreen?.()
+    }
+  }
+
+  const progress = duration ? (current  / duration) * 100 : 0
+  const buffPct  = duration ? (buffered / duration) * 100 : 0
+
+  /* ── Icono volumen ── */
+  const VolumeIcon = () => {
+    if (muted || volume === 0) return (
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+        <path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/>
+      </svg>
+    )
+    if (volume < 0.5) return (
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+        <path d="M18.5 12c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM5 9v6h4l5 5V4L9 9H5z"/>
+      </svg>
+    )
+    return (
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+        <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
+      </svg>
+    )
+  }
+
+  const PlayIcon = () => playing
+    ? <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+    : <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+
+  const FullscreenIcon = () => fullscreen
+    ? <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z"/></svg>
+    : <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>
+
+  return (
+    <div
+      className={`${styles.controls} ${visible ? styles.controlsVisible : ''}`}
+      onMouseEnter={showControls}
+      onMouseMove={showControls}
+      onMouseLeave={hideControls}
+      onTouchStart={showControls}
+    >
+      {/* Gradiente oscuro inferior */}
+      <div className={styles.controlsGradient} />
+
+      <div className={styles.controlsInner}>
+        {/* Barra de progreso */}
+        <div
+          ref={barRef}
+          className={styles.progressBar}
+          onClick={seek}
+          onMouseMove={(e) => { if (e.buttons === 1) seek(e) }}
+        >
+          <div className={styles.progressBg} />
+          <div className={styles.progressBuffered} style={{ width: `${buffPct}%` }} />
+          <div className={styles.progressFill}     style={{ width: `${progress}%` }} />
+          <div className={styles.progressThumb}    style={{ left:  `${progress}%` }} />
+        </div>
+
+        {/* Fila de botones */}
+        <div className={styles.controlsRow}>
+          {/* Izquierda */}
+          <div className={styles.controlsLeft}>
+            <button className={styles.ctrlBtn} onClick={togglePlay} title={playing ? 'Pausar' : 'Reproducir'}>
+              <PlayIcon />
+            </button>
+
+            {/* Retroceder 10 s */}
+            <button
+              className={styles.ctrlBtn}
+              onClick={() => { if (videoEl) videoEl.currentTime = Math.max(0, videoEl.currentTime - 10) }}
+              title="Retroceder 10s"
+            >
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+                <path d="M11.99 5V1l-5 5 5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6h-2c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/>
+              </svg>
+            </button>
+
+            {/* Adelantar 10 s */}
+            <button
+              className={styles.ctrlBtn}
+              onClick={() => { if (videoEl) videoEl.currentTime = Math.min(videoEl.duration || 0, videoEl.currentTime + 10) }}
+              title="Adelantar 10s"
+            >
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+                <path d="M12.01 5V1l5 5-5 5V7c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6h2c0 4.42-3.58 8-8 8s-8-3.58-8-8 3.58-8 8-8z"/>
+              </svg>
+            </button>
+
+            {/* Volumen */}
+            <div className={styles.volumeGroup}>
+              <button className={styles.ctrlBtn} onClick={toggleMute} title={muted ? 'Activar sonido' : 'Silenciar'}>
+                <VolumeIcon />
+              </button>
+              <input
+                type="range"
+                min="0" max="1" step="0.02"
+                value={muted ? 0 : volume}
+                onChange={e => changeVolume(e.target.value)}
+                className={styles.volumeSlider}
+                title="Volumen"
+              />
+            </div>
+
+            {/* Tiempo */}
+            <span className={styles.timeDisplay}>
+              {fmtTime(current)} / {fmtTime(duration)}
+            </span>
+          </div>
+
+          {/* Derecha */}
+          <div className={styles.controlsRight}>
+            <button className={styles.ctrlBtn} onClick={toggleFullscreen} title={fullscreen ? 'Salir de pantalla completa' : 'Pantalla completa'}>
+              <FullscreenIcon />
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/* ═══════════════════════════════════════════════
+   COMPONENTE PRINCIPAL
+═══════════════════════════════════════════════ */
 export default function VideoCarousel() {
   const { profile } = useAuth()
   const isSuperAdmin = profile?.rol === 'superadmin'
 
-  const [videos, setVideos]         = useState([])
-  const [current, setCurrent]       = useState(0)
-  const [editing, setEditing]       = useState(false)
-  const [editVideos, setEditVideos] = useState([])
-  const [saving, setSaving]         = useState(false)
-  const [uploading, setUploading]   = useState(null)
+  const [videos,      setVideos]      = useState([])
+  const [current,     setCurrent]     = useState(0)
+  const [editing,     setEditing]     = useState(false)
+  const [editVideos,  setEditVideos]  = useState([])
+  const [saving,      setSaving]      = useState(false)
+  const [uploading,   setUploading]   = useState(null)
   const [videoRatios, setVideoRatios] = useState({})
+
+  /* Controla si la sección es visible en viewport (para mute/unmute automático) */
+  const [sectionVisible, setSectionVisible] = useState(false)
 
   const videoInputRef   = useRef(null)
   const uploadTargetRef = useRef(null)
   const videoRefs       = useRef({})
+  const sectionRef      = useRef(null)
 
+  /* ── Cargar lista de videos ── */
   useEffect(() => { fetchVideos() }, [])
 
   async function fetchVideos() {
@@ -38,6 +281,34 @@ export default function VideoCarousel() {
 
   const activeVideos = editing ? editVideos : videos
 
+  /* ── IntersectionObserver: detectar visibilidad de la sección ── */
+  useEffect(() => {
+    if (!sectionRef.current) return
+    const observer = new IntersectionObserver(
+      ([entry]) => setSectionVisible(entry.isIntersecting),
+      { threshold: 0.35 }
+    )
+    observer.observe(sectionRef.current)
+    return () => observer.disconnect()
+  }, [])
+
+  /* ── Mute/unmute + play/pause del video activo según visibilidad ── */
+  useEffect(() => {
+    const videoEl = videoRefs.current[current]
+    if (!videoEl) return
+
+    if (sectionVisible) {
+      // Intentar reproducir con audio; si el navegador lo bloquea, mute y retry
+      videoEl.muted = false
+      videoEl.play().catch(() => {
+        videoEl.muted = true
+        videoEl.play().catch(() => {})
+      })
+    } else {
+      videoEl.muted = true
+    }
+  }, [sectionVisible, current])
+
   /* ── Detectar ratio del video ── */
   function handleVideoMeta(e, i) {
     const { videoWidth, videoHeight } = e.target
@@ -46,20 +317,28 @@ export default function VideoCarousel() {
     }
   }
 
-  /* ── Controlar play/pause según slide activo ── */
+  /* ── Play/pause + mute de todos los slides ── */
   useEffect(() => {
     Object.entries(videoRefs.current).forEach(([idx, videoEl]) => {
       if (!videoEl) return
-      if (parseInt(idx) === current) {
-        videoEl.play().catch(() => {})
+      const isActive = parseInt(idx) === current
+      if (isActive) {
+        // El efecto de sectionVisible ya maneja el muted/play del activo
+        // Solo actualizamos muted si cambió el slide
+        videoEl.muted = !sectionVisible
+        videoEl.play().catch(() => {
+          videoEl.muted = true
+          videoEl.play().catch(() => {})
+        })
       } else {
         videoEl.pause()
         videoEl.currentTime = 0
+        videoEl.muted = true
       }
     })
-  }, [current, activeVideos.length])
+  }, [current, activeVideos.length]) // sectionVisible NO va aquí para evitar conflictos con el effect anterior
 
-  /* ── Avance automático al terminar el video ── */
+  /* ── Avance automático al terminar ── */
   function handleVideoEnded() {
     goTo(current + 1)
   }
@@ -73,7 +352,7 @@ export default function VideoCarousel() {
   function getOffset(i) {
     const len = activeVideos.length
     let offset = i - current
-    if (offset > len / 2)  offset -= len
+    if (offset >  len / 2) offset -= len
     if (offset < -len / 2) offset += len
     return offset
   }
@@ -101,6 +380,13 @@ export default function VideoCarousel() {
     const file = e.target.files?.[0]
     if (!file) return
     const index = uploadTargetRef.current
+    // Validación de tamaño (50MB max). Lanza Error si supera.
+    try { compressVideo(file) }
+    catch (err) {
+      alert(err.message)
+      e.target.value = ''
+      return
+    }
     setUploading(index)
     try {
       const { data } = await supabase.auth.getSession()
@@ -194,7 +480,7 @@ export default function VideoCarousel() {
   const hasVideos = activeVideos.length > 0
 
   return (
-    <section className={styles.section}>
+    <section className={styles.section} ref={sectionRef}>
       <div className={styles.bg} />
 
       {/* Encabezado */}
@@ -233,11 +519,11 @@ export default function VideoCarousel() {
         <>
           <div className={styles.filmstrip}>
             {activeVideos.map((vid, i) => {
-              const offset    = getOffset(i)
-              const absOffset = Math.abs(offset)
-              const isActive  = offset === 0
-              const visible   = absOffset <= 2
-              const ratio     = videoRatios[i] || (9 / 16)
+              const offset     = getOffset(i)
+              const absOffset  = Math.abs(offset)
+              const isActive   = offset === 0
+              const visible    = absOffset <= 2
+              const ratio      = videoRatios[i] || (9 / 16)
               const isVertical = ratio < 1
 
               return (
@@ -246,31 +532,47 @@ export default function VideoCarousel() {
                   className={`${styles.slide} ${isActive ? styles.slideActive : ''}`}
                   style={{
                     ...(isVertical
-                      ? { height: 'min(75vh, 620px)', width: 'auto' }  // ← sube de 72vh/580px
-                      : { width: 'min(65vw, 800px)', height: 'auto' }  // ← sube de 88vw/700px
+                      ? { height: 'min(75vh, 620px)', width: 'auto' }
+                      : { width:  'min(65vw, 800px)', height: 'auto' }
                     ),
                     aspectRatio: `${ratio}`,
                     transform: `translateX(calc(${offset} * var(--slide-gap))) scale(${isActive ? 1 : Math.max(0.65, 0.82 - absOffset * 0.1)})`,
-                    opacity:   isActive ? 1 : Math.max(0.15, 0.45 - absOffset * 0.15),
-                    filter:    isActive ? 'brightness(1)' : `brightness(${Math.max(0.3, 0.55 - absOffset * 0.1)})`,
-                    zIndex:    isActive ? 10 : 10 - absOffset,
+                    opacity:    isActive ? 1 : Math.max(0.15, 0.45 - absOffset * 0.15),
+                    filter:     isActive ? 'brightness(1)' : `brightness(${Math.max(0.3, 0.55 - absOffset * 0.1)})`,
+                    zIndex:     isActive ? 10 : 10 - absOffset,
                     pointerEvents: visible ? 'auto' : 'none',
                     visibility:    visible ? 'visible' : 'hidden',
-                    cursor:    isActive ? 'default' : 'pointer',
+                    cursor:     isActive ? 'default' : 'pointer',
                   }}
                   onClick={() => !isActive && setCurrent(i)}
                 >
                   {vid.video_url ? (
-                    <video
-                      ref={el => videoRefs.current[i] = el}
-                      src={vid.video_url}
-                      className={`${styles.video} ${isActive ? styles.videoActive : ''}`}
-                      muted
-                      playsInline
-                      loop={false}
-                      onLoadedMetadata={e => handleVideoMeta(e, i)}
-                      onEnded={isActive ? handleVideoEnded : undefined}
-                    />
+                    <>
+                      <video
+                        ref={el => videoRefs.current[i] = el}
+                        src={vid.video_url}
+                        className={`${styles.video} ${isActive ? styles.videoActive : ''}`}
+                        /*
+                          LAZY LOADING / OPTIMIZACIÓN:
+                          · preload="none"     → videos inactivos no descargan nada al cargar la página
+                          · preload="metadata" → video activo solo carga metadatos (duración, dimensiones)
+                          El navegador cargará el contenido real cuando el usuario interactúe o el slide sea activo
+                        */
+                        preload={isActive ? 'metadata' : 'none'}
+                        playsInline
+                        loop={false}
+                        onLoadedMetadata={e => handleVideoMeta(e, i)}
+                        /* NO ponemos muted aquí; se controla por JS en los effects */
+                      />
+
+                      {/* Controles de reproducción (solo slide activo, fuera del modo edición) */}
+                      {isActive && !editing && (
+                        <VideoControls
+                          videoEl={videoRefs.current[i]}
+                          onEnded={handleVideoEnded}
+                        />
+                      )}
+                    </>
                   ) : (
                     <div className={styles.emptySlide}>
                       <span>Sin video</span>

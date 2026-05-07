@@ -415,6 +415,17 @@
   border-radius: 12px 12px 12px 2px;
 }
 
+/* Cuando la burbuja contiene un AudioPlayer, dejamos que el player
+   sea su propio contenedor (mismo patrón que LawyerChatDashboard). */
+.msgBubbleAudio {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  border-radius: 0 !important;
+  max-width: none !important;
+}
+
 .msgText {
   color: #ffffff;
   font-size: 0.9rem;
@@ -607,15 +618,16 @@
 
 .areaChipSelected {
   padding: 7px 14px;
-  border: 1px solid var(--navy-md);
+  border: 1px solid var(--gold, #c9a84c);
   border-radius: 20px;
-  background: var(--surface);
-  color: var(--navy);
+  background: rgba(201,168,76,0.14);
+  color: #8a6a28;
   font-size: 0.78rem;
   cursor: pointer;
   transition: all 0.2s;
   font-family: inherit;
   font-weight: 600;
+  box-shadow: 0 0 0 1px rgba(201,168,76,0.35) inset;
 }
 
 .areasSelected {
@@ -902,4 +914,257 @@
     gap: 0;
   }
   .sideCards { display: none; }
+}
+
+/* ════════════════════════════════════════════════════════════════
+   SELECTOR DE TIPO DE PROFESIONAL (PASO 1 — formulario inicial)
+   Paleta ivory/navy/gold para alinearse con el formCard.
+════════════════════════════════════════════════════════════════ */
+.tipoCards {
+  display: flex;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.tipoCard,
+.tipoCardSelected {
+  flex: 1 1 0;
+  min-height: 96px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 18px 16px;
+  border-radius: 10px;
+  background: #ffffff;
+  border: 1px solid rgba(13,45,94,0.18);
+  color: var(--navy);
+  cursor: pointer;
+  transition: border 0.2s ease, background 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease;
+  font-family: inherit;
+  text-align: center;
+}
+
+.tipoCard:hover {
+  border-color: rgba(201,168,76,0.55);
+  transform: translateY(-1px);
+}
+
+.tipoCardSelected {
+  background: rgba(201,168,76,0.10);
+  border: 2px solid var(--gold, #c9a84c);
+  box-shadow: 0 0 12px rgba(201,168,76,0.30);
+  padding: 17px 15px; /* compensar el 1px extra de borde */
+}
+
+.tipoIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--gold, #c9a84c);
+  opacity: 0.55;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.tipoCardSelected .tipoIcon {
+  opacity: 1;
+  transform: scale(1.05);
+}
+
+.tipoLabel {
+  font-family: 'Cinzel', serif;
+  font-size: 0.95rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--navy);
+  margin-top: 4px;
+}
+
+.tipoDescripcion {
+  font-size: 0.72rem;
+  color: var(--muted);
+  font-weight: 400;
+  letter-spacing: 0.02em;
+}
+
+@media (max-width: 480px) {
+  .tipoCards { gap: 10px; }
+  .tipoCard,
+  .tipoCardSelected {
+    min-height: 88px;
+    padding: 14px 10px;
+  }
+  .tipoCardSelected { padding: 13px 9px; }
+  .tipoLabel { font-size: 0.88rem; }
+  .tipoDescripcion { font-size: 0.66rem; }
+}
+
+/* ════════════════════════════════════════════════════════════════
+   FORMULARIO PQR — visible cuando step === 'choose_another'
+   Paleta: navy oscuro (consistente con el banner amarillo de cierre).
+════════════════════════════════════════════════════════════════ */
+.pqrCard {
+  margin-top: 24px;
+  padding: 20px 22px;
+  background: rgba(13,45,94,0.04);
+  border: 1px solid rgba(13,45,94,0.14);
+  border-left: 3px solid var(--gold, #c9a84c);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+}
+
+.pqrTitle {
+  font-family: 'Cinzel', serif;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--navy, #0d2d5e);
+  margin: 0 0 4px;
+  letter-spacing: 0.04em;
+}
+
+.pqrSubtitle {
+  font-size: 0.74rem;
+  color: var(--muted, #6b7fa3);
+  margin: 0 0 14px;
+}
+
+.pqrTipoPills {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.pqrTipoPill,
+.pqrTipoPillSelected {
+  padding: 8px 16px;
+  border-radius: 22px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  background: #ffffff;
+  border: 1px solid rgba(13,45,94,0.2);
+  color: var(--navy, #0d2d5e);
+  white-space: nowrap;
+}
+
+.pqrTipoPill:hover {
+  border-color: rgba(201,168,76,0.55);
+}
+
+.pqrTipoPillSelected {
+  background: rgba(201,168,76,0.15);
+  border: 2px solid var(--gold, #c9a84c);
+  color: #8a6a28;
+  padding: 7px 15px; /* compensar el 1px extra de borde */
+  box-shadow: 0 0 0 1px rgba(201,168,76,0.25) inset;
+}
+
+.pqrTextarea {
+  width: 100%;
+  min-height: 90px;
+  padding: 10px 12px;
+  background: #ffffff;
+  border: 1px solid rgba(13,45,94,0.2);
+  border-radius: 8px;
+  color: var(--navy, #0d2d5e);
+  font-family: inherit;
+  font-size: 0.86rem;
+  line-height: 1.5;
+  resize: vertical;
+  outline: none;
+  transition: border-color 0.2s ease;
+  box-sizing: border-box;
+}
+.pqrTextarea:focus {
+  border-color: rgba(201,168,76,0.55);
+}
+.pqrTextarea::placeholder {
+  color: rgba(13,45,94,0.4);
+}
+
+.pqrSuccess {
+  margin: 6px 0 0;
+  padding: 12px 14px;
+  background: rgba(46,160,90,0.08);
+  border: 1px solid rgba(46,160,90,0.3);
+  border-radius: 8px;
+  color: #2a8255;
+  font-size: 0.82rem;
+  font-weight: 500;
+}
+
+.pqrError {
+  margin: 10px 0 0;
+  font-size: 0.78rem;
+  color: #c0392b;
+}
+
+/* Botón "Enviar PQR" — más sutil que .btnGold (que es navy uppercase y compite
+   visualmente con el resto). Aquí gold filled, sentence case, mismo radius. */
+.pqrFooter {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 12px;
+}
+
+.pqrSubmitBtn {
+  background: var(--gold, #c9a84c);
+  color: #ffffff;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 22px;
+  font-family: 'Cinzel', serif;
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: background 0.2s ease, transform 0.1s ease;
+}
+.pqrSubmitBtn:hover:not(:disabled) {
+  background: #b89540;
+  transform: translateY(-1px);
+}
+.pqrSubmitBtn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* ── Banner "Tu consulta anterior fue cerrada" ── */
+.closedBanner {
+  background: rgba(201,168,76,0.08);
+  border: 1px solid rgba(201,168,76,0.35);
+  border-radius: 10px;
+  padding: 14px 18px;
+  margin-bottom: 20px;
+  font-size: 0.83rem;
+  color: var(--navy, #0d2d5e);
+  line-height: 1.6;
+}
+.closedBanner strong { color: #8a6a28; }
+
+/* ── Acciones tras el chat (Buscar otro / Salir) ── */
+.postChatActions {
+  display: flex;
+  gap: 12px;
+  margin-top: 20px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 600px) {
+  .pqrCard { padding: 16px 14px; }
+  .pqrTipoPills {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 4px;
+    scrollbar-width: none;
+  }
+  .pqrTipoPills::-webkit-scrollbar { display: none; }
+  .pqrTipoPill,
+  .pqrTipoPillSelected { flex: 0 0 auto; }
 }

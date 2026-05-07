@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase'
 import styles from './ChatSection.module.css'
 import VideoCallOverlay from './VideoCallOverlay'
 import AudioPlayer from './AudioPlayer'
+import UbicacionSelector from './UbicacionSelector'
 import { IconPaperclip, IconVideoCamera, IconMic } from './Icons'
 import { validarCelular, validarCorreo, normalizarCelular } from '../lib/validaciones'
 
@@ -10,28 +11,58 @@ import { validarCelular, validarCorreo, normalizarCelular } from '../lib/validac
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
 
-const DEPARTAMENTOS_CIUDADES = [
-  'Amazonas - Leticia', 'Antioquia - Medellín', 'Antioquia - Bello',
-  'Antioquia - Envigado', 'Antioquia - Itagüí', 'Arauca - Arauca',
-  'Atlántico - Barranquilla', 'Atlántico - Soledad', 'Bolívar - Cartagena',
-  'Boyacá - Tunja', 'Caldas - Manizales', 'Caquetá - Florencia',
-  'Casanare - Yopal', 'Cauca - Popayán', 'Cesar - Valledupar',
-  'Chocó - Quibdó', 'Córdoba - Montería', 'Cundinamarca - Bogotá D.C.',
-  'Cundinamarca - Soacha', 'Huila - Neiva', 'La Guajira - Riohacha',
-  'Magdalena - Santa Marta', 'Meta - Villavicencio', 'Nariño - Pasto',
-  'Norte de Santander - Cúcuta', 'Putumayo - Mocoa', 'Quindío - Armenia',
-  'Risaralda - Pereira', 'San Andrés - San Andrés', 'Santander - Bucaramanga',
-  'Santander - Floridablanca', 'Sucre - Sincelejo', 'Tolima - Ibagué',
-  'Valle del Cauca - Cali', 'Valle del Cauca - Buenaventura',
-  'Valle del Cauca - Palmira', 'Vaupés - Mitú', 'Vichada - Puerto Carreño',
-]
-const DEPARTAMENTOS = [...new Set(DEPARTAMENTOS_CIUDADES.map(dc => dc.split(' - ')[0]))]
 const AREAS_DERECHO = [
   'Derecho Civil', 'Derecho Penal', 'Derecho Laboral', 'Derecho Comercial',
   'Derecho de Familia', 'Derecho Administrativo', 'Derecho Tributario',
   'Derecho Migratorio', 'Derecho Corporativo', 'Derecho Constitucional',
   'Derecho Ambiental', 'Derecho Internacional', 'Derecho Inmobiliario',
   'Derecho de Tránsito', 'Derecho Disciplinario',
+]
+
+const AREAS_CONTADURIA = [
+  'Contabilidad General', 'Auditoría', 'Tributaria y Fiscal',
+  'Contabilidad Forense', 'Costos y Presupuestos', 'Revisoría Fiscal',
+  'Finanzas Corporativas', 'Contabilidad Internacional (NIIF)',
+  'Nómina y Seguridad Social', 'Otro',
+]
+
+// SVG inline para no depender de assets externos
+const TIPO_OPTIONS = [
+  {
+    value: 'abogado',
+    label: 'Abogado',
+    descripcion: 'Asesoría jurídica',
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" width="34" height="34">
+        <path d="M12 3v18M5 7h14"/>
+        <path d="M3 13l2-6 2 6a3 3 0 1 1-4 0z"/>
+        <path d="M17 13l2-6 2 6a3 3 0 1 1-4 0z"/>
+        <path d="M7 21h10"/>
+      </svg>
+    ),
+  },
+  {
+    value: 'contador',
+    label: 'Contador',
+    descripcion: 'Asesoría contable y fiscal',
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" width="34" height="34">
+        <rect x="5" y="3" width="14" height="18" rx="2"/>
+        <rect x="8" y="6" width="8" height="3" rx="0.5"/>
+        <circle cx="9"  cy="13" r="0.6" fill="currentColor"/>
+        <circle cx="12" cy="13" r="0.6" fill="currentColor"/>
+        <circle cx="15" cy="13" r="0.6" fill="currentColor"/>
+        <circle cx="9"  cy="16" r="0.6" fill="currentColor"/>
+        <circle cx="12" cy="16" r="0.6" fill="currentColor"/>
+        <circle cx="15" cy="16" r="0.6" fill="currentColor"/>
+        <circle cx="9"  cy="19" r="0.6" fill="currentColor"/>
+        <circle cx="12" cy="19" r="0.6" fill="currentColor"/>
+        <circle cx="15" cy="19" r="0.6" fill="currentColor"/>
+      </svg>
+    ),
+  },
 ]
 
 async function hashCedula(cedula) {
@@ -259,8 +290,9 @@ function StepCedula({ onNew, onResume }) {
 export default function ChatSection() {
   const [step, setStep]         = useState('cedula')
   const [form, setForm]         = useState({
-    nombre:'', apellido:'', ciudad:'', departamento:'',
+    nombre:'', apellido:'', ciudad:'', departamento:'', barrio:'',
     areas:[], correo:'', celular:'', descripcion:'',
+    tipo_profesional: 'abogado',
   })
   const [correoTouched,  setCorreoTouched]  = useState(false)
   const [celularTouched, setCelularTouched] = useState(false)
@@ -285,6 +317,14 @@ export default function ChatSection() {
   const [excludedLawyerIds, setExcludedLawyerIds] = useState([])
   const [closedRoomId, setClosedRoomId]           = useState(null)
 
+  // ── PQR (peticiones / quejas / reclamos) tras cierre del chat ────────────
+  const [pqrTipo,       setPqrTipo]       = useState('')        // peticion | queja | reclamo
+  const [pqrMensaje,    setPqrMensaje]    = useState('')
+  const [pqrSubmitting, setPqrSubmitting] = useState(false)
+  const [pqrSent,       setPqrSent]       = useState(false)
+  const [pqrError,      setPqrError]      = useState('')
+  const [pqrYaExiste,   setPqrYaExiste]   = useState(false)     // si ya envió uno para este room
+
   // ── Voz ──────────────────────────────────────────────────────────────────
   const [recording, setRecording]         = useState(false)
   const [recordingTime, setRecordingTime] = useState(0)
@@ -305,10 +345,72 @@ export default function ChatSection() {
 
   const fileRef     = useRef(null)
   const messagesRef = useRef(null)
+  const lawyersRef  = useRef(null)
 
   useEffect(() => {
     if (messagesRef.current) messagesRef.current.scrollTop = messagesRef.current.scrollHeight
   }, [messages])
+
+  // Cuando se abre el listado o el cierre del chat, llevar la vista a la sección
+  useEffect(() => {
+    if ((step === 'lawyers' || step === 'choose_another' || step === 'post_chat') && lawyersRef.current) {
+      lawyersRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+  }, [step])
+
+  // Al entrar a post_chat, verificar si ya hay un PQR para esta sala —
+  // así el formulario aparece UNA sola vez por consulta.
+  useEffect(() => {
+    if (step !== 'post_chat' || !closedRoomId) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const res = await fetch(
+          `${SUPABASE_URL}/rest/v1/pqr?room_id=eq.${closedRoomId}&select=id&limit=1`,
+          { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } }
+        )
+        const data = await res.json()
+        if (!cancelled && Array.isArray(data) && data.length > 0) setPqrYaExiste(true)
+      } catch { /* si falla, mostramos el form igual — no bloqueamos al cliente */ }
+    })()
+    return () => { cancelled = true }
+  }, [step, closedRoomId])
+
+  async function handleSendPqr() {
+    if (!pqrTipo)            { setPqrError('Selecciona el tipo (petición, queja o reclamo).'); return }
+    if (!pqrMensaje.trim())  { setPqrError('Describe tu situación.'); return }
+    if (pqrMensaje.trim().length < 15) { setPqrError('El mensaje es muy corto, por favor amplíalo un poco.'); return }
+    setPqrSubmitting(true); setPqrError('')
+    const nombreCliente = `${form.nombre || ''} ${form.apellido || ''}`.trim()
+    try {
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/pqr`, {
+        method: 'POST',
+        headers: {
+          apikey: SUPABASE_KEY,
+          Authorization: `Bearer ${SUPABASE_KEY}`,
+          'Content-Type': 'application/json',
+          Prefer: 'return=representation',
+        },
+        body: JSON.stringify({
+          room_id:           closedRoomId || null,
+          codigo_referencia: roomCodigo || null,
+          client_nombre:     nombreCliente || null,
+          client_email:      form.correo || null,
+          tipo:              pqrTipo,
+          mensaje:           pqrMensaje.trim(),
+        }),
+      })
+      if (!res.ok) {
+        const detail = await res.text().catch(() => '')
+        throw new Error(detail || `HTTP ${res.status}`)
+      }
+      setPqrSent(true)
+    } catch (err) {
+      setPqrError('No se pudo enviar tu PQR: ' + (err.message || 'error desconocido'))
+    } finally {
+      setPqrSubmitting(false)
+    }
+  }
 
   useEffect(() => {
     if (!roomId) return
@@ -337,11 +439,12 @@ export default function ChatSection() {
               ? formRef.current.areas
               : roomAreaRef.current.split(', ').map(a => a.trim()).filter(Boolean)
             const dept = formRef.current.departamento || ''
-            // Buscar abogados disponibles excluyendo los del chat cerrado
+            // Buscar profesionales disponibles excluyendo los del chat cerrado
             if (areas.length > 0) {
+              const rol = formRef.current.tipo_profesional || 'abogado'
               const { data: todos } = await supabase.from('profiles')
-                .select('id, nombre, apellido, area_derecho, ciudad, departamento, foto_url, email')
-                .eq('aprobado', true)
+                .select('id, nombre, apellido, area_derecho, ciudad, departamento, foto_url, email, rol')
+                .eq('aprobado', true).eq('rol', rol)
               const filtrados = (todos || []).filter(l =>
                 !excluded.includes(l.id) &&
                 areas.some(a => l.area_derecho?.toLowerCase().includes(a.toLowerCase()))
@@ -351,7 +454,8 @@ export default function ChatSection() {
                 porArea:  filtrados.filter(l => l.departamento !== dept),
               })
             }
-            setStep('choose_another')
+            // Flujo de cierre: 1° rating → 2° PQR → 3° opción de elegir otro.
+            setStep('rating')
           }
         })
       .subscribe()
@@ -368,9 +472,10 @@ export default function ChatSection() {
 
   function resetToStart() {
     setStep('cedula'); setRoomId(null); setRoomStatus('waiting'); setRoomArea(''); setRoomCodigo('')
-    setMessages([]); setForm({ nombre:'', apellido:'', ciudad:'', departamento:'', areas:[], correo:'', celular:'', descripcion:'' })
+    setMessages([]); setForm({ nombre:'', apellido:'', ciudad:'', departamento:'', barrio:'', areas:[], correo:'', celular:'', descripcion:'', tipo_profesional:'abogado' })
     setPicked([]); setCallActive(false); setIncomingCall(null)
     setExcludedLawyerIds([]); setClosedRoomId(null)
+    setPqrTipo(''); setPqrMensaje(''); setPqrSent(false); setPqrError(''); setPqrYaExiste(false)
     localStorage.removeItem('chat_cedula_hash'); localStorage.removeItem('chat_nombre'); localStorage.removeItem('chat_codigo_ref')
   }
 
@@ -385,14 +490,15 @@ export default function ChatSection() {
     if (!descripcion.trim())               { setFormError('Describe brevemente tu caso.'); return }
     setSubmitting(true); setFormError('')
     localStorage.setItem('chat_nombre', `${nombre.trim()} ${apellido.trim()}`)
-    await fetchLawyers(areas, departamento, excludedLawyerIds)
+    await fetchLawyers(areas, departamento, excludedLawyerIds, form.tipo_profesional)
     setStep('lawyers'); setSubmitting(false)
   }
 
-  async function fetchLawyers(areas, departamento, excluded = []) {
+  async function fetchLawyers(areas, departamento, excluded = [], rol = 'abogado') {
     setLoadingL(true)
     const { data } = await supabase.from('profiles')
-      .select('id, nombre, apellido, area_derecho, ciudad, departamento, foto_url, email').eq('aprobado', true)
+      .select('id, nombre, apellido, area_derecho, ciudad, departamento, foto_url, email, rol')
+      .eq('aprobado', true).eq('rol', rol)
     const filtrados = (data || []).filter(l =>
       !excluded.includes(l.id) &&
       areas.some(a => l.area_derecho?.toLowerCase().includes(a.toLowerCase()))
@@ -405,7 +511,8 @@ export default function ChatSection() {
   }
 
   function toggleLawyer(id) {
-    setPicked(prev => prev.includes(id) ? prev.filter(x => x!==id) : prev.length < 3 ? [...prev, id] : prev)
+    // Selección única: si ya está seleccionado se deselecciona, si no se reemplaza
+    setPicked(prev => prev.includes(id) ? [] : [id])
   }
 
   async function startChat() {
@@ -413,24 +520,41 @@ export default function ChatSection() {
     setSending(true)
     const hash      = localStorage.getItem('chat_cedula_hash')
     const codigoRef = localStorage.getItem('chat_codigo_ref') || null
-    const { nombre, apellido, areas, descripcion, ciudad, departamento, correo, celular } = form
-    const { data: room, error } = await supabase.from('chat_rooms')
-      .insert({ area_derecho: areas.join(', '), client_token: hash, client_cedula: hash,
-        client_email: correo||null, client_nombre: `${nombre} ${apellido}`,
-        client_celular: celular||null, codigo_referencia: codigoRef, status:'waiting' })
-      .select().single()
-    if (error || !room) { setSending(false); return }
+    const { nombre, apellido, areas, descripcion, ciudad, departamento, barrio, correo, celular } = form
+    const ubicacionTxt = barrio ? `${ciudad} - ${barrio}, ${departamento}` : `${ciudad}, ${departamento}`
+
+    // Reutilizar room existente waiting/active si ya hay uno (evita 409 por UNIQUE)
+    const { data: existingRooms } = await supabase.from('chat_rooms')
+      .select('*').eq('client_cedula', hash).order('created_at', { ascending: false })
+    let room = existingRooms?.find(r => r.status === 'waiting' || r.status === 'active') || null
+
+    if (!room) {
+      const { data: inserted, error } = await supabase.from('chat_rooms')
+        .insert({ area_derecho: areas.join(', '), client_token: hash, client_cedula: hash,
+          client_email: correo||null, client_nombre: `${nombre} ${apellido}`,
+          client_celular: celular||null, codigo_referencia: codigoRef,
+          tipo_profesional: form.tipo_profesional || 'abogado', status:'waiting' })
+        .select().single()
+      if (error || !inserted) {
+        console.error('[startChat] Error insertando chat_rooms:', error)
+        setFormError(`No se pudo crear la consulta: ${error?.message || 'error desconocido'}. Revisa la consola.`)
+        setSending(false)
+        return
+      }
+      room = inserted
+    }
+
     await supabase.from('chat_room_lawyers').insert(picked.map(lid => ({ room_id: room.id, lawyer_id: lid, status:'invited' })))
     await supabase.from('chat_messages').insert({
       room_id: room.id, sender_type:'client', lawyer_id: null,
-      content: `Hola, mi nombre es ${nombre} ${apellido}.\n\nUbicación: ${ciudad}, ${departamento}\nÁrea(s): ${areas.join(', ')}\nContacto: ${correo||'—'} / ${celular||'—'}\n\nDescripción del caso:\n${descripcion}`,
+      content: `Hola, mi nombre es ${nombre} ${apellido}.\n\nUbicación: ${ubicacionTxt}\nÁrea(s): ${areas.join(', ')}\n\nDescripción del caso:\n${descripcion}`,
     })
     const todosAbogados = [...lawyers.cercanos, ...lawyers.porArea]
     for (const abogado of todosAbogados.filter(l => picked.includes(l.id))) {
       if (abogado.email) await notificarAbogado({ lawyerEmail: abogado.email,
         nombreAbogado: `${abogado.nombre} ${abogado.apellido}`, nombreCliente:`${nombre} ${apellido}`, area: areas.join(', ') })
     }
-    setRoomId(room.id); setRoomStatus('waiting'); setRoomArea(areas.join(', '))
+    setRoomId(room.id); setRoomStatus(room.status || 'waiting'); setRoomArea(areas.join(', '))
     setRoomCodigo(codigoRef || ''); setPicked([])
     setStep('chat'); setSending(false)
   }
@@ -473,15 +597,36 @@ export default function ChatSection() {
 
   async function fixAudioDuration(blob) {
     return new Promise(resolve => {
+      let done = false
+      const finish = () => {
+        if (done) return
+        done = true
+        try { URL.revokeObjectURL(audio.src) } catch {}
+        resolve(blob)
+      }
+      // Firefox a veces no dispara `timeupdate` tras el seek a 1e101 — sin
+      // este timeout la promesa se cuelga para siempre y uploadAudio nunca
+      // se ejecuta.
+      const timer = setTimeout(finish, 1500)
+
       const audio = document.createElement('audio')
-      audio.preload = 'metadata'; audio.src = URL.createObjectURL(blob)
+      audio.preload = 'metadata'
+      audio.src = URL.createObjectURL(blob)
       audio.onloadedmetadata = () => {
         if (audio.duration === Infinity || isNaN(audio.duration)) {
           audio.currentTime = 1e101
-          audio.ontimeupdate = () => { audio.ontimeupdate = null; audio.currentTime = 0; URL.revokeObjectURL(audio.src); resolve(blob) }
-        } else { URL.revokeObjectURL(audio.src); resolve(blob) }
+          audio.ontimeupdate = () => {
+            audio.ontimeupdate = null
+            audio.currentTime = 0
+            clearTimeout(timer)
+            finish()
+          }
+        } else {
+          clearTimeout(timer)
+          finish()
+        }
       }
-      audio.onerror = () => resolve(blob)
+      audio.onerror = () => { clearTimeout(timer); finish() }
     })
   }
 
@@ -516,19 +661,22 @@ export default function ChatSection() {
     try {
       const ext  = mimeType.includes('ogg') ? 'ogg' : mimeType.includes('mp4') ? 'mp4' : 'webm'
       const path = `${roomId}/audio_${Date.now()}.${ext}`
+      const cleanMime = mimeType.split(';')[0] || 'audio/webm'
       const res  = await fetch(`${SUPABASE_URL}/storage/v1/object/chat-files/${path}`, {
         method: 'POST',
-        headers: { 'Authorization':`Bearer ${SUPABASE_KEY}`, 'apikey':SUPABASE_KEY, 'Content-Type':mimeType, 'x-upsert':'true' },
+        headers: { 'Authorization':`Bearer ${SUPABASE_KEY}`, 'apikey':SUPABASE_KEY, 'Content-Type':cleanMime, 'x-upsert':'true' },
         body: blob,
       })
-      if (!res.ok) { const err = await res.json(); console.error('Error subiendo audio:', err); return }
+      if (!res.ok) { const err = await res.text().catch(() => ''); console.error('Error subiendo audio:', res.status, err); return }
       const { data: signed } = await supabase.storage.from('chat-files').createSignedUrl(path, 60*60*24*7)
       if (!signed?.signedUrl) { console.error('No se pudo obtener URL firmada'); return }
-      await supabase.from('chat_messages').insert({
+      const { error: insErr } = await supabase.from('chat_messages').insert({
         room_id: roomId, sender_type:'client', lawyer_id: null,
         content:'Mensaje de voz', file_url: signed.signedUrl,
         file_name:`voz_${Date.now()}.${ext}`, file_size: blob.size, message_type:'audio',
       })
+      if (insErr) { console.error('Error insertando mensaje de audio:', insErr); return }
+      await loadMessages(roomId)
     } catch (err) { console.error('Error en uploadAudio:', err) }
     finally { setUploading(false) }
   }
@@ -559,14 +707,19 @@ export default function ChatSection() {
         {loadingL ? <p className={styles.loadingText}>Buscando abogados disponibles…</p>
           : allLawyers.length === 0 ? (
             <div className={styles.emptyLawyers}>
-              <p className={styles.emptyText}>No hay más abogados disponibles en esta área.</p>
+              <p className={styles.emptyText}>
+                No hay más {form.tipo_profesional === 'contador' ? 'contadores' : 'abogados'} disponibles en esta {form.tipo_profesional === 'contador' ? 'especialidad' : 'área'}.
+              </p>
               <button className={styles.btnOutline} onClick={resetToStart}>Volver al inicio</button>
             </div>
           ) : (
             <>
               {lawyers.cercanos.length > 0 && (
                 <>
-                  <div className={styles.sectionLabel}><span className={styles.sectionLabelDot}/>Cerca de ti — {form.ciudad}, {form.departamento}</div>
+                  <div className={styles.sectionLabel}>
+                    <span className={styles.sectionLabelDot}/>
+                    {form.tipo_profesional === 'contador' ? 'Contadores cerca de ti' : 'Abogados cerca de ti'} — {form.ciudad}, {form.departamento}
+                  </div>
                   <div className={styles.lawyersList}>
                     {lawyers.cercanos.map(l => {
                       const sel = picked.includes(l.id)
@@ -589,7 +742,8 @@ export default function ChatSection() {
               {lawyers.porArea.length > 0 && (
                 <>
                   <div className={styles.sectionLabel} style={{ marginTop: lawyers.cercanos.length > 0 ? 32 : 0 }}>
-                    <span className={styles.sectionLabelDot}/>Por área — resto del país
+                    <span className={styles.sectionLabelDot}/>
+                    {form.tipo_profesional === 'contador' ? 'Contadores por especialidad' : 'Abogados por área'} — resto del país
                   </div>
                   <div className={styles.lawyersList}>
                     {lawyers.porArea.map(l => {
@@ -615,7 +769,9 @@ export default function ChatSection() {
         }
         {picked.length > 0 && (
           <button className={styles.btnGold} style={{ marginTop:24 }} onClick={onStart} disabled={sending}>
-            {sending ? 'Iniciando chat…' : startLabel || `Iniciar chat con ${picked.length} abogado${picked.length > 1 ? 's' : ''}`}
+            {sending
+              ? 'Iniciando chat…'
+              : startLabel || `Iniciar chat con el ${form.tipo_profesional === 'contador' ? 'contador' : 'abogado'}`}
           </button>
         )}
       </>
@@ -712,11 +868,15 @@ export default function ChatSection() {
                         </div>
                       )
                     }
+                    const isAudio = msg.message_type === 'audio' && msg.file_url
                     return (
                       <div key={msg.id} className={mine ? styles.msgRowMine : styles.msgRowOther}>
-                        <div className={mine ? styles.msgBubbleMine : styles.msgBubbleOther}>
-                          {msg.message_type === 'audio' && msg.file_url ? (
-                            <AudioPlayer src={msg.file_url} mine={mine} />
+                        <div className={`${mine ? styles.msgBubbleMine : styles.msgBubbleOther} ${isAudio ? styles.msgBubbleAudio : ''}`}>
+                          {isAudio ? (
+                            // mine={true} fuerza el skin dorado del AudioPlayer:
+                            // se ve bien sobre fondo claro (fondo translúcido del
+                            // skin "other" desaparece sobre la paleta ivory).
+                            <AudioPlayer src={msg.file_url} mine={true} />
                           ) : msg.file_url ? (
                             <button className={styles.fileBtn} onClick={() => window.open(msg.file_url,'_blank')}>
                               <IconPaperclip size={14} />
@@ -776,6 +936,36 @@ export default function ChatSection() {
       {step === 'form' && (
         <div className={styles.form}>
           <div className={styles.formCard}>
+
+            {/* ── Selector de tipo de profesional ─────────────────────────── */}
+            <div className={styles.field}>
+              <label className={styles.label}>
+                ¿Qué tipo de profesional necesitas? <span className={styles.required}>*</span>
+              </label>
+              <div className={styles.tipoCards}>
+                {TIPO_OPTIONS.map(opt => {
+                  const sel = form.tipo_profesional === opt.value
+                  return (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      className={sel ? styles.tipoCardSelected : styles.tipoCard}
+                      onClick={() => setForm(f => ({
+                        ...f,
+                        tipo_profesional: opt.value,
+                        // Resetear áreas — las del otro rol no aplican
+                        areas: f.tipo_profesional === opt.value ? f.areas : [],
+                      }))}
+                    >
+                      <span className={styles.tipoIcon}>{opt.icon}</span>
+                      <span className={styles.tipoLabel}>{opt.label}</span>
+                      <span className={styles.tipoDescripcion}>{opt.descripcion}</span>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
             <div className={styles.formRow}>
               <div className={styles.field}>
                 <label className={styles.label}>Nombre <span className={styles.required}>*</span></label>
@@ -788,25 +978,20 @@ export default function ChatSection() {
                   onChange={e => setForm(f => ({ ...f, apellido: e.target.value }))} placeholder="Tu apellido" />
               </div>
             </div>
-            <div className={styles.formRow}>
-              <div className={styles.field}>
-                <label className={styles.label}>Departamento <span className={styles.required}>*</span></label>
-                <select className={styles.select} value={form.departamento}
-                  onChange={e => setForm(f => ({ ...f, departamento: e.target.value, ciudad:'' }))}>
-                  <option value="">Selecciona…</option>
-                  {DEPARTAMENTOS.map(d => <option key={d} value={d}>{d}</option>)}
-                </select>
-              </div>
-              <div className={styles.field}>
-                <label className={styles.label}>Ciudad <span className={styles.required}>*</span></label>
-                <select className={styles.select} value={form.ciudad}
-                  onChange={e => setForm(f => ({ ...f, ciudad: e.target.value }))} disabled={!form.departamento}>
-                  <option value="">Selecciona…</option>
-                  {DEPARTAMENTOS_CIUDADES.filter(dc => dc.startsWith(form.departamento))
-                    .map(dc => dc.split(' - ')[1]).map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
-              </div>
-            </div>
+            <UbicacionSelector
+              departamento={form.departamento}
+              municipio={form.ciudad}
+              barrio={form.barrio}
+              required
+              classes={{
+                field: styles.field,
+                label: styles.label,
+                select: styles.select,
+              }}
+              onChange={({ departamento, municipio, barrio }) =>
+                setForm(f => ({ ...f, departamento, ciudad: municipio, barrio }))
+              }
+            />
             <div className={styles.field}>
               <label className={styles.label}>Correo electrónico</label>
               {(() => {
@@ -894,11 +1079,11 @@ export default function ChatSection() {
             </div>
             <div className={styles.field}>
               <label className={styles.label}>
-                Área del caso <span className={styles.required}>*</span>
+                {form.tipo_profesional === 'contador' ? 'Especialidad' : 'Área del caso'} <span className={styles.required}>*</span>
                 <span style={{ color:'rgba(255,255,255,0.35)', fontWeight:400, marginLeft:8 }}>(mínimo 1, máximo 3)</span>
               </label>
               <div className={styles.areasGrid}>
-                {AREAS_DERECHO.map(area => {
+                {(form.tipo_profesional === 'contador' ? AREAS_CONTADURIA : AREAS_DERECHO).map(area => {
                   const selected = form.areas.includes(area)
                   const disabled = !selected && form.areas.length >= 3
                   return (
@@ -921,64 +1106,140 @@ export default function ChatSection() {
             </div>
             {formError && <p className={styles.formError}>{formError}</p>}
             <button className={styles.btnGold} onClick={handleFormSubmit} disabled={submitting}>
-              {submitting ? 'Buscando abogados…' : 'Buscar abogados disponibles'}
+              {submitting
+                ? (form.tipo_profesional === 'contador' ? 'Buscando contadores…' : 'Buscando abogados…')
+                : (form.tipo_profesional === 'contador' ? 'Buscar contadores disponibles' : 'Buscar abogados disponibles')}
             </button>
             <button className={styles.btnBack} onClick={() => setStep('cedula')}>← Volver</button>
           </div>
         </div>
       )}
 
-      {/* ── Selección inicial de abogados ── */}
+      {/* ── Selección inicial de profesionales ── */}
       {step === 'lawyers' && (
-        <div className={styles.lawyersWrap}>
+        <div className={styles.lawyersWrap} ref={lawyersRef}>
           <button className={styles.btnBack} onClick={() => setStep('form')}>← Volver al formulario</button>
           <p className={styles.areaTitle}>{form.areas.join(' · ')}</p>
-          <p className={styles.areaSubtitle}>Selecciona hasta 3 abogados para iniciar el chat.</p>
+          <p className={styles.areaSubtitle}>
+            Selecciona un {form.tipo_profesional === 'contador' ? 'contador' : 'abogado'} para iniciar el chat.
+          </p>
           <LawyerList
             onStart={startChat}
-            startLabel={sending ? 'Iniciando chat…' : `Iniciar chat con ${picked.length} abogado${picked.length > 1 ? 's' : ''}`}
+            startLabel={sending
+              ? 'Iniciando chat…'
+              : `Iniciar chat con el ${form.tipo_profesional === 'contador' ? 'contador' : 'abogado'}`}
           />
         </div>
       )}
 
-      {/* ── Elegir otro abogado tras cierre/inactividad ── */}
-      {step === 'choose_another' && (
-        <div className={styles.lawyersWrap}>
-          {/* Banner informativo */}
-          <div style={{
-            background:'rgba(220,160,50,0.1)', border:'1px solid rgba(220,160,50,0.3)',
-            borderRadius:10, padding:'14px 18px', marginBottom:20,
-            fontSize:'0.83rem', color:'rgba(255,210,120,0.9)', lineHeight:1.6,
-          }}>
-            <strong>Tu consulta anterior fue cerrada.</strong><br/>
-            Puedes elegir otro abogado disponible para continuar. Los abogados del chat anterior no aparecen en esta lista.
+      {/* ── Post-chat: banner + PQR + opción de continuar con otro profesional ── */}
+      {step === 'post_chat' && (
+        <div className={styles.lawyersWrap} ref={lawyersRef}>
+          <div className={styles.closedBanner}>
+            <strong>Tu consulta anterior fue cerrada.</strong>
+            <br/>Gracias por usar AAP. Si quieres, déjanos un comentario antes de continuar.
           </div>
 
-          <p className={styles.areaTitle}>Continuar con otro abogado</p>
-          <p className={styles.areaSubtitle}>Selecciona hasta 3 abogados para iniciar una nueva consulta.</p>
+          {!pqrYaExiste && (
+            <div className={styles.pqrCard}>
+              <p className={styles.pqrTitle}>¿Tienes algún comentario sobre tu experiencia?</p>
+              <p className={styles.pqrSubtitle}>
+                Tu mensaje llega directamente al equipo de AAP. Es opcional.
+              </p>
+
+              {pqrSent ? (
+                <p className={styles.pqrSuccess}>
+                  ✓ Tu PQR fue enviada. Gracias por tu retroalimentación.
+                </p>
+              ) : (
+                <>
+                  <div className={styles.pqrTipoPills}>
+                    {[
+                      { v:'peticion', l:'Petición' },
+                      { v:'queja',    l:'Queja' },
+                      { v:'reclamo',  l:'Reclamo' },
+                    ].map(opt => (
+                      <button
+                        key={opt.v}
+                        type="button"
+                        className={pqrTipo === opt.v ? styles.pqrTipoPillSelected : styles.pqrTipoPill}
+                        onClick={() => setPqrTipo(opt.v)}
+                      >
+                        {opt.l}
+                      </button>
+                    ))}
+                  </div>
+
+                  <textarea
+                    className={styles.pqrTextarea}
+                    placeholder="Describe tu situación..."
+                    value={pqrMensaje}
+                    onChange={e => setPqrMensaje(e.target.value)}
+                    rows={4}
+                    maxLength={2000}
+                  />
+
+                  <div className={styles.pqrFooter}>
+                    <button
+                      className={styles.pqrSubmitBtn}
+                      onClick={handleSendPqr}
+                      disabled={pqrSubmitting}
+                    >
+                      {pqrSubmitting ? 'Enviando…' : 'Enviar PQR'}
+                    </button>
+                  </div>
+
+                  {pqrError && <p className={styles.pqrError}>{pqrError}</p>}
+                </>
+              )}
+            </div>
+          )}
+
+          <div className={styles.postChatActions}>
+            <button
+              className={styles.btnOutline}
+              onClick={() => setStep('choose_another')}
+            >
+              {form.tipo_profesional === 'contador'
+                ? 'Buscar otro contador'
+                : 'Buscar otro abogado'}
+            </button>
+            <button className={styles.btnBack} onClick={resetToStart}>
+              Salir
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Elegir otro profesional (solo se llega desde post_chat al pulsar "Buscar otro") ── */}
+      {step === 'choose_another' && (
+        <div className={styles.lawyersWrap} ref={lawyersRef}>
+          <p className={styles.areaTitle}>
+            Continuar con otro {form.tipo_profesional === 'contador' ? 'contador' : 'abogado'}
+          </p>
+          <p className={styles.areaSubtitle}>
+            Selecciona un {form.tipo_profesional === 'contador' ? 'contador' : 'abogado'} para iniciar una nueva consulta.
+          </p>
 
           <LawyerList
             onStart={async () => {
               setClosedRoomId(null); setExcludedLawyerIds([])
               await startChat()
             }}
-            startLabel={sending ? 'Iniciando chat…' : `Iniciar nueva consulta con ${picked.length} abogado${picked.length > 1 ? 's' : ''}`}
+            startLabel={sending ? 'Iniciando chat…' : 'Iniciar nueva consulta'}
           />
 
-          <div style={{ display:'flex', gap:12, marginTop:16, flexWrap:'wrap' }}>
-            {closedRoomId && (
-              <button className={styles.btnOutline}
-                onClick={() => { setStep('rating'); setRoomId(closedRoomId) }}>
-                Calificar consulta anterior
-              </button>
-            )}
+          <div className={styles.postChatActions} style={{ marginTop: 16 }}>
+            <button className={styles.btnBack} onClick={() => setStep('post_chat')}>
+              ← Volver
+            </button>
             <button className={styles.btnBack} onClick={resetToStart}>Salir</button>
           </div>
         </div>
       )}
 
       {step === 'rating' && roomId && (
-        <RatingPanel roomId={roomId} onDone={resetToStart} />
+        <RatingPanel roomId={roomId} onDone={() => setStep('post_chat')} />
       )}
     </section>
   )

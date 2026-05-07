@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
+import { compressImage } from '../utils/compressMedia'
 import styles from './Hero.module.css'
 import { IconPencil, IconCamera } from './Icons'
 
@@ -20,6 +21,7 @@ export default function Hero() {
   const isSuperAdmin = profile?.rol === 'superadmin'
 
   const [slides, setSlides]       = useState(DEFAULT_SLIDES)
+  const [loading, setLoading]     = useState(true)        // mientras llega data de Supabase
   const [current, setCurrent]     = useState(0)
   const [editing, setEditing]     = useState(false)
   const [editSlides, setEditSlides] = useState([])
@@ -40,7 +42,21 @@ export default function Hero() {
       const data = await res.json()
       if (Array.isArray(data) && data.length > 0) setSlides(data)
     } catch { /* usa defaults */ }
+    finally { setLoading(false) }
   }
+
+  // Preload de la primera imagen real (la que va con fetchpriority=high) en
+  // cuanto conocemos su URL — gana ~100-300ms vs esperar al render del <img>.
+  useEffect(() => {
+    if (loading || !slides[0]?.imagen_url) return
+    const link = document.createElement('link')
+    link.rel  = 'preload'
+    link.as   = 'image'
+    link.href = slides[0].imagen_url
+    link.fetchPriority = 'high'
+    document.head.appendChild(link)
+    return () => { try { document.head.removeChild(link) } catch {} }
+  }, [loading, slides])
 
   /* ── Navegación ───────────────────────────────────── */
   const activeSlides = editing ? editSlides : slides
@@ -85,11 +101,14 @@ export default function Hero() {
   }
 
   async function handleImageUpload(e) {
-    const file = e.target.files?.[0]
-    if (!file) return
+    const rawFile = e.target.files?.[0]
+    if (!rawFile) return
     const index = uploadTargetRef.current
     setUploading(index)
     try {
+      // Compresión client-side (1400px max, JPEG q=0.82). Si el archivo es
+      // chico o no comprimible (svg/gif), devuelve el original.
+      const file = await compressImage(rawFile)
       const { data } = await supabase.auth.getSession()
       const token = data?.session?.access_token
       const ext  = file.name.split('.').pop()
@@ -205,7 +224,24 @@ export default function Hero() {
 
       {/* ── Filmstrip ── */}
       <div className={styles.filmstrip}>
-        {activeSlides.map((slide, i) => {
+        {loading && !editing && Array.from({ length: 5 }).map((_, i) => {
+          const offset    = i - 2  // skeleton centrado en el medio
+          const absOffset = Math.abs(offset)
+          const isActive  = offset === 0
+          return (
+            <div
+              key={`sk-${i}`}
+              className={`${styles.slide} ${styles.slideSkeleton}`}
+              aria-hidden="true"
+              style={{
+                transform: `translateX(calc(${offset} * var(--slide-gap))) scale(${isActive ? 1 : Math.max(0.65, 0.88 - absOffset * 0.1)})`,
+                opacity:   isActive ? 1 : Math.max(0.3, 0.72 - absOffset * 0.18),
+                zIndex:    isActive ? 10 : 10 - absOffset,
+              }}
+            />
+          )
+        })}
+        {!loading && activeSlides.map((slide, i) => {
           const offset    = getOffset(i)
           const absOffset = Math.abs(offset)
           const isActive  = offset === 0
@@ -230,6 +266,11 @@ export default function Hero() {
                 src={slide.imagen_url}
                 alt={`Slide ${i + 1}`}
                 className={`${styles.slideImg} ${isActive ? styles.slideImgActive : ''}`}
+                width="580"
+                height="740"
+                decoding="async"
+                loading={i === 0 ? 'eager' : 'lazy'}
+                fetchpriority={i === 0 ? 'high' : 'auto'}
               />
 
               {/* Overlay edición — solo en slide activo */}

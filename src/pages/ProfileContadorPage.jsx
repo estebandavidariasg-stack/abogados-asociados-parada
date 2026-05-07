@@ -1,11 +1,13 @@
 import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../context/AuthContext'
-import { supabase } from '../lib/supabase'
 import { useNavigate } from 'react-router-dom'
+// Reutilizamos el mismo CSS module del perfil de abogado — los estilos son
+// idénticos, solo cambian los datos. Importar un .module.css desde otro
+// componente NO lo modifica; las clases siguen siendo scoped al archivo.
 import styles from './ProfilePage.module.css'
-import LawyerChatDashboard from '../components/LawyerChatDashboard'
 import MisContratos from '../components/MisContratos'
 import LawyerInternalChat from '../components/LawyerInternalChat'
+import ContadorChatDashboard from '../components/ContadorChatDashboard'
 import UbicacionSelector from '../components/UbicacionSelector'
 import { getAuthHeaders } from '../lib/supabase'
 
@@ -48,14 +50,18 @@ const UNIVERSIDADES = [
   'Otra',
 ]
 
-const AREAS_DERECHO = [
-  'Derecho Penal', 'Derecho Civil', 'Derecho de Familia', 'Derecho Laboral',
-  'Derecho Comercial', 'Derecho Corporativo', 'Derecho Administrativo',
-  'Derecho Constitucional', 'Derecho Tributario', 'Derecho Ambiental',
-  'Derecho Internacional', 'Derecho Migratorio', 'Derecho Inmobiliario',
-  'Derecho de Seguros', 'Derecho de Tránsito', 'Derecho Disciplinario',
-  'Derecho Minero y Energético', 'Derecho de Propiedad Intelectual',
-  'Derecho Informático', 'Derecho Médico', 'Otro',
+// Áreas/Especialidades específicas de la profesión contable
+const ESPECIALIDADES_CONTADURIA = [
+  'Contabilidad General',
+  'Auditoría',
+  'Tributaria y Fiscal',
+  'Contabilidad Forense',
+  'Costos y Presupuestos',
+  'Revisoría Fiscal',
+  'Finanzas Corporativas',
+  'Contabilidad Internacional (NIIF)',
+  'Nómina y Seguridad Social',
+  'Otro',
 ]
 
 const EXPERIENCIA_OPTIONS = [
@@ -65,7 +71,7 @@ const EXPERIENCIA_OPTIONS = [
 
 const MAX_VIDEO_MB = 200
 
-export default function ProfilePage() {
+export default function ProfileContadorPage() {
   const { user, profile, signOut, loading } = useAuth()
   const navigate = useNavigate()
   const fileInputRef    = useRef(null)
@@ -78,7 +84,7 @@ export default function ProfilePage() {
   const [error, setError]         = useState(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
 
-  // ── Campos del perfil ─────────────────────────────────────────────────
+  // Campos
   const [nombre, setNombre]           = useState('')
   const [apellido, setApellido]       = useState('')
   const [telefono, setTelefono]       = useState('')
@@ -96,9 +102,9 @@ export default function ProfilePage() {
   const [uploadingTarjeta, setUploadingTarjeta]   = useState(false)
   const [departamento, setDepartamento]     = useState('')
   const [barrio, setBarrio]                 = useState('')
-  const [areasDerecho, setAreasDerecho] = useState([])
+  const [especialidades, setEspecialidades] = useState([])
 
-  // ── Redes sociales ────────────────────────────────────────────────────
+  // Redes sociales
   const [instagram, setInstagram] = useState('')
   const [linkedin,  setLinkedin]  = useState('')
   const [facebook,  setFacebook]  = useState('')
@@ -115,14 +121,15 @@ export default function ProfilePage() {
       setTelefono(profile.telefono   || '')
       setUniversidad(profile.universidad || '')
       setExperiencia(profile.experiencia || '')
-      setAreasDerecho(
+      // El campo BD se llama area_derecho aunque para contador signifique
+      // "especialidad". Reusamos la columna existente.
+      setEspecialidades(
         profile.area_derecho
           ? profile.area_derecho.split(',').map(a => a.trim()).filter(Boolean)
           : []
       )
       setDireccion(profile.direccion  || '')
       setDepartamento(profile.departamento || '')
-      // ciudad puede venir en formato "Municipio - Barrio" cuando existe nivel 3
       const ciudadDB = profile.ciudad || ''
       if (ciudadDB.includes(' - ')) {
         const idx = ciudadDB.indexOf(' - ')
@@ -138,7 +145,6 @@ export default function ProfilePage() {
       setTarjetaArchivoUrl(profile.tarjeta_archivo_url || null)
       if (profile.foto_url) setFotoPreview(profile.foto_url)
 
-      // Redes sociales
       setInstagram(profile.instagram || '')
       setLinkedin(profile.linkedin   || '')
       setFacebook(profile.facebook   || '')
@@ -159,15 +165,7 @@ export default function ProfilePage() {
       const path = `avatars/${user.id}.${ext}`
       const res  = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/profile-photos/${path}`,
-        {
-          method: 'POST',
-          headers: {
-            ...headers,
-            'Content-Type': file.type,
-            'x-upsert': 'true',
-          },
-          body: file,
-        }
+        { method: 'POST', headers: { ...headers, 'Content-Type': file.type, 'x-upsert': 'true' }, body: file }
       )
       if (!res.ok) throw new Error('Error subiendo foto')
       setFotoUrl(`${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/profile-photos/${path}`)
@@ -191,15 +189,7 @@ export default function ProfilePage() {
       const path = `videos/${user.id}.${ext}`
       const res  = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/profile-videos/${path}`,
-        {
-          method: 'POST',
-          headers: {
-            ...headers,
-            'Content-Type': file.type,
-            'x-upsert': 'true',
-          },
-          body: file,
-        }
+        { method: 'POST', headers: { ...headers, 'Content-Type': file.type, 'x-upsert': 'true' }, body: file }
       )
       if (!res.ok) throw new Error('Error subiendo video')
       setVideoUrl(`${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/profile-videos/${path}`)
@@ -226,22 +216,12 @@ export default function ProfilePage() {
     try {
       const headers = await getAuthHeaders()
       const ext  = file.name.split('.').pop().toLowerCase()
-      // Path con user.id como primer "folder" — exigido por la RLS del bucket
       const path = `${user.id}/tarjeta.${ext}`
       const res  = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/tarjetas-profesionales/${path}`,
-        {
-          method: 'POST',
-          headers: {
-            ...headers,
-            'Content-Type': file.type,
-            'x-upsert': 'true',
-          },
-          body: file,
-        }
+        { method: 'POST', headers: { ...headers, 'Content-Type': file.type, 'x-upsert': 'true' }, body: file }
       )
       if (!res.ok) throw new Error('Error subiendo tarjeta')
-      // cache-buster para forzar re-fetch tras upsert
       setTarjetaArchivoUrl(`${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/tarjetas-profesionales/${path}?t=${Date.now()}`)
       setMsg('Tarjeta profesional subida correctamente')
     } catch (err) {
@@ -261,20 +241,17 @@ export default function ProfilePage() {
         `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/profiles?id=eq.${user.id}`,
         {
           method: 'PATCH',
-          headers: {
-            ...headers,
-            'Content-Type': 'application/json',
-            'Prefer': 'return=minimal',
-          },
+          headers: { ...headers, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
           body: JSON.stringify({
             nombre, apellido, telefono, universidad,
             experiencia, direccion,
             ciudad: barrio ? `${ciudad} - ${barrio}` : ciudad,
             departamento,
-            area_derecho: areasDerecho.join(', '),
+            // Reusamos la columna area_derecho para almacenar especialidades
+            area_derecho: especialidades.join(', '),
             descripcion, foto_url: fotoUrl, video_url: videoUrl,
             tarjeta_archivo_url: tarjetaArchivoUrl
-              ? tarjetaArchivoUrl.split('?')[0]   // strip cache-buster
+              ? tarjetaArchivoUrl.split('?')[0]
               : null,
             instagram, linkedin, facebook, twitter, whatsapp, tiktok,
           }),
@@ -299,10 +276,7 @@ export default function ProfilePage() {
       const headers = await getAuthHeaders()
       await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/profiles?id=eq.${user.id}`,
-        {
-          method: 'DELETE',
-          headers,
-        }
+        { method: 'DELETE', headers }
       )
       await signOut()
       navigate('/')
@@ -319,7 +293,7 @@ export default function ProfilePage() {
         {/* Header */}
         <div className={styles.header}>
           <button className={styles.backBtn} onClick={() => navigate('/')}>← Volver</button>
-          <h1 className={styles.pageTitle}>Mi <em>Perfil</em></h1>
+          <h1 className={styles.pageTitle}>Mi Perfil — <em>Contador</em></h1>
           <span className={styles.status}>
             {profile?.aprobado ? '✦ Aprobado — visible en la página' : '◌ Pendiente de aprobación'}
           </span>
@@ -346,7 +320,6 @@ export default function ProfilePage() {
             <p className={styles.photoHint}>JPG, PNG — máx. 5 MB</p>
           </div>
 
-          {/* Grid de campos */}
           <div className={styles.fieldsGrid}>
 
             <div className={styles.field}>
@@ -384,21 +357,21 @@ export default function ProfilePage() {
 
             <div className={`${styles.field} ${styles.fullWidth}`}>
               <label className={styles.label}>
-                Áreas de derecho
+                Especialidades
                 <span className={styles.optional}>(puedes seleccionar varias)</span>
               </label>
               <div className={styles.checkboxGrid}>
-                {AREAS_DERECHO.map(area => (
+                {ESPECIALIDADES_CONTADURIA.map(area => (
                   <label key={area} className={styles.checkboxLabel}>
                     <input
                       type="checkbox"
                       className={styles.checkbox}
-                      checked={areasDerecho.includes(area)}
+                      checked={especialidades.includes(area)}
                       onChange={e => {
                         if (e.target.checked) {
-                          setAreasDerecho(prev => [...prev, area])
+                          setEspecialidades(prev => [...prev, area])
                         } else {
-                          setAreasDerecho(prev => prev.filter(a => a !== area))
+                          setEspecialidades(prev => prev.filter(a => a !== area))
                         }
                       }}
                     />
@@ -406,9 +379,9 @@ export default function ProfilePage() {
                   </label>
                 ))}
               </div>
-              {areasDerecho.length > 0 && (
+              {especialidades.length > 0 && (
                 <p className={styles.selectedAreas}>
-                  Seleccionadas: <strong>{areasDerecho.join(' · ')}</strong>
+                  Seleccionadas: <strong>{especialidades.join(' · ')}</strong>
                 </p>
               )}
             </div>
@@ -417,15 +390,9 @@ export default function ProfilePage() {
               departamento={departamento}
               municipio={ciudad}
               barrio={barrio}
-              classes={{
-                field: styles.field,
-                label: styles.label,
-                select: styles.input,
-              }}
+              classes={{ field: styles.field, label: styles.label, select: styles.input }}
               onChange={({ departamento: d, municipio, barrio: b }) => {
-                setDepartamento(d)
-                setCiudad(municipio)
-                setBarrio(b)
+                setDepartamento(d); setCiudad(municipio); setBarrio(b)
               }}
             />
             <div className={styles.field}>
@@ -433,7 +400,7 @@ export default function ProfilePage() {
               <input type="text" className={styles.input} placeholder="Calle 123 # 45-67, Of. 101" value={direccion} onChange={e => setDireccion(e.target.value)} />
             </div>
 
-            {/* ── Descripción ── */}
+            {/* Descripción */}
             <div className={`${styles.field} ${styles.fullWidth}`}>
               <label className={styles.label}>
                 Perfil profesional <span className={styles.required}>*</span>
@@ -449,7 +416,7 @@ export default function ProfilePage() {
               />
             </div>
 
-            {/* ── Redes sociales ── */}
+            {/* Redes */}
             <div className={`${styles.field} ${styles.fullWidth}`}>
               <label className={styles.label}>Redes sociales</label>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 10 }}>
@@ -468,7 +435,7 @@ export default function ProfilePage() {
               </div>
             </div>
 
-            {/* ── Video ── */}
+            {/* Video */}
             <div className={`${styles.field} ${styles.fullWidth}`}>
               <label className={styles.label}>
                 Video de presentación
@@ -481,7 +448,7 @@ export default function ProfilePage() {
               <input ref={videoInputRef} type="file" accept="video/*" style={{ display: 'none' }} onChange={handleVideoChange} />
             </div>
 
-            {/* ── Tarjeta profesional (archivo) ── */}
+            {/* Tarjeta profesional (archivo) */}
             <div className={`${styles.field} ${styles.fullWidth}`}>
               <label className={styles.label}>
                 Tarjeta profesional
@@ -549,13 +516,13 @@ export default function ProfilePage() {
               Consultas de <em>clientes</em>
             </h2>
             <p className={styles.sectionSub}>
-              Aquí aparecen los chats de clientes asignados a tu área.
+              Aquí aparecen los chats de clientes asignados a tu especialidad.
             </p>
           </div>
-          <LawyerChatDashboard lawyerId={user?.id} />
+          <ContadorChatDashboard contadorId={user?.id} />
         </div>
 
-        {/* ── Chat interno con el administrador ── */}
+        {/* Canal interno con el administrador (sí aplica al contador) */}
         <div className={styles.sectionBlock}>
           <div className={styles.sectionHeader}>
             <h2 className={styles.sectionTitle}>
@@ -568,7 +535,7 @@ export default function ProfilePage() {
           <LawyerInternalChat miId={user?.id} />
         </div>
 
-        {/* ── Mis Contratos ── */}
+        {/* Mis Contratos (storage genérico, también aplica) */}
         <div className={styles.sectionBlock}>
           <div className={styles.contractsWrap}>
             <MisContratos abogadoId={user?.id} isSuperAdmin={false} />

@@ -93,7 +93,12 @@ export default function LawyerCard({ lawyer, delay = 0, isSuperAdmin = false }) 
               ))}
             </p>
           )}
-          <h3 className={styles.name}>{lawyer.nombre} {lawyer.apellido}</h3>
+          <h3 className={styles.name}>
+            {lawyer.nombre} {lawyer.apellido}
+            <span className={`${styles.rolPill} ${lawyer.rol === 'contador' ? styles.rolPillContador : styles.rolPillAbogado}`}>
+              {lawyer.rol === 'contador' ? 'Contador' : 'Abogado'}
+            </span>
+          </h3>
           {(lawyer.ciudad || lawyer.departamento) && (
             <p className={styles.location}>
               {[lawyer.ciudad, lawyer.departamento].filter(Boolean).join(', ')}
@@ -144,7 +149,12 @@ export default function LawyerCard({ lawyer, delay = 0, isSuperAdmin = false }) 
                     ))}
                   </p>
                 )}
-                <h2 className={styles.modalName}>{lawyer.nombre} {lawyer.apellido}</h2>
+                <h2 className={styles.modalName}>
+                  {lawyer.nombre} {lawyer.apellido}
+                  <span className={`${styles.rolPill} ${lawyer.rol === 'contador' ? styles.rolPillContador : styles.rolPillAbogado}`}>
+                    {lawyer.rol === 'contador' ? 'Contador' : 'Abogado'}
+                  </span>
+                </h2>
                 {(lawyer.ciudad || lawyer.departamento) && (
                   <p className={styles.modalLocation}>
                     {[lawyer.ciudad, lawyer.departamento].filter(Boolean).join(', ')}
@@ -190,17 +200,21 @@ export default function LawyerCard({ lawyer, delay = 0, isSuperAdmin = false }) 
               <InfoRow icon={<svg viewBox="0 0 24 24" fill="none" stroke="var(--gold)" strokeWidth="1.5" width="18" height="18"><rect x="2" y="3" width="20" height="18" rx="2"/><path d="M2 8h20M8 3v5"/></svg>} label="Tarjeta profesional" value={lawyer.tarjeta_profesional} />
             </div>
 
-            {/* CTA WhatsApp */}
-            {lawyer.telefono && (
-              <a
-                href="https://wa.me/573108886571"
-                target="_blank"
-                rel="noopener noreferrer"
-                className={styles.modalCta}
-              >
-                Contactar por WhatsApp
-              </a>
-            )}
+            {/* CTA — lleva a la sección de consulta privada */}
+            <button
+              type="button"
+              className={styles.modalCta}
+              onClick={() => {
+                setOpen(false)
+                // pequeño delay para que el modal se desmonte antes del scroll
+                setTimeout(() => {
+                  const el = document.getElementById('chat')
+                  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                }, 120)
+              }}
+            >
+              INICIAR CONSULTA
+            </button>
           </div>
         </div>
       )}
