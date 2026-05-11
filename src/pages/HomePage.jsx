@@ -1,17 +1,17 @@
-import Navbar from '../components/Navbar'
-import Hero from '../components/Hero'
-import LawyersSection from '../components/LawyersSection'
-import CTASection from '../components/CTASection'
-import MapSection from '../components/MapSection'
-import ChatSection from '../components/ChatSection'
-import Footer from '../components/Footer'
-import WhatsAppButton from '../components/WhatsAppButton'
-import AuthModal from '../components/AuthModal'
-import RegisterContadorModal from '../components/RegisterContadorModal'
+import Navbar from '../components/layout/Navbar'
+import Hero from '../components/home/Hero'
+import LawyersSection from '../components/home/LawyersSection'
+import CTASection from '../components/home/CTASection'
+import MapSection from '../components/home/MapSection'
+import ChatSection from '../components/chat/ChatSection'
+import Footer from '../components/layout/Footer'
+import WhatsAppButton from '../components/home/WhatsAppButton'
+import AuthModal from '../components/auth/AuthModal'
+import RegisterContadorModal from '../components/auth/RegisterContadorModal'
 import { useState } from 'react'
 import { useAuth } from '../context/AuthContext'
-import VideoCarousel from '../components/VideoCarousel'
-import ModelosContractualesSection from '../components/ModelosContractualesSection'
+import VideoCarousel from '../components/home/VideoCarousel'
+import ModelosContractualesSection from '../components/home/ModelosContractualesSection'
 
 
 export default function HomePage() {
@@ -41,7 +41,7 @@ export default function HomePage() {
       <ModelosContractualesSection />
       <MapSection />
       <Footer />
-      <WhatsAppButton phone="573108886571" />
+      <WhatsAppButton phone="573124086734" />
       {modal && <AuthModal initialTab={modal} onClose={() => setModal(null)} />}
       {contadorOpen && <RegisterContadorModal onClose={() => setContadorOpen(false)} />}
     </>

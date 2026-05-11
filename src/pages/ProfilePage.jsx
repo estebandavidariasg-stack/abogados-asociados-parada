@@ -3,10 +3,10 @@ import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import { useNavigate } from 'react-router-dom'
 import styles from './ProfilePage.module.css'
-import LawyerChatDashboard from '../components/LawyerChatDashboard'
-import MisContratos from '../components/MisContratos'
-import LawyerInternalChat from '../components/LawyerInternalChat'
-import UbicacionSelector from '../components/UbicacionSelector'
+import LawyerChatDashboard from '../components/chat/LawyerChatDashboard'
+import MisContratos from '../components/profile/MisContratos'
+import LawyerInternalChat from '../components/chat/LawyerInternalChat'
+import UbicacionSelector from '../components/profile/UbicacionSelector'
 import { getAuthHeaders } from '../lib/supabase'
 
 const UNIVERSIDADES = [
@@ -93,6 +93,7 @@ export default function ProfilePage() {
   const [uploadingFoto, setUploadingFoto]   = useState(false)
   const [uploadingVideo, setUploadingVideo] = useState(false)
   const [tarjetaArchivoUrl, setTarjetaArchivoUrl] = useState(null)
+  const [tarjetaDisplayUrl, setTarjetaDisplayUrl] = useState(null)
   const [uploadingTarjeta, setUploadingTarjeta]   = useState(false)
   const [departamento, setDepartamento]     = useState('')
   const [barrio, setBarrio]                 = useState('')
@@ -147,6 +148,28 @@ export default function ProfilePage() {
       setTiktok(profile.tiktok       || '')
     }
   }, [user, profile, loading, navigate])
+
+  /* ── Resolver de URL de visualización para la tarjeta profesional ────────
+     El bucket `tarjetas-profesionales` debe ser PRIVADO (datos sensibles).
+     `tarjeta_archivo_url` puede contener:
+       · Un path como "<userId>/tarjeta.pdf"  → genera signed URL (1 h)
+       · Una URL legacy completa (https://…)  → úsala tal cual (compat hacia
+         atrás con perfiles que se guardaron antes del fix de seguridad). */
+  useEffect(() => {
+    if (!tarjetaArchivoUrl) { setTarjetaDisplayUrl(null); return }
+    if (/^https?:\/\//.test(tarjetaArchivoUrl)) {
+      setTarjetaDisplayUrl(tarjetaArchivoUrl)
+      return
+    }
+    let cancelled = false
+    ;(async () => {
+      const { data } = await supabase.storage
+        .from('tarjetas-profesionales')
+        .createSignedUrl(tarjetaArchivoUrl, 3600)
+      if (!cancelled && data?.signedUrl) setTarjetaDisplayUrl(data.signedUrl)
+    })()
+    return () => { cancelled = true }
+  }, [tarjetaArchivoUrl])
 
   async function handleFotoChange(e) {
     const file = e.target.files[0]
@@ -241,8 +264,11 @@ export default function ProfilePage() {
         }
       )
       if (!res.ok) throw new Error('Error subiendo tarjeta')
-      // cache-buster para forzar re-fetch tras upsert
-      setTarjetaArchivoUrl(`${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/tarjetas-profesionales/${path}?t=${Date.now()}`)
+      // Guardamos sólo el path. El useEffect de resolución lo convertirá en
+      // signed URL para visualización. Antes guardábamos la URL pública del
+      // bucket (con cache-buster), pero el bucket pasó a privado por
+      // contener datos sensibles (cédula, foto del profesional).
+      setTarjetaArchivoUrl(path)
       setMsg('Tarjeta profesional subida correctamente')
     } catch (err) {
       setError('Error subiendo la tarjeta: ' + err.message)
@@ -273,9 +299,7 @@ export default function ProfilePage() {
             departamento,
             area_derecho: areasDerecho.join(', '),
             descripcion, foto_url: fotoUrl, video_url: videoUrl,
-            tarjeta_archivo_url: tarjetaArchivoUrl
-              ? tarjetaArchivoUrl.split('?')[0]   // strip cache-buster
-              : null,
+            tarjeta_archivo_url: tarjetaArchivoUrl || null,
             instagram, linkedin, facebook, twitter, whatsapp, tiktok,
           }),
         }
@@ -489,14 +513,18 @@ export default function ProfilePage() {
               </label>
               {tarjetaArchivoUrl && (
                 <p style={{ margin: '0 0 8px', fontSize: '0.82rem' }}>
-                  <a
-                    href={tarjetaArchivoUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={{ color: 'var(--gold-dk, #8a6a28)', fontWeight: 600, textDecoration: 'underline' }}
-                  >
-                    Ver archivo cargado ↗
-                  </a>
+                  {tarjetaDisplayUrl ? (
+                    <a
+                      href={tarjetaDisplayUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ color: 'var(--gold-dk, #8a6a28)', fontWeight: 600, textDecoration: 'underline' }}
+                    >
+                      Ver archivo cargado ↗
+                    </a>
+                  ) : (
+                    <span style={{ color: '#888' }}>Generando enlace seguro…</span>
+                  )}
                 </p>
               )}
               <button

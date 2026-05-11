@@ -1,0 +1,608 @@
+/* ── BASE ─────────────────────────────────────────────── */
+.section {
+  position: relative;
+  padding: 6rem 0 5rem;
+  background: var(--ivory);
+  overflow: hidden;
+  --slide-gap: 460px;
+}
+
+.bg {
+  display: none;
+}
+
+/* ── ENCABEZADO ───────────────────────────────────────── */
+.header {
+  text-align: center;
+  margin-bottom: 4rem;
+  padding: 0 2rem;
+  position: relative;
+  z-index: 2;
+}
+
+.eyebrow {
+  display: block;
+  font-family: 'Raleway', sans-serif;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.35em;
+  text-transform: uppercase;
+  color: var(--navy-md);
+  margin-bottom: 1rem;
+}
+
+.title {
+  font-family: 'Cormorant Garamond', serif;
+  font-style: italic;
+  font-size: clamp(2rem, 4vw, 3.2rem);
+  font-weight: 300;
+  color: var(--navy);
+  margin-bottom: 1rem;
+  line-height: 1.15;
+}
+
+.title em {
+  font-style: italic;
+  color: var(--gold);
+}
+
+.subtitle {
+  font-family: 'Raleway', sans-serif;
+  font-size: 0.85rem;
+  font-weight: 300;
+  color: var(--muted);
+  max-width: 480px;
+  margin: 0 auto;
+  line-height: 1.9;
+  letter-spacing: 0.03em;
+}
+
+/* ── FAB SUPERADMIN ───────────────────────────────────── */
+.fab {
+  position: absolute;
+  top: 2rem;
+  right: 2rem;
+  z-index: 50;
+  background: var(--navy);
+  color: #ffffff;
+  border: none;
+  border-radius: 30px;
+  padding: 10px 22px;
+  font-weight: 700;
+  font-size: 0.82rem;
+  cursor: pointer;
+  letter-spacing: 0.5px;
+  box-shadow: 0 4px 20px rgba(13,45,94,0.25);
+  transition: transform 0.2s, box-shadow 0.2s;
+  font-family: inherit;
+}
+.fab:hover {
+  transform: scale(1.05);
+  box-shadow: 0 6px 28px rgba(13,45,94,0.4);
+}
+
+/* ── TOOLBAR ──────────────────────────────────────────── */
+.toolbar {
+  position: absolute;
+  top: 2rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 50;
+  display: flex;
+  gap: 10px;
+}
+
+.toolAdd, .toolSave, .toolCancel {
+  padding: 9px 20px;
+  border: none;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.2s;
+}
+
+.toolAdd {
+  background: rgba(13,45,94,0.08);
+  color: var(--navy);
+  border: 1px solid rgba(13,45,94,0.2);
+}
+.toolAdd:hover { background: rgba(13,45,94,0.14); }
+
+.toolSave {
+  background: var(--gold);
+  color: var(--navy);
+}
+.toolSave:hover { opacity: 0.9; }
+.toolSave:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.toolCancel {
+  background: rgba(13,45,94,0.05);
+  color: var(--muted);
+  border: 1px solid rgba(13,45,94,0.12);
+}
+.toolCancel:hover { background: rgba(13,45,94,0.1); }
+
+/* ── SAVING OVERLAY ───────────────────────────────────── */
+.savingOverlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(250,247,242,0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+  color: var(--navy);
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+/* ── FILMSTRIP ────────────────────────────────────────── */
+.filmstrip {
+  position: relative;
+  width: 100%;
+  height: 65vh;
+  min-height: 420px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ── SLIDE ── */
+.slide {
+  position: absolute;
+  border-radius: 0;
+  overflow: hidden;
+  transition:
+    transform 0.7s cubic-bezier(0.4, 0, 0.2, 1),
+    opacity   0.7s ease,
+    filter    0.7s ease;
+  will-change: transform, opacity;
+}
+
+.slideActive {
+  box-shadow:
+    0 0 0 1px rgba(13,45,94,0.4),
+    0 0 0 5px rgba(13,45,94,0.08),
+    0 30px 80px rgba(13,45,94,0.25);
+}
+
+.video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  border-radius: 0;
+  background: var(--surface);
+}
+
+.videoActive { box-shadow: none; }
+
+.emptySlide {
+  width: 100%;
+  height: 100%;
+  background: rgba(13,45,94,0.04);
+  border: 1px dashed rgba(13,45,94,0.2);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+/* ── OVERLAY PLAY ─────────────────────────────────────── */
+.playOverlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  background: rgba(13,45,94,0.15);
+}
+
+.playIcon {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: rgba(201,168,76,0.2);
+  border: 1px solid rgba(201,168,76,0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--gold-dk);
+  font-size: 1rem;
+}
+
+/* ── OVERLAY EDICIÓN ──────────────────────────────────── */
+.editOverlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(13,45,94,0.55);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  cursor: pointer;
+  border-radius: 6px;
+  z-index: 5;
+  transition: background 0.3s;
+}
+.editOverlay:hover { background: rgba(13,45,94,0.72); }
+
+.editIcon {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background: rgba(201,168,76,0.2);
+  border: 2px solid var(--gold);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.4rem;
+}
+
+.editText {
+  color: #fff;
+  font-size: 0.78rem;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+}
+
+/* ── BOTÓN ELIMINAR ───────────────────────────────────── */
+.removeBtn {
+  position: absolute;
+  top: -10px;
+  right: -10px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: rgba(200,50,50,0.85);
+  color: #fff;
+  border: none;
+  font-size: 0.7rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 20;
+  transition: background 0.2s;
+}
+.removeBtn:hover { background: rgb(200,50,50); }
+
+/* ── EMPTY STATE ──────────────────────────────────────── */
+.emptyState {
+  text-align: center;
+  padding: 4rem 2rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+/* ── DOTS ─────────────────────────────────────────────── */
+.dots {
+  display: flex;
+  justify-content: center;
+  gap: 0.75rem;
+  margin-top: 2.5rem;
+  position: relative;
+  z-index: 20;
+}
+
+.dot {
+  width: 28px;
+  height: 2px;
+  background: rgba(13,45,94,0.18);
+  border: none;
+  cursor: pointer;
+  transition: background 0.4s, width 0.4s;
+  padding: 0;
+}
+
+.dotActive {
+  background: var(--gold);
+  width: 48px;
+}
+
+/* ── RESPONSIVE ───────────────────────────────────────── */
+@media (max-width: 1200px) { .section { --slide-gap: 360px; } }
+@media (max-width: 1024px) { .section { --slide-gap: 290px; } }
+@media (max-width: 768px) {
+  .section   { --slide-gap: 230px; padding: 4rem 0 3.5rem; }
+  .filmstrip { height: 75vh; min-height: 400px; }
+}
+@media (max-width: 480px) {
+  .section   { --slide-gap: 185px; }
+  .filmstrip { height: 72vh; min-height: 360px; }
+}
+
+/* ═══════════════════════════════════════════════════
+   AGREGAR ESTOS ESTILOS AL FINAL DE VideoCarousel.module.css
+   (No reemplaza el archivo completo, solo agregar al final)
+═══════════════════════════════════════════════════ */
+
+/* ── Contenedor de controles ── */
+.controls {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  /* Mostrar cursor normal sobre los controles */
+  cursor: default;
+}
+
+.controlsVisible {
+  opacity: 1;
+}
+
+/* Gradiente oscuro en la parte inferior */
+.controlsGradient {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to top,
+    rgba(0, 0, 0, 0.85) 0%,
+    rgba(0, 0, 0, 0.35) 40%,
+    transparent 70%
+  );
+  pointer-events: none;
+  border-radius: inherit;
+}
+
+/* Contenido real de los controles */
+.controlsInner {
+  position: relative;
+  z-index: 1;
+  padding: 0 12px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* ── Barra de progreso ── */
+.progressBar {
+  position: relative;
+  height: 18px; /* área clickeable amplia */
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+.progressBg,
+.progressBuffered,
+.progressFill {
+  position: absolute;
+  left: 0;
+  height: 4px;
+  border-radius: 2px;
+  transition: height 0.15s ease;
+}
+
+.progressBar:hover .progressBg,
+.progressBar:hover .progressBuffered,
+.progressBar:hover .progressFill {
+  height: 6px;
+}
+
+.progressBg {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.progressBuffered {
+  background: rgba(255, 255, 255, 0.4);
+  max-width: 100%;
+}
+
+.progressFill {
+  background: #c9a84c; /* gold AAP */
+  max-width: 100%;
+}
+
+.progressThumb {
+  position: absolute;
+  width: 13px;
+  height: 13px;
+  background: #c9a84c;
+  border-radius: 50%;
+  transform: translate(-50%, -50%) scale(0);
+  top: 50%;
+  transition: transform 0.15s ease;
+  pointer-events: none;
+  box-shadow: 0 0 4px rgba(0,0,0,0.5);
+}
+
+.progressBar:hover .progressThumb {
+  transform: translate(-50%, -50%) scale(1);
+}
+
+/* ── Fila de botones ── */
+.controlsRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+}
+
+.controlsLeft,
+.controlsRight {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+/* ── Botones individuales ── */
+.ctrlBtn {
+  background: none;
+  border: none;
+  color: #ffffff;
+  padding: 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s ease, color 0.15s ease;
+  line-height: 1;
+}
+
+.ctrlBtn:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: #c9a84c;
+}
+
+.ctrlBtn:active {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+/* ── Grupo de volumen ── */
+.volumeGroup {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.volumeSlider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 0;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.4);
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+  overflow: hidden;
+  opacity: 0;
+  transition: width 0.2s ease, opacity 0.2s ease;
+}
+
+.volumeGroup:hover .volumeSlider,
+.volumeSlider:focus {
+  width: 70px;
+  opacity: 1;
+}
+
+.volumeSlider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  background: #ffffff;
+  border-radius: 50%;
+  cursor: pointer;
+  box-shadow: -70px 0 0 70px #c9a84c; /* rellena el track a la izquierda */
+}
+
+.volumeSlider::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  background: #ffffff;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.volumeSlider::-moz-range-progress {
+  background: #c9a84c;
+  height: 4px;
+  border-radius: 2px;
+}
+
+/* ── Display de tiempo ── */
+.timeDisplay {
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 12px;
+  font-family: monospace;
+  white-space: nowrap;
+  padding: 0 4px;
+  user-select: none;
+}
+
+/* ── Responsive: móvil ── */
+@media (max-width: 600px) {
+  .controlsInner {
+    padding: 0 8px 8px;
+  }
+
+  .timeDisplay {
+    font-size: 11px;
+  }
+
+  .volumeGroup:hover .volumeSlider,
+  .volumeSlider:focus {
+    width: 50px;
+  }
+}
+
+/* ═══════════════════════════════════════════════════
+   FULLSCREEN
+   El slide se mete a fullscreen vía requestFullscreen() (no el <video>
+   directamente) para que los controles custom queden visibles. Pero
+   el slide tiene estilos inline (aspectRatio, width: min(65vw, 800px),
+   transform: scale/translate, opacity, filter) que recortan/encogen
+   el contenido en fullscreen. Aquí los reseteamos con !important, y
+   cambiamos object-fit del video de cover→contain para que se vea
+   completo con letterbox negro en lugar de zoom recortado.
+═══════════════════════════════════════════════════ */
+.slide:fullscreen {
+  width:        100vw !important;
+  height:       100vh !important;
+  max-width:    none  !important;
+  max-height:   none  !important;
+  aspect-ratio: auto  !important;
+  transform:    none  !important;
+  opacity:      1     !important;
+  filter:       none  !important;
+  box-shadow:   none  !important;
+  border-radius: 0    !important;
+  background:   #000;
+  display:      flex;
+  align-items:  center;
+  justify-content: center;
+  cursor:       default;
+}
+
+.slide:fullscreen .video {
+  width:      100% !important;
+  height:     100% !important;
+  object-fit: contain !important;   /* ← NO crop. Letterbox negro si la
+                                        ratio del video no coincide con
+                                        la del monitor. */
+  background: #000;
+  border-radius: 0 !important;
+}
+
+/* Mismas reglas para Safari < 16.4 (vendor prefix). Las separamos del
+   selector :fullscreen porque combinarlas en un solo rule list invalida
+   la regla entera en navegadores que no soportan el prefijo. */
+.slide:-webkit-full-screen {
+  width:        100vw !important;
+  height:       100vh !important;
+  max-width:    none  !important;
+  max-height:   none  !important;
+  aspect-ratio: auto  !important;
+  transform:    none  !important;
+  opacity:      1     !important;
+  filter:       none  !important;
+  box-shadow:   none  !important;
+  border-radius: 0    !important;
+  background:   #000;
+  display:      flex;
+  align-items:  center;
+  justify-content: center;
+  cursor:       default;
+}
+
+.slide:-webkit-full-screen .video {
+  width:      100% !important;
+  height:     100% !important;
+  object-fit: contain !important;
+  background: #000;
+  border-radius: 0 !important;
+}

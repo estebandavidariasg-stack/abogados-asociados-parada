@@ -8,7 +8,7 @@ const transporter = nodemailer.createTransport({
   },
 })
 
-const SITE_BASE = 'https://paradayasociados.co'
+const SITE_BASE = 'https://abogadosyasociadosparada.com'
 
 // CTA URL builder ──────────────────────────────────────────────────────────
 function buildCtaUrl(recipientRole, codigoReferencia) {
@@ -26,35 +26,46 @@ function buildCtaUrl(recipientRole, codigoReferencia) {
   }
 }
 
-// Email HTML template ──────────────────────────────────────────────────────
+// Email HTML template — alineado visualmente con send-verification-code.js
+// (tarjeta navy + acentos dorados, sin fondo full-bleed). El navy del header
+// (#0a1628) y el del cuerpo (#132237) son los mismos del correo del código
+// de verificación; mantener este pareo asegura branding consistente.
 function renderEmailHtml({ subjectLine, greetingHtml, bodyHtml, ctaLabel, ctaUrl }) {
   return `
-    <div style="margin:0;padding:40px 16px;background:#0a0a0a;font-family:Georgia,'Times New Roman',serif;">
-      <div style="max-width:600px;margin:0 auto;background:#111111;border-top:3px solid #c9a84c;padding:40px;">
-        <h1 style="margin:0 0 12px 0;font-family:Georgia,'Times New Roman',serif;color:#c9a84c;letter-spacing:2px;text-transform:uppercase;font-size:22px;text-align:center;font-weight:normal;">
-          Abogados y Asociados Parada
-        </h1>
-        <p style="margin:0 0 24px 0;color:#ffffff;font-size:18px;text-align:center;">
-          ${subjectLine}
-        </p>
-        <hr style="border:none;border-top:1px solid rgba(201,168,76,0.3);margin:0 0 24px 0;" />
-        <p style="margin:0 0 16px 0;color:#cccccc;font-size:15px;line-height:1.7;">
-          ${greetingHtml}
-        </p>
-        <div style="margin:0 0 28px 0;color:#cccccc;font-size:15px;line-height:1.7;">
-          ${bodyHtml}
-        </div>
-        <div style="text-align:center;margin:0 0 32px 0;">
-          <a href="${ctaUrl}" style="display:inline-block;background:#c9a84c;color:#0a0a0a;font-weight:bold;padding:14px 32px;border-radius:4px;text-transform:uppercase;letter-spacing:1px;text-decoration:none;font-size:14px;">
-            ${ctaLabel}
-          </a>
-        </div>
-        <hr style="border:none;border-top:1px solid rgba(201,168,76,0.3);margin:0 0 20px 0;" />
-        <p style="margin:0;color:#555555;font-size:12px;text-align:center;line-height:1.5;">
-          Este correo fue generado automáticamente por el sistema de Abogados y Asociados Parada. No responda a este mensaje.
-        </p>
+<div style="margin:0;padding:24px 16px;font-family:Georgia,'Times New Roman',serif;">
+  <div style="max-width:560px;margin:0 auto;background-color:#132237;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(13,27,42,0.18);">
+
+    <div style="background-color:#0a1628;padding:28px 24px;text-align:center;">
+      <div style="color:#c9a84c;font-size:18px;letter-spacing:3px;text-transform:uppercase;font-weight:bold;">
+        Abogados y Asociados Parada
+      </div>
+      <div style="color:#ffffff;font-size:13px;margin-top:6px;">
+        ${subjectLine}
       </div>
     </div>
+
+    <div style="padding:32px 24px;">
+      <p style="margin:0 0 16px;color:#ffffff;font-size:15px;line-height:1.7;">
+        ${greetingHtml}
+      </p>
+      <div style="margin:0 0 28px;color:#ffffff;font-size:15px;line-height:1.7;">
+        ${bodyHtml}
+      </div>
+      <div style="text-align:center;">
+        <a href="${ctaUrl}" style="display:inline-block;background-color:#c9a84c;color:#0a1628;font-weight:bold;padding:14px 32px;border-radius:8px;text-transform:uppercase;letter-spacing:1px;text-decoration:none;font-size:14px;font-family:Georgia,'Times New Roman',serif;">
+          ${ctaLabel}
+        </a>
+      </div>
+    </div>
+
+    <div style="border-top:1px solid rgba(201,168,76,0.3);margin:0 24px;"></div>
+
+    <div style="color:#ffffff;opacity:0.65;font-size:11px;text-align:center;padding:20px 24px;line-height:1.6;">
+      Este correo fue generado automáticamente por Abogados y Asociados Parada.
+      No responda a este mensaje.
+    </div>
+  </div>
+</div>
   `
 }
 
@@ -65,7 +76,7 @@ function emailAbogado({ nombreAbogado, nombreCliente, area, ctaUrl }) {
     html: renderEmailHtml({
       subjectLine,
       greetingHtml: `Estimado/a <strong style="color:#c9a84c;">${nombreAbogado}</strong>,`,
-      bodyHtml: `Tienes una nueva consulta pendiente por parte de <strong style="color:#ffffff;">${nombreCliente}</strong> en el área de <strong style="color:#ffffff;">${area}</strong>. Ingresa a la plataforma para atenderla a la brevedad posible.`,
+      bodyHtml: `Tienes una nueva consulta pendiente por parte de <strong style="color:#c9a84c;">${nombreCliente}</strong> en el área de <strong style="color:#c9a84c;">${area}</strong>. Ingresa a la plataforma para atenderla a la brevedad posible.`,
       ctaLabel: 'Ver consulta',
       ctaUrl,
     }),
@@ -79,7 +90,7 @@ function emailCliente({ nombreCliente, nombreAbogado, area, ctaUrl }) {
     html: renderEmailHtml({
       subjectLine,
       greetingHtml: `Estimado/a <strong style="color:#c9a84c;">${nombreCliente}</strong>,`,
-      bodyHtml: `Tu consulta en el área de <strong style="color:#ffffff;">${area}</strong> ha sido recibida. El abogado/a <strong style="color:#ffffff;">${nombreAbogado}</strong> se ha unido y está listo para atenderte. Ingresa a la plataforma para continuar con tu consulta.`,
+      bodyHtml: `Tu consulta en el área de <strong style="color:#c9a84c;">${area}</strong> ha sido recibida. El abogado/a <strong style="color:#c9a84c;">${nombreAbogado}</strong> se ha unido y está listo para atenderte. Ingresa a la plataforma para continuar con tu consulta.`,
       ctaLabel: 'Ir al chat',
       ctaUrl,
     }),

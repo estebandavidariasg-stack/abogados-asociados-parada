@@ -2,7 +2,7 @@ import { Routes, Route } from 'react-router-dom'
 import HomePage from './pages/HomePage'
 import ProfilePage from './pages/ProfilePage'
 import ProfileContadorPage from './pages/ProfileContadorPage'
-import AdminPage from './pages/admin/AdminPage'
+import AdminPage from './pages/AdminPage'
 import ResetPasswordPage from './pages/ResetPasswordPage'
 
 

@@ -5,10 +5,10 @@ import { useNavigate } from 'react-router-dom'
 // idénticos, solo cambian los datos. Importar un .module.css desde otro
 // componente NO lo modifica; las clases siguen siendo scoped al archivo.
 import styles from './ProfilePage.module.css'
-import MisContratos from '../components/MisContratos'
-import LawyerInternalChat from '../components/LawyerInternalChat'
-import ContadorChatDashboard from '../components/ContadorChatDashboard'
-import UbicacionSelector from '../components/UbicacionSelector'
+import MisContratos from '../components/profile/MisContratos'
+import LawyerInternalChat from '../components/chat/LawyerInternalChat'
+import ContadorChatDashboard from '../components/chat/ContadorChatDashboard'
+import UbicacionSelector from '../components/profile/UbicacionSelector'
 import { getAuthHeaders } from '../lib/supabase'
 
 const UNIVERSIDADES = [
@@ -99,6 +99,7 @@ export default function ProfileContadorPage() {
   const [uploadingFoto, setUploadingFoto]   = useState(false)
   const [uploadingVideo, setUploadingVideo] = useState(false)
   const [tarjetaArchivoUrl, setTarjetaArchivoUrl] = useState(null)
+  const [tarjetaDisplayUrl, setTarjetaDisplayUrl] = useState(null)
   const [uploadingTarjeta, setUploadingTarjeta]   = useState(false)
   const [departamento, setDepartamento]     = useState('')
   const [barrio, setBarrio]                 = useState('')
@@ -153,6 +154,26 @@ export default function ProfileContadorPage() {
       setTiktok(profile.tiktok       || '')
     }
   }, [user, profile, loading, navigate])
+
+  /* ── Resolver de URL de visualización para la tarjeta profesional ────────
+     Bucket `tarjetas-profesionales` privado por datos sensibles. El campo
+     puede contener un path nuevo o una URL pública legacy — manejamos ambos
+     casos para no romper perfiles antiguos durante la migración. */
+  useEffect(() => {
+    if (!tarjetaArchivoUrl) { setTarjetaDisplayUrl(null); return }
+    if (/^https?:\/\//.test(tarjetaArchivoUrl)) {
+      setTarjetaDisplayUrl(tarjetaArchivoUrl)
+      return
+    }
+    let cancelled = false
+    ;(async () => {
+      const { data } = await supabase.storage
+        .from('tarjetas-profesionales')
+        .createSignedUrl(tarjetaArchivoUrl, 3600)
+      if (!cancelled && data?.signedUrl) setTarjetaDisplayUrl(data.signedUrl)
+    })()
+    return () => { cancelled = true }
+  }, [tarjetaArchivoUrl])
 
   async function handleFotoChange(e) {
     const file = e.target.files[0]
@@ -222,7 +243,9 @@ export default function ProfileContadorPage() {
         { method: 'POST', headers: { ...headers, 'Content-Type': file.type, 'x-upsert': 'true' }, body: file }
       )
       if (!res.ok) throw new Error('Error subiendo tarjeta')
-      setTarjetaArchivoUrl(`${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/tarjetas-profesionales/${path}?t=${Date.now()}`)
+      // Guardamos sólo el path; el resolver useEffect lo convierte en
+      // signed URL para visualización. Bucket privado por datos sensibles.
+      setTarjetaArchivoUrl(path)
       setMsg('Tarjeta profesional subida correctamente')
     } catch (err) {
       setError('Error subiendo la tarjeta: ' + err.message)
@@ -250,9 +273,7 @@ export default function ProfileContadorPage() {
             // Reusamos la columna area_derecho para almacenar especialidades
             area_derecho: especialidades.join(', '),
             descripcion, foto_url: fotoUrl, video_url: videoUrl,
-            tarjeta_archivo_url: tarjetaArchivoUrl
-              ? tarjetaArchivoUrl.split('?')[0]
-              : null,
+            tarjeta_archivo_url: tarjetaArchivoUrl || null,
             instagram, linkedin, facebook, twitter, whatsapp, tiktok,
           }),
         }
@@ -456,14 +477,18 @@ export default function ProfileContadorPage() {
               </label>
               {tarjetaArchivoUrl && (
                 <p style={{ margin: '0 0 8px', fontSize: '0.82rem' }}>
-                  <a
-                    href={tarjetaArchivoUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={{ color: 'var(--gold-dk, #8a6a28)', fontWeight: 600, textDecoration: 'underline' }}
-                  >
-                    Ver archivo cargado ↗
-                  </a>
+                  {tarjetaDisplayUrl ? (
+                    <a
+                      href={tarjetaDisplayUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ color: 'var(--gold-dk, #8a6a28)', fontWeight: 600, textDecoration: 'underline' }}
+                    >
+                      Ver archivo cargado ↗
+                    </a>
+                  ) : (
+                    <span style={{ color: '#888' }}>Generando enlace seguro…</span>
+                  )}
                 </p>
               )}
               <button
