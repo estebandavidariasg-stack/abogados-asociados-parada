@@ -6,8 +6,8 @@ import { lqipHero }     from '../../lqip-hero'
 import styles from './Hero.module.css'
 import { IconPencil, IconCamera } from '../shared/Icons'
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
-const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || ''
+const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || ''
 
 // Las defaults ahora son una clave base ('/hero-1') y `deriveImgSources` arma
 // las 9 variantes (3 anchos × 3 formatos) generadas por scripts/optimize-hero.js.
@@ -75,7 +75,6 @@ export default function Hero() {
   const isSuperAdmin = profile?.rol === 'superadmin'
 
   const [slides, setSlides]       = useState(DEFAULT_SLIDES)
-  const [loading, setLoading]     = useState(true)        // mientras llega data de Supabase
   const [current, setCurrent]     = useState(0)
   const [editing, setEditing]     = useState(false)
   const [editSlides, setEditSlides] = useState([])
@@ -90,6 +89,7 @@ export default function Hero() {
   useEffect(() => { fetchSlides() }, [])
 
   async function fetchSlides() {
+    if (!SUPABASE_URL || !SUPABASE_KEY) return
     try {
       const res = await fetch(
         `${SUPABASE_URL}/rest/v1/carrusel?select=*&order=orden.asc&activo=eq.true`,
@@ -98,15 +98,14 @@ export default function Hero() {
       const data = await res.json()
       if (Array.isArray(data) && data.length > 0) setSlides(data)
     } catch { /* usa defaults */ }
-    finally { setLoading(false) }
   }
 
-  // Preload del primer slide (el que va con fetchpriority=high) en cuanto
-  // conocemos su URL — gana ~100-300 ms vs esperar al render del <img>.
+  // Performance: el hero ya pinta DEFAULT_SLIDES sin esperar Supabase. Este
+  // preload acelera la primera imagen real sin bloquear el render inicial.
   // Para defaults usamos imagesrcset/imagesizes para que el browser preload
   // SOLO el ancho que va a renderizar (480/800/1200 según viewport).
   useEffect(() => {
-    if (loading || !slides[0]?.imagen_url) return
+    if (!slides[0]?.imagen_url) return
     const s = deriveImgSources(slides[0].imagen_url)
     const link = document.createElement('link')
     link.rel  = 'preload'
@@ -118,7 +117,7 @@ export default function Hero() {
     link.fetchPriority = 'high'
     document.head.appendChild(link)
     return () => { try { document.head.removeChild(link) } catch {} }
-  }, [loading, slides])
+  }, [slides])
 
   /* ── Navegación ───────────────────────────────────── */
   const activeSlides = editing ? editSlides : slides
@@ -286,34 +285,20 @@ export default function Hero() {
 
       {/* ── Filmstrip ── */}
       <div className={styles.filmstrip}>
-        {loading && !editing && Array.from({ length: 5 }).map((_, i) => {
-          const offset    = i - 2  // skeleton centrado en el medio
-          const absOffset = Math.abs(offset)
-          const isActive  = offset === 0
-          return (
-            <div
-              key={`sk-${i}`}
-              className={`${styles.slide} ${styles.slideSkeleton}`}
-              aria-hidden="true"
-              style={{
-                transform: `translateX(calc(${offset} * var(--slide-gap))) scale(${isActive ? 1 : Math.max(0.65, 0.88 - absOffset * 0.1)})`,
-                opacity:   isActive ? 1 : Math.max(0.3, 0.72 - absOffset * 0.18),
-                zIndex:    isActive ? 10 : 10 - absOffset,
-              }}
-            />
-          )
-        })}
-        {!loading && activeSlides.map((slide, i) => {
+        {activeSlides.map((slide, i) => {
           const offset    = getOffset(i)
           const absOffset = Math.abs(offset)
           const isActive  = offset === 0
           const visible   = absOffset <= 3
+          // Performance: los slides lejanos conservan el LQIP de fondo, pero
+          // no descargan la imagen completa hasta acercarse al foco del carrusel.
+          const shouldLoadImage = editing || absOffset <= 1
           const s         = deriveImgSources(slide.imagen_url)
           const isLoaded  = !!imgLoaded[i]
 
           return (
             <div
-              key={i}
+              key={slide.id || `${slide.imagen_url}-${i}`}
               className={styles.slide}
               style={{
                 transform: `translateX(calc(${offset} * var(--slide-gap))) scale(${isActive ? 1 : Math.max(0.65, 0.88 - absOffset * 0.1)})`,
@@ -331,7 +316,7 @@ export default function Hero() {
               }}
               onClick={() => !isActive && setCurrent(i)}
             >
-              {(() => {
+              {shouldLoadImage ? (() => {
                 return (
                   <picture>
                     {s.isResponsive && (
@@ -351,8 +336,8 @@ export default function Hero() {
                       width="580"
                       height="740"
                       decoding="async"
-                      loading={i === 0 ? 'eager' : 'lazy'}
-                      fetchpriority={i === 0 ? 'high' : 'auto'}
+                      loading={isActive ? 'eager' : 'lazy'}
+                      fetchpriority={isActive ? 'high' : 'auto'}
                       onLoad={() => setImgLoaded(prev => prev[i] ? prev : { ...prev, [i]: true })}
                       style={{
                         opacity:    isLoaded ? 1 : 0,
@@ -361,7 +346,7 @@ export default function Hero() {
                     />
                   </picture>
                 )
-              })()}
+              })() : null}
 
               {/* Overlay edición — solo en slide activo */}
               {editing && isActive && (

@@ -1,5 +1,7 @@
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
-const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || ''
+const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || ''
+// En local puede no existir .env. Mantener valores vacios evita una pantalla
+// blanca por errores de inicializacion; las vistas usan datos por defecto.
 
 function getHeaders() {
   const token = localStorage.getItem('sb_token')
@@ -83,7 +85,9 @@ function buildQuery(table, cols = '*') {
 }
 
 // ── Realtime WebSocket ────────────────────────────────────────────────────
-const WS_URL = SUPABASE_URL.replace('https://', 'wss://').replace('http://', 'ws://')
+const WS_URL = SUPABASE_URL
+  ? SUPABASE_URL.replace('https://', 'wss://').replace('http://', 'ws://')
+  : ''
 
 class RealtimeChannel {
   constructor(name) {
@@ -123,6 +127,10 @@ class RealtimeChannel {
   }
 
   subscribe(statusCb) {
+    if (!WS_URL) {
+      if (statusCb) statusCb('CHANNEL_ERROR')
+      return this
+    }
     const token = localStorage.getItem('sb_token') || SUPABASE_KEY
     this.ws = new WebSocket(`${WS_URL}/realtime/v1/websocket?apikey=${SUPABASE_KEY}&vsn=1.0.0`)
     const hasBroadcast = Object.keys(this.bcHandlers).length > 0

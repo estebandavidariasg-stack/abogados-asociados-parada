@@ -838,7 +838,7 @@ export default function SuperAdminChatViewer() {
                       <div className={styles.ratingTop}>
                         {r.profiles?.foto_url && (
                           <img src={r.profiles.foto_url} alt={nombre}
-                            className={styles.ratingAvatar} />
+                            className={styles.ratingAvatar} width="40" height="40" loading="lazy" decoding="async" />
                         )}
                         <div>
                           <p className={styles.ratingLawyer}>{nombre}</p>

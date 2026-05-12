@@ -666,8 +666,15 @@ function RatingPanel({ roomId, onDone }) {
           return (
             <div key={l.id}>
               <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:10 }}>
-                <img src={l.foto_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(nombre)}&background=1a1a1a&color=c9a84c`}
-                  alt={nombre} style={{ width:40, height:40, borderRadius:'50%', objectFit:'cover', flexShrink:0 }} />
+                <img
+                  src={l.foto_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(nombre)}&background=1a1a1a&color=c9a84c`}
+                  alt={nombre}
+                  width="40"
+                  height="40"
+                  loading="lazy"
+                  decoding="async"
+                  style={{ width:40, height:40, borderRadius:'50%', objectFit:'cover', flexShrink:0 }}
+                />
                 <p style={{ color:'#ccc', fontWeight:600, fontSize:'0.9rem', margin:0 }}>{nombre}</p>
               </div>
               <StarRating value={ratings[l.id]||0} onChange={v => setRatings(r => ({ ...r, [l.id]: v }))} />
@@ -1190,7 +1197,7 @@ export default function ChatSection() {
                       const nombre = `${l.nombre||''} ${l.apellido||''}`.trim()
                       return (
                         <div key={l.id} className={`${sel ? styles.lawyerCardSelected : styles.lawyerCard} aap-card-lawyer`} data-selected={sel ? 'true' : 'false'} onClick={() => toggleLawyer(l.id)}>
-                          <img className={styles.lawyerAvatar} src={l.foto_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(nombre)}&background=1a1a1a&color=c9a84c`} alt={nombre} />
+                          <img className={styles.lawyerAvatar} src={l.foto_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(nombre)}&background=1a1a1a&color=c9a84c`} alt={nombre} width="48" height="48" loading="lazy" decoding="async" />
                           <div className={styles.lawyerInfo}>
                             <p className={sel ? styles.lawyerNameSelected : styles.lawyerName}>{nombre}</p>
                             <p className={styles.lawyerArea}>{l.area_derecho}</p>
@@ -1215,7 +1222,7 @@ export default function ChatSection() {
                       const nombre = `${l.nombre||''} ${l.apellido||''}`.trim()
                       return (
                         <div key={l.id} className={`${sel ? styles.lawyerCardSelected : styles.lawyerCard} aap-card-lawyer`} data-selected={sel ? 'true' : 'false'} onClick={() => toggleLawyer(l.id)}>
-                          <img className={styles.lawyerAvatar} src={l.foto_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(nombre)}&background=1a1a1a&color=c9a84c`} alt={nombre} />
+                          <img className={styles.lawyerAvatar} src={l.foto_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(nombre)}&background=1a1a1a&color=c9a84c`} alt={nombre} width="48" height="48" loading="lazy" decoding="async" />
                           <div className={styles.lawyerInfo}>
                             <p className={sel ? styles.lawyerNameSelected : styles.lawyerName}>{nombre}</p>
                             <p className={styles.lawyerArea}>{l.area_derecho}</p>

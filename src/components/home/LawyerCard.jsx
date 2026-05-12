@@ -77,7 +77,17 @@ export default function LawyerCard({ lawyer, delay = 0, isSuperAdmin = false }) 
       >
         <div className={styles.photoWrap}>
           {lawyer.foto_url
-            ? <img src={lawyer.foto_url} alt={lawyer.nombre} className={styles.photo} />
+            ? (
+              <img
+                src={lawyer.foto_url}
+                alt={lawyer.nombre}
+                className={styles.photo}
+                width="96"
+                height="96"
+                loading="lazy"
+                decoding="async"
+              />
+            )
             : <span className={styles.initials}>{initials}</span>
           }
           <div className={styles.photoGlow} />
@@ -135,7 +145,17 @@ export default function LawyerCard({ lawyer, delay = 0, isSuperAdmin = false }) 
             <div className={styles.modalHeader}>
               <div className={styles.modalPhotoWrap}>
                 {lawyer.foto_url
-                  ? <img src={lawyer.foto_url} alt={lawyer.nombre} className={styles.modalPhoto} />
+                  ? (
+                    <img
+                      src={lawyer.foto_url}
+                      alt={lawyer.nombre}
+                      className={styles.modalPhoto}
+                      width="84"
+                      height="84"
+                      loading="eager"
+                      decoding="async"
+                    />
+                  )
                   : <span className={styles.modalInitials}>{initials}</span>
                 }
               </div>
@@ -176,7 +196,7 @@ export default function LawyerCard({ lawyer, delay = 0, isSuperAdmin = false }) 
             {lawyer.video_url && (
               <div className={styles.modalSection}>
                 <h4 className={styles.modalSectionTitle}>Presentación</h4>
-                <video src={lawyer.video_url} controls className={styles.modalVideo} poster={lawyer.foto_url || undefined} />
+                <video src={lawyer.video_url} controls preload="metadata" className={styles.modalVideo} poster={lawyer.foto_url || undefined} />
               </div>
             )}
 

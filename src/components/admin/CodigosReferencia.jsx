@@ -359,6 +359,10 @@ export default function CodigosReferencia() {
                         src={getQRUrl(c.codigo, 400)}
                         alt={`QR ${c.codigo}`}
                         className={styles.qrImg}
+                        width="400"
+                        height="400"
+                        loading="lazy"
+                        decoding="async"
                       />
                     </div>
 

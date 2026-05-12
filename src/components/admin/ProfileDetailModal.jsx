@@ -125,7 +125,7 @@ export default function ProfileDetailModal({ profile, onClose }) {
         <div className={styles.modalHeader}>
           <div className={styles.modalPhotoWrap}>
             {profile.foto_url
-              ? <img src={profile.foto_url} alt={profile.nombre} className={styles.modalPhoto} />
+              ? <img src={profile.foto_url} alt={profile.nombre} className={styles.modalPhoto} width="84" height="84" loading="lazy" decoding="async" />
               : <span className={styles.modalInitials}>{initials}</span>}
           </div>
           <div className={styles.modalHeaderText}>
@@ -172,7 +172,7 @@ export default function ProfileDetailModal({ profile, onClose }) {
         {profile.video_url && (
           <div className={styles.modalSection}>
             <h4 className={styles.modalSectionTitle}>Presentación</h4>
-            <video src={profile.video_url} controls className={styles.modalVideo}
+            <video src={profile.video_url} controls preload="metadata" className={styles.modalVideo}
               poster={profile.foto_url || undefined} />
           </div>
         )}

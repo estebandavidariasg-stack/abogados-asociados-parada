@@ -54,8 +54,13 @@
   flex-shrink: 0;
 }
 
+.logoWrap picture {
+  display: flex;
+  align-items: center;
+}
+
 .logoImg {
-  height: 60px;   /* era 90px, muy grande para un favicon */
+  height: 60px;
   width: auto;
   object-fit: contain;
 }

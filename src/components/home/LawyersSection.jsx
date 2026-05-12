@@ -4,8 +4,8 @@ import LawyerCard from './LawyerCard'
 import styles from './LawyersSection.module.css'
 import { useAuth } from '../../context/AuthContext'
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
-const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || ''
+const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || ''
 
 export default function LawyersSection() {
   const sectionRef = useRef(null)
@@ -15,11 +15,34 @@ export default function LawyersSection() {
   const [areaDerecho, setAreaDerecho]   = useState('')
   const [departamento, setDepartamento] = useState('')
   const [ciudad, setCiudad]             = useState('')
+  const [shouldFetch, setShouldFetch]   = useState(false)
   const { profile }                     = useAuth()
   const isSuperAdmin                    = profile?.rol === 'superadmin'
 
+  // Performance: esta seccion esta debajo del hero, asi que diferimos perfiles
+  // y fotos remotas hasta que el usuario este cerca de verla.
+  useEffect(() => {
+    const el = sectionRef.current
+    if (!el) return
+    const observer = new IntersectionObserver(
+      entries => {
+        if (entries.some(entry => entry.isIntersecting)) {
+          setShouldFetch(true)
+          observer.disconnect()
+        }
+      },
+      { rootMargin: '450px 0px', threshold: 0.01 }
+    )
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
+
   // Fetch reactivo a la profesión seleccionada
   useEffect(() => {
+    if (!shouldFetch || !SUPABASE_URL || !SUPABASE_KEY) {
+      setLoading(false)
+      return
+    }
     let cancelled = false
     async function fetchLawyers() {
       setLoading(true)
@@ -62,7 +85,7 @@ export default function LawyersSection() {
     }
     fetchLawyers()
     return () => { cancelled = true }
-  }, [profesion])
+  }, [profesion, shouldFetch])
 
   // Al cambiar de profesión, resetear filtros secundarios
   function changeProfesion(p) {

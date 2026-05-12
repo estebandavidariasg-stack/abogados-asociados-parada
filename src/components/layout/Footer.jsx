@@ -29,7 +29,18 @@ export default function Footer() {
         {/* ── Columna 1: Logo + dirección ── */}
         <div className={styles.brand}>
           <a href="/" className={styles.logoWrap}>
-            <img src="/logo.png" alt="Abogados y Asociados Parada" className={styles.logoImg} />
+            <picture>
+              <source srcSet="/logo-nav.webp" type="image/webp" />
+              <img
+                src="/logo-nav.png"
+                alt="Abogados y Asociados Parada"
+                className={styles.logoImg}
+                width="96"
+                height="96"
+                loading="lazy"
+                decoding="async"
+              />
+            </picture>
           </a>
           <p className={styles.tagline}>Bufete jurídico comprometido con la excelencia y la defensa de sus derechos.</p>
           <div className={styles.address}>

@@ -33,7 +33,7 @@
       ]
     },
     {
-      "source": "/(favicon\\.png|logo\\.png)",
+      "source": "/(favicon\\.png|logo\\.png|logo-nav\\.(?:png|webp))",
       "headers": [
         { "key": "Cache-Control", "value": "public, max-age=604800, must-revalidate" }
       ]

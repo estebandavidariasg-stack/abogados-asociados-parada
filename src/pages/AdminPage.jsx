@@ -310,7 +310,7 @@ export default function AdminPage() {
                 >
                   <div className={styles.cardPhoto}>
                     {p.foto_url
-                      ? <img src={p.foto_url} alt={p.nombre} />
+                      ? <img src={p.foto_url} alt={p.nombre} width="48" height="48" loading="lazy" decoding="async" />
                       : <span>{p.nombre?.[0] || '?'}{p.apellido?.[0] || ''}</span>
                     }
                   </div>
@@ -384,7 +384,7 @@ export default function AdminPage() {
                 >
                   <div className={styles.cardPhoto}>
                     {p.foto_url
-                      ? <img src={p.foto_url} alt={p.nombre} />
+                      ? <img src={p.foto_url} alt={p.nombre} width="48" height="48" loading="lazy" decoding="async" />
                       : <span>{p.nombre?.[0] || '?'}{p.apellido?.[0] || ''}</span>
                     }
                   </div>

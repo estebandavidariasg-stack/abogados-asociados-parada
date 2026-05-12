@@ -355,7 +355,7 @@ export default function ProfilePage() {
           <div className={styles.photoSection}>
             <div className={styles.photoWrap} onClick={() => fileInputRef.current.click()}>
               {fotoPreview
-                ? <img src={fotoPreview} alt="Foto de perfil" className={styles.photoImg} />
+                ? <img src={fotoPreview} alt="Foto de perfil" className={styles.photoImg} width="160" height="160" decoding="async" />
                 : <div className={styles.photoPlaceholder}>
                     <svg viewBox="0 0 24 24" fill="currentColor">
                       <path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z"/>
@@ -498,7 +498,7 @@ export default function ProfilePage() {
                 Video de presentación
                 <span className={styles.optional}>(opcional — máx. {MAX_VIDEO_MB} MB)</span>
               </label>
-              {videoUrl && <video src={videoUrl} controls className={styles.videoPreview} />}
+              {videoUrl && <video src={videoUrl} controls preload="metadata" className={styles.videoPreview} />}
               <button type="button" className="btn-ghost" onClick={() => videoInputRef.current.click()} disabled={uploadingVideo}>
                 {uploadingVideo ? 'Subiendo video...' : videoUrl ? 'Cambiar video' : 'Subir video'}
               </button>

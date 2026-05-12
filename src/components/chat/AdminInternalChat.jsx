@@ -379,7 +379,7 @@ export default function AdminInternalChat({ miId }) {
             >
               <div className={styles.avatar}>
                 {a.foto_url
-                  ? <img src={a.foto_url} alt={a.nombre} />
+                  ? <img src={a.foto_url} alt={a.nombre} width="40" height="40" loading="lazy" decoding="async" />
                   : `${a.nombre?.[0] || ''}${a.apellido?.[0] || ''}`}
               </div>
               <div className={styles.itemInfo}>
@@ -413,7 +413,7 @@ export default function AdminInternalChat({ miId }) {
             <div className={styles.chatHead}>
               <div className={styles.chatHeadAvatar}>
                 {selected.foto_url
-                  ? <img src={selected.foto_url} alt={selected.nombre} />
+                  ? <img src={selected.foto_url} alt={selected.nombre} width="44" height="44" loading="lazy" decoding="async" />
                   : `${selected.nombre?.[0] || ''}${selected.apellido?.[0] || ''}`}
               </div>
               <div>

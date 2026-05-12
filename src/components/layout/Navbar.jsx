@@ -49,7 +49,18 @@ export default function Navbar({ onLogin, onRegister, onRegisterContador }) {
     <nav className={`${styles.nav} ${scrolled ? styles.navScrolled : ''}`}>
       {/* Logo */}
       <a href="/" className={styles.logoWrap}>
-        <img src="/favicon.png" alt="Abogados y Asociados Parada" className={styles.logoImg} />
+        <picture>
+          <source srcSet="/logo-nav.webp" type="image/webp" />
+          <img
+            src="/logo-nav.png"
+            alt="Abogados y Asociados Parada"
+            className={styles.logoImg}
+            width="96"
+            height="96"
+            decoding="async"
+            fetchpriority="high"
+          />
+        </picture>
       </a>
 
       {/* Firm name — centered on desktop */}
@@ -74,7 +85,17 @@ export default function Navbar({ onLogin, onRegister, onRegisterContador }) {
             >
               <span className={`${styles.avatar} ${scrolled ? styles.avatarDark : ''}`}>
                 {profile?.foto_url
-                  ? <img src={profile.foto_url} alt={displayName} className={styles.avatarImg} />
+                  ? (
+                    <img
+                      src={profile.foto_url}
+                      alt={displayName}
+                      className={styles.avatarImg}
+                      width="34"
+                      height="34"
+                      loading="lazy"
+                      decoding="async"
+                    />
+                  )
                   : (
                     <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                       <path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z" />
@@ -167,7 +188,17 @@ export default function Navbar({ onLogin, onRegister, onRegisterContador }) {
               <div className={styles.mobileUser}>
                 <span className={styles.avatar}>
                   {profile?.foto_url
-                    ? <img src={profile.foto_url} alt={displayName} className={styles.avatarImg} />
+                    ? (
+                      <img
+                        src={profile.foto_url}
+                        alt={displayName}
+                        className={styles.avatarImg}
+                        width="34"
+                        height="34"
+                        loading="lazy"
+                        decoding="async"
+                      />
+                    )
                     : (
                       <svg viewBox="0 0 24 24" fill="currentColor">
                         <path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z" />
