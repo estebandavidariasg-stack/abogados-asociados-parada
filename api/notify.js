@@ -10,6 +10,36 @@ const transporter = nodemailer.createTransport({
 
 const SITE_BASE = 'https://abogadosyasociadosparada.com'
 
+const SUPABASE_URL =
+  process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
+
+/* ── Resuelve email de profesional por su ID, usando service role ─────────
+   El frontend ya NO descarga `email` en sus consultas de `profiles` (era un
+   leak: cualquier visitante anónimo veía la lista completa de correos al
+   abrir la home). Acá lo resolvemos server-side, sin tocar al cliente. */
+async function resolveProfessionalEmail(lawyerId) {
+  if (!lawyerId || !SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return null
+  try {
+    const url =
+      `${SUPABASE_URL}/rest/v1/profiles` +
+      `?id=eq.${encodeURIComponent(lawyerId)}` +
+      `&select=email,nombre,apellido&limit=1`
+    const res = await fetch(url, {
+      headers: {
+        apikey:        SUPABASE_SERVICE_ROLE_KEY,
+        Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+      },
+    })
+    if (!res.ok) return null
+    const rows = await res.json()
+    return Array.isArray(rows) && rows[0] ? rows[0] : null
+  } catch (err) {
+    console.error('[notify] resolveProfessionalEmail failed:', err)
+    return null
+  }
+}
+
 // CTA URL builder ──────────────────────────────────────────────────────────
 function buildCtaUrl(recipientRole, codigoReferencia) {
   switch (recipientRole) {
@@ -108,14 +138,36 @@ export default async function handler(req, res) {
     const ctaUrl = buildCtaUrl(recipientRole, codigoReferencia)
 
     // ── Notificación al abogado cuando llega consulta nueva ──
+    // Acepta `lawyerId` (preferido) o `lawyerEmail` (legacy, compat hacia
+    // atrás). Con lawyerId resolvemos el correo con service role en lugar
+    // de confiar en datos que vengan del cliente — el frontend ya no expone
+    // emails de profesionales por motivos de privacidad.
     if (type === 'new_consultation') {
-      const { lawyerEmail, nombreAbogado, nombreCliente, area } = data
+      const { lawyerId, lawyerEmail: legacyEmail, nombreAbogado, nombreCliente, area } = data
 
-      const { subject, html } = emailAbogado({ nombreAbogado, nombreCliente, area, ctaUrl })
+      let toEmail   = legacyEmail || null
+      let toNombre  = nombreAbogado || null
+      if (lawyerId) {
+        const pro = await resolveProfessionalEmail(lawyerId)
+        if (pro?.email) {
+          toEmail  = pro.email
+          if (!toNombre && pro.nombre) toNombre = `${pro.nombre} ${pro.apellido || ''}`.trim()
+        }
+      }
+      if (!toEmail) {
+        return res.status(400).json({ error: 'No se pudo resolver el correo del profesional.' })
+      }
+
+      const { subject, html } = emailAbogado({
+        nombreAbogado: toNombre || 'profesional',
+        nombreCliente,
+        area,
+        ctaUrl,
+      })
 
       await transporter.sendMail({
         from: `"Abogados y Asociados Parada" <${process.env.GMAIL_USER}>`,
-        to: lawyerEmail,
+        to: toEmail,
         subject,
         html,
       })

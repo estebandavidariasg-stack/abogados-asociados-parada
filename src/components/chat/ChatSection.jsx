@@ -554,12 +554,16 @@ async function notificarSuperAdminContacto({ roomId, senderType, texto }) {
   } catch (err) { console.error('Error notificando contacto:', err) }
 }
 
-async function notificarAbogado({ lawyerEmail, nombreAbogado, nombreCliente, area }) {
+async function notificarAbogado({ lawyerId, nombreAbogado, nombreCliente, area }) {
+  // Pasa lawyerId — el endpoint resolverá el email server-side con service
+  // role. Antes mandábamos el email desde el front, lo que requería que el
+  // browser descargara la lista de correos de todos los profesionales
+  // aprobados (leak de datos personales).
   try {
     await fetch('/api/notify', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type: 'new_consultation', data: { lawyerEmail, nombreAbogado, nombreCliente, area } }),
+      body: JSON.stringify({ type: 'new_consultation', data: { lawyerId, nombreAbogado, nombreCliente, area } }),
     })
   } catch (err) { console.error('Error notificando abogado:', err) }
 }
@@ -890,7 +894,7 @@ export default function ChatSection() {
             if (areas.length > 0) {
               const rol = formRef.current.tipo_profesional || 'abogado'
               const { data: todos } = await supabase.from('profiles')
-                .select('id, nombre, apellido, area_derecho, ciudad, departamento, foto_url, email, rol')
+                .select('id, nombre, apellido, area_derecho, ciudad, departamento, foto_url, rol')
                 .eq('aprobado', true).eq('rol', rol)
               const filtrados = (todos || []).filter(l =>
                 !excluded.includes(l.id) &&
@@ -944,7 +948,7 @@ export default function ChatSection() {
   async function fetchLawyers(areas, departamento, excluded = [], rol = 'abogado') {
     setLoadingL(true)
     const { data } = await supabase.from('profiles')
-      .select('id, nombre, apellido, area_derecho, ciudad, departamento, foto_url, email, rol')
+      .select('id, nombre, apellido, area_derecho, ciudad, departamento, foto_url, rol')
       .eq('aprobado', true).eq('rol', rol)
     const filtrados = (data || []).filter(l =>
       !excluded.includes(l.id) &&
@@ -1022,8 +1026,14 @@ export default function ChatSection() {
     })
     const todosAbogados = [...lawyers.cercanos, ...lawyers.porArea]
     for (const abogado of todosAbogados.filter(l => picked.includes(l.id))) {
-      if (abogado.email) await notificarAbogado({ lawyerEmail: abogado.email,
-        nombreAbogado: `${abogado.nombre} ${abogado.apellido}`, nombreCliente:`${nombre} ${apellido}`, area: areas.join(', ') })
+      // El email lo resuelve /api/notify server-side a partir del lawyerId,
+      // así el browser nunca descarga correos de profesionales.
+      await notificarAbogado({
+        lawyerId:      abogado.id,
+        nombreAbogado: `${abogado.nombre} ${abogado.apellido}`,
+        nombreCliente: `${nombre} ${apellido}`,
+        area:          areas.join(', '),
+      })
     }
     setRoomId(room.id); setRoomStatus(room.status || 'waiting'); setRoomArea(areas.join(', '))
     setRoomCodigo(codigoRef || ''); setPicked([])

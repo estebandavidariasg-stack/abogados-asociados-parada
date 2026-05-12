@@ -44,6 +44,32 @@ const CODE_TTL_MS           = 10 * 60 * 1000
 
 const TIPOS_VALIDOS = new Set(['abogado', 'contador'])
 
+/* ── Verificación de reCAPTCHA contra Google ──────────────────────────────
+   Antes el token sólo se recolectaba en el cliente y nunca se validaba.
+   Cualquier atacante saltaba el captcha llamando este endpoint a pelo y
+   nos spameaba correos con OTPs a víctimas arbitrarias. Ahora exigimos un
+   token válido. RECAPTCHA_SECRET_KEY debe estar configurado en Vercel. */
+async function verifyRecaptcha(token) {
+  if (!token) return { ok: false, reason: 'missing-token' }
+  const secret = process.env.RECAPTCHA_SECRET_KEY
+  if (!secret) {
+    console.error('[recaptcha] RECAPTCHA_SECRET_KEY no configurado')
+    return { ok: false, reason: 'config' }
+  }
+  try {
+    const r = await fetch('https://www.google.com/recaptcha/api/siteverify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ secret, response: token }),
+    })
+    const data = await r.json()
+    return { ok: !!data.success, reason: data['error-codes']?.join(',') || null }
+  } catch (err) {
+    console.error('[recaptcha] verify failed:', err)
+    return { ok: false, reason: 'network' }
+  }
+}
+
 const adminHeaders = () => ({
   apikey:        SUPABASE_SERVICE_ROLE_KEY,
   Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
@@ -206,15 +232,24 @@ export default async function handler(req, res) {
   }
 
   // ── Validación de input ──────────────────────────────────────────────
-  const body         = req.body || {}
-  const rawEmail     = typeof body.email === 'string' ? body.email.trim() : ''
-  const tipoRegistro = typeof body.tipoRegistro === 'string' ? body.tipoRegistro : ''
+  const body            = req.body || {}
+  const rawEmail        = typeof body.email === 'string' ? body.email.trim() : ''
+  const tipoRegistro    = typeof body.tipoRegistro === 'string' ? body.tipoRegistro : ''
+  const recaptchaToken  = typeof body.recaptchaToken === 'string' ? body.recaptchaToken : ''
 
   if (!rawEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(rawEmail)) {
     return res.status(400).json({ error: 'Correo inválido.' })
   }
   if (!TIPOS_VALIDOS.has(tipoRegistro)) {
     return res.status(400).json({ error: 'Tipo de registro inválido.' })
+  }
+
+  // ── Verificación de captcha (antes de tocar BD/admin API/SMTP) ───────
+  const captchaCheck = await verifyRecaptcha(recaptchaToken)
+  if (!captchaCheck.ok) {
+    return res.status(403).json({
+      error: 'No se pudo verificar el captcha. Recarga la página e intenta de nuevo.'
+    })
   }
 
   // Supabase Auth almacena emails en lowercase — alineamos.

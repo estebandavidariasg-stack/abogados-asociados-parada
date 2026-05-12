@@ -26,14 +26,34 @@ export default function LawyersSection() {
       try {
         const { data } = await supabase.auth.getSession()
         const token = data?.session?.access_token
-        const res = await fetch(
-          `${SUPABASE_URL}/rest/v1/profiles?aprobado=eq.true&rol=eq.${profesion}&select=*`,
-          { headers: { 'Content-Type':'application/json', apikey: SUPABASE_KEY, Authorization:`Bearer ${token||SUPABASE_KEY}` } }
-        )
+        // Solo columnas estrictamente públicas — el visitante anónimo NO
+        // debe recibir email, telefono, direccion, tarjeta_archivo_url, etc.
+        // Antes era `select=*` y exponía todo en el JSON (scrape trivial).
+        // Si una columna nueva debe ser pública, agrégala explícitamente.
+        const PUBLIC_COLS = [
+          'id', 'nombre', 'apellido', 'area_derecho',
+          'ciudad', 'departamento',
+          'foto_url', 'video_url', 'descripcion',
+          'universidad', 'experiencia', 'rol',
+          'instagram', 'linkedin', 'facebook', 'twitter', 'whatsapp', 'tiktok',
+        ].join(',')
+        const url =
+          `${SUPABASE_URL}/rest/v1/profiles?aprobado=eq.true&rol=eq.${profesion}` +
+          `&select=${PUBLIC_COLS}`
+        const res = await fetch(url, {
+          headers: { 'Content-Type':'application/json', apikey: SUPABASE_KEY, Authorization:`Bearer ${token||SUPABASE_KEY}` },
+        })
+        if (!res.ok) {
+          const detail = await res.text().catch(() => '')
+          console.error('[LawyersSection] fetch failed:', res.status, detail)
+          if (!cancelled) setLawyers([])
+          return
+        }
         const json = await res.json()
         if (cancelled) return
         setLawyers(Array.isArray(json) ? json : [])
-      } catch {
+      } catch (err) {
+        console.error('[LawyersSection] fetch error:', err)
         if (!cancelled) setLawyers([])
       }
       finally {

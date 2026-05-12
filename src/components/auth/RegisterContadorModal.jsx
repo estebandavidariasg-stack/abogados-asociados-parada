@@ -173,6 +173,7 @@ export default function RegisterContadorModal({ onClose }) {
 
   // POST /api/send-verification-code — extraído para reutilizar en
   // "Reenviar código" desde la pantalla de verificación.
+  // El recaptchaToken se valida server-side; sin él, 403 y spam de OTPs trivial.
   async function sendVerificationCode() {
     const res = await fetch('/api/send-verification-code', {
       method: 'POST',
@@ -180,6 +181,7 @@ export default function RegisterContadorModal({ onClose }) {
       body: JSON.stringify({
         email: regEmail.trim(),
         tipoRegistro: 'contador',
+        recaptchaToken: captchaValue,
       }),
     })
 
@@ -362,8 +364,11 @@ export default function RegisterContadorModal({ onClose }) {
               </div>
             </div>
             <div style={{ textAlign: 'center', margin: '20px 0' }}>
-              <ReCAPTCHA ref={recaptchaRef} sitekey="6Lc50NEsAAAAANHXeDejrPO9up93HP9tlMDzFXON"
-                onChange={(v) => setCaptchaValue(v)} />
+              <ReCAPTCHA
+                ref={recaptchaRef}
+                sitekey={import.meta.env.VITE_RECAPTCHA_SITE_KEY || '6LeCveUsAAAAAHPFzHpB8KrLMaNEu0E7UORrkgMA'}
+                onChange={(v) => setCaptchaValue(v)}
+              />
             </div>
             <button type="button" className={`btn-solid ${styles.submit}`}
               disabled={loading || !captchaValue} onClick={handleLogin}>
@@ -565,8 +570,11 @@ export default function RegisterContadorModal({ onClose }) {
 
             {/* Captcha */}
             <div style={{ textAlign: 'center', margin: '10px 0' }}>
-              <ReCAPTCHA ref={recaptchaRef} sitekey="6Lc50NEsAAAAANHXeDejrPO9up93HP9tlMDzFXON"
-                onChange={(v) => setCaptchaValue(v)} />
+              <ReCAPTCHA
+                ref={recaptchaRef}
+                sitekey={import.meta.env.VITE_RECAPTCHA_SITE_KEY || '6LeCveUsAAAAAHPFzHpB8KrLMaNEu0E7UORrkgMA'}
+                onChange={(v) => setCaptchaValue(v)}
+              />
             </div>
 
             <button type="submit" className={`btn-solid ${styles.submit}`} disabled={!canRegister}>

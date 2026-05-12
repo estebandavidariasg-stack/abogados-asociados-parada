@@ -54,10 +54,12 @@ export default function AuthModal({ initialTab = 'login', onClose }) {
   const [captchaValue,    setCaptchaValue]     = useState(null)
 
   // ── Olvidaste tu contraseña ──
-  const [forgotMode,    setForgotMode]    = useState(false)   // false | 'form' | 'sent'
-  const [forgotEmail,   setForgotEmail]   = useState('')
-  const [forgotLoading, setForgotLoading] = useState(false)
-  const [forgotError,   setForgotError]   = useState('')
+  const [forgotMode,         setForgotMode]         = useState(false)   // false | 'form' | 'sent'
+  const [forgotEmail,        setForgotEmail]        = useState('')
+  const [forgotLoading,      setForgotLoading]      = useState(false)
+  const [forgotError,        setForgotError]        = useState('')
+  const [forgotCaptchaValue, setForgotCaptchaValue] = useState(null)
+  const forgotRecaptchaRef = useRef()
 
   async function handleForgotSubmit(e) {
     e?.preventDefault?.()
@@ -66,17 +68,22 @@ export default function AuthModal({ initialTab = 'login', onClose }) {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       setForgotError('Correo inválido.'); return
     }
+    if (!forgotCaptchaValue) {
+      setForgotError('Por favor completa el captcha.'); return
+    }
     setForgotLoading(true); setForgotError('')
     try {
-      // Endpoint custom: dispara el correo con estética AAP (mismo patrón
-      // que /api/send-contact-card). Por seguridad, el endpoint responde
-      // 200 incluso si el email no existe — no enumeramos usuarios.
+      // Endpoint custom: dispara el correo con estética AAP. Por seguridad,
+      // el endpoint responde 200 incluso si el email no existe (no
+      // enumeramos usuarios). El captcha previene flooding de correos a
+      // víctimas arbitrarias.
       const res = await fetch('/api/forgot-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           email,
           redirectTo: `${window.location.origin}/nueva-contrasena`,
+          recaptchaToken: forgotCaptchaValue,
         }),
       })
       if (!res.ok) {
@@ -86,6 +93,8 @@ export default function AuthModal({ initialTab = 'login', onClose }) {
       setForgotMode('sent')
     } catch (err) {
       setForgotError(err.message || 'No se pudo enviar el enlace.')
+      forgotRecaptchaRef.current?.reset()
+      setForgotCaptchaValue(null)
     } finally {
       setForgotLoading(false)
     }
@@ -196,6 +205,8 @@ export default function AuthModal({ initialTab = 'login', onClose }) {
 
   // POST /api/send-verification-code — extraído para reutilizar en
   // "Reenviar código" desde la pantalla de verificación.
+  // El recaptchaToken se valida server-side (Google siteverify); sin él,
+  // el endpoint responde 403 y el spam de OTPs es trivial.
   async function sendVerificationCode() {
     const res = await fetch('/api/send-verification-code', {
       method: 'POST',
@@ -203,6 +214,7 @@ export default function AuthModal({ initialTab = 'login', onClose }) {
       body: JSON.stringify({
         email: regEmail.trim(),
         tipoRegistro: 'abogado',
+        recaptchaToken: captchaValue,
       }),
     })
 
@@ -356,8 +368,11 @@ export default function AuthModal({ initialTab = 'login', onClose }) {
               </div>
             </div>
             <div style={{ textAlign:'center', margin:'20px 0' }}>
-              <ReCAPTCHA ref={recaptchaRef} sitekey="6Lc50NEsAAAAANHXeDejrPO9up93HP9tlMDzFXON"
-                onChange={(v) => setCaptchaValue(v)} />
+              <ReCAPTCHA
+                ref={recaptchaRef}
+                sitekey={import.meta.env.VITE_RECAPTCHA_SITE_KEY || '6LeCveUsAAAAAHPFzHpB8KrLMaNEu0E7UORrkgMA'}
+                onChange={(v) => setCaptchaValue(v)}
+              />
             </div>
             <button type="button" className={`btn-solid ${styles.submit}`}
               disabled={loading || !captchaValue} onClick={handleLogin}>
@@ -399,6 +414,13 @@ export default function AuthModal({ initialTab = 'login', onClose }) {
                 autoFocus
               />
             </div>
+            <div style={{ textAlign: 'center', margin: '14px 0 6px' }}>
+              <ReCAPTCHA
+                ref={forgotRecaptchaRef}
+                sitekey={import.meta.env.VITE_RECAPTCHA_SITE_KEY || '6LeCveUsAAAAAHPFzHpB8KrLMaNEu0E7UORrkgMA'}
+                onChange={(v) => setForgotCaptchaValue(v)}
+              />
+            </div>
             {forgotError && (
               <p style={{ color: '#e07a7a', fontSize: '0.78rem', margin: '4px 0 8px' }}>
                 {forgotError}
@@ -407,7 +429,7 @@ export default function AuthModal({ initialTab = 'login', onClose }) {
             <button
               type="submit"
               className={`btn-solid ${styles.submit}`}
-              disabled={forgotLoading}
+              disabled={forgotLoading || !forgotCaptchaValue}
             >
               {forgotLoading ? 'Enviando…' : 'Enviar enlace'}
             </button>
@@ -646,8 +668,11 @@ export default function AuthModal({ initialTab = 'login', onClose }) {
 
             {/* Captcha */}
             <div style={{ textAlign:'center', margin:'10px 0' }}>
-              <ReCAPTCHA ref={recaptchaRef} sitekey="6Lc50NEsAAAAANHXeDejrPO9up93HP9tlMDzFXON"
-                onChange={(v) => setCaptchaValue(v)} />
+              <ReCAPTCHA
+                ref={recaptchaRef}
+                sitekey={import.meta.env.VITE_RECAPTCHA_SITE_KEY || '6LeCveUsAAAAAHPFzHpB8KrLMaNEu0E7UORrkgMA'}
+                onChange={(v) => setCaptchaValue(v)}
+              />
             </div>
 
             <button type="submit" className={`btn-solid ${styles.submit}`} disabled={!canRegister}>

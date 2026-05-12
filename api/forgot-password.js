@@ -25,7 +25,32 @@ const SUPABASE_URL =
   process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
 
-const DEFAULT_REDIRECT = 'https://paradayasociados.co/nueva-contrasena'
+const DEFAULT_REDIRECT = 'https://abogadosyasociadosparada.com/nueva-contrasena'
+
+/* ── Verificación de reCAPTCHA contra Google ──────────────────────────────
+   Sin esto, un atacante hace flooding de correos de recuperación a víctimas
+   arbitrarias (DoS de bandeja + costo de Gmail). RECAPTCHA_SECRET_KEY debe
+   estar configurado en Vercel. */
+async function verifyRecaptcha(token) {
+  if (!token) return { ok: false, reason: 'missing-token' }
+  const secret = process.env.RECAPTCHA_SECRET_KEY
+  if (!secret) {
+    console.error('[recaptcha] RECAPTCHA_SECRET_KEY no configurado')
+    return { ok: false, reason: 'config' }
+  }
+  try {
+    const r = await fetch('https://www.google.com/recaptcha/api/siteverify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ secret, response: token }),
+    })
+    const data = await r.json()
+    return { ok: !!data.success, reason: data['error-codes']?.join(',') || null }
+  } catch (err) {
+    console.error('[recaptcha] verify failed:', err)
+    return { ok: false, reason: 'network' }
+  }
+}
 
 function renderResetEmailHtml({ actionLink }) {
   return `
@@ -88,7 +113,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' })
   }
 
-  const { email, redirectTo } = req.body || {}
+  const { email, redirectTo, recaptchaToken } = req.body || {}
   if (!email || typeof email !== 'string') {
     return res.status(400).json({ error: 'Falta el correo.' })
   }
@@ -96,6 +121,15 @@ export default async function handler(req, res) {
   // Validación estructural rápida (no exhaustiva — Supabase rechaza el resto).
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     return res.status(400).json({ error: 'Correo inválido.' })
+  }
+
+  // Verificación de captcha — antes de tocar admin API o SMTP. Reduce el
+  // costo de un ataque de spam de correos a casi cero para nosotros.
+  const captchaCheck = await verifyRecaptcha(recaptchaToken)
+  if (!captchaCheck.ok) {
+    return res.status(403).json({
+      error: 'No se pudo verificar el captcha. Recarga la página e intenta de nuevo.'
+    })
   }
 
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
