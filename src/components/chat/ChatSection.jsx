@@ -858,7 +858,12 @@ export default function ChatSection() {
           apikey: SUPABASE_KEY,
           Authorization: `Bearer ${SUPABASE_KEY}`,
           'Content-Type': 'application/json',
-          Prefer: 'return=representation',
+          // return=minimal — sin esto, PostgREST hace SELECT del row insertado
+          // y necesita SELECT permission. Anon no tiene SELECT en `pqr` (solo
+          // superadmin la lee), así que el SELECT post-INSERT falla con 42501
+          // aunque el INSERT mismo haya pasado. La response no se usa, así que
+          // minimal es lo correcto.
+          Prefer: 'return=minimal',
         },
         body: JSON.stringify({
           room_id:           closedRoomId || null,
