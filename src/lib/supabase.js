@@ -339,13 +339,20 @@ export const supabase = {
       insert(body) {
         let _select = false
         let _single = false
+        let _cols   = '*'
         const inserter = {
-          select() { _select = true; return inserter },
-          single()  { _single = true; return inserter },
+          // Permite acotar las columnas devueltas por RETURNING. Sin esto,
+          // un INSERT como anon en una tabla con column-level GRANTs falla
+          // porque el RETURNING * intenta leer columnas a las que el rol
+          // no tiene SELECT permission.
+          select(cols) { _select = true; if (cols) _cols = cols; return inserter },
+          single()     { _single = true; return inserter },
           async then(resolve) {
             try {
               const headers = { ...getHeaders(), 'Prefer': _select ? 'return=representation' : 'return=minimal' }
-              const res  = await fetch(`${SUPABASE_URL}/rest/v1/${table}`, {
+              let url = `${SUPABASE_URL}/rest/v1/${table}`
+              if (_select && _cols !== '*') url += `?select=${encodeURIComponent(_cols)}`
+              const res = await fetch(url, {
                 method: 'POST', headers, body: JSON.stringify(body),
               })
               if (_select) {

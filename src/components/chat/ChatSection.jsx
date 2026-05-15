@@ -525,6 +525,14 @@ async function hashCedula(cedula) {
   return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('')
 }
 
+// ── Columnas no-PII de chat_rooms accesibles por el cliente anon ───────
+// El rol `anon` en BD tiene REVOKE SELECT sobre las columnas con datos
+// personales (client_email, client_celular, client_nombre). Esta lista
+// debe coincidir con el GRANT SELECT (...) ON public.chat_rooms TO anon.
+// Si agregas una columna nueva PÚBLICA, inclúyela aquí Y en el GRANT.
+const ANON_ROOM_COLS =
+  'id,area_derecho,status,codigo_referencia,tipo_profesional,created_at,updated_at,client_token,client_cedula'
+
 function formatSize(bytes) {
   if (!bytes) return ''
   if (bytes < 1024) return `${bytes} B`
@@ -714,7 +722,7 @@ function StepCedula({ onNew, onResume }) {
     localStorage.setItem('chat_cedula_hash', hash)
     if (codigo.trim()) localStorage.setItem('chat_codigo_ref', codigo.trim().toUpperCase())
     else localStorage.removeItem('chat_codigo_ref')
-    const { data: rooms } = await supabase.from('chat_rooms').select('*').eq('client_cedula', hash).order('created_at', { ascending: false })
+    const { data: rooms } = await supabase.from('chat_rooms').select(ANON_ROOM_COLS).eq('client_cedula', hash).order('created_at', { ascending: false })
     const existing = rooms?.find(r => r.status === 'waiting' || r.status === 'active')
     if (existing) onResume(existing)
     else onNew()
@@ -983,7 +991,7 @@ export default function ChatSection() {
 
     // Reutilizar room existente waiting/active si ya hay uno (evita 409 por UNIQUE)
     const { data: existingRooms } = await supabase.from('chat_rooms')
-      .select('*').eq('client_cedula', hash).order('created_at', { ascending: false })
+      .select(ANON_ROOM_COLS).eq('client_cedula', hash).order('created_at', { ascending: false })
     let room = existingRooms?.find(r => r.status === 'waiting' || r.status === 'active') || null
 
     if (!room) {
@@ -1000,7 +1008,7 @@ export default function ChatSection() {
 
       let { data: inserted, error } = await supabase.from('chat_rooms')
         .insert({ ...baseRoom, codigo_referencia: codigoRef })
-        .select().single()
+        .select(ANON_ROOM_COLS).single()
 
       // Fallback: si el codigo_referencia colisiona con un UNIQUE legacy
       // (consulta anterior cerrada, o el mismo código usado por otro
@@ -1012,7 +1020,7 @@ export default function ChatSection() {
         console.warn('[startChat] codigo_referencia colisiona con UNIQUE — reintentando sin él')
         const retry = await supabase.from('chat_rooms')
           .insert({ ...baseRoom, codigo_referencia: null })
-          .select().single()
+          .select(ANON_ROOM_COLS).single()
         inserted = retry.data
         error    = retry.error
       }
