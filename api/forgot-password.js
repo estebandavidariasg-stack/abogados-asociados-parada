@@ -52,6 +52,60 @@ async function verifyRecaptcha(token) {
   }
 }
 
+/* ── Rate-limit por email ─────────────────────────────────────────────────
+   El captcha bloquea bots tontos, pero un atacante humano (o uno con farm
+   de captchas) podría disparar repetidos correos de recuperación contra
+   una víctima. Limitamos a 3 intentos cada 15 min por email.
+
+   Para no romper el modelo anti-enumeración: si se excede el límite,
+   silenciosamente NO enviamos el correo, pero seguimos respondiendo 200.
+   Si devolviéramos 429, un atacante sabría que ese email está siendo
+   atacado (señal de que existe / es interesante). */
+const RL_WINDOW_MS = 15 * 60 * 1000
+const RL_MAX       = 3
+
+const adminHeaders = () => ({
+  apikey:        SUPABASE_SERVICE_ROLE_KEY,
+  Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+  'Content-Type':'application/json',
+})
+
+async function isRateLimited(email) {
+  const since = new Date(Date.now() - RL_WINDOW_MS).toISOString()
+  const url   =
+    `${SUPABASE_URL}/rest/v1/forgot_password_attempts` +
+    `?email=eq.${encodeURIComponent(email)}` +
+    `&created_at=gt.${encodeURIComponent(since)}` +
+    `&select=id&limit=${RL_MAX + 1}`
+  try {
+    const res = await fetch(url, { headers: adminHeaders() })
+    if (!res.ok) {
+      // Fail-open: si no podemos contar (BD caída, etc.), no bloqueamos al
+      // usuario legítimo. Es preferible ese caso que dejarlos sin correo.
+      console.error('[forgot-password] rate-limit count failed:', res.status)
+      return false
+    }
+    const rows = await res.json()
+    return Array.isArray(rows) && rows.length >= RL_MAX
+  } catch (err) {
+    console.error('[forgot-password] rate-limit count error:', err)
+    return false
+  }
+}
+
+async function recordAttempt(email) {
+  try {
+    await fetch(`${SUPABASE_URL}/rest/v1/forgot_password_attempts`, {
+      method: 'POST',
+      headers: { ...adminHeaders(), Prefer: 'return=minimal' },
+      body:    JSON.stringify({ email }),
+    })
+  } catch (err) {
+    // No-fatal — si esto falla, simplemente perdemos un punto del conteo.
+    console.error('[forgot-password] recordAttempt failed:', err)
+  }
+}
+
 function renderResetEmailHtml({ actionLink }) {
   return `
 <div style="margin:0;background-color:#0d1b2a;padding:32px 16px;font-family:Georgia,'Times New Roman',serif;">
@@ -138,10 +192,27 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'Configuración del servidor incompleta.' })
   }
 
+  // Normalizar a lowercase — Supabase Auth almacena emails en lowercase
+  // y el rate-limit debe ser case-insensitive (que un atacante no rote
+  // entre Foo@ y foo@ para multiplicar el límite).
+  const normalizedEmail = email.toLowerCase().trim()
+
   // Por seguridad, NO revelamos si el email existe o no en la base.
   // SIEMPRE respondemos 200 al cliente, independientemente del resultado
   // (esto previene enumeración de usuarios).
   const target = (typeof redirectTo === 'string' && redirectTo) ? redirectTo : DEFAULT_REDIRECT
+
+  // ── Rate-limit ────────────────────────────────────────────────────────
+  // Registramos el intento ANTES de chequear el límite — así el conteo
+  // incluye intentos rate-limited (no solo los que pasaron). Esto evita
+  // que un atacante mande 1000 requests y solo cuenten los primeros 3.
+  await recordAttempt(normalizedEmail)
+  if (await isRateLimited(normalizedEmail)) {
+    // Silencio — no enviamos correo, pero respondemos 200 para no enumerar
+    // (no revelamos que este email está bajo ataque).
+    console.warn('[forgot-password] rate-limit hit for', normalizedEmail)
+    return res.status(200).json({ success: true })
+  }
 
   try {
     // Generar el link de recovery con la SERVICE_ROLE key
@@ -154,7 +225,7 @@ export default async function handler(req, res) {
       },
       body: JSON.stringify({
         type: 'recovery',
-        email,
+        email: normalizedEmail,
         options: { redirect_to: target },
       }),
     })
@@ -173,7 +244,7 @@ export default async function handler(req, res) {
 
     await transporter.sendMail({
       from:    `"Abogados y Asociados Parada" <${process.env.GMAIL_USER}>`,
-      to:      email,
+      to:      normalizedEmail,
       subject: 'Restablece tu contraseña — Abogados y Asociados Parada',
       html:    renderResetEmailHtml({ actionLink }),
     })
