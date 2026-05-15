@@ -1169,11 +1169,11 @@ export default function ChatSection() {
         body: blob,
       })
       if (!res.ok) { const err = await res.text().catch(() => ''); console.error('Error subiendo audio:', res.status, err); return }
-      const { data: signed } = await supabase.storage.from('chat-files').createSignedUrl(path, 60*60*24*7)
-      if (!signed?.signedUrl) { console.error('No se pudo obtener URL firmada'); return }
+      // Guardamos el path (no el signed URL) para que el audio NO expire.
+      // AudioPlayer firma on-demand al reproducir.
       const { error: insErr } = await supabase.from('chat_messages').insert({
         room_id: roomId, sender_type:'client', lawyer_id: null,
-        content:'Mensaje de voz', file_url: signed.signedUrl,
+        content:'Mensaje de voz', file_url: path,
         file_name:`voz_${Date.now()}.${ext}`, file_size: blob.size, message_type:'audio',
       })
       if (insErr) { console.error('Error insertando mensaje de audio:', insErr); return }

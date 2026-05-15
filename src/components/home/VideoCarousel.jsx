@@ -5,7 +5,7 @@ import { compressVideo } from '../../utils/compressMedia'
 import { transcodeVideo }       from '../../utils/transcodeVideo'
 import { extractPosterFromVideo } from '../../utils/extractPoster'
 import styles from './VideoCarousel.module.css'
-import { IconVideoCamera } from '../shared/Icons'
+import { IconVideoCamera, IconX } from '../shared/Icons'
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
@@ -703,9 +703,10 @@ export default function VideoCarousel() {
                     <button
                       className={styles.removeBtn}
                       onClick={e => { e.stopPropagation(); removeVideo(i) }}
-                      title="Eliminar"
+                      title="Eliminar video"
+                      aria-label="Eliminar video"
                     >
-                      ✕
+                      <IconX size={12} />
                     </button>
                   )}
                 </div>

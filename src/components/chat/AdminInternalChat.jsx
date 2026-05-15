@@ -224,28 +224,8 @@ export default function AdminInternalChat({ miId }) {
         return
       }
 
-      // 2) Firmar URL (7 días)
-      const signHeaders = await getAuthHeaders()
-      const signRes = await fetch(
-        `${SUPABASE_URL}/storage/v1/object/sign/chat-files/${path}`,
-        {
-          method: 'POST',
-          headers: { ...signHeaders, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ expiresIn: 60 * 60 * 24 * 7 }),
-        }
-      )
-      if (!signRes.ok) {
-        const detail = await signRes.text().catch(() => '')
-        console.error('Error firmando URL:', signRes.status, detail)
-        return
-      }
-      const signData = await signRes.json()
-      const signedUrl = signData?.signedURL
-        ? `${SUPABASE_URL}/storage/v1${signData.signedURL}`
-        : null
-      if (!signedUrl) { console.error('No se pudo obtener URL firmada', signData); return }
-
-      // 3) Insertar mensaje con metadata de audio
+      // 2) Insertar mensaje guardando el PATH (no signed URL).
+      //    AudioPlayer firma on-demand → audio nunca expira.
       const insHeaders = await getAuthHeaders()
       const insRes = await fetch(`${SUPABASE_URL}/rest/v1/mensajes_internos`, {
         method: 'POST',
@@ -255,7 +235,7 @@ export default function AdminInternalChat({ miId }) {
           to_id: selected.id,
           mensaje: null,
           message_type: 'audio',
-          file_url: signedUrl,
+          file_url: path,
           file_name: `voz_${Date.now()}.${ext}`,
           file_size: blob.size,
         }),

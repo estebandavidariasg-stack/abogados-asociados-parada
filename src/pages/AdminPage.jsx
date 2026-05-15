@@ -104,8 +104,10 @@ export default function AdminPage() {
   async function fetchAlertas() {
     try {
       const headers = await getAuthHeaders()
+      // chat_rooms.status: 'waiting' | 'active' | 'closed' (NO existe `cerrado`).
+      // Las alertas son chats abiertos (no closed) sin actividad +24h.
       const roomsRes = await fetch(
-        `${SUPABASE_URL}/rest/v1/chat_rooms?cerrado=eq.false&select=*&order=created_at.desc`,
+        `${SUPABASE_URL}/rest/v1/chat_rooms?status=in.(waiting,active)&select=*&order=created_at.desc`,
         { headers }
       )
       const rooms = await roomsRes.json()
@@ -118,17 +120,30 @@ export default function AdminPage() {
           { headers }
         )
         const msgs = await msgRes.json()
-        if (!Array.isArray(msgs) || msgs.length === 0) inactivas.push(room)
+        if (!Array.isArray(msgs) || msgs.length === 0) {
+          // Adjuntar abogados/contadores asignados para poder notificarlos
+          // El email lo resuelve server-side el endpoint (no exponemos en cliente)
+          const lawyersRes = await fetch(
+            `${SUPABASE_URL}/rest/v1/chat_room_lawyers?room_id=eq.${room.id}&select=lawyer_id`,
+            { headers }
+          )
+          const lawyersRows = await lawyersRes.json()
+          room.lawyer_ids = Array.isArray(lawyersRows) ? lawyersRows.map(l => l.lawyer_id) : []
+          inactivas.push(room)
+        }
       }
       setAlertas(inactivas)
-    } catch { setAlertas([]) }
+    } catch (err) {
+      console.error('[fetchAlertas] error:', err)
+      setAlertas([])
+    }
   }
 
   async function fetchChatsCerrados() {
     try {
       const headers = await getAuthHeaders()
       const res = await fetch(
-        `${SUPABASE_URL}/rest/v1/chat_rooms?cerrado=eq.true&select=*&order=created_at.desc&limit=50`,
+        `${SUPABASE_URL}/rest/v1/chat_rooms?status=eq.closed&select=*&order=created_at.desc&limit=50`,
         { headers }
       )
       const data = await res.json()
@@ -138,12 +153,54 @@ export default function AdminPage() {
 
   async function reabrirChat(id) {
     const headers = await getAuthHeaders()
+    // Reabrir = volver a 'waiting' para que un profesional pueda retomarla.
     await fetch(`${SUPABASE_URL}/rest/v1/chat_rooms?id=eq.${id}`, {
       method: 'PATCH', headers,
-      body: JSON.stringify({ cerrado: false }),
+      body: JSON.stringify({ status: 'waiting' }),
     })
     fetchChatsCerrados()
     fetchAlertas()
+  }
+
+  // ── Notificar a los abogados asignados de un chat inactivo ──────────────
+  // Llama a /api/notify type=chat_inactivity (resuelve emails server-side).
+  // Estado local para feedback visual: 'idle' | 'sending' | 'sent' | 'error'
+  const [notifEstado, setNotifEstado] = useState({}) // roomId → estado
+
+  async function notificarInactividad(room) {
+    if (!room.lawyer_ids || room.lawyer_ids.length === 0) {
+      setNotifEstado(s => ({ ...s, [room.id]: 'no-lawyers' }))
+      return
+    }
+    setNotifEstado(s => ({ ...s, [room.id]: 'sending' }))
+    try {
+      // Una llamada por abogado asignado (típicamente 1-3, no merece batching)
+      const results = await Promise.all(
+        room.lawyer_ids.map(lawyerId =>
+          fetch('/api/notify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              type: 'chat_inactivity',
+              recipientRole: 'lawyer',
+              codigoReferencia: room.codigo_referencia || null,
+              data: {
+                lawyerId,
+                roomId:        room.id,
+                clientNombre:  room.client_nombre || 'Cliente',
+                area:          room.area_derecho  || '',
+                createdAt:     room.created_at,
+              },
+            }),
+          })
+        )
+      )
+      const allOk = results.every(r => r.ok)
+      setNotifEstado(s => ({ ...s, [room.id]: allOk ? 'sent' : 'error' }))
+    } catch (err) {
+      console.error('[notificarInactividad] error:', err)
+      setNotifEstado(s => ({ ...s, [room.id]: 'error' }))
+    }
   }
 
   // ── Filtrados derivados por rol ───────────────────────────────────────
@@ -485,29 +542,52 @@ export default function AdminPage() {
                   <span>✅</span>
                   <p>Todos los chats activos tienen actividad reciente. ¡Todo en orden!</p>
                 </div>
-              ) : alertas.map(r => (
-                <div key={r.id} className={styles.alertaCard}>
-                  <span className={styles.alertaIcono}>⚠️</span>
-                  <div className={styles.alertaInfo}>
-                    <p className={styles.alertaNombre}>
-                      {r.client_nombre || 'Cliente'}
-                      {r.codigo_referencia && (
-                        <span className={styles.codigoRef}>{r.codigo_referencia}</span>
+              ) : alertas.map(r => {
+                const estado = notifEstado[r.id]
+                const sinAbogados = !r.lawyer_ids || r.lawyer_ids.length === 0
+                return (
+                  <div key={r.id} className={styles.alertaCard}>
+                    <span className={styles.alertaIcono}>⚠️</span>
+                    <div className={styles.alertaInfo}>
+                      <p className={styles.alertaNombre}>
+                        {r.client_nombre || 'Cliente'}
+                        {r.codigo_referencia && (
+                          <span className={styles.codigoRef}>{r.codigo_referencia}</span>
+                        )}
+                      </p>
+                      <p className={styles.alertaMeta}>
+                        {r.client_email || ''}{r.client_celular ? ` · ${r.client_celular}` : ''}
+                      </p>
+                      <p className={styles.alertaFecha}>
+                        Creado: {new Date(r.created_at).toLocaleDateString('es-CO', {
+                          day: 'numeric', month: 'short', year: 'numeric',
+                          hour: '2-digit', minute: '2-digit'
+                        })}
+                        {' · '}
+                        {sinAbogados
+                          ? 'Sin profesional asignado'
+                          : `${r.lawyer_ids.length} profesional${r.lawyer_ids.length > 1 ? 'es' : ''} asignado${r.lawyer_ids.length > 1 ? 's' : ''}`}
+                      </p>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end' }}>
+                      <span className={styles.alertaBadge}>+24h sin actividad</span>
+                      {!sinAbogados && (
+                        <button
+                          className={styles.btnRefresh}
+                          onClick={() => notificarInactividad(r)}
+                          disabled={estado === 'sending' || estado === 'sent'}
+                          style={{ fontSize: '0.78rem', padding: '6px 12px' }}
+                        >
+                          {estado === 'sending' ? 'Enviando...'
+                            : estado === 'sent'  ? '✓ Notificado'
+                            : estado === 'error' ? '✗ Reintentar'
+                            : '✉ Notificar profesional'}
+                        </button>
                       )}
-                    </p>
-                    <p className={styles.alertaMeta}>
-                      {r.client_email || ''}{r.client_celular ? ` · ${r.client_celular}` : ''}
-                    </p>
-                    <p className={styles.alertaFecha}>
-                      Creado: {new Date(r.created_at).toLocaleDateString('es-CO', {
-                        day: 'numeric', month: 'short', year: 'numeric',
-                        hour: '2-digit', minute: '2-digit'
-                      })}
-                    </p>
+                    </div>
                   </div>
-                  <span className={styles.alertaBadge}>+24h sin actividad</span>
-                </div>
-              ))}
+                )
+              })}
             </div>
           )}
 

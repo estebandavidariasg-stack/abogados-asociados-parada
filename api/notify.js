@@ -127,6 +127,31 @@ function emailCliente({ nombreCliente, nombreAbogado, area, ctaUrl }) {
   }
 }
 
+function emailInactividad({ nombreAbogado, nombreCliente, area, createdAt, ctaUrl }) {
+  const subjectLine = 'Consulta sin atender — acción requerida'
+  const fechaCreacion = createdAt
+    ? new Date(createdAt).toLocaleDateString('es-CO', {
+        day: 'numeric', month: 'long', year: 'numeric',
+      })
+    : null
+  return {
+    subject: subjectLine,
+    html: renderEmailHtml({
+      subjectLine,
+      greetingHtml: `Estimado/a <strong style="color:#c9a84c;">${nombreAbogado}</strong>,`,
+      bodyHtml:
+        `Tienes una consulta de <strong style="color:#c9a84c;">${nombreCliente}</strong>` +
+        (area ? ` en el área de <strong style="color:#c9a84c;">${area}</strong>` : '') +
+        (fechaCreacion ? ` (abierta el ${fechaCreacion})` : '') +
+        ` sin actividad por más de 24 horas. ` +
+        `El equipo administrativo te solicita ingresar a la plataforma y dar respuesta lo antes posible. ` +
+        `Si la consulta ya no requiere tu atención, márcala como cerrada.`,
+      ctaLabel: 'Atender consulta',
+      ctaUrl,
+    }),
+  }
+}
+
 // ── Handler principal ──────────────────────────────────────────────────────
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -173,6 +198,39 @@ export default async function handler(req, res) {
       })
 
       return res.status(200).json({ ok: true, sent: 'lawyer' })
+    }
+
+    // ── Notificación al profesional sobre chat inactivo ──
+    // Disparado manualmente por el superadmin desde AdminPage > tab Alertas
+    // cuando un chat lleva +24h sin actividad. Resuelve el correo del
+    // profesional con service role (no se expone en el cliente).
+    if (type === 'chat_inactivity') {
+      const { lawyerId, clientNombre, area, createdAt } = data || {}
+      if (!lawyerId) {
+        return res.status(400).json({ error: 'Falta lawyerId.' })
+      }
+      const pro = await resolveProfessionalEmail(lawyerId)
+      if (!pro?.email) {
+        return res.status(400).json({ error: 'No se pudo resolver el correo del profesional.' })
+      }
+      const nombreAbogado = `${pro.nombre || ''} ${pro.apellido || ''}`.trim() || 'profesional'
+
+      const { subject, html } = emailInactividad({
+        nombreAbogado,
+        nombreCliente: clientNombre || 'un cliente',
+        area:          area || '',
+        createdAt,
+        ctaUrl,
+      })
+
+      await transporter.sendMail({
+        from: `"Abogados y Asociados Parada" <${process.env.GMAIL_USER}>`,
+        to: pro.email,
+        subject,
+        html,
+      })
+
+      return res.status(200).json({ ok: true, sent: 'lawyer_inactivity' })
     }
 
     // ── Notificación al cliente cuando el abogado se une ──

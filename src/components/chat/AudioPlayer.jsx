@@ -1,18 +1,80 @@
 import { useState, useRef, useEffect } from 'react'
 import styles from './AudioPlayer.module.css'
+import { supabase } from '../../lib/supabase'
+
+/* ── Resolución de URL del audio ──────────────────────────────────────────
+   Los uploads viejos guardaban el signed URL completo en chat_messages
+   (con expiración de 7 días). Después de 7 días el URL muere y el audio
+   queda inaccesible aunque el archivo SIGA en el bucket.
+
+   Esta función rescata esos audios:
+     · Si recibimos un path simple ("<userId>/voz.webm") → firmamos por 1h
+     · Si recibimos un URL firmado expirado → extraemos el path interno y
+       re-firmamos
+     · Si no podemos derivar un path → devolvemos el src original (último
+       intento, por si era un URL público válido)
+*/
+function extractChatFilesPath(url) {
+  if (!url) return null
+  // URL firmado:  /storage/v1/object/sign/chat-files/<path>?token=...
+  const signed = url.match(/\/storage\/v1\/object\/sign\/chat-files\/([^?]+)/)
+  if (signed) return decodeURIComponent(signed[1])
+  // URL público/directo: /storage/v1/object/(public/)?chat-files/<path>
+  const direct = url.match(/\/storage\/v1\/object\/(?:public\/)?chat-files\/([^?]+)/)
+  if (direct) return decodeURIComponent(direct[1])
+  return null
+}
+
+async function resolveAudioUrl(src) {
+  if (!src) return null
+  // Path puro (formato nuevo)
+  if (!/^https?:\/\//.test(src)) {
+    const { data } = await supabase.storage
+      .from('chat-files')
+      .createSignedUrl(src, 60 * 60) // 1 h, suficiente para reproducir
+    return data?.signedUrl || null
+  }
+  // URL — intentar extraer el path interno y re-firmar
+  const path = extractChatFilesPath(src)
+  if (path) {
+    const { data } = await supabase.storage
+      .from('chat-files')
+      .createSignedUrl(path, 60 * 60)
+    return data?.signedUrl || src
+  }
+  // Formato no reconocido — devolver tal cual (último intento)
+  return src
+}
 
 export default function AudioPlayer({ src, mine }) {
-  const audioRef                = useRef(null)
-  const [playing, setPlaying]   = useState(false)
-  const [progress, setProgress] = useState(0)
-  const [duration, setDuration] = useState(0)
-  const [current, setCurrent]   = useState(0)
-  const [error, setError]       = useState(false)
-  const [loaded, setLoaded]     = useState(false)
+  const audioRef                          = useRef(null)
+  const [playing, setPlaying]             = useState(false)
+  const [progress, setProgress]           = useState(0)
+  const [duration, setDuration]           = useState(0)
+  const [current, setCurrent]             = useState(0)
+  const [error, setError]                 = useState(false)
+  const [loaded, setLoaded]               = useState(false)
+  const [resolvedSrc, setResolvedSrc]     = useState(null)
+  const [resolveFailed, setResolveFailed] = useState(false)
+
+  // Resolver el src a un signed URL fresco antes de pasarlo al <audio>
+  useEffect(() => {
+    let cancelled = false
+    setResolvedSrc(null); setResolveFailed(false)
+    setError(false);      setLoaded(false)
+    resolveAudioUrl(src)
+      .then(url => {
+        if (cancelled) return
+        if (url) setResolvedSrc(url)
+        else     setResolveFailed(true)
+      })
+      .catch(() => { if (!cancelled) setResolveFailed(true) })
+    return () => { cancelled = true }
+  }, [src])
 
   useEffect(() => {
     const audio = audioRef.current
-    if (!audio) return
+    if (!audio || !resolvedSrc) return
     setError(false); setLoaded(false)
 
     let durationFixTimer = null
@@ -64,7 +126,7 @@ export default function AudioPlayer({ src, mine }) {
       audio.removeEventListener('canplay', onCanPlay)
       clearTimeout(durationFixTimer)
     }
-  }, [src])
+  }, [resolvedSrc])
 
   async function togglePlay() {
     const audio = audioRef.current
@@ -101,7 +163,7 @@ export default function AudioPlayer({ src, mine }) {
 
   const HEIGHTS = [20,35,55,40,65,80,50,35,70,45,60,30,75,55,40,65,35,80,50,40,70,30,55,65,45,75,35,60,50,40]
 
-  if (error) {
+  if (error || resolveFailed) {
     return (
       <div className={`${styles.player} ${mine ? styles.playerMine : styles.playerOther}`}>
         <span style={{ fontSize: '0.75rem', opacity: 0.5 }}>Audio no disponible</span>
@@ -111,7 +173,7 @@ export default function AudioPlayer({ src, mine }) {
 
   return (
     <div className={`${styles.player} ${mine ? styles.playerMine : styles.playerOther}`}>
-      <audio ref={audioRef} src={src} preload="auto" crossOrigin="anonymous" />
+      <audio ref={audioRef} src={resolvedSrc || undefined} preload="auto" crossOrigin="anonymous" />
 
       <button className={styles.playBtn} onClick={togglePlay} disabled={!loaded}>
         {playing
