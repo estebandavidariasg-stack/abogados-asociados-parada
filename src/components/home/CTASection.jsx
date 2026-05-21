@@ -19,11 +19,11 @@ export default function CTASection() {
     <section className={styles.section} id="contacto" ref={ref}>
       <span className={`${styles.label} fade-up`}>¿Necesita asesoría?</span>
       <h2 className={`${styles.title} fade-up`}>
-        Hablemos sobre <br /> su caso hoy
+        Escríbemos <br /> si tienes dudas
       </h2>
       <div className={`${styles.actions} fade-up`}>
         <a 
-          href="https://wa.me/573108886571" 
+          href="https://wa.me/573124086734" 
           className={styles.ctaButton}
         >
           WhatsApp directo
