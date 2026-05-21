@@ -13,12 +13,13 @@
   height: 72px;
   width: 100%;
   max-width: 100%;
-  background: rgba(6, 16, 38, 0.55);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  background: rgba(250, 247, 242, 0.78);
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
   border: none;
+  border-bottom: 1px solid rgba(201, 168, 76, 0.22);
   border-radius: 0;
-  box-shadow: none;
+  box-shadow: 0 1px 0 rgba(13, 45, 94, 0.04);
   transition:
     background 0.35s ease,
     box-shadow 0.35s ease,
@@ -83,7 +84,7 @@
   font-family: 'Cinzel', serif;
   font-size: 0.5rem;
   font-weight: 400;
-  color: rgba(255, 255, 255, 0.92);
+  color: var(--navy);
   text-align: center;
   transition: color 0.4s;
 }
@@ -96,7 +97,7 @@
   font-family: 'Cinzel', serif;
   font-size: 0.62rem;
   font-weight: 700;
-  color: var(--gold-lt);
+  color: var(--gold);
   text-align: center;
   transition: color 0.4s;
 }
@@ -119,8 +120,8 @@
   letter-spacing: 0.15em;
   text-transform: uppercase;
   background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.65);
-  color: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(13, 45, 94, 0.5);
+  color: var(--navy-md);
   padding: 0.5rem 1.3rem;
   cursor: pointer;
   border-radius: 4px;
@@ -128,9 +129,9 @@
 }
 
 .btnLogin:hover {
-  background: rgba(255, 255, 255, 0.15);
-  border-color: #fff;
-  color: #fff;
+  background: rgba(13, 45, 94, 0.07);
+  border-color: var(--navy);
+  color: var(--navy);
 }
 
 .btnLoginDark {
@@ -150,9 +151,9 @@
   font-weight: 700;
   letter-spacing: 0.15em;
   text-transform: uppercase;
-  background: #fff;
-  border: 1px solid #fff;
-  color: var(--navy);
+  background: var(--navy);
+  border: 1px solid var(--navy);
+  color: #fff;
   padding: 0.5rem 1.3rem;
   cursor: pointer;
   border-radius: 4px;
@@ -160,8 +161,9 @@
 }
 
 .btnRegister:hover {
-  background: rgba(255, 255, 255, 0.88);
-  opacity: 0.92;
+  background: var(--navy-md);
+  border-color: var(--navy-md);
+  opacity: 0.95;
 }
 
 .btnRegisterDark {
@@ -186,7 +188,7 @@
   gap: 0.7rem;
   background: none;
   border: none;
-  color: #fff;
+  color: var(--navy);
   padding: 0.3rem 0.5rem;
   cursor: pointer;
   font-family: 'Raleway', sans-serif;
@@ -204,8 +206,8 @@
   width: 34px;
   height: 34px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.15);
-  border: 1.5px solid rgba(255, 255, 255, 0.5);
+  background: rgba(13, 45, 94, 0.08);
+  border: 1.5px solid rgba(13, 45, 94, 0.3);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -226,7 +228,7 @@
 .avatar svg {
   width: 16px;
   height: 16px;
-  color: rgba(255, 255, 255, 0.8);
+  color: var(--navy-md);
 }
 
 .avatarDark svg {
@@ -248,7 +250,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: rgba(255, 255, 255, 0.9);
+  color: var(--navy);
   transition: color 0.4s;
 }
 
@@ -323,7 +325,7 @@
   display: block;
   width: 22px;
   height: 2px;
-  background: rgba(255, 255, 255, 0.92);
+  background: var(--navy);
   border-radius: 2px;
   transition: transform 0.3s, opacity 0.3s, background 0.4s;
 }
