@@ -113,25 +113,41 @@ export default function AdminPage() {
       const rooms = await roomsRes.json()
       if (!Array.isArray(rooms) || rooms.length === 0) { setAlertas([]); return }
       const hace24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
-      const inactivas = []
-      for (const room of rooms) {
-        const msgRes = await fetch(
-          `${SUPABASE_URL}/rest/v1/chat_messages?room_id=eq.${room.id}&created_at=gte.${hace24h}&select=id&limit=1`,
-          { headers }
-        )
-        const msgs = await msgRes.json()
-        if (!Array.isArray(msgs) || msgs.length === 0) {
-          // Adjuntar abogados/contadores asignados para poder notificarlos
-          // El email lo resuelve server-side el endpoint (no exponemos en cliente)
-          const lawyersRes = await fetch(
-            `${SUPABASE_URL}/rest/v1/chat_room_lawyers?room_id=eq.${room.id}&select=lawyer_id`,
-            { headers }
-          )
-          const lawyersRows = await lawyersRes.json()
-          room.lawyer_ids = Array.isArray(lawyersRows) ? lawyersRows.map(l => l.lawyer_id) : []
-          inactivas.push(room)
-        }
+
+      // Antes hacíamos 1 + 2N queries (serializadas dentro del for) — con
+      // 30+ salas tardaba ~30s. Ahora batcheamos:
+      //   1) Una query para TODOS los mensajes recientes de TODAS las salas
+      //   2) Filtramos en memoria las salas SIN actividad
+      //   3) Una query para los abogados asignados a esas salas inactivas
+      // Total: 3 queries en lugar de 1 + 2N.
+      const roomIds = rooms.map(r => r.id).join(',')
+      const msgsRes = await fetch(
+        `${SUPABASE_URL}/rest/v1/chat_messages?room_id=in.(${roomIds})&created_at=gte.${hace24h}&select=room_id`,
+        { headers }
+      )
+      const msgsAll = await msgsRes.json()
+      const conActividad = new Set(
+        (Array.isArray(msgsAll) ? msgsAll : []).map(m => m.room_id)
+      )
+      const inactiveRooms = rooms.filter(r => !conActividad.has(r.id))
+      if (inactiveRooms.length === 0) { setAlertas([]); return }
+
+      const inactiveIds = inactiveRooms.map(r => r.id).join(',')
+      const lawyersRes = await fetch(
+        `${SUPABASE_URL}/rest/v1/chat_room_lawyers?room_id=in.(${inactiveIds})&select=room_id,lawyer_id`,
+        { headers }
+      )
+      const lawyersAll = await lawyersRes.json()
+      const lawyersByRoom = {}
+      for (const l of (Array.isArray(lawyersAll) ? lawyersAll : [])) {
+        if (!lawyersByRoom[l.room_id]) lawyersByRoom[l.room_id] = []
+        lawyersByRoom[l.room_id].push(l.lawyer_id)
       }
+
+      const inactivas = inactiveRooms.map(r => ({
+        ...r,
+        lawyer_ids: lawyersByRoom[r.id] || [],
+      }))
       setAlertas(inactivas)
     } catch (err) {
       console.error('[fetchAlertas] error:', err)

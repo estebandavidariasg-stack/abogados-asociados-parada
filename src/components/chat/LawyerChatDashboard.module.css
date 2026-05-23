@@ -271,24 +271,162 @@
   max-width: none !important;
 }
 
-/* Primer mensaje del cliente — destacado en navy con texto blanco
-   (replica el estilo de bubble Mine que ve el cliente en ChatSection). */
-.bubbleFirst {
-  background: #0d2d5e !important;
+/* Idem para imagenes: la imagen ES la burbuja (estilo WhatsApp). */
+.bubbleImg {
+  background: transparent !important;
   border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  border-radius: 0 !important;
+  max-width: none !important;
+}
+
+/* Primer mensaje del cliente — destacado con fondo BLANCO y acento
+   dorado lateral. El texto va en navy oscuro (legible sobre claro).
+   Antes era navy + texto blanco, pero pisaba visualmente la apertura
+   del chat — el cliente preferia respeto del tono claro general. */
+.bubbleFirst {
+  background: #ffffff !important;
+  border: 1px solid rgba(201, 168, 76, 0.45) !important;
+  border-left: 3px solid var(--gold, #c9a84c) !important;
   border-radius: 14px 14px 14px 4px !important;
-  box-shadow: 0 4px 16px rgba(13,45,94,0.16) !important;
+  box-shadow: 0 4px 16px rgba(201, 168, 76, 0.14) !important;
   padding: 14px 18px !important;
   max-width: 78% !important;
 }
-.bubbleFirst .msgText {
-  color: #ffffff !important;
+.bubbleFirst .msgText,
+.bubbleFirst.bubbleOther .msgText {
+  color: #1a2a4a !important;
+  opacity: 1 !important;
   font-size: 0.92rem !important;
   line-height: 1.6 !important;
+  text-shadow: none !important;
 }
 .bubbleFirst .msgMetaOther {
-  color: rgba(232,242,252,0.5) !important;
+  color: #8a9ab5 !important;
   text-align: right !important;
+}
+
+/* ── Toast visual (reemplaza alert() nativo del navegador) ────────
+   Aparece fijo al centro-inferior del viewport, navy con borde gold,
+   auto-dismiss en 3.5s desde el JSX. Click para descartar. */
+.toast {
+  position: fixed;
+  bottom: 32px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: linear-gradient(135deg, #0d2d5e 0%, #1a4d8a 100%);
+  color: #fef8e1;
+  padding: 14px 22px;
+  border-radius: 12px;
+  border: 1px solid rgba(201, 168, 76, 0.5);
+  box-shadow: 0 12px 40px rgba(13, 45, 94, 0.4), 0 0 0 1px rgba(201, 168, 76, 0.1);
+  font-family: inherit;
+  font-size: 0.88rem;
+  font-weight: 500;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  animation: toastIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  max-width: min(440px, calc(100% - 32px));
+  cursor: pointer;
+}
+.toast svg {
+  flex-shrink: 0;
+  color: var(--gold, #c9a84c);
+}
+.toast:hover {
+  background: linear-gradient(135deg, #1a3a6b 0%, #2a6496 100%);
+}
+@keyframes toastIn {
+  from { opacity: 0; transform: translate(-50%, 16px); }
+  to   { opacity: 1; transform: translate(-50%, 0); }
+}
+
+/* ── Imagen inline (WhatsApp style) ──────────────────────────────
+   Click = abrir lightbox. Hover = elevacion sutil. draggable=false
+   y onContextMenu (en JSX) son deterrentes a guardar-como, no
+   security real — el navegador igual descarga los bytes para
+   poder pintar la imagen. */
+.imgBtn {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: zoom-in;
+  display: block;
+  max-width: 280px;
+  border-radius: 14px;
+  overflow: hidden;
+  line-height: 0;
+  box-shadow: 0 2px 8px rgba(13, 45, 94, 0.12);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+.imgBtn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(13, 45, 94, 0.2);
+}
+.imgPreview {
+  display: block;
+  width: 100%;
+  max-height: 320px;
+  object-fit: cover;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+/* ── Lightbox fullscreen ─────────────────────────────────────────
+   Fade-in suave + boton de cerrar arriba a la derecha + click
+   fuera de la imagen cierra. Escape tambien cierra (handler en JSX). */
+.lightbox {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.92);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  animation: lightboxIn 0.25s ease-out;
+  cursor: zoom-out;
+}
+.lightboxImg {
+  max-width: 92vw;
+  max-height: 92vh;
+  object-fit: contain;
+  border-radius: 4px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  cursor: default;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+.lightboxClose {
+  position: absolute;
+  top: 20px;
+  right: 24px;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  color: #fff;
+  font-size: 1.6rem;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s, transform 0.2s, border-color 0.2s;
+  font-family: inherit;
+  padding: 0;
+}
+.lightboxClose:hover {
+  background: rgba(255, 255, 255, 0.22);
+  border-color: rgba(255, 255, 255, 0.5);
+  transform: scale(1.06);
+}
+@keyframes lightboxIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }
 
 .msgText {
@@ -298,7 +436,7 @@
   margin: 0;
 }
 
-.bubbleMine .msgText { color: rgba(255,255,255,0.92); }
+.bubbleMine .msgText { color: #ffffff; }
 .bubbleOther .msgText { color: #1a2a4a; }
 
 .msgMeta {
@@ -306,27 +444,76 @@
   margin: 4px 0 0;
 }
 
-.msgMetaMine  { composes: msgMeta; text-align: right; color: rgba(255,255,255,0.4); }
+.msgMetaMine  { composes: msgMeta; text-align: right; color: rgba(255,255,255,0.55); }
 .msgMetaOther { composes: msgMeta; text-align: left; color: #8a9ab5; }
 
+/* ── Chip de archivo adjunto ─────────────────────────────────────
+   Default (burbuja blanca .bubbleOther = archivos del cliente):
+     navy text + ícono dorado + borde navy sutil.
+   Override .bubbleMine (burbuja navy oscura = archivos propios):
+     texto cream + ícono dorado + tinte gold — sin esto el chip se
+     volvía invisible (texto navy sobre fondo navy). */
 .fileBtn {
-  background: none;
-  border: 1px solid rgba(13,45,94,0.15);
-  border-radius: 6px;
-  padding: 8px 12px;
+  background: rgba(13, 45, 94, 0.04);
+  border: 1px solid rgba(13, 45, 94, 0.22);
+  border-radius: 8px;
+  padding: 10px 14px;
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 8px;
-  color: #0d2d5e;
-  font-size: 0.85rem;
+  gap: 10px;
+  color: var(--navy, #0d2d5e);
+  font-family: inherit;
+  font-size: 0.88rem;
+  font-weight: 600;
   width: 100%;
   text-align: left;
-  transition: border-color 0.2s;
+  transition: background 0.2s, border-color 0.2s, transform 0.15s, box-shadow 0.2s;
 }
-.fileBtn:hover { border-color: var(--gold); }
-.fileName { flex: 1; word-break: break-all; }
-.fileSize { color: #8a9ab5; font-size: 0.75rem; flex-shrink: 0; }
+.fileBtn:hover {
+  background: rgba(13, 45, 94, 0.08);
+  border-color: var(--navy, #0d2d5e);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(13, 45, 94, 0.12);
+}
+.fileBtn svg {
+  color: #b8841c;
+  flex-shrink: 0;
+}
+
+.bubbleMine .fileBtn {
+  background: rgba(201, 168, 76, 0.16);
+  border-color: rgba(201, 168, 76, 0.45);
+  color: #fef8e1;
+}
+.bubbleMine .fileBtn:hover {
+  background: rgba(201, 168, 76, 0.26);
+  border-color: rgba(201, 168, 76, 0.7);
+  box-shadow: 0 4px 12px rgba(201, 168, 76, 0.22);
+}
+.bubbleMine .fileBtn svg {
+  color: var(--gold, #c9a84c);
+}
+.bubbleMine .fileSize {
+  color: rgba(255, 248, 225, 0.7);
+}
+
+.fileName {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+.fileSize {
+  color: rgba(13, 45, 94, 0.6);
+  font-size: 0.72rem;
+  font-weight: 500;
+  flex-shrink: 0;
+  letter-spacing: 0.02em;
+}
 
 /* Input */
 .inputBar {
@@ -388,43 +575,68 @@
 .sendBtn:hover { background: #1a4d8a; }
 .sendBtn:disabled { opacity: 0.4; cursor: not-allowed; }
 
+/* ── Botón "Volver" mobile (oculto en desktop) ── */
+.btnBackMobile {
+  display: none;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  color: #0d2d5e;
+  font-family: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 4px 8px;
+  margin: -4px -8px 4px;
+  border-radius: 6px;
+  transition: background 0.15s;
+}
+.btnBackMobile:hover { background: rgba(13,45,94,0.06); }
+
 /* ── Mobile ── */
 @media (max-width: 700px) {
   .dashboard {
     grid-template-columns: 1fr;
-    grid-template-rows: auto 1fr;
-    height: auto;
-    min-height: 80vh;
+    grid-template-rows: 1fr;
+    height: 78vh;
+    min-height: 500px;
+    border-radius: 10px;
   }
 
+  /* Default mobile: solo sidebar (lista de chats), full-width */
   .sidebar {
     border-right: none;
-    border-bottom: 1px solid rgba(13,45,94,0.08);
-    max-height: 180px;
-    overflow-x: auto;
-    overflow-y: hidden;
-    flex-direction: row;
-    flex-wrap: nowrap;
+    max-height: none;
+    overflow-y: auto;
+    width: 100%;
+  }
+  .main {
+    display: none;
   }
 
-  .sidebarHeader { display: none; }
+  /* Cuando hay una sala activa: ocultar sidebar, mostrar chat */
+  .dashboardChatOpen .sidebar {
+    display: none;
+  }
+  .dashboardChatOpen .main {
+    display: flex;
+    width: 100%;
+  }
 
+  /* Mostrar el botón "Volver" solo en mobile + cuando hay chat abierto */
+  .dashboardChatOpen .btnBackMobile {
+    display: inline-flex;
+  }
+
+  /* Cada fila de sala respeta el layout vertical, ocupa todo el ancho */
   .roomRow,
   .roomRowActive {
-    min-width: 160px;
-    border-bottom: none;
-    border-left: none;
-    border-bottom: 2px solid transparent;
-    padding: 12px 14px;
-    flex-shrink: 0;
+    width: 100%;
+    border-left: 2px solid transparent;
+    border-bottom: 1px solid rgba(13,45,94,0.06);
+    padding: 14px 16px;
   }
-
-  .roomRowActive {
-    border-bottom-color: var(--gold);
-    border-left-color: transparent;
-  }
-
-  .main { min-height: 60vh; }
 
   .bubble { max-width: 88%; }
 

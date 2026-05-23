@@ -228,36 +228,43 @@
   cursor: not-allowed;
 }
 
-/* ── Burbuja con archivo adjunto (botón clicable) ─────────────────────── */
+/* ── Burbuja con archivo adjunto (boton clicable) ─────────────────────── */
 .fileBtn {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  background: rgba(201, 168, 76, 0.10);
-  border: 1px solid rgba(201, 168, 76, 0.35);
+  gap: 10px;
+  padding: 10px 14px;
+  background: rgba(201, 168, 76, 0.14);
+  border: 1px solid rgba(201, 168, 76, 0.42);
   border-radius: 10px;
-  color: #e8dfc0;
+  color: #fef8e1;
   cursor: pointer;
   font-family: inherit;
-  font-size: 0.82rem;
+  font-size: 0.86rem;
+  font-weight: 600;
   text-align: left;
-  transition: background 0.18s, border-color 0.18s;
+  transition: background 0.18s, border-color 0.18s, transform 0.15s, box-shadow 0.2s;
   max-width: 100%;
   min-width: 0;
 }
 .fileBtn:hover {
-  background: rgba(201, 168, 76, 0.18);
-  border-color: rgba(201, 168, 76, 0.55);
+  background: rgba(201, 168, 76, 0.24);
+  border-color: rgba(201, 168, 76, 0.7);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(201, 168, 76, 0.2);
+}
+.fileBtn svg {
+  color: var(--gold, #c9a84c);
+  flex-shrink: 0;
 }
 .mia .fileBtn {
-  background: rgba(201, 168, 76, 0.20);
-  border-color: rgba(201, 168, 76, 0.45);
-  color: #e8dfc0;
+  background: rgba(201, 168, 76, 0.22);
+  border-color: rgba(201, 168, 76, 0.5);
+  color: #fef8e1;
 }
 .mia .fileBtn:hover {
-  background: rgba(201, 168, 76, 0.28);
-  border-color: rgba(201, 168, 76, 0.60);
+  background: rgba(201, 168, 76, 0.32);
+  border-color: rgba(201, 168, 76, 0.7);
 }
 .fileName {
   flex: 1;
@@ -265,13 +272,15 @@
   overflow: hidden;
   text-overflow: ellipsis;
   font-weight: 600;
+  letter-spacing: 0.01em;
   min-width: 0;
 }
 .fileSize {
   flex-shrink: 0;
-  font-size: 0.70rem;
-  opacity: 0.75;
+  font-size: 0.72rem;
+  color: rgba(255, 248, 225, 0.7);
   font-weight: 500;
+  letter-spacing: 0.02em;
 }
 
 /* ── Botón micrófono (grabando) ── */

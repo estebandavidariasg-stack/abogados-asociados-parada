@@ -4,6 +4,11 @@ import styles from './LawyerChatDashboard.module.css'
 import AudioPlayer from './AudioPlayer'
 import { IconPaperclip, IconMic } from '../shared/Icons'
 
+// Detecta si el archivo es imagen para renderizar preview inline (WhatsApp style).
+function isImage(name) {
+  return /\.(jpe?g|png|webp|gif|bmp|svg)$/i.test(name || '')
+}
+
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
 
@@ -104,6 +109,23 @@ export default function LawyerChatDashboard({ lawyerId }) {
   const mediaRecorderRef  = useRef(null)
   const audioChunksRef    = useRef([])
   const recordingTimerRef = useRef(null)
+
+  // ── Toast visual (reemplaza alert() del navegador al click de archivo) ──
+  const [toast, setToast] = useState(null)
+  useEffect(() => {
+    if (!toast) return
+    const t = setTimeout(() => setToast(null), 3500)
+    return () => clearTimeout(t)
+  }, [toast])
+
+  // ── Lightbox para imágenes (click en thumbnail = abrir fullscreen) ──
+  const [lightbox, setLightbox] = useState(null)
+  useEffect(() => {
+    if (!lightbox) return
+    const onKey = (e) => { if (e.key === 'Escape') setLightbox(null) }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [lightbox])
 
   /* ── Cargar salas ── */
   const fetchRooms = useCallback(async () => {
@@ -517,7 +539,7 @@ export default function LawyerChatDashboard({ lawyerId }) {
   const hasVideos = activeRoom && messages.some(m => m.message_type === 'video_call')
 
   return (
-    <div className={styles.dashboard}>
+    <div className={`${styles.dashboard} ${activeRoom ? styles.dashboardChatOpen : ''}`}>
 
       {/* ── Sidebar de salas ── */}
       <div className={styles.sidebar}>
@@ -604,6 +626,17 @@ export default function LawyerChatDashboard({ lawyerId }) {
             {/* Header */}
             <div className={styles.chatHeader}>
               <div className={styles.chatMeta}>
+                <button
+                  type="button"
+                  className={styles.btnBackMobile}
+                  onClick={() => setActiveRoom(null)}
+                  aria-label="Volver a la lista de consultas"
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path d="M15 18l-6-6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                  Volver
+                </button>
                 <p className={styles.chatTitle}>{activeRoom.area_derecho}</p>
                 <p className={styles.chatSubtitle}>
                   Cliente · {activeRoom.client_nombre || 'Anónimo'}
@@ -682,25 +715,47 @@ export default function LawyerChatDashboard({ lawyerId }) {
                 const esMio = m.sender_type === 'lawyer'
                 const isAudio = m.message_type === 'audio' && m.file_url
                 const isFirstClientMsg = i === 0 && m.sender_type === 'client' && !isAudio
+                const isImageMsg = !isAudio && (m.message_type === 'file' || m.file_url) && isImage(m.file_name)
                 return (
                   <div
                     key={m.id}
                     className={esMio ? styles.msgRowMine : styles.msgRowOther}
                   >
-                    <div className={`${esMio ? styles.bubbleMine : styles.bubbleOther} ${isAudio ? styles.bubbleAudio : ''} ${isFirstClientMsg ? styles.bubbleFirst : ''}`}>
+                    <div className={`${esMio ? styles.bubbleMine : styles.bubbleOther} ${isAudio ? styles.bubbleAudio : ''} ${isFirstClientMsg ? styles.bubbleFirst : ''} ${isImageMsg ? styles.bubbleImg : ''}`}>
                       {isAudio ? (
                         // mine={true} fuerza el skin dorado: se ve bien sobre
                         // fondo claro (skin "other" translúcido desaparece sobre ivory).
                         <AudioPlayer src={m.file_url} mine={true} />
-                      ) : m.message_type === 'file' ? (
-                        <button
-                          className={styles.fileBtn}
-                          onClick={() => window.open(m.file_url, '_blank')}
-                        >
-                          <IconPaperclip size={14} />
-                          <span className={styles.fileName}>{m.file_name}</span>
-                          {m.file_size && <span className={styles.fileSize}>{formatSize(m.file_size)}</span>}
-                        </button>
+                      ) : (m.message_type === 'file' || m.file_url) ? (
+                        isImage(m.file_name) ? (
+                          <button
+                            className={styles.imgBtn}
+                            onClick={() => setLightbox(m.file_url)}
+                            onContextMenu={(e) => {
+                              e.preventDefault()
+                              setToast('Por políticas de privacidad no puedes guardar esta imagen.')
+                            }}
+                            title="Click para ampliar"
+                          >
+                            <img
+                              src={m.file_url}
+                              alt={m.file_name || 'imagen'}
+                              className={styles.imgPreview}
+                              draggable="false"
+                              loading="lazy"
+                            />
+                          </button>
+                        ) : (
+                          <button
+                            className={styles.fileBtn}
+                            onClick={() => setToast('Por políticas de privacidad no puedes descargar este archivo.')}
+                            title="Archivo bloqueado por políticas de privacidad"
+                          >
+                            <IconPaperclip size={16} />
+                            <span className={styles.fileName}>{m.file_name}</span>
+                            {m.file_size && <span className={styles.fileSize}>{formatSize(m.file_size)}</span>}
+                          </button>
+                        )
                       ) : (
                         <p className={styles.msgText}>{m.content}</p>
                       )}
@@ -760,6 +815,34 @@ export default function LawyerChatDashboard({ lawyerId }) {
           </>
         )}
       </div>
+
+      {toast && (
+        <div className={styles.toast} role="status" onClick={() => setToast(null)}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M12 1a4 4 0 0 0-4 4v3H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V10a2 2 0 0 0-2-2h-2V5a4 4 0 0 0-4-4Zm-2 7V5a2 2 0 1 1 4 0v3h-4Z" fill="currentColor"/>
+          </svg>
+          <span>{toast}</span>
+        </div>
+      )}
+
+      {lightbox && (
+        <div className={styles.lightbox} onClick={() => setLightbox(null)} role="dialog" aria-label="Vista de imagen">
+          <img
+            src={lightbox}
+            alt=""
+            className={styles.lightboxImg}
+            onClick={(e) => e.stopPropagation()}
+            onContextMenu={(e) => e.preventDefault()}
+            draggable="false"
+          />
+          <button
+            className={styles.lightboxClose}
+            onClick={() => setLightbox(null)}
+            aria-label="Cerrar"
+            type="button"
+          >×</button>
+        </div>
+      )}
     </div>
   )
 }

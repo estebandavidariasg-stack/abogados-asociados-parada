@@ -6,6 +6,11 @@ import UbicacionSelector from '../profile/UbicacionSelector'
 import { IconPaperclip, IconMic } from '../shared/Icons'
 import { validarCelular, validarCorreo, normalizarCelular } from '../../lib/validaciones'
 
+// Detecta si el archivo es imagen para renderizar preview inline (WhatsApp style).
+function isImage(name) {
+  return /\.(jpe?g|png|webp|gif|bmp|svg)$/i.test(name || '')
+}
+
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
@@ -784,6 +789,15 @@ export default function ChatSection() {
   const [sending, setSending]       = useState(false)
   const [uploading, setUploading]   = useState(false)
 
+  // ── Lightbox para ver imagenes en grande (click en thumbnail) ────────────
+  const [lightbox, setLightbox] = useState(null)
+  useEffect(() => {
+    if (!lightbox) return
+    const onKey = (e) => { if (e.key === 'Escape') setLightbox(null) }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [lightbox])
+
   // ── Contacto bloqueado ────────────────────────────────────────────────────
   const [contactoWarning, setContactoWarning] = useState(false)
 
@@ -1090,6 +1104,7 @@ export default function ChatSection() {
       await supabase.from('chat_messages').insert({
         room_id: roomId, sender_type:'client', lawyer_id: null,
         content: file.name, file_url: signed?.signedUrl, file_name: file.name, file_size: file.size,
+        message_type: 'file',
       })
     }
     setUploading(false)
@@ -1326,20 +1341,41 @@ export default function ChatSection() {
                       )
                     }
                     const isAudio = msg.message_type === 'audio' && msg.file_url
+                    const isImageMsg = !isAudio && !!msg.file_url && isImage(msg.file_name)
                     return (
                       <div key={msg.id} className={mine ? styles.msgRowMine : styles.msgRowOther}>
-                        <div className={`${mine ? styles.msgBubbleMine : styles.msgBubbleOther} ${isAudio ? styles.msgBubbleAudio : ''}`}>
+                        <div className={`${mine ? styles.msgBubbleMine : styles.msgBubbleOther} ${isAudio ? styles.msgBubbleAudio : ''} ${isImageMsg ? styles.msgBubbleImg : ''}`}>
                           {isAudio ? (
                             // mine={true} fuerza el skin dorado del AudioPlayer:
                             // se ve bien sobre fondo claro (fondo translúcido del
                             // skin "other" desaparece sobre la paleta ivory).
                             <AudioPlayer src={msg.file_url} mine={true} />
                           ) : msg.file_url ? (
-                            <button className={styles.fileBtn} onClick={() => window.open(msg.file_url,'_blank')}>
-                              <IconPaperclip size={14} />
-                              <span className={styles.fileName}>{msg.file_name}</span>
-                              <span className={styles.fileSize}>{formatSize(msg.file_size)}</span>
-                            </button>
+                            isImageMsg ? (
+                              <button
+                                className={styles.imgBtn}
+                                onClick={() => setLightbox(msg.file_url)}
+                                title="Click para ampliar"
+                              >
+                                <img
+                                  src={msg.file_url}
+                                  alt={msg.file_name || 'imagen'}
+                                  className={styles.imgPreview}
+                                  draggable="false"
+                                  loading="lazy"
+                                />
+                              </button>
+                            ) : (
+                              <button
+                                className={styles.fileBtn}
+                                onClick={() => window.open(msg.file_url,'_blank')}
+                                title={msg.file_name}
+                              >
+                                <IconPaperclip size={16} />
+                                <span className={styles.fileName}>{msg.file_name}</span>
+                                <span className={styles.fileSize}>{formatSize(msg.file_size)}</span>
+                              </button>
+                            )
                           ) : (
                             <p className={styles.msgText}>{msg.content}</p>
                           )}
@@ -1698,6 +1734,24 @@ export default function ChatSection() {
 
       {step === 'rating' && roomId && (
         <RatingPanel roomId={roomId} onDone={() => setStep('post_chat')} />
+      )}
+
+      {lightbox && (
+        <div className={styles.lightbox} onClick={() => setLightbox(null)} role="dialog" aria-label="Vista de imagen">
+          <img
+            src={lightbox}
+            alt=""
+            className={styles.lightboxImg}
+            onClick={(e) => e.stopPropagation()}
+            draggable="false"
+          />
+          <button
+            className={styles.lightboxClose}
+            onClick={() => setLightbox(null)}
+            aria-label="Cerrar"
+            type="button"
+          >×</button>
+        </div>
       )}
     </section>
   )

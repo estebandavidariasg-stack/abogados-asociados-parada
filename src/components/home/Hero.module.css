@@ -12,6 +12,25 @@
   --slide-gap: 480px;
 }
 
+/* Fade superior: desde blanco (color de ModelosContractualesSection)
+   hacia el navy del Hero. Sin esto el corte blanco→navy era abrupto.
+   El Hero ahora vive entre dos secciones claras (Modelos arriba, Map
+   abajo), asi que necesita degradados en AMBOS bordes. */
+.hero::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 100px;
+  background: linear-gradient(to top, transparent, #ffffff);
+  pointer-events: none;
+  z-index: 10;
+}
+
+/* Fade inferior: al color top del MapSection (#eceef5, azul muy claro)
+   en lugar de ivory — antes asumiamos VideoCarousel debajo, pero ahora
+   el Hero esta justo arriba del mapa. */
 .hero::after {
   content: '';
   position: absolute;
@@ -19,7 +38,7 @@
   left: 0;
   right: 0;
   height: 100px;
-  background: linear-gradient(to bottom, transparent, var(--ivory));
+  background: linear-gradient(to bottom, transparent, #eceef5);
   pointer-events: none;
   z-index: 10;
 }

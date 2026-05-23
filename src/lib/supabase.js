@@ -428,9 +428,23 @@ export const supabase = {
             headers: getHeaders(),
             body: JSON.stringify({ expiresIn }),
           })
-          const data = await res.json()
-          const signedUrl = data.signedURL ? `${SUPABASE_URL}/storage/v1${data.signedURL}` : null
-          return { data: signedUrl ? { signedUrl } : null, error: res.ok ? null : data }
+          const data = await res.json().catch(() => ({}))
+          if (!res.ok) {
+            console.warn('[storage.createSignedUrl] API error', res.status, data)
+            return { data: null, error: data }
+          }
+          // Supabase Storage API: versiones viejas devuelven `signedURL` (URL
+          // mayúsculas), versiones nuevas devuelven `signedUrl` (camelCase).
+          // Esto causaba que TODOS los audios viejos del chat interno cayeran
+          // al fallback "Audio no disponible" — el wrapper devolvía null aunque
+          // la API hubiera firmado bien.
+          const rel = data.signedURL || data.signedUrl
+          if (!rel) {
+            console.warn('[storage.createSignedUrl] respuesta sin signedURL/signedUrl', data)
+            return { data: null, error: { message: 'No signed URL in response', raw: data } }
+          }
+          const tail = rel.startsWith('/') ? rel : `/${rel}`
+          return { data: { signedUrl: `${SUPABASE_URL}/storage/v1${tail}` }, error: null }
         },
 
         async remove(paths) {
