@@ -1,5 +1,4 @@
 import Navbar from '../components/layout/Navbar'
-import IntroSection from '../components/home/IntroSection'
 import Hero from '../components/home/Hero'
 import LawyersSection from '../components/home/LawyersSection'
 import CTASection from '../components/home/CTASection'
@@ -30,17 +29,16 @@ export default function HomePage() {
         onRegister={() => setModal('register')}
         onRegisterContador={() => setContadorOpen(true)}
       />
-      <IntroSection />
+      <VideoCarousel/>
+      <ChatSection />
+      <CTASection />
+      <LawyersSection />
+      <ModelosContractualesSection />
       <Hero
         editMode={editMode}
         onToggleEdit={() => setEditMode((v) => !v)}
         isSuperAdmin={isSuperAdmin}
       />
-      <VideoCarousel/>
-      <CTASection />
-      <ChatSection />
-      <LawyersSection />
-      <ModelosContractualesSection />
       <MapSection />
       <Footer />
       <WhatsAppButton phone="573124086734" />

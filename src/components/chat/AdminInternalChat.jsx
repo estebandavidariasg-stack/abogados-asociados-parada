@@ -40,8 +40,10 @@ export default function AdminInternalChat({ miId }) {
   const [uploadingFile, setUploadingFile] = useState(false)
   const fileInputRef = useRef(null)
 
-  const bottomRef = useRef()
-  const pollRef   = useRef()
+  const bottomRef    = useRef()
+  const mensajesRef  = useRef(null)
+  const lastCountRef = useRef(0)
+  const pollRef      = useRef()
 
   useEffect(() => {
     fetchAbogados()
@@ -57,9 +59,32 @@ export default function AdminInternalChat({ miId }) {
     return () => clearInterval(pollRef.current)
   }, [selected])
 
+  /* ── Scroll: solo auto-baja si el user YA estaba al fondo ──────────────
+     Antes hacía scrollIntoView en cada cambio de messages, lo que yankeaba
+     al admin cuando estaba leyendo historial arriba. Ahora trackeamos la
+     posición y solo bajamos si la distancia al fondo es < 80px. */
+  const isAtBottomRef = useRef(true)
   useEffect(() => {
-    if (!bottomRef.current || messages.length === 0) return
-    bottomRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+    // Reset al cambiar de conversación: arrancar siempre al fondo.
+    lastCountRef.current = 0
+    isAtBottomRef.current = true
+    const c = mensajesRef.current
+    if (!c) return
+    const onScroll = () => {
+      isAtBottomRef.current = c.scrollHeight - c.scrollTop - c.clientHeight < 80
+    }
+    c.addEventListener('scroll', onScroll, { passive: true })
+    return () => c.removeEventListener('scroll', onScroll)
+  }, [selected])  // re-attach al cambiar de conversación
+
+  useEffect(() => {
+    if (messages.length === lastCountRef.current) return
+    const prevCount = lastCountRef.current
+    lastCountRef.current = messages.length
+    if (!bottomRef.current) return
+    if (prevCount === 0 || isAtBottomRef.current) {
+      bottomRef.current.scrollIntoView({ behavior: prevCount === 0 ? 'auto' : 'smooth', block: 'nearest' })
+    }
   }, [messages])
 
   async function fetchAbogados() {
@@ -410,7 +435,7 @@ export default function AdminInternalChat({ miId }) {
             </div>
 
             {/* Mensajes */}
-            <div className={styles.mensajes}>
+            <div className={styles.mensajes} ref={mensajesRef}>
               {messages.length === 0 && (
                 <p className={styles.sinMsgs}>No hay mensajes. Inicia la conversación.</p>
               )}
@@ -431,7 +456,7 @@ export default function AdminInternalChat({ miId }) {
                         onClick={() => window.open(m.file_url, '_blank', 'noopener,noreferrer')}
                         title={m.file_name}
                       >
-                        <IconPaperclip size={14} />
+                        <IconPaperclip size={16} />
                         <span className={styles.fileName}>{m.file_name}</span>
                         <span className={styles.fileSize}>{fmtFileSize(m.file_size)}</span>
                       </button>

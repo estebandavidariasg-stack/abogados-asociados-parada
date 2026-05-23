@@ -337,7 +337,16 @@ export default function SuperAdminChatViewer() {
     let list = [...rooms]
     if (filterStatus !== 'all') list = list.filter(r => r.status === filterStatus)
     if (filterArea) list = list.filter(r => r.area_derecho?.toLowerCase().includes(filterArea.toLowerCase()))
-    if (search)     list = list.filter(r => r.area_derecho?.toLowerCase().includes(search.toLowerCase()))
+    // Búsqueda libre: matchea contra nombre del cliente, código de referencia
+    // y área (antes solo matcheaba área, redundante con el dropdown filterArea).
+    if (search) {
+      const s = search.toLowerCase()
+      list = list.filter(r =>
+        r.client_nombre?.toLowerCase().includes(s) ||
+        r.codigo_referencia?.toLowerCase().includes(s) ||
+        r.area_derecho?.toLowerCase().includes(s)
+      )
+    }
     setFiltered(list)
   }, [rooms, filterStatus, filterArea, search])
 
@@ -366,11 +375,28 @@ export default function SuperAdminChatViewer() {
       .from('chat_rooms')
       .select(FIELDS)
       .order('created_at', { ascending: false })
-    if (!data) return
-    const withLawyers = await Promise.all(data.map(async room => {
-      const { data: assignments } = await supabase
-        .from('chat_room_lawyers').select('lawyer_id, status').eq('room_id', room.id)
-      return { ...room, chat_room_lawyers: assignments || [] }
+    if (!data || data.length === 0) { setRooms([]); return }
+
+    // Antes hacíamos 1 + N queries (N salas × 1 query cada una para sus
+    // abogados asignados). Con 50+ salas eso son 50+ requests en paralelo
+    // y un round-trip lento. Ahora batcheamos en UNA sola query con IN()
+    // y agrupamos en memoria → 2 queries totales.
+    const roomIds = data.map(r => r.id)
+    const headers = await getAuthHeaders()
+    const idsList = roomIds.join(',')
+    const assignRes = await fetch(
+      `${SUPABASE_URL}/rest/v1/chat_room_lawyers?room_id=in.(${idsList})&select=room_id,lawyer_id,status`,
+      { headers }
+    )
+    const allAssignments = await assignRes.json().catch(() => [])
+    const byRoom = {}
+    for (const a of (Array.isArray(allAssignments) ? allAssignments : [])) {
+      if (!byRoom[a.room_id]) byRoom[a.room_id] = []
+      byRoom[a.room_id].push({ lawyer_id: a.lawyer_id, status: a.status })
+    }
+    const withLawyers = data.map(room => ({
+      ...room,
+      chat_room_lawyers: byRoom[room.id] || [],
     }))
     setRooms(withLawyers)
   }
@@ -419,47 +445,86 @@ export default function SuperAdminChatViewer() {
           setSearchError('No se encontraron chats para esta cédula.')
           setFiltered([])
         } else {
-          const withLawyers = await Promise.all(data.map(async room => {
-            const { data: assignments } = await supabase
-              .from('chat_room_lawyers').select('lawyer_id, status').eq('room_id', room.id)
-            return { ...room, chat_room_lawyers: assignments || [] }
+          // Batched: 1 query para todas las asignaciones en lugar de N.
+          const headers = await getAuthHeaders()
+          const ids = data.map(r => r.id).join(',')
+          const assignRes = await fetch(
+            `${SUPABASE_URL}/rest/v1/chat_room_lawyers?room_id=in.(${ids})&select=room_id,lawyer_id,status`,
+            { headers }
+          )
+          const allAssign = await assignRes.json().catch(() => [])
+          const byRoom = {}
+          for (const a of (Array.isArray(allAssign) ? allAssign : [])) {
+            if (!byRoom[a.room_id]) byRoom[a.room_id] = []
+            byRoom[a.room_id].push({ lawyer_id: a.lawyer_id, status: a.status })
+          }
+          const withLawyers = data.map(room => ({
+            ...room,
+            chat_room_lawyers: byRoom[room.id] || [],
           }))
           setFiltered(withLawyers)
         }
 
       } else if (searchMode === 'abogado') {
-        // Fetch directo con OR en la URL
-        const q = encodeURIComponent(searchQuery.trim())
-        const res = await fetch(
-          `${SUPABASE_URL}/rest/v1/profiles?rol=eq.abogado&or=(nombre.ilike.*${searchQuery.trim()}*,apellido.ilike.*${searchQuery.trim()}*)&select=id,nombre,apellido`,
-          { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } }
-        )
-        const profiles = await res.json()
+        // Antes: 1 + M + M×N queries serializadas (búsqueda → por cada
+        // abogado, su lista de asignaciones → por cada asignación, la sala).
+        // Con 3 abogados de 10 salas eran 33 round-trips lentísimos.
+        // Ahora: 3 queries con IN() + agrupado en memoria.
+        const q = searchQuery.trim()
+        const enc = encodeURIComponent(q)
+        const headers = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` }
 
-        if (!profiles || profiles.length === 0) {
-          setSearchError('No se encontró ningún abogado con ese nombre.')
+        // 1) Buscar profesionales que matcheen (acepta abogado Y contador
+        //    porque tipo_profesional en chat_rooms los maneja a ambos).
+        const profRes = await fetch(
+          `${SUPABASE_URL}/rest/v1/profiles?rol=in.(abogado,contador)&or=(nombre.ilike.*${enc}*,apellido.ilike.*${enc}*)&select=id,nombre,apellido`,
+          { headers }
+        )
+        const profiles = await profRes.json()
+
+        if (!Array.isArray(profiles) || profiles.length === 0) {
+          setSearchError('No se encontró ningún profesional con ese nombre.')
           setFiltered([]); setSearching(false); return
         }
 
-        const allRooms = []
-        for (const lawyer of profiles) {
-          const { data: assignments } = await supabase
-            .from('chat_room_lawyers').select('room_id').eq('lawyer_id', lawyer.id)
-          for (const a of (assignments || [])) {
-            const { data: room } = await supabase
-              .from('chat_rooms').select(FIELDS).eq('id', a.room_id).single()
-            if (room && !allRooms.find(r => r.id === room.id)) {
-              allRooms.push({
-                ...room,
-                _lawyerNombre: `${lawyer.nombre} ${lawyer.apellido}`,
-                chat_room_lawyers: [],
-              })
-            }
-          }
+        const lawyerIds = profiles.map(p => p.id)
+        const lawyerNameById = Object.fromEntries(
+          profiles.map(p => [p.id, `${p.nombre} ${p.apellido || ''}`.trim()])
+        )
+
+        // 2) UNA sola query para todas las asignaciones de esos profesionales.
+        const assignRes = await fetch(
+          `${SUPABASE_URL}/rest/v1/chat_room_lawyers?lawyer_id=in.(${lawyerIds.join(',')})&select=room_id,lawyer_id`,
+          { headers }
+        )
+        const assignments = await assignRes.json()
+        const assignmentList = Array.isArray(assignments) ? assignments : []
+
+        if (assignmentList.length === 0) {
+          setSearchError('No se encontraron chats para este profesional.')
+          setFiltered([]); setSearching(false); return
         }
 
-        allRooms.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
-        if (allRooms.length === 0) setSearchError('No se encontraron chats para este abogado.')
+        // Primera asignación lawyer→room para etiquetar el nombre en la card.
+        const lawyerByRoom = {}
+        for (const a of assignmentList) {
+          if (!lawyerByRoom[a.room_id]) lawyerByRoom[a.room_id] = a.lawyer_id
+        }
+        const uniqueRoomIds = Object.keys(lawyerByRoom)
+
+        // 3) UNA sola query para todas las salas únicas.
+        const roomsRes = await fetch(
+          `${SUPABASE_URL}/rest/v1/chat_rooms?id=in.(${uniqueRoomIds.join(',')})&select=${encodeURIComponent(FIELDS)}&order=created_at.desc`,
+          { headers }
+        )
+        const rooms = await roomsRes.json()
+        const allRooms = (Array.isArray(rooms) ? rooms : []).map(room => ({
+          ...room,
+          _lawyerNombre: lawyerNameById[lawyerByRoom[room.id]] || 'Profesional',
+          chat_room_lawyers: [],
+        }))
+
+        if (allRooms.length === 0) setSearchError('No se encontraron chats para este profesional.')
         setFiltered(allRooms)
       }
     } catch (err) {
@@ -638,7 +703,7 @@ export default function SuperAdminChatViewer() {
       {searchMode === 'all' && (
         <div className={styles.filters}>
           <input className={styles.searchInput} value={search}
-            onChange={e => setSearch(e.target.value)} placeholder="Buscar por área…" />
+            onChange={e => setSearch(e.target.value)} placeholder="Buscar por cliente, código o área…" />
           <select className={styles.filterSelect} value={filterStatus}
             onChange={e => setFilterStatus(e.target.value)}>
             <option value="all">Todos los estados</option>
@@ -801,8 +866,9 @@ export default function SuperAdminChatViewer() {
                         <AudioPlayer src={msg.file_url} mine={true} />
                       ) : msg.file_url ? (
                         <button className={styles.fileBtn}
-                          onClick={() => window.open(msg.file_url, '_blank')}>
-                          <IconPaperclip size={13} />
+                          onClick={() => window.open(msg.file_url, '_blank')}
+                          title={msg.file_name}>
+                          <IconPaperclip size={16} />
                           <span className={styles.fileName}>{msg.file_name}</span>
                           <span className={styles.fileSize}>{formatSize(msg.file_size)}</span>
                         </button>

@@ -84,12 +84,32 @@ export default function LawyerInternalChat({ miId }) {
     return () => clearInterval(pollRef.current)
   }, [adminId, miId])
 
-  /* ── Scroll al fondo SOLO cuando el conteo cambia (no en cada poll) ── */
+  /* ── Scroll: solo auto-baja si el user YA estaba al fondo ──────────────
+     Antes auto-bajaba en cada nuevo mensaje, lo que yankeaba al user cuando
+     estaba leyendo historial arriba. Ahora trackeamos la posición y solo
+     scrolleamos si la distancia al fondo es menor a 80px. */
+  const isAtBottomRef = useRef(true)
+  useEffect(() => {
+    const c = mensajesRef.current
+    if (!c) return
+    const onScroll = () => {
+      isAtBottomRef.current = c.scrollHeight - c.scrollTop - c.clientHeight < 80
+    }
+    c.addEventListener('scroll', onScroll, { passive: true })
+    return () => c.removeEventListener('scroll', onScroll)
+  }, [])
+
   useEffect(() => {
     if (messages.length === lastCountRef.current) return
+    const prevCount = lastCountRef.current
     lastCountRef.current = messages.length
     const c = mensajesRef.current
-    if (c) c.scrollTop = c.scrollHeight
+    if (!c) return
+    // Si el user no estaba al fondo, NO bajarlo a la fuerza.
+    // Excepción: carga inicial (prevCount === 0) → siempre al fondo.
+    if (prevCount === 0 || isAtBottomRef.current) {
+      c.scrollTop = c.scrollHeight
+    }
   }, [messages])
 
   const fetchMessages = useCallback(async () => {
@@ -396,7 +416,7 @@ export default function LawyerInternalChat({ miId }) {
                   onClick={() => window.open(m.file_url, '_blank', 'noopener,noreferrer')}
                   title={m.file_name}
                 >
-                  <IconPaperclip size={14} />
+                  <IconPaperclip size={16} />
                   <span className={styles.fileName}>{m.file_name}</span>
                   <span className={styles.fileSize}>{fmtFileSize(m.file_size)}</span>
                 </button>

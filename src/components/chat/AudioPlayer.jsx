@@ -29,20 +29,29 @@ async function resolveAudioUrl(src) {
   if (!src) return null
   // Path puro (formato nuevo)
   if (!/^https?:\/\//.test(src)) {
-    const { data } = await supabase.storage
+    const { data, error } = await supabase.storage
       .from('chat-files')
       .createSignedUrl(src, 60 * 60) // 1 h, suficiente para reproducir
-    return data?.signedUrl || null
+    if (error || !data?.signedUrl) {
+      console.warn('[AudioPlayer] createSignedUrl falló para path:', src, error)
+      return null
+    }
+    return data.signedUrl
   }
   // URL — intentar extraer el path interno y re-firmar
   const path = extractChatFilesPath(src)
   if (path) {
-    const { data } = await supabase.storage
+    const { data, error } = await supabase.storage
       .from('chat-files')
       .createSignedUrl(path, 60 * 60)
-    return data?.signedUrl || src
+    if (error || !data?.signedUrl) {
+      console.warn('[AudioPlayer] re-sign falló para path extraído:', path, 'src original:', src, error)
+      return src
+    }
+    return data.signedUrl
   }
   // Formato no reconocido — devolver tal cual (último intento)
+  console.warn('[AudioPlayer] formato de src no reconocido, intento directo:', src)
   return src
 }
 
@@ -77,8 +86,17 @@ export default function AudioPlayer({ src, mine }) {
     if (!audio || !resolvedSrc) return
     setError(false); setLoaded(false)
 
+    // Flag para distinguir errores reales del audio vs errores
+    // disparados por el truco del seek a 1e101 (durationFix).
+    let isAttemptingDurationFix = false
+    // Una vez que el seek a 1e101 fallo (webm legacy sin Cues), NO reintentar
+    // — el reload del audio dispara loadedmetadata de nuevo y entrariamos
+    // en loop infinito.
+    let skipDurationFix = false
     let durationFixTimer = null
+
     const onDurationFix = () => {
+      isAttemptingDurationFix = false
       if (audio.duration !== Infinity && !isNaN(audio.duration)) {
         setDuration(audio.duration)
       }
@@ -93,11 +111,15 @@ export default function AudioPlayer({ src, mine }) {
         setDuration(audio.duration)
         return
       }
+      // Si ya intentamos antes y fallo (webm legacy), no reintentar.
+      if (skipDurationFix) return
       // WebM blobs de MediaRecorder llegan con duration=Infinity. Truco:
       // forzar seek a un valor imposible para que el navegador recalcule.
       // Firefox a veces no dispara timeupdate → timeout de seguridad.
+      isAttemptingDurationFix = true
       audio.addEventListener('timeupdate', onDurationFix)
       durationFixTimer = setTimeout(() => {
+        isAttemptingDurationFix = false
         audio.removeEventListener('timeupdate', onDurationFix)
       }, 1500)
       try { audio.currentTime = 1e101 } catch {}
@@ -108,7 +130,36 @@ export default function AudioPlayer({ src, mine }) {
       if (audio.duration !== Infinity && !isNaN(audio.duration)) setDuration(audio.duration)
     }
     const onEnded  = () => { setPlaying(false); setProgress(0); setCurrent(0) }
-    const onError  = () => { setError(true); setPlaying(false) }
+    const onError  = (ev) => {
+      const code = ev?.currentTarget?.error?.code
+      const msg  = ev?.currentTarget?.error?.message
+      // Caso especial: webm viejos de MediaRecorder sin Cues. El seek a 1e101
+      // del durationFix falla con "FFmpegDemuxer: demuxer seek failed". El
+      // archivo IGUAL es reproducible desde 0 — solo el seek no funciona.
+      // Recuperamos: limpiamos el error state recargando el <audio> y
+      // dejamos que el usuario pueda darle play normalmente.
+      if (isAttemptingDurationFix) {
+        console.warn('[AudioPlayer] seek del durationFix falló (webm legacy sin Cues); recuperando para permitir play', { msg, resolvedSrc })
+        isAttemptingDurationFix = false
+        skipDurationFix = true   // NUNCA reintentar — evita loop infinito al recargar.
+        audio.removeEventListener('timeupdate', onDurationFix)
+        clearTimeout(durationFixTimer)
+        // Reload del audio: limpia el error state y permite play desde 0.
+        // El loadedmetadata que viene tras el load() vera skipDurationFix=true
+        // y NO volvera a intentar el seek.
+        const currentSrc = audio.src
+        try {
+          audio.removeAttribute('src')
+          audio.load()
+          audio.src = currentSrc
+          audio.load()
+        } catch {}
+        return
+      }
+      console.warn('[AudioPlayer] <audio> error', { code, msg, resolvedSrc, srcOriginal: src })
+      setError(true)
+      setPlaying(false)
+    }
     const onCanPlay = () => setLoaded(true)
 
     audio.addEventListener('loadedmetadata', onLoaded)
