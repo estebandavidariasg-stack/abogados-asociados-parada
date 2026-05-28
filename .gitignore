@@ -4,3 +4,6 @@ dist/
 .vscode/
 .vercel
 .env*.local
+
+# Claude Code - config personal, no compartir
+.claude/
