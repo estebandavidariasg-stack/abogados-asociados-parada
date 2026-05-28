@@ -261,12 +261,8 @@ export default function VideoCarousel() {
   const [uploadPct,   setUploadPct]   = useState(0)     // 0..100 dentro del stage actual
   const [videoRatios, setVideoRatios] = useState({})
 
-  /* Controla si la sección es visible en viewport (para mute/unmute automático) */
+  /* Controla si la sección es visible en viewport (dispara play() y unmute). */
   const [sectionVisible, setSectionVisible] = useState(false)
-  /* Pre-aviso: el usuario está cerca de llegar al carrusel — ya podemos
-     empezar a precargar el video activo y su vecino para que cuando entre
-     en viewport ya esté buffereado (no se vea cargando). */
-  const [sectionNear,    setSectionNear]    = useState(false)
 
   const videoInputRef   = useRef(null)
   const uploadTargetRef = useRef(null)
@@ -289,29 +285,19 @@ export default function VideoCarousel() {
 
   const activeVideos = editing ? editVideos : videos
 
-  /* ── IntersectionObserver: detectar visibilidad y pre-aviso ──
-     Dos observers:
-       · `near`    → rootMargin 1500 px → dispara MUCHO antes de entrar al
-                     viewport. Damos tiempo a que el video descargue y arranque
-                     muted offscreen, así cuando el usuario llegue ya está
-                     reproduciéndose (ver effect de play/pause más abajo).
-       · `visible` → threshold 0.35 → controla mute/unmute (no el play).
+  /* ── IntersectionObserver: detecta cuando la sección está en pantalla ──
+     threshold:0.25 → dispara cuando ~1/4 de la sección es visible. Esto controla
+     a la vez si el video activo debe reproducirse (ver effect más abajo).
   */
   useEffect(() => {
     if (!sectionRef.current) return
     const target = sectionRef.current
-
-    const obsVisible = new IntersectionObserver(
+    const obs = new IntersectionObserver(
       ([entry]) => setSectionVisible(entry.isIntersecting),
-      { threshold: 0.35 }
+      { threshold: 0.25 }
     )
-    const obsNear = new IntersectionObserver(
-      ([entry]) => setSectionNear(entry.isIntersecting),
-      { rootMargin: '1500px 0px' }
-    )
-    obsVisible.observe(target)
-    obsNear.observe(target)
-    return () => { obsVisible.disconnect(); obsNear.disconnect() }
+    obs.observe(target)
+    return () => obs.disconnect()
   }, [])
 
   /* ── Detectar ratio del video ── */
@@ -323,15 +309,16 @@ export default function VideoCarousel() {
   }
 
   /* ── Play / pause / mute de todos los videos según estado ──
-     Estrategia de "pre-roll silencioso":
-       · sectionNear (800 px antes del viewport)  → arranca muted offscreen.
-         El video se descarga y reproduce silencioso mientras el usuario
-         hace scroll. Cuando llega, ya está en marcha.
-       · sectionVisible (35% en pantalla)         → quita el mute.
-         (Si el browser bloquea el unmute por política de autoplay, el video
-         se queda muted y el usuario puede activar el sonido con el botón.)
-       · ni near ni visible                        → pausa el video activo.
-       · slides inactivos                          → siempre pausados, muted, en t=0.
+       · sectionVisible (25% en pantalla)  → reproduce. Intenta con sonido y si
+         la política de autoplay del browser bloquea, reintenta muted (el usuario
+         puede activar el sonido con el botón de los controles).
+       · sectionVisible = false             → pausa el video activo.
+       · slides inactivos                   → siempre pausados, muted, en t=0.
+     Antes había un "pre-roll silencioso" con un observer de rootMargin 1500px,
+     pero como el carrusel suele estar al tope de la home, sectionNear era true
+     desde el render inicial y forzaba la descarga del MP4 entero antes de pintar
+     nada. Ahora el poster aparece al instante y el video se descarga solo cuando
+     el usuario está mirando.
   */
   useEffect(() => {
     Object.entries(videoRefs.current).forEach(([idx, videoEl]) => {
@@ -345,10 +332,8 @@ export default function VideoCarousel() {
         return
       }
 
-      if (sectionNear) {
-        // Pre-roll: empieza muted apenas estamos cerca.
-        // Cuando esté visible, además quitamos el mute.
-        videoEl.muted = !sectionVisible
+      if (sectionVisible) {
+        videoEl.muted = false
         videoEl.play().catch(() => {
           // Política de autoplay con audio puede bloquear: forzar mute y reintentar.
           videoEl.muted = true
@@ -358,7 +343,7 @@ export default function VideoCarousel() {
         videoEl.pause()
       }
     })
-  }, [current, activeVideos.length, sectionNear, sectionVisible])
+  }, [current, activeVideos.length, sectionVisible])
 
   /* ── Avance automático al terminar ── */
   function handleVideoEnded() {
@@ -641,16 +626,14 @@ export default function VideoCarousel() {
                         src={vid.poster_url ? vid.video_url : `${vid.video_url}#t=0.1`}
                         poster={vid.poster_url || undefined}
                         className={`${styles.video} ${isActive ? styles.videoActive : ''}`}
-                        /* Preload escalonado:
-                           · slide activo + sección cerca → 'auto' (buffer agresivo)
-                           · slide activo o vecino directo → 'metadata' (poster + dimensiones)
+                        /* Preload conservador:
+                           · slide activo o vecino directo → 'metadata' (header MP4
+                             para pintar el primer frame / poster sin descargar todo)
                            · resto                          → 'none'    (no toca red)
+                           El MP4 completo solo se descarga cuando se llama play()
+                           desde el effect — evita bloquear la carga inicial de la página.
                         */
-                        preload={
-                          (isActive && sectionNear) ? 'auto'
-                          : (absOffset <= 1)        ? 'metadata'
-                          :                           'none'
-                        }
+                        preload={absOffset <= 1 ? 'metadata' : 'none'}
                         playsInline
                         loop={false}
                         onLoadedMetadata={e => handleVideoMeta(e, i)}
