@@ -772,6 +772,7 @@ export default function ChatSection() {
     nombre:'', apellido:'', ciudad:'', departamento:'', barrio:'',
     areas:[], correo:'', celular:'', descripcion:'',
     tipo_profesional: 'abogado',
+    genero: '',
   })
   const [correoTouched,  setCorreoTouched]  = useState(false)
   const [celularTouched, setCelularTouched] = useState(false)
@@ -957,7 +958,7 @@ export default function ChatSection() {
 
   function resetToStart() {
     setStep('cedula'); setRoomId(null); setRoomStatus('waiting'); setRoomArea(''); setRoomCodigo('')
-    setMessages([]); setForm({ nombre:'', apellido:'', ciudad:'', departamento:'', barrio:'', areas:[], correo:'', celular:'', descripcion:'', tipo_profesional:'abogado' })
+    setMessages([]); setForm({ nombre:'', apellido:'', ciudad:'', departamento:'', barrio:'', areas:[], correo:'', celular:'', descripcion:'', tipo_profesional:'abogado', genero:'' })
     setPicked([])
     setExcludedLawyerIds([]); setClosedRoomId(null)
     setPqrTipo(''); setPqrMensaje(''); setPqrSent(false); setPqrError(''); setPqrYaExiste(false)
@@ -1005,7 +1006,7 @@ export default function ChatSection() {
     setSending(true)
     const hash      = localStorage.getItem('chat_cedula_hash')
     const codigoRef = localStorage.getItem('chat_codigo_ref') || null
-    const { nombre, apellido, areas, descripcion, ciudad, departamento, barrio, correo, celular } = form
+    const { nombre, apellido, areas, descripcion, ciudad, departamento, barrio, correo, celular, genero } = form
     const ubicacionTxt = barrio ? `${ciudad} - ${barrio}, ${departamento}` : `${ciudad}, ${departamento}`
 
     // Reutilizar room existente waiting/active si ya hay uno (evita 409 por UNIQUE)
@@ -1021,6 +1022,7 @@ export default function ChatSection() {
         client_email:     correo || null,
         client_nombre:    `${nombre} ${apellido}`,
         client_celular:   celular || null,
+        client_genero:    genero || null,
         tipo_profesional: form.tipo_profesional || 'abogado',
         status:           'waiting',
       }
@@ -1472,6 +1474,33 @@ export default function ChatSection() {
                   onChange={e => setForm(f => ({ ...f, apellido: e.target.value }))} placeholder="Tu apellido" />
               </div>
             </div>
+
+            <div className={styles.field}>
+              <label className={styles.label}>Género</label>
+              <div className={styles.areasGrid} role="radiogroup" aria-label="Género">
+                {[
+                  { value: 'femenino',          label: 'Femenino' },
+                  { value: 'masculino',         label: 'Masculino' },
+                  { value: 'otro',              label: 'Otro' },
+                  { value: 'prefiero_no_decir', label: 'Prefiero no decirlo' },
+                ].map(opt => {
+                  const sel = form.genero === opt.value
+                  return (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      role="radio"
+                      aria-checked={sel}
+                      className={sel ? styles.areaChipSelected : styles.areaChip}
+                      onClick={() => setForm(f => ({ ...f, genero: sel ? '' : opt.value }))}
+                    >
+                      {opt.label}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
             <UbicacionSelector
               departamento={form.departamento}
               municipio={form.ciudad}
