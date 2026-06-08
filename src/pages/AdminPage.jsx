@@ -8,6 +8,7 @@ import CodigosReferencia from '../components/admin/CodigosReferencia'
 import MisContratos from '../components/profile/MisContratos'
 import AdminInternalChat from '../components/chat/AdminInternalChat'
 import ProfileDetailModal from '../components/admin/ProfileDetailModal'
+import TarjetaPreview from '../components/profile/TarjetaPreview'
 import NotificationBell from '../components/admin/NotificationBell'
 import { IconCheck, IconX, IconArrowLeft } from '../components/shared/Icons'
 
@@ -433,15 +434,11 @@ export default function AdminPage() {
                       </span>
                     )}
                     {p.tarjeta_archivo_url && (
-                      <a
-                        href={p.tarjeta_archivo_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={e => e.stopPropagation()}
-                        className={styles.cardTarjetaLink}
-                      >
-                        📎 Ver tarjeta profesional
-                      </a>
+                      <TarjetaPreview
+                        rawPath={p.tarjeta_archivo_url}
+                        storagePath={p.tarjeta_archivo_url}
+                        compact
+                      />
                     )}
                     {p.descripcion && <p className={styles.cardDesc}>{p.descripcion}</p>}
                   </div>
@@ -506,15 +503,11 @@ export default function AdminPage() {
                       </span>
                     )}
                     {p.tarjeta_archivo_url && (
-                      <a
-                        href={p.tarjeta_archivo_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={e => e.stopPropagation()}
-                        className={styles.cardTarjetaLink}
-                      >
-                        📎 Ver tarjeta profesional
-                      </a>
+                      <TarjetaPreview
+                        rawPath={p.tarjeta_archivo_url}
+                        storagePath={p.tarjeta_archivo_url}
+                        compact
+                      />
                     )}
                   </div>
                   <div className={styles.cardActions}>

@@ -19,6 +19,19 @@
 }
 
 
+/* Degrada blanco→transparente en el borde superior para fundir con
+   la ChatSection (blanco) que viene encima. */
+.topFade {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 120px;
+  background: linear-gradient(to bottom, #ffffff, transparent);
+  pointer-events: none;
+  z-index: 1;
+}
+
 .section::before {
   content: 'AAP';
   position: absolute;

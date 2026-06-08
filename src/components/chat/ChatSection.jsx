@@ -1,5 +1,6 @@
 
 import { useState, useEffect, useRef } from 'react'
+import { motion, useInView, useReducedMotion } from 'framer-motion'
 import { supabase } from '../../lib/supabase'
 import styles from './ChatSection.module.css'
 import AudioPlayer from './AudioPlayer'
@@ -41,21 +42,7 @@ const AAP_CARD_STYLES = `
     from { opacity: 0; transform: translateY(18px); }
     to   { opacity: 1; transform: translateY(0); }
   }
-  /* One parametric keyframe — each card supplies its own X/Y/rotation
-     via custom properties, so left and right columns can scatter
-     asymmetrically into the gap toward the centre. */
-  @keyframes aap-float {
-    0%, 100% {
-      transform:
-        translate(var(--aap-x, 0px), var(--aap-y, 0px))
-        rotate(var(--aap-r, 0deg));
-    }
-    50% {
-      transform:
-        translate(var(--aap-x, 0px), var(--aap-y-mid, -10px))
-        rotate(var(--aap-r, 0deg));
-    }
-  }
+  /* aap-float eliminado — framer-motion gestiona el float de las cards */
 
   /* Major panels: gold accent bar at the top edge */
   .aap-card-cedula,
@@ -105,10 +92,8 @@ const AAP_CARD_STYLES = `
       filter 380ms ease;
   }
   .aap-card-feature:hover {
-    /* Pause the float so the user can read it; lift via shadow + glow + brighten. */
-    animation-play-state: paused;
     z-index: 4;
-    filter: brightness(1.08) saturate(1.10);
+    filter: brightness(1.1) saturate(1.12);
     border-color: rgba(201, 168, 76, 0.85);
     box-shadow:
       0 2px 4px rgba(0, 0, 0, 0.30),
@@ -119,56 +104,33 @@ const AAP_CARD_STYLES = `
       inset 0 1px 0 rgba(255, 255, 255, 0.18);
   }
 
-  /* Every feature card uses the same parametric keyframe; the per-card
-     X/Y/rotation values come from custom properties below. */
-  .aap-card-feature { animation-name: aap-float; }
-
-  /* Lift the first card on each side up next to the "Consulta Privada"
-     heading, and add breathing room between cards in the column. */
+  /* Posicionamiento estático — framer-motion gestiona x/y/rotate en el componente */
   .aap-card-feature[data-side]:first-child       { margin-top: -160px; }
   .aap-card-feature[data-side]:not(:last-child)  { margin-bottom: 30px; }
 
-  /* LEFT column — fan outward (away from the centre cedula card) with
-     varying offsets so the trio breathes and the cedula gets room. */
-  .aap-card-feature[data-side="left"]:nth-child(1) {
-    --aap-x: -64px;  --aap-y: 0px;    --aap-y-mid: -10px;  --aap-r: -3.5deg;
-  }
-  .aap-card-feature[data-side="left"]:nth-child(2) {
-    --aap-x: -28px;  --aap-y: 22px;   --aap-y-mid: 10px;   --aap-r: 2.5deg;
-  }
-  .aap-card-feature[data-side="left"]:nth-child(3) {
-    --aap-x: -50px;  --aap-y: -8px;   --aap-y-mid: -20px;  --aap-r: -1.5deg;
-  }
-
-  /* RIGHT column — mirror image, also fanning outward. */
-  .aap-card-feature[data-side="right"]:nth-child(1) {
-    --aap-x: 64px;   --aap-y: 0px;    --aap-y-mid: -10px;  --aap-r: 3.5deg;
-  }
-  .aap-card-feature[data-side="right"]:nth-child(2) {
-    --aap-x: 28px;   --aap-y: 22px;   --aap-y-mid: 10px;   --aap-r: -2.5deg;
-  }
-  .aap-card-feature[data-side="right"]:nth-child(3) {
-    --aap-x: 50px;   --aap-y: -8px;   --aap-y-mid: -20px;  --aap-r: 1.5deg;
-  }
-
-  /* Icon container — gold gradient chip, navy strokes for high contrast */
+  /* Icon container — gold gradient chip, navy strokes, outer glow ring */
   .aap-card-feature > div:first-child {
-    width: 60px;
-    height: 60px;
-    border-radius: 16px;
-    background: linear-gradient(135deg, #ecd383 0%, #c9a84c 55%, #a08236 100%);
-    border: 1px solid rgba(255, 255, 255, 0.20);
+    width: 66px;
+    height: 66px;
+    border-radius: 18px;
+    background: linear-gradient(145deg, #f2d580 0%, #c9a84c 50%, #9a7a2c 100%);
+    border: 1px solid rgba(255, 255, 255, 0.25);
     box-shadow:
+      0 0 0 3px rgba(201, 168, 76, 0.18),
       0 4px 16px rgba(201, 168, 76, 0.45),
       inset 0 1px 0 rgba(255, 255, 255, 0.65),
       inset 0 -1px 0 rgba(0, 0, 0, 0.18);
-    color: #0d2d5e;          /* SVG strokes use currentColor → become navy */
-    margin: 0 auto 16px;
+    color: #0d2d5e;
+    margin: 0 auto 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
   }
   .aap-card-feature > div:first-child svg {
-    width: 28px;
-    height: 28px;
-    stroke-width: 1.9;
+    width: 30px;
+    height: 30px;
+    stroke-width: 1.8;
   }
   /* Title — white, Cinzel inherited */
   .aap-card-feature h4 {
@@ -561,27 +523,131 @@ async function notificarAbogado({ lawyerId, nombreAbogado, nombreCliente, area }
 }
 
 const CARDS_LEFT = [
-  { icon: (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>), title: 'Cifrado seguro', text: 'Tu información viaja protegida con encriptación de extremo a extremo.', delay: '0s', duration: '4.4s' },
-  { icon: (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>), title: 'Identidad anónima', text: 'Tu cédula se convierte en un código único. Nadie sabrá quién eres.', delay: '0.9s', duration: '5s' },
-  { icon: (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>), title: 'Cobertura nacional', text: 'Abogados en todo el territorio colombiano listos para atenderte.', delay: '1.7s', duration: '4.7s' },
+  {
+    icon: (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>),
+    title: 'Cifrado seguro',
+    text: 'Tu información viaja protegida con encriptación de extremo a extremo.',
+    xOffset: -64, yFloat: [0, -12, 0], rotate: -3.5,
+    floatDuration: 4.8, floatDelay: 0, entranceDelay: 0,
+  },
+  {
+    icon: (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>),
+    title: 'Identidad anónima',
+    text: 'Tu cédula se convierte en un código único. Nadie sabrá quién eres.',
+    xOffset: -28, yFloat: [0, 11, 0], rotate: 2.5,
+    floatDuration: 5.2, floatDelay: 0.3, entranceDelay: 0.1,
+  },
+  {
+    icon: (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>),
+    title: 'Cobertura nacional',
+    text: 'Abogados en todo el territorio colombiano listos para atenderte.',
+    xOffset: -50, yFloat: [0, -14, 0], rotate: -1.5,
+    floatDuration: 4.5, floatDelay: 0.6, entranceDelay: 0.2,
+  },
 ]
 const CARDS_RIGHT = [
-  { icon: (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>), title: 'Contadores y Auditores Expertos', text: 'Conecta con especialistas verificados en tu área.', delay: '0.3s', duration: '4.8s' },
-  { icon: (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>), title: 'Respuesta rápida', text: 'Recibe orientación legal en minutos desde cualquier dispositivo.', delay: '1.1s', duration: '4.3s' },
-  { icon: (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>), title: 'Atención 24/7', text: 'Consulta cuando lo necesites, sin importar la hora ni el lugar.', delay: '2s', duration: '5.2s' },
+  {
+    icon: (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>),
+    title: 'Especialistas verificados',
+    text: 'Abogados y contadores con credenciales comprobadas en tu área.',
+    xOffset: 64, yFloat: [0, -11, 0], rotate: 3.5,
+    floatDuration: 5.0, floatDelay: 0.15, entranceDelay: 0.05,
+  },
+  {
+    icon: (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>),
+    title: 'Respuesta rápida',
+    text: 'Recibe orientación legal en minutos desde cualquier dispositivo.',
+    xOffset: 28, yFloat: [0, 13, 0], rotate: -2.5,
+    floatDuration: 4.3, floatDelay: 0.45, entranceDelay: 0.15,
+  },
+  {
+    icon: (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>),
+    title: 'Atención 24/7',
+    text: 'Consulta cuando lo necesites, sin importar la hora ni el lugar.',
+    xOffset: 50, yFloat: [0, -15, 0], rotate: 1.5,
+    floatDuration: 5.4, floatDelay: 0.75, entranceDelay: 0.25,
+  },
 ]
 
-function SideCards({ cards, side }) {
+const FM_EASE = [0.16, 1, 0.3, 1]
+
+function FeatureCardItem({ card, side, triggered, prefersReduced }) {
+  const xStart = (side === 'left' ? -90 : 90) + card.xOffset
+
   return (
-    <div className={styles.sideCards}>
-      {cards.map(card => (
-        <div key={card.title} className={`${styles.featureCard} aap-card-feature`}
-          data-side={side}
-          style={{ animationDelay: card.delay, animationDuration: card.duration }}>
-          <div className={styles.cardIconWrap}>{card.icon}</div>
-          <h4 className={styles.cardTitle}>{card.title}</h4>
-          <p className={styles.cardText}>{card.text}</p>
-        </div>
+    <motion.div
+      className={`${styles.featureCard} aap-card-feature`}
+      data-side={side}
+      initial={{ opacity: 0, x: xStart, rotate: card.rotate }}
+      animate={triggered ? {
+        opacity: 1,
+        x: card.xOffset,
+        rotate: card.rotate,
+        y: prefersReduced ? 0 : card.yFloat,
+      } : {
+        opacity: 0,
+        x: xStart,
+        rotate: card.rotate,
+      }}
+      transition={{
+        opacity: { duration: 0.72, ease: FM_EASE, delay: card.entranceDelay },
+        x:       { duration: 0.88, ease: FM_EASE, delay: card.entranceDelay },
+        rotate:  { duration: 0 },
+        y: triggered && !prefersReduced ? {
+          duration: card.floatDuration,
+          repeat: Infinity,
+          ease: 'easeInOut',
+          delay: card.entranceDelay + 0.9,
+          times: [0, 0.5, 1],
+        } : { duration: 0 },
+      }}
+      whileHover={prefersReduced ? {} : {
+        scale: 1.07,
+        transition: { type: 'spring', stiffness: 260, damping: 18 },
+      }}
+    >
+      {/* Icon chip — pulsa suavemente para indicar "seguridad activa" */}
+      <motion.div
+        className={styles.cardIconWrap}
+        animate={prefersReduced ? {} : {
+          boxShadow: [
+            '0 4px 14px rgba(201,168,76,0.40), inset 0 1px 0 rgba(255,255,255,0.60)',
+            '0 4px 28px rgba(201,168,76,0.80), inset 0 1px 0 rgba(255,255,255,0.70)',
+            '0 4px 14px rgba(201,168,76,0.40), inset 0 1px 0 rgba(255,255,255,0.60)',
+          ],
+        }}
+        transition={{
+          boxShadow: {
+            duration: 2.6,
+            repeat: Infinity,
+            ease: 'easeInOut',
+            delay: card.entranceDelay + 1.4,
+          },
+        }}
+      >
+        {card.icon}
+      </motion.div>
+      <h4 className={styles.cardTitle}>{card.title}</h4>
+      <p className={styles.cardText}>{card.text}</p>
+    </motion.div>
+  )
+}
+
+function SideCards({ cards, side }) {
+  const ref = useRef(null)
+  const inView = useInView(ref, { once: true, amount: 0.25 })
+  const prefersReduced = useReducedMotion()
+
+  return (
+    <div ref={ref} className={styles.sideCards}>
+      {cards.map((card) => (
+        <FeatureCardItem
+          key={card.title}
+          card={card}
+          side={side}
+          triggered={inView}
+          prefersReduced={prefersReduced}
+        />
       ))}
     </div>
   )

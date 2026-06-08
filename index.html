@@ -1,23 +1,202 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es-CO">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Abogados y Asociados Parada — Bufete Jurídico</title>
+
+    <!-- Preload LCP hero — dispara durante el parse del HTML, antes de que ejecute JS -->
+    <link
+      rel="preload"
+      as="image"
+      href="/hero-1-1200.avif"
+      type="image/avif"
+      imagesrcset="/hero-1-480.avif 480w, /hero-1-800.avif 800w, /hero-1-1200.avif 1200w"
+      imagesizes="(max-width: 600px) 480px, (max-width: 1024px) 800px, 1200px"
+      fetchpriority="high"
+    />
+
+    <!-- ── SEO primario ── -->
+    <title>Abogados y Asociados Parada — Bufete Jurídico y Contable en Bogotá</title>
+    <meta name="description" content="Bufete jurídico y contable en Bogotá, Colombia. Asesoría en derecho penal, civil, corporativo, de familia, laboral y administrativo, con consultas en línea con abogados y contadores verificados." />
+    <link rel="canonical" href="https://abogadosyasociadosparada.com/" />
+    <meta name="robots" content="index, follow, max-image-preview:large" />
+    <meta name="author" content="Abogados y Asociados Parada" />
+    <meta name="theme-color" content="#0d2d5e" />
+
     <link rel="icon" type="image/png" href="/favicon.png" />
-
-
     <meta name="facebook-domain-verification" content="ur1364pviw8i9zs5l5kr6jdek1o9kp" />
+
+    <!-- ── Open Graph (Facebook / WhatsApp / LinkedIn) ── -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Abogados y Asociados Parada" />
+    <meta property="og:title" content="Abogados y Asociados Parada — Bufete Jurídico y Contable en Bogotá" />
+    <meta property="og:description" content="Asesoría jurídica y contable en Bogotá, Colombia. Consultas en línea con abogados y contadores verificados en derecho penal, civil, laboral, de familia y más." />
+    <meta property="og:url" content="https://abogadosyasociadosparada.com/" />
+    <meta property="og:image" content="https://abogadosyasociadosparada.com/hero-1-1200.jpg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:locale" content="es_CO" />
+
+    <!-- ── Twitter Card ── -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Abogados y Asociados Parada — Bufete Jurídico y Contable en Bogotá" />
+    <meta name="twitter:description" content="Asesoría jurídica y contable en Bogotá, Colombia. Consultas en línea con abogados y contadores verificados." />
+    <meta name="twitter:image" content="https://abogadosyasociadosparada.com/hero-1-1200.jpg" />
+
+    <!-- ── Schema.org @graph unificado ── -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "WebSite",
+          "@id": "https://abogadosyasociadosparada.com/#website",
+          "url": "https://abogadosyasociadosparada.com/",
+          "name": "Abogados y Asociados Parada",
+          "inLanguage": "es-CO",
+          "publisher": { "@id": "https://abogadosyasociadosparada.com/#organization" }
+        },
+        {
+          "@type": "Organization",
+          "@id": "https://abogadosyasociadosparada.com/#organization",
+          "name": "Abogados y Asociados Parada",
+          "url": "https://abogadosyasociadosparada.com/",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://abogadosyasociadosparada.com/logo.png"
+          },
+          "email": "abogadosyasociados.parada@gmail.com",
+          "telephone": "+573124086734"
+        },
+        {
+          "@type": ["LegalService", "AccountingService"],
+          "@id": "https://abogadosyasociadosparada.com/#firma",
+          "name": "Abogados y Asociados Parada",
+          "description": "Bufete jurídico y de servicios contables en Bogotá, Colombia. Asesoría en derecho penal, civil, corporativo, de familia, laboral y administrativo, con consultas en línea con abogados y contadores verificados.",
+          "url": "https://abogadosyasociadosparada.com/",
+          "image": "https://abogadosyasociadosparada.com/hero-1-1200.jpg",
+          "email": "abogadosyasociados.parada@gmail.com",
+          "telephone": "+573124086734",
+          "priceRange": "$$",
+          "knowsLanguage": "es-CO",
+          "parentOrganization": { "@id": "https://abogadosyasociadosparada.com/#organization" },
+          "address": {
+            "@type": "PostalAddress",
+            "streetAddress": "Calle 93 # 15-23, Of. 804",
+            "addressLocality": "Bogotá",
+            "addressRegion": "Bogotá D.C.",
+            "postalCode": "110221",
+            "addressCountry": "CO"
+          },
+          "geo": {
+            "@type": "GeoCoordinates",
+            "latitude": "4.6769",
+            "longitude": "-74.0463"
+          },
+          "areaServed": [
+            { "@type": "Country", "name": "Colombia" },
+            { "@type": "City", "name": "Bogotá D.C.", "@id": "https://www.wikidata.org/wiki/Q2841" },
+            { "@type": "City", "name": "Medellín",    "@id": "https://www.wikidata.org/wiki/Q48481" },
+            { "@type": "City", "name": "Cali",        "@id": "https://www.wikidata.org/wiki/Q48268" }
+          ],
+          "serviceArea": {
+            "@type": "City",
+            "name": "Bogotá D.C.",
+            "@id": "https://www.wikidata.org/wiki/Q2841"
+          },
+          "hasOfferCatalog": {
+            "@type": "OfferCatalog",
+            "name": "Áreas de práctica",
+            "itemListElement": [
+              { "@type": "Offer", "itemOffered": { "@type": "LegalService", "name": "Derecho Penal",          "serviceType": "Asesoría penal",          "description": "Defensa y asesoría en procesos penales, investigación preliminar y juicio oral ante la Fiscalía General de la Nación." } },
+              { "@type": "Offer", "itemOffered": { "@type": "LegalService", "name": "Derecho Civil",          "serviceType": "Asesoría civil",          "description": "Contratos, responsabilidad civil, sucesiones, bienes inmuebles y litigios patrimoniales en Colombia." } },
+              { "@type": "Offer", "itemOffered": { "@type": "LegalService", "name": "Derecho Corporativo",    "serviceType": "Asesoría corporativa",    "description": "Constitución de empresas, fusiones y adquisiciones, contratos mercantiles y gobierno corporativo." } },
+              { "@type": "Offer", "itemOffered": { "@type": "LegalService", "name": "Derecho de Familia",     "serviceType": "Asesoría familiar",       "description": "Divorcios, custodia de menores, alimentos, adopciones y procesos de violencia intrafamiliar." } },
+              { "@type": "Offer", "itemOffered": { "@type": "LegalService", "name": "Derecho Laboral",        "serviceType": "Asesoría laboral",        "description": "Contratos laborales, despidos, liquidaciones, acoso laboral y litigios ante el Ministerio del Trabajo." } },
+              { "@type": "Offer", "itemOffered": { "@type": "LegalService", "name": "Derecho Administrativo", "serviceType": "Asesoría administrativa", "description": "Acciones de tutela, nulidades, contratación estatal y recursos ante entidades públicas colombianas." } },
+              { "@type": "Offer", "itemOffered": { "@type": "Service",      "name": "Asesoría y servicios contables", "serviceType": "Servicios contables", "description": "Auditoría, gestión tributaria, planeación financiera y contabilidad bajo NIIF." } }
+            ]
+          }
+        },
+        {
+          "@type": "SoftwareApplication",
+          "@id": "https://abogadosyasociadosparada.com/#app",
+          "name": "Plataforma de consultas — Abogados y Asociados Parada",
+          "applicationCategory": "BusinessApplication",
+          "operatingSystem": "Windows, macOS, Linux, Android, iOS",
+          "url": "https://abogadosyasociadosparada.com/",
+          "description": "Plataforma web para consultas jurídicas y contables en línea con abogados y contadores verificados en Colombia. Chat en tiempo real, mensajes de audio, adjuntos de archivos y calificación de profesionales.",
+          "inLanguage": "es-CO",
+          "softwareVersion": "1.0",
+          "featureList": "Consultas en tiempo real con abogados verificados, Consultas con contadores certificados, Mensajes de audio, Adjuntos de archivos, Calificación de profesionales, Peticiones quejas y reclamos (PQR)",
+          "offers": { "@type": "Offer", "price": "0", "priceCurrency": "COP" },
+          "provider": { "@id": "https://abogadosyasociadosparada.com/#organization" }
+        }
+      ]
+    }
+    </script>
 
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!-- Fuentes no-bloqueantes: elimina el request CSS del critical path -->
     <link
+      rel="preload"
       href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400;1,600&family=Cinzel:wght@400;600;700&family=Raleway:wght@300;400;500;600&display=swap"
-      rel="stylesheet"
+      as="style"
+      onload="this.onload=null;this.rel='stylesheet'"
     />
+    <noscript>
+      <link
+        href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400;1,600&family=Cinzel:wght@400;600;700&family=Raleway:wght@300;400;500;600&display=swap"
+        rel="stylesheet"
+      />
+    </noscript>
   </head>
   <body>
     <div id="root"></div>
+    <!-- Contenido estático para crawlers sin JavaScript. React lo reemplaza en el montaje. -->
+    <noscript>
+      <main style="font-family:sans-serif;max-width:860px;margin:0 auto;padding:2rem;color:#111">
+        <h1>Abogados y Asociados Parada — Bufete Jurídico y Contable en Bogotá</h1>
+        <p>Somos un bufete jurídico y de servicios contables con sede en Bogotá, Colombia, comprometidos con la excelencia y la defensa de los derechos de nuestros clientes. Ofrecemos asesoría jurídica integral en las principales ramas del derecho colombiano, con acceso directo a consultas en línea con abogados y contadores verificados, sin necesidad de desplazamiento.</p>
+
+        <h2>Áreas de práctica</h2>
+
+        <h3>Derecho Penal</h3>
+        <p>Brindamos defensa y asesoría en procesos penales ante la Fiscalía General de la Nación y los juzgados penales de Colombia. Atendemos casos de investigación preliminar, imputación de cargos, acusación y juicio oral. Protegemos los derechos fundamentales de nuestros clientes conforme al Código de Procedimiento Penal (Ley 906 de 2004).</p>
+
+        <h3>Derecho Civil</h3>
+        <p>Asesoramos en asuntos civiles que incluyen elaboración y revisión de contratos, reclamaciones por responsabilidad civil extracontractual, procesos de sucesiones y herencias, derechos sobre bienes inmuebles y litigios patrimoniales. Actuamos con base en el Código Civil colombiano y la jurisprudencia de la Corte Suprema de Justicia.</p>
+
+        <h3>Derecho Corporativo</h3>
+        <p>Acompañamos a empresas y emprendedores en la constitución de sociedades, redacción de contratos mercantiles, estructuración de fusiones y adquisiciones, y gobierno corporativo. Nuestros servicios cubren todo el ciclo de vida empresarial conforme al Código de Comercio y la Ley 1258 de 2008 (SAS).</p>
+
+        <h3>Derecho de Familia</h3>
+        <p>Gestionamos procesos de divorcio, custodia y visitas de menores, cuota alimentaria, adopciones nacionales e internacionales, y medidas de protección en casos de violencia intrafamiliar. Trabajamos de manera sensible y confidencial para proteger el bienestar de las familias colombianas.</p>
+
+        <h3>Derecho Laboral</h3>
+        <p>Defendemos los derechos de trabajadores y empleadores en materia de contratos laborales, terminación injusta, liquidaciones, acoso laboral, accidentes de trabajo y litigios ante el Ministerio del Trabajo y juzgados laborales, aplicando el Código Sustantivo del Trabajo y la Ley 1010 de 2006.</p>
+
+        <h3>Derecho Administrativo</h3>
+        <p>Interponemos acciones de tutela, derechos de petición, nulidades y restablecimiento del derecho, recursos ante entidades del Estado y procesos de contratación estatal. Representamos a nuestros clientes ante el Consejo de Estado y los Tribunales Administrativos de Colombia.</p>
+
+        <h3>Asesoría y servicios contables</h3>
+        <p>Contamos con contadores públicos certificados especializados en auditoría financiera, gestión tributaria (declaraciones de renta, IVA, retención en la fuente), planeación financiera y contabilidad para personas naturales y jurídicas bajo las Normas Internacionales de Información Financiera (NIIF) adoptadas en Colombia.</p>
+
+        <h2>Consultas jurídicas en línea</h2>
+        <p>Nuestra plataforma digital permite iniciar una consulta jurídica o contable de forma inmediata desde cualquier dispositivo en Colombia. El proceso: selecciona el tipo de profesional (abogado o contador), elige el área de tu consulta, escoge al profesional y comienza a chatear en tiempo real. Al finalizar puedes calificar el servicio y dejar retroalimentación. Todos los profesionales han sido verificados y aprobados por nuestro equipo.</p>
+
+        <h2>Cobertura nacional</h2>
+        <p>Atendemos clientes en todo el territorio colombiano con presencia en Bogotá, Medellín, Cali, Barranquilla, Cartagena, Bucaramanga, Pereira, Cúcuta, Santa Marta, Pasto, Villavicencio y Manizales. Las consultas en línea eliminan barreras geográficas para el acceso a la justicia.</p>
+
+        <h2>Contacto y ubicación</h2>
+        <address>
+          <p>Calle 93 # 15-23, Of. 804 — Bogotá D.C., Colombia</p>
+          <p>Teléfono: <a href="tel:+573124086734">+57 312 408 6734</a></p>
+          <p>Correo: <a href="mailto:abogadosyasociados.parada@gmail.com">abogadosyasociados.parada@gmail.com</a></p>
+          <p>WhatsApp: <a href="https://wa.me/573124086734">+57 312 408 6734</a></p>
+        </address>
+      </main>
+    </noscript>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

@@ -7,6 +7,7 @@ import LawyerChatDashboard from '../components/chat/LawyerChatDashboard'
 import MisContratos from '../components/profile/MisContratos'
 import LawyerInternalChat from '../components/chat/LawyerInternalChat'
 import UbicacionSelector from '../components/profile/UbicacionSelector'
+import TarjetaPreview from '../components/profile/TarjetaPreview'
 import { getAuthHeaders } from '../lib/supabase'
 
 const UNIVERSIDADES = [
@@ -512,20 +513,9 @@ export default function ProfilePage() {
                 <span className={styles.optional}>(opcional — PDF, PNG, JPG o WEBP, máx. 10 MB)</span>
               </label>
               {tarjetaArchivoUrl && (
-                <p style={{ margin: '0 0 8px', fontSize: '0.82rem' }}>
-                  {tarjetaDisplayUrl ? (
-                    <a
-                      href={tarjetaDisplayUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      style={{ color: 'var(--gold-dk, #8a6a28)', fontWeight: 600, textDecoration: 'underline' }}
-                    >
-                      Ver archivo cargado ↗
-                    </a>
-                  ) : (
-                    <span style={{ color: '#888' }}>Generando enlace seguro…</span>
-                  )}
-                </p>
+                tarjetaDisplayUrl
+                  ? <TarjetaPreview displayUrl={tarjetaDisplayUrl} storagePath={tarjetaArchivoUrl} />
+                  : <span style={{ display: 'block', margin: '6px 0 10px', fontSize: '0.82rem', color: '#888' }}>Generando enlace seguro…</span>
               )}
               <button
                 type="button"

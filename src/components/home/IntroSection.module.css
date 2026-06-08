@@ -34,16 +34,16 @@
   z-index: 0;
 }
 
-/* Franja inferior que se funde al navy del Hero (#06102a) — transición
-   continua entre las dos secciones, sin salto de color. */
+/* Franja inferior que suaviza el paso a VideoCarousel (fondo ivory #faf7f2).
+   Ya no va hacia navy porque el Hero fue movido más abajo en la página. */
 .section::after {
   content: '';
   position: absolute;
   left: 0;
   right: 0;
   bottom: 0;
-  height: 200px;
-  background: linear-gradient(to bottom, transparent 0%, rgba(6, 16, 42, 0.55) 60%, #06102a 100%);
+  height: 140px;
+  background: linear-gradient(to bottom, transparent 0%, #faf7f2 100%);
   pointer-events: none;
   z-index: 0;
 }
@@ -153,6 +153,7 @@
 }
 
 .ctaBase {
+  appearance: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;

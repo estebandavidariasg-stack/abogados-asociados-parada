@@ -1,4 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
+import { motion } from 'framer-motion'
+import { headerStagger, eyebrowReveal, fadeUp, gridStagger, cardReveal, VIEWPORT } from '../../lib/motionVariants'
 import { useAuth } from '../../context/AuthContext'
 import { supabase } from '../../lib/supabase'
 import styles from './ModelosContractualesSection.module.css'
@@ -325,13 +327,23 @@ export default function ModelosContractualesSection() {
     <section className={styles.section} id="modelos">
 
       {/* ── Header ── */}
-      <div className={styles.header}>
-        <span className={styles.label}>Recursos Legales</span>
-        <h2 className={styles.title}>MODELOS <em>CONTRACTUALES</em></h2>
-        <p className={styles.desc}>
+      <motion.div
+        className={styles.header}
+        variants={headerStagger}
+        initial="hidden"
+        whileInView="visible"
+        viewport={VIEWPORT}
+      >
+        <motion.span className={styles.label} variants={eyebrowReveal}>
+          Recursos Legales
+        </motion.span>
+        <motion.h2 className={styles.title} variants={fadeUp}>
+          Modelos <em>contractuales</em>
+        </motion.h2>
+        <motion.p className={styles.desc} variants={fadeUp}>
           Plantillas profesionales en Word, Excel y PDF — listas para descargar y adaptar a tu caso.
-        </p>
-      </div>
+        </motion.p>
+      </motion.div>
 
       {/* ── Filtros (chips horizontales, scroll en móvil) ── */}
       <div className={styles.filtersWrap}>
@@ -386,15 +398,22 @@ export default function ModelosContractualesSection() {
         </div>
       ) : (
         <>
-          <div className={styles.grid}>
+          <motion.div
+            className={styles.grid}
+            variants={gridStagger}
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true, amount: 0.1 }}
+          >
             {modelos.map(m => (
-              <article
+              <motion.article
                 key={m.id}
                 className={styles.card}
                 onClick={() => openPreview(m)}
                 role="button"
                 tabIndex={0}
                 onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openPreview(m) } }}
+                variants={cardReveal}
               >
 
                 {isSuperAdmin && (
@@ -429,9 +448,9 @@ export default function ModelosContractualesSection() {
                 >
                   ⬇ Descargar {FORMAT_LABEL[m.formato] || m.formato.toUpperCase()}
                 </button>
-              </article>
+              </motion.article>
             ))}
-          </div>
+          </motion.div>
 
           {hasMore && (
             <div className={styles.loadMoreWrap}>

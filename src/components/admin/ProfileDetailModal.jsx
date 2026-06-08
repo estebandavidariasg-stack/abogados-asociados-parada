@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { supabase } from '../../lib/supabase'
 import SocialLinks from '../profile/SocialLinks'
+import TarjetaPreview from '../profile/TarjetaPreview'
 // Reusamos los estilos del modal de LawyerCard — mismo lenguaje visual.
 import styles from '../home/LawyerCard.module.css'
 
@@ -111,7 +113,7 @@ export default function ProfileDetailModal({ profile, onClose }) {
     profile.twitter   || profile.tiktok   || profile.whatsapp
   )
 
-  return (
+  return createPortal(
     <div className={styles.overlay} onClick={onClose}>
       <div
         className={styles.modal}
@@ -209,13 +211,16 @@ export default function ProfileDetailModal({ profile, onClose }) {
             label="Tarjeta profesional (número)"
             value={profile.tarjeta_profesional} />
           {profile.tarjeta_archivo_url && (
-            <InfoRow
-              icon={ICONS.paperclip}
-              label="Tarjeta profesional (archivo)"
-              value={tarjetaDisplayUrl ? 'Ver archivo cargado ↗' : 'Generando enlace seguro…'}
-              isLink={!!tarjetaDisplayUrl}
-              href={tarjetaDisplayUrl || undefined}
-            />
+            <div className={styles.infoRow}>
+              <span className={styles.infoIcon}>{ICONS.paperclip}</span>
+              <div>
+                <span className={styles.infoLabel}>Tarjeta profesional (archivo)</span>
+                {tarjetaDisplayUrl
+                  ? <TarjetaPreview displayUrl={tarjetaDisplayUrl} storagePath={profile.tarjeta_archivo_url} />
+                  : <span style={{ display: 'block', fontSize: '0.82rem', color: '#888', marginTop: 4 }}>Generando enlace seguro…</span>
+                }
+              </div>
+            </div>
           )}
         </div>
 
@@ -229,6 +234,7 @@ export default function ProfileDetailModal({ profile, onClose }) {
           </>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

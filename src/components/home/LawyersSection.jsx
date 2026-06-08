@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
+import { motion } from 'framer-motion'
+import { headerStagger, eyebrowReveal, fadeUp, VIEWPORT } from '../../lib/motionVariants'
 import LawyerCard from './LawyerCard'
 import styles from './LawyersSection.module.css'
 import { useAuth } from '../../context/AuthContext'
@@ -112,19 +114,27 @@ export default function LawyersSection() {
   return (
     <section className={styles.section} id="lawyers" ref={sectionRef}>
 
-      <div className={`${styles.header} fade-up`}>
-        <span className={styles.label}>Nuestros Socios</span>
-        <h2 className={styles.title}>
+      <motion.div
+        className={styles.header}
+        variants={headerStagger}
+        initial="hidden"
+        whileInView="visible"
+        viewport={VIEWPORT}
+      >
+        <motion.span className={styles.label} variants={eyebrowReveal}>
+          Nuestros Socios
+        </motion.span>
+        <motion.h2 className={styles.title} variants={fadeUp}>
           {profesion === 'contador'
-            ? <>CONTADORES <em>ALIADOS</em></>
-            : <>ABOGADOS DE <em>EXCELENCIA</em></>}
-        </h2>
-        <p className={styles.desc}>
+            ? <>Contadores <em>aliados</em></>
+            : <>Abogados de <em>excelencia</em></>}
+        </motion.h2>
+        <motion.p className={styles.desc} variants={fadeUp}>
           {profesion === 'contador'
             ? 'Profesionales contables aliados, especialistas en auditoría, tributaria y gestión financiera.'
             : 'Profesionales especializados, comprometidos con cada caso y con la defensa de sus derechos.'}
-        </p>
-      </div>
+        </motion.p>
+      </motion.div>
 
       {/* ── Switch de profesión (chips) ── */}
       <div className={`${styles.profesionRow} fade-up`}>

@@ -7,6 +7,19 @@
   --slide-gap: 460px;
 }
 
+/* Funde el fondo ivory (#faf7f2) con el blanco de ChatSection debajo */
+.section::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 80px;
+  background: linear-gradient(to bottom, transparent, #ffffff);
+  pointer-events: none;
+  z-index: 1;
+}
+
 .bg {
   display: none;
 }
@@ -23,17 +36,16 @@
 .eyebrow {
   display: block;
   font-family: 'Raleway', sans-serif;
-  font-size: 0.68rem;
+  font-size: 0.65rem;
   font-weight: 600;
   letter-spacing: 0.35em;
   text-transform: uppercase;
-  color: var(--navy-md);
+  color: var(--gold);
   margin-bottom: 1rem;
 }
 
 .title {
   font-family: 'Cormorant Garamond', serif;
-  font-style: italic;
   font-size: clamp(2rem, 4vw, 3.2rem);
   font-weight: 300;
   color: var(--navy);

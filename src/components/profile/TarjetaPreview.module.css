@@ -1,0 +1,185 @@
+/* ── Variante compacta (inline en cards del admin) ─────────── */
+.compactBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  padding: 0;
+  background: none;
+  border: none;
+  border-bottom: 1px dashed rgba(201, 168, 76, 0.5);
+  padding-bottom: 1px;
+  color: var(--gold-dk, #8a6a28);
+  font-family: 'Raleway', sans-serif;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 0.18s;
+}
+
+.compactBtn:hover { color: var(--navy, #0d2d5e); }
+.compactBtn:disabled { opacity: 0.6; cursor: default; }
+
+/* ── Contenedor centrado ────────────────────────────────────── */
+.wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 0 14px;
+}
+
+/* ── Thumbnail clickable ───────────────────────────────────── */
+.thumb {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 220px;
+  height: 148px;
+  border: 1.5px solid rgba(13, 45, 94, 0.13);
+  border-radius: 14px;
+  overflow: hidden;
+  background: rgba(13, 45, 94, 0.03);
+  cursor: pointer;
+  padding: 0;
+  box-shadow: 0 2px 16px rgba(13, 45, 94, 0.08);
+  transition: border-color 0.22s ease, box-shadow 0.22s ease, transform 0.18s ease;
+}
+
+.thumb:hover {
+  border-color: var(--gold, #C9A84C);
+  box-shadow: 0 6px 28px rgba(201, 168, 76, 0.26);
+  transform: translateY(-2px);
+}
+
+.thumb:hover .thumbOverlay {
+  opacity: 1;
+}
+
+.thumbImg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  pointer-events: none;
+}
+
+.thumbPdf {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: var(--navy, #0d2d5e);
+  opacity: 0.45;
+}
+
+.thumbPdfLabel {
+  font-family: 'Raleway', sans-serif;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.thumbOverlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(13, 45, 94, 0.60);
+  color: #fff;
+  font-family: 'Raleway', sans-serif;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+/* ── Label debajo de la tarjeta ─────────────────────────────── */
+.thumbCaption {
+  font-family: 'Raleway', sans-serif;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: rgba(13, 45, 94, 0.50);
+  text-transform: uppercase;
+}
+
+/* ── Modal overlay ────────────────────────────────────────── */
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 900;
+  background: rgba(8, 22, 48, 0.84);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1.5rem;
+  animation: fadeIn 0.16s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .overlay { animation: none; }
+}
+
+.closeBtn {
+  position: fixed;
+  top: 1rem;
+  right: 1.25rem;
+  z-index: 901;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  color: #fff;
+  font-size: 0.95rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.18s;
+}
+
+.closeBtn:hover {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.viewer {
+  width: 100%;
+  max-width: 880px;
+  max-height: 90vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.viewerImg {
+  max-width: 100%;
+  max-height: 88vh;
+  object-fit: contain;
+  border-radius: 8px;
+  user-select: none;
+  -webkit-user-select: none;
+  pointer-events: none;
+}
+
+.viewerIframe {
+  width: 100%;
+  height: 86vh;
+  border: none;
+  border-radius: 8px;
+  background: #fff;
+}

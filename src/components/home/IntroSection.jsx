@@ -18,9 +18,9 @@ function ArrowIcon() {
   )
 }
 
-export default function IntroSection() {
+export default function IntroSection({ onUnirse }) {
   return (
-    <section className={styles.section} aria-labelledby="intro-heading">
+    <section id="intro" className={styles.section} aria-labelledby="intro-heading">
       <div className={styles.content}>
         <span className={styles.eyebrow}>Abogados y Asociados Parada</span>
 
@@ -42,15 +42,15 @@ export default function IntroSection() {
             onClick={(e) => smoothScrollTo(e, 'chat')}
             className={styles.ctaPrimary}
           >
-            Hablar con un abogado o contador <ArrowIcon />
+            Cuéntanos tu caso <ArrowIcon />
           </a>
-          <a
-            href="#lawyers"
-            onClick={(e) => smoothScrollTo(e, 'lawyers')}
+          <button
+            type="button"
+            onClick={onUnirse}
             className={styles.ctaSecondary}
           >
-            Conocer a los profesionales <ArrowIcon />
-          </a>
+            Únete a la firma <ArrowIcon />
+          </button>
         </div>
       </div>
     </section>

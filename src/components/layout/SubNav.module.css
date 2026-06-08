@@ -1,0 +1,178 @@
+/* ══════════════════════════════════════════════════════════
+   SUBNAV — barra de navegación secundaria bajo el Navbar
+   ══════════════════════════════════════════════════════════ */
+.subnav {
+  position: fixed;
+  top: 72px;
+  left: 0;
+  right: auto;
+  width: 100%;
+  height: 44px;
+  z-index: 89;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 2.5rem;
+  background: rgba(250, 247, 242, 0.88);
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  border-radius: 0;
+  box-shadow: none;
+  transition:
+    top 0.3s ease,
+    left 0.3s ease,
+    width 0.3s ease,
+    max-width 0.3s ease,
+    transform 0.3s ease,
+    border-radius 0.3s ease,
+    background 0.35s ease,
+    box-shadow 0.35s ease,
+    padding 0.3s ease,
+    border 0.35s ease;
+}
+
+/* ── Scrolled: solo las píldoras individuales, sin fondo contenedor ── */
+.subnavScrolled {
+  top: calc(1rem + 68px); /* top:1rem + height:64px + 4px gap */
+  left: 50%;
+  width: calc(100% - 3rem);
+  max-width: 1140px;
+  transform: translateX(-50%);
+  border-radius: 0;
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border: none;
+  box-shadow: none;
+}
+
+/* ── Lista ─────────────────────────────────────────────── */
+.list {
+  display: flex;
+  align-items: center;
+  list-style: none;
+  gap: 6px;
+  height: 100%;
+}
+
+/* ── Link — píldora individual ──────────────────────────── */
+.link {
+  appearance: none;
+  background: transparent;
+  border: 1px solid rgba(13, 45, 94, 0.18);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border-radius: 999px;
+  cursor: pointer;
+  text-decoration: none;
+
+  font-family: 'Raleway', sans-serif;
+  font-size: 0.67rem;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(13, 45, 94, 0.52);
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 28px;
+  padding: 0 1rem;
+  white-space: nowrap;
+
+  transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.link:hover {
+  background: rgba(13, 45, 94, 0.06);
+  border-color: rgba(13, 45, 94, 0.30);
+  color: var(--navy, #0d2d5e);
+}
+
+/* ── Active: borde navy + fondo sutil ───────────────────── */
+.link.active {
+  background: rgba(13, 45, 94, 0.08);
+  border-color: rgba(13, 45, 94, 0.35);
+  color: var(--navy, #0d2d5e);
+}
+
+/* ── CTA "Iniciar consulta" — píldora dorada, acción no selección ── */
+.linkCta {
+  background: var(--gold, #C9A84C);
+  border-color: var(--gold, #C9A84C);
+  color: var(--navy, #0d2d5e);
+  font-weight: 700;
+}
+
+.linkCta:hover {
+  background: var(--gold-lt, #E8C96A);
+  border-color: var(--gold-lt, #E8C96A);
+  color: var(--navy, #0d2d5e);
+  box-shadow: 0 2px 14px rgba(201, 168, 76, 0.40);
+}
+
+.linkCta.active {
+  background: var(--gold, #C9A84C);
+  border-color: var(--gold, #C9A84C);
+  color: var(--navy, #0d2d5e);
+}
+
+/* ── Scrolled: los pills flotan sobre secciones → necesitan fondo propio ── */
+/* La barra contenedora es transparente en este estado, así que cada    */
+/* píldora lleva su propia superficie glass para no perderse en el fondo */
+
+.subnavScrolled .link {
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(14px) saturate(130%);
+  -webkit-backdrop-filter: blur(14px) saturate(130%);
+  border-color: rgba(255, 255, 255, 0.55);
+  box-shadow:
+    0 2px 12px rgba(13, 45, 94, 0.10),
+    inset 0 1px 0 rgba(255, 255, 255, 0.90);
+  color: rgba(13, 45, 94, 0.68);
+}
+
+.subnavScrolled .link:hover {
+  background: rgba(255, 255, 255, 0.96);
+  border-color: rgba(13, 45, 94, 0.20);
+  color: var(--navy, #0d2d5e);
+  box-shadow:
+    0 3px 16px rgba(13, 45, 94, 0.13),
+    inset 0 1px 0 rgba(255, 255, 255, 1);
+}
+
+.subnavScrolled .link.active {
+  background: rgba(255, 255, 255, 0.96);
+  border-color: rgba(13, 45, 94, 0.26);
+  color: var(--navy, #0d2d5e);
+  box-shadow:
+    0 2px 12px rgba(13, 45, 94, 0.10),
+    inset 0 1px 0 rgba(255, 255, 255, 1);
+}
+
+/* CTA en scroll: glass blanco igual que los otros pills, pero borde y texto
+   dorados para que siga leyéndose como acción y no como nav item */
+.subnavScrolled .linkCta {
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(14px) saturate(130%);
+  -webkit-backdrop-filter: blur(14px) saturate(130%);
+  border-color: var(--gold, #C9A84C);
+  color: var(--gold-dk, #8A6A28);
+  box-shadow:
+    0 2px 14px rgba(201, 168, 76, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.90);
+}
+
+.subnavScrolled .linkCta:hover {
+  background: rgba(255, 255, 255, 0.97);
+  border-color: var(--gold-lt, #E8C96A);
+  color: var(--gold-dk, #8A6A28);
+  box-shadow:
+    0 3px 20px rgba(201, 168, 76, 0.32),
+    inset 0 1px 0 rgba(255, 255, 255, 1);
+}
+
+/* ── Móvil ───────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .subnav { display: none; }
+}

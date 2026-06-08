@@ -22,7 +22,10 @@
 }
 
 /* ── BASE ───────────────────────────────────────────────── */
-html { scroll-behavior: smooth; }
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 120px; /* navbar (72px) + subnav (44px) + 4px gap */
+}
 
 body {
   background: var(--ivory);

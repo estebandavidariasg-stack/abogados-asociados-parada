@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { motion } from 'framer-motion'
+import { headerStagger, eyebrowReveal, fadeUp, VIEWPORT } from '../../lib/motionVariants'
 import { useAuth } from '../../context/AuthContext'
 import { supabase } from '../../lib/supabase'
 import { compressVideo } from '../../utils/compressMedia'
@@ -557,15 +559,23 @@ export default function VideoCarousel() {
       <div className={styles.bg} />
 
       {/* Encabezado */}
-      <div className={styles.header}>
-        <span className={styles.eyebrow}>Bufete Jurídico · AAP</span>
-        <h2 className={styles.title}>
+      <motion.div
+        className={styles.header}
+        variants={headerStagger}
+        initial="hidden"
+        whileInView="visible"
+        viewport={VIEWPORT}
+      >
+        <motion.span className={styles.eyebrow} variants={eyebrowReveal}>
+          Plataforma de servicios jurídicos y contables en Colombia
+        </motion.span>
+        <motion.h2 className={styles.title} variants={fadeUp}>
           Conoce nuestra <em>firma</em>
-        </h2>
-        <p className={styles.subtitle}>
+        </motion.h2>
+        <motion.p className={styles.subtitle} variants={fadeUp}>
           Descubre quiénes somos, cómo trabajamos y el compromiso que tenemos con cada cliente.
-        </p>
-      </div>
+        </motion.p>
+      </motion.div>
 
       {/* FAB superadmin */}
       {isSuperAdmin && !editing && (
