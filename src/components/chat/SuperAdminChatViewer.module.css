@@ -250,11 +250,23 @@
   gap: 6px;
 }
 
-.roomArea {
-  color: #1a2a4a;
-  font-size: 0.8rem;
-  font-weight: 600;
+/* Nombre del cliente — identificador principal de la fila (arriba). */
+.roomClientName {
+  color: #0d2d5e;
+  font-size: 0.84rem;
+  font-weight: 700;
   margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.roomArea {
+  color: #6b7fa3;
+  font-size: 0.74rem;
+  font-weight: 600;
+  margin: 3px 0 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -281,6 +293,31 @@
   color: var(--gold-dk);
   margin: 3px 0 0;
   letter-spacing: 1px;
+}
+
+/* Profesional que atiende la sala */
+.roomProfesional {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.72rem;
+  color: #3a4a6b;
+  margin: 4px 0 0;
+  min-width: 0;
+}
+.roomProfesional svg {
+  color: var(--gold-dk, #b8841c);
+  flex-shrink: 0;
+}
+.roomProfNombre {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-weight: 600;
+}
+.roomProfRol {
+  color: #8a9ab5;
+  flex-shrink: 0;
 }
 
 .roomDate {
@@ -514,6 +551,34 @@
 .fileBtn:hover { border-color: var(--gold); }
 .fileName { flex: 1; word-break: break-all; }
 .fileSize { color: #8a9ab5; font-size: 0.7rem; flex-shrink: 0; }
+
+/* ── Imagen inline (preview tipo WhatsApp) ── */
+.imgBtn {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: zoom-in;
+  display: block;
+  max-width: 240px;
+  border-radius: 12px;
+  overflow: hidden;
+  line-height: 0;
+  box-shadow: 0 2px 8px rgba(13, 45, 94, 0.12);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+.imgBtn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(13, 45, 94, 0.2);
+}
+.imgBtn:disabled { cursor: default; }
+.imgPreview {
+  display: block;
+  width: 100%;
+  max-height: 300px;
+  object-fit: cover;
+  user-select: none;
+  -webkit-user-drag: none;
+}
 
 /* ── Calificaciones ── */
 .ratingsSection {

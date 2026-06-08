@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { getAuthHeaders } from '../../lib/supabase'
+import { openChatFile, ChatImage, ChatLightbox } from '../../lib/chatFiles'
 import styles from './AdminInternalChat.module.css'
 import AudioPlayer from './AudioPlayer'
 import { IconMic, IconPaperclip } from '../shared/Icons'
@@ -7,6 +8,10 @@ import { IconMic, IconPaperclip } from '../shared/Icons'
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
 const MAX_FILE_BYTES = 10 * 1024 * 1024 // 10 MB
+
+function isImage(name) {
+  return /\.(jpe?g|png|webp|gif|bmp|svg)$/i.test(name || '')
+}
 
 function fmtFileSize(bytes) {
   if (!bytes) return ''
@@ -40,6 +45,9 @@ export default function AdminInternalChat({ miId }) {
   const [uploadingFile, setUploadingFile] = useState(false)
   const fileInputRef = useRef(null)
 
+  // ── Lightbox para imágenes ──
+  const [lightbox, setLightbox] = useState(null)
+
   const bottomRef    = useRef()
   const mensajesRef  = useRef(null)
   const lastCountRef = useRef(0)
@@ -54,9 +62,14 @@ export default function AdminInternalChat({ miId }) {
     clearInterval(pollRef.current)
     if (selected) {
       fetchMessages()
-      pollRef.current = setInterval(fetchMessages, 3000)
+      pollRef.current = setInterval(() => { if (!document.hidden) fetchMessages() }, 3000)
     }
-    return () => clearInterval(pollRef.current)
+    const onVisible = () => { if (!document.hidden && selected) fetchMessages() }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      clearInterval(pollRef.current)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
   }, [selected])
 
   /* ── Scroll: solo auto-baja si el user YA estaba al fondo ──────────────
@@ -451,15 +464,25 @@ export default function AdminInternalChat({ miId }) {
                         <AudioPlayer src={m.file_url} mine={mine} />
                       </div>
                     ) : m.message_type === 'file' && m.file_url ? (
-                      <button
-                        className={styles.fileBtn}
-                        onClick={() => window.open(m.file_url, '_blank', 'noopener,noreferrer')}
-                        title={m.file_name}
-                      >
-                        <IconPaperclip size={16} />
-                        <span className={styles.fileName}>{m.file_name}</span>
-                        <span className={styles.fileSize}>{fmtFileSize(m.file_size)}</span>
-                      </button>
+                      isImage(m.file_name) ? (
+                        <ChatImage
+                          src={m.file_url}
+                          alt={m.file_name || 'imagen'}
+                          btnClassName={styles.imgBtn}
+                          imgClassName={styles.imgPreview}
+                          onOpen={setLightbox}
+                        />
+                      ) : (
+                        <button
+                          className={styles.fileBtn}
+                          onClick={() => openChatFile(m.file_url)}
+                          title={m.file_name}
+                        >
+                          <IconPaperclip size={16} />
+                          <span className={styles.fileName}>{m.file_name}</span>
+                          <span className={styles.fileSize}>{fmtFileSize(m.file_size)}</span>
+                        </button>
+                      )
                     ) : (
                       <p className={styles.burbujaTexto}>{m.mensaje}</p>
                     )}
@@ -519,6 +542,8 @@ export default function AdminInternalChat({ miId }) {
           </>
         )}
       </div>
+
+      <ChatLightbox src={lightbox} onClose={() => setLightbox(null)} />
     </div>
   )
 }

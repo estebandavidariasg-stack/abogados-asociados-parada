@@ -1,61 +1,11 @@
 import { useState, useRef, useEffect } from 'react'
 import styles from './AudioPlayer.module.css'
-import { supabase } from '../../lib/supabase'
+import { resolveSignedUrl } from '../../lib/chatFiles'
 
-/* ── Resolución de URL del audio ──────────────────────────────────────────
-   Los uploads viejos guardaban el signed URL completo en chat_messages
-   (con expiración de 7 días). Después de 7 días el URL muere y el audio
-   queda inaccesible aunque el archivo SIGA en el bucket.
-
-   Esta función rescata esos audios:
-     · Si recibimos un path simple ("<userId>/voz.webm") → firmamos por 1h
-     · Si recibimos un URL firmado expirado → extraemos el path interno y
-       re-firmamos
-     · Si no podemos derivar un path → devolvemos el src original (último
-       intento, por si era un URL público válido)
-*/
-function extractChatFilesPath(url) {
-  if (!url) return null
-  // URL firmado:  /storage/v1/object/sign/chat-files/<path>?token=...
-  const signed = url.match(/\/storage\/v1\/object\/sign\/chat-files\/([^?]+)/)
-  if (signed) return decodeURIComponent(signed[1])
-  // URL público/directo: /storage/v1/object/(public/)?chat-files/<path>
-  const direct = url.match(/\/storage\/v1\/object\/(?:public\/)?chat-files\/([^?]+)/)
-  if (direct) return decodeURIComponent(direct[1])
-  return null
-}
-
-async function resolveAudioUrl(src) {
-  if (!src) return null
-  // Path puro (formato nuevo)
-  if (!/^https?:\/\//.test(src)) {
-    const { data, error } = await supabase.storage
-      .from('chat-files')
-      .createSignedUrl(src, 60 * 60) // 1 h, suficiente para reproducir
-    if (error || !data?.signedUrl) {
-      console.warn('[AudioPlayer] createSignedUrl falló para path:', src, error)
-      return null
-    }
-    return data.signedUrl
-  }
-  // URL — intentar extraer el path interno y re-firmar
-  const path = extractChatFilesPath(src)
-  if (path) {
-    const { data, error } = await supabase.storage
-      .from('chat-files')
-      .createSignedUrl(path, 60 * 60)
-    if (error || !data?.signedUrl) {
-      console.warn('[AudioPlayer] re-sign falló para path extraído:', path, 'src original:', src, error)
-      return src
-    }
-    return data.signedUrl
-  }
-  // Formato no reconocido — devolver tal cual (último intento)
-  console.warn('[AudioPlayer] formato de src no reconocido, intento directo:', src)
-  return src
-}
-
-export default function AudioPlayer({ src, mine }) {
+/* La resolución de URL (firma fresca on-demand para que el audio nunca
+   expire) vive en src/lib/chatFiles.jsx — compartida con ChatImage y la
+   apertura de archivos. */
+export default function AudioPlayer({ src, mine, theme = 'dark' }) {
   const audioRef                          = useRef(null)
   const [playing, setPlaying]             = useState(false)
   const [progress, setProgress]           = useState(0)
@@ -71,7 +21,7 @@ export default function AudioPlayer({ src, mine }) {
     let cancelled = false
     setResolvedSrc(null); setResolveFailed(false)
     setError(false);      setLoaded(false)
-    resolveAudioUrl(src)
+    resolveSignedUrl(src, 60 * 60)
       .then(url => {
         if (cancelled) return
         if (url) setResolvedSrc(url)
@@ -214,16 +164,24 @@ export default function AudioPlayer({ src, mine }) {
 
   const HEIGHTS = [20,35,55,40,65,80,50,35,70,45,60,30,75,55,40,65,35,80,50,40,70,30,55,65,45,75,35,60,50,40]
 
+  // theme 'light' (ChatSection, fondo claro): el audio adopta el color de la
+  // burbuja → cliente (mine) navy, profesional (other) blanco. 'dark' (default,
+  // dashboards): se mantiene el skin dorado original sobre fondo oscuro.
+  const light = theme === 'light'
+  const skin = light
+    ? (mine ? styles.playerMineLight : styles.playerOtherLight)
+    : (mine ? styles.playerMine : styles.playerOther)
+
   if (error || resolveFailed) {
     return (
-      <div className={`${styles.player} ${mine ? styles.playerMine : styles.playerOther}`}>
+      <div className={`${styles.player} ${skin}`}>
         <span style={{ fontSize: '0.75rem', opacity: 0.5 }}>Audio no disponible</span>
       </div>
     )
   }
 
   return (
-    <div className={`${styles.player} ${mine ? styles.playerMine : styles.playerOther}`}>
+    <div className={`${styles.player} ${skin}`}>
       <audio ref={audioRef} src={resolvedSrc || undefined} preload="auto" crossOrigin="anonymous" />
 
       <button className={styles.playBtn} onClick={togglePlay} disabled={!loaded}>
@@ -248,8 +206,12 @@ export default function AudioPlayer({ src, mine }) {
                   style={{
                     height: `${h}%`,
                     background: filled
-                      ? (mine ? 'rgba(0,0,0,0.5)' : 'var(--gold)')
-                      : (mine ? 'rgba(0,0,0,0.2)' : 'rgba(201,168,76,0.25)')
+                      ? (light
+                          ? (mine ? 'rgba(255,255,255,0.9)' : 'var(--navy, #0d2d5e)')
+                          : (mine ? 'rgba(0,0,0,0.5)' : 'var(--gold)'))
+                      : (light
+                          ? (mine ? 'rgba(255,255,255,0.4)' : 'rgba(13,45,94,0.28)')
+                          : (mine ? 'rgba(0,0,0,0.2)' : 'rgba(201,168,76,0.25)'))
                   }}
                 />
               )

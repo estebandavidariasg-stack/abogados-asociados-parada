@@ -1,12 +1,23 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { getAuthHeaders } from '../../lib/supabase'
+import { supabase, getAuthHeaders } from '../../lib/supabase'
+import { contieneContacto } from '../../lib/validaciones'
 import styles from './LawyerChatDashboard.module.css'
 import AudioPlayer from './AudioPlayer'
+import { ChatImage, openChatFile } from '../../lib/chatFiles'
 import { IconPaperclip, IconMic } from '../shared/Icons'
 
 // Detecta si el archivo es imagen para renderizar preview inline (WhatsApp style).
 function isImage(name) {
   return /\.(jpe?g|png|webp|gif|bmp|svg)$/i.test(name || '')
+}
+
+// Renderiza **negrillas** estilo markdown conservando los saltos de línea.
+function renderMensaje(text) {
+  if (text == null) return text
+  return String(text).split(/(\*\*[^*\n]+\*\*)/g).map((parte, i) => {
+    const m = parte.match(/^\*\*([^*\n]+)\*\*$/)
+    return m ? <strong key={i}>{m[1]}</strong> : parte
+  })
 }
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
@@ -83,7 +94,7 @@ function markSeen(uid, roomId, ts) {
   }
 }
 
-export default function LawyerChatDashboard({ lawyerId }) {
+export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false }) {
   const [rooms,       setRooms]       = useState([])
   const [activeRoom,  setActiveRoom]  = useState(null)
   const [messages,    setMessages]    = useState([])
@@ -92,6 +103,14 @@ export default function LawyerChatDashboard({ lawyerId }) {
   const [uploading,   setUploading]   = useState(false)
   const [closing,     setClosing]     = useState(false)
   const [confirmClose, setConfirmClose] = useState(false)
+  const [confirmVerificar, setConfirmVerificar] = useState(false)
+  const [sendingVerificar, setSendingVerificar] = useState(false)
+  const [contactoBlocked, setContactoBlocked] = useState(false)
+  const [canDownload, setCanDownload] = useState(canDownloadFiles)
+  // Salas a las que ya se les solicitó revisión en esta sesión. No hay
+  // columna en BD para persistirlo, así que es estado por-navegador: basta
+  // para evitar reenvíos accidentales y mostrar el tag "Revisión solicitada".
+  const [verifiedRooms, setVerifiedRooms] = useState(() => new Set())
   const [rating,      setRating]      = useState(0)
   const [showRating,  setShowRating]  = useState(false)
   const [loadingRooms, setLoadingRooms] = useState(true)
@@ -100,7 +119,6 @@ export default function LawyerChatDashboard({ lawyerId }) {
   const mensajesRef = useRef(null)
   const lastCountRef = useRef(0)
   const pollRooms = useRef(null)
-  const pollMsgs  = useRef(null)
 
   // ── Voz ──────────────────────────────────────────────────────────────────
   const [recording, setRecording]           = useState(false)
@@ -118,6 +136,27 @@ export default function LawyerChatDashboard({ lawyerId }) {
     return () => clearTimeout(t)
   }, [toast])
 
+  // Polling del permiso de descarga — se actualiza sin recargar si el admin lo cambia
+  useEffect(() => {
+    if (!lawyerId) return
+    async function fetchPermiso() {
+      try {
+        const headers = await getAuthHeaders()
+        const res = await fetch(
+          `${SUPABASE_URL}/rest/v1/profiles?id=eq.${lawyerId}&select=puede_descargar_archivos`,
+          { headers }
+        )
+        const [data] = await res.json()
+        if (data) setCanDownload(!!data.puede_descargar_archivos)
+      } catch { /* silencioso */ }
+    }
+    fetchPermiso()
+    // Pausar el polling cuando la pestaña está oculta: no malgastar queries
+    // contra la BD si el profesional no está mirando.
+    const interval = setInterval(() => { if (!document.hidden) fetchPermiso() }, 60_000)
+    return () => clearInterval(interval)
+  }, [lawyerId])
+
   // ── Lightbox para imágenes (click en thumbnail = abrir fullscreen) ──
   const [lightbox, setLightbox] = useState(null)
   useEffect(() => {
@@ -126,6 +165,22 @@ export default function LawyerChatDashboard({ lawyerId }) {
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
   }, [lightbox])
+
+  // ── Cerrar modales de confirmación con Escape ──
+  useEffect(() => {
+    if (!confirmClose && !confirmVerificar && !showRating && !contactoBlocked) return
+    const onKey = (e) => {
+      if (e.key !== 'Escape') return
+      if (sendingVerificar || closing) return   // no cerrar a media petición
+      setConfirmClose(false)
+      setConfirmVerificar(false)
+      setShowRating(false)
+      setRating(0)
+      setContactoBlocked(false)
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [confirmClose, confirmVerificar, showRating, contactoBlocked, sendingVerificar, closing])
 
   /* ── Cargar salas ── */
   const fetchRooms = useCallback(async () => {
@@ -165,32 +220,41 @@ export default function LawyerChatDashboard({ lawyerId }) {
     const seenMap    = readSeen(lawyerId)
     const lastMsgMap = {}
     const unreadMap  = {}
-    await Promise.all(
-      roomData.map(async room => {
-        const mRes = await fetch(
-          `${SUPABASE_URL}/rest/v1/chat_messages` +
-          `?room_id=eq.${room.id}&order=created_at.desc&limit=50&select=content,created_at,sender_type`,
-          { headers: await getAuthHeaders() }
-        )
-        const mData = await mRes.json()
-        if (Array.isArray(mData) && mData.length > 0) {
-          lastMsgMap[room.id] = mData[0]
-          // Sólo cuenta msgs del cliente posteriores al último "visto"
-          // (abrir la sala o nuestra última respuesta). El break al ver un
-          // 'lawyer' implica que cualquier respuesta nuestra también resetea
-          // el contador, sin depender de seenMap.
-          const seenAt = seenMap[room.id] ? new Date(seenMap[room.id]).getTime() : 0
-          let unread = 0
-          for (const m of mData) {
-            if (m.sender_type === 'lawyer') break
-            if (m.sender_type === 'client' && new Date(m.created_at).getTime() > seenAt) {
-              unread++
-            }
-          }
-          unreadMap[room.id] = unread
-        }
-      })
+    // UNA sola query con los mensajes recientes de TODAS las salas. Antes era
+    // 1 query por sala → N+1 disparado cada 6s. Agrupamos en memoria y
+    // aplicamos el mismo algoritmo de no-leídos por sala. El tope global de
+    // 1000 cubre de sobra la actividad reciente; una sala muy vieja sin
+    // mensajes dentro de ese tope queda sin preview pero igual se lista.
+    const mRes = await fetch(
+      `${SUPABASE_URL}/rest/v1/chat_messages` +
+      `?room_id=in.(${roomIds})&order=created_at.desc&limit=1000` +
+      `&select=room_id,content,created_at,sender_type`,
+      { headers }
     )
+    const allMsgs = await mRes.json()
+    if (Array.isArray(allMsgs)) {
+      const byRoom = {}
+      for (const m of allMsgs) {
+        if (!byRoom[m.room_id]) byRoom[m.room_id] = []
+        byRoom[m.room_id].push(m)   // preserva el orden desc global
+      }
+      for (const room of roomData) {
+        const msgs = byRoom[room.id]
+        if (!msgs || msgs.length === 0) continue
+        lastMsgMap[room.id] = msgs[0]
+        // Cuenta msgs del cliente posteriores al último "visto"; el break en
+        // 'lawyer' resetea el contador (cualquier respuesta nuestra lo limpia).
+        const seenAt = seenMap[room.id] ? new Date(seenMap[room.id]).getTime() : 0
+        let unread = 0
+        for (const m of msgs) {
+          if (m.sender_type === 'lawyer') break
+          if (m.sender_type === 'client' && new Date(m.created_at).getTime() > seenAt) {
+            unread++
+          }
+        }
+        unreadMap[room.id] = unread
+      }
+    }
 
     // 4. Mezclar estado de asignación con datos de sala
     const enriched = roomData.map(room => {
@@ -218,8 +282,16 @@ export default function LawyerChatDashboard({ lawyerId }) {
 
   useEffect(() => {
     fetchRooms()
-    pollRooms.current = setInterval(fetchRooms, 6000)
-    return () => clearInterval(pollRooms.current)
+    // Sidebar por poll (lento, pausado con la pestaña oculta) + refresco al
+    // volver. La sala ABIERTA se actualiza al instante por Realtime; las demás
+    // (preview/badge) refrescan cada 20s — basta para chats que no miras.
+    pollRooms.current = setInterval(() => { if (!document.hidden) fetchRooms() }, 20000)
+    const onVisible = () => { if (!document.hidden) fetchRooms() }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      clearInterval(pollRooms.current)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
   }, [fetchRooms])
 
   /* ── Cargar mensajes de la sala activa ── */
@@ -235,12 +307,24 @@ export default function LawyerChatDashboard({ lawyerId }) {
   }, [activeRoom])
 
   useEffect(() => {
-    clearInterval(pollMsgs.current)
-    if (activeRoom) {
-      fetchMessages()
-      pollMsgs.current = setInterval(fetchMessages, 3000)
+    if (!activeRoom) return
+    fetchMessages()   // historial al abrir la sala
+    // Realtime: mensajes nuevos de ESTA sala (reemplaza el poll de 3s). Una
+    // sola suscripción y solo mientras hay un chat abierto → barata en cupo
+    // de Realtime. El status de la sala (cierre) también llega al instante.
+    const ch = supabase.channel(`lcd:${activeRoom.id}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages', filter: `room_id=eq.${activeRoom.id}` },
+        p => setMessages(prev => prev.find(m => m.id === p.new.id) ? prev : [...prev, p.new]))
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'chat_rooms', filter: `id=eq.${activeRoom.id}` },
+        p => setActiveRoom(prev => (prev && prev.id === p.new.id) ? { ...prev, ...p.new } : prev))
+      .subscribe()
+    // Red de seguridad ante hipos del WS: re-sincroniza al volver a la pestaña.
+    const onVisible = () => { if (!document.hidden) fetchMessages() }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      supabase.removeChannel(ch)
+      document.removeEventListener('visibilitychange', onVisible)
     }
-    return () => clearInterval(pollMsgs.current)
   }, [activeRoom, fetchMessages])
 
   /* ── Scroll al fondo SOLO cuando el conteo cambia (no en cada poll) ── */
@@ -277,6 +361,7 @@ export default function LawyerChatDashboard({ lawyerId }) {
 
     setActiveRoom(room)
     setConfirmClose(false)
+    setConfirmVerificar(false)
     setShowRating(false)
     setRating(0)
 
@@ -309,6 +394,8 @@ export default function LawyerChatDashboard({ lawyerId }) {
   /* ── Enviar mensaje ── */
   async function enviar() {
     if (!input.trim() || sending || !activeRoom) return
+    // ── Bloqueo de datos de contacto (teléfono / correo) ──
+    if (contieneContacto(input.trim())) { setContactoBlocked(true); return }
     setSending(true)
     const headers = await getAuthHeaders()
     await fetch(`${SUPABASE_URL}/rest/v1/chat_messages`, {
@@ -536,6 +623,39 @@ export default function LawyerChatDashboard({ lawyerId }) {
     fetchRooms()
   }
 
+  /* ── Verificar: notificar al administrador para revisión de proceso ──
+     Inserta un mensaje en el canal interno (mensajes_internos) dirigido al
+     superadmin. Reutiliza la infraestructura del chat interno: el admin lo
+     verá en AdminInternalChat como un mensaje del abogado. */
+  async function enviarVerificacion() {
+    if (!activeRoom || sendingVerificar) return
+    setSendingVerificar(true)
+    try {
+      // Endpoint seguro: valida server-side que soy el abogado asignado,
+      // registra la notificación para la campanita del admin, deja el mensaje
+      // en el chat interno y envía el correo. Ver api/verify-request.js.
+      const headers = await getAuthHeaders()
+      const res = await fetch('/api/verify-request', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          roomId:       activeRoom.id,
+          clientNombre: activeRoom.client_nombre || 'Anónimo',
+          area:         activeRoom.area_derecho || 'Consulta',
+        }),
+      })
+      if (!res.ok) throw new Error('verify-request failed')
+
+      setVerifiedRooms(prev => new Set(prev).add(activeRoom.id))
+      setToast('Solicitud de revisión enviada al administrador.')
+    } catch (err) {
+      setToast('No se pudo enviar la solicitud. Intenta de nuevo.')
+    } finally {
+      setSendingVerificar(false)
+      setConfirmVerificar(false)
+    }
+  }
+
   const hasVideos = activeRoom && messages.some(m => m.message_type === 'video_call')
 
   return (
@@ -572,9 +692,9 @@ export default function LawyerChatDashboard({ lawyerId }) {
                 <div className={styles.itemIcon}>⚖</div>
 
                 <div className={styles.itemInfo}>
-                  {/* Fila superior: área + hora último mensaje */}
+                  {/* Fila superior: NOMBRE del cliente + hora último mensaje */}
                   <div className={styles.itemRow}>
-                    <span className={styles.itemArea}>{room.area_derecho || 'Consulta'}</span>
+                    <span className={styles.itemNombre}>{room.client_nombre || 'Anónimo'}</span>
                     <span className={styles.itemFecha}>{fmtSidebar(lastTs)}</span>
                   </div>
 
@@ -602,9 +722,9 @@ export default function LawyerChatDashboard({ lawyerId }) {
                     </span>
                   </div>
 
-                  {/* Fila inferior: fecha de inicio del chat */}
+                  {/* Fila inferior: área + fecha de inicio */}
                   <div className={styles.itemInicio}>
-                    Inicio · {fmtSidebar(room.created_at)}
+                    {room.area_derecho || 'Consulta'} · Inicio {fmtSidebar(room.created_at)}
                   </div>
                 </div>
               </button>
@@ -647,55 +767,24 @@ export default function LawyerChatDashboard({ lawyerId }) {
                 </p>
               </div>
 
-              {/* Botón de cierre — solo cuando NO está el panel rating activo */}
+              {/* Acciones del header — solo cuando NO está el panel rating activo */}
               {activeRoom.status !== 'closed' && !showRating && (
-                !confirmClose
-                  ? <button className={styles.btnClose} onClick={() => setConfirmClose(true)}>
-                      Finalizar consulta
-                    </button>
-                  : <div className={styles.confirmRow}>
-                      <span className={styles.confirmText}>¿Confirmar cierre?</span>
-                      <button className={styles.btnConfirm} onClick={() => setShowRating(true)}>
-                        Sí, cerrar
-                      </button>
-                      <button className={styles.btnCancel} onClick={() => setConfirmClose(false)}>
-                        Cancelar
-                      </button>
-                    </div>
+                <div className={styles.headerActions}>
+                  {verifiedRooms.has(activeRoom.id)
+                    ? <span className={styles.verificadoTag}>✓ Revisión solicitada</span>
+                    : <button
+                        className={styles.btnVerificar}
+                        onClick={() => setConfirmVerificar(true)}
+                        title="Notificar al administrador para revisión de proceso"
+                      >
+                        Verificar
+                      </button>}
+                  <button className={styles.btnClose} onClick={() => setConfirmClose(true)}>
+                    Finalizar consulta
+                  </button>
+                </div>
               )}
             </div>
-
-            {/* Panel de calificación — banda full-width debajo del header,
-                no compite con el botón "Finalizar consulta". */}
-            {showRating && (
-              <div className={styles.ratingPanel}>
-                <p className={styles.ratingLabel}>Califica esta consulta</p>
-                <div className={styles.stars}>
-                  {[1,2,3,4,5].map(n => (
-                    <button
-                      key={n}
-                      className={`${styles.star} ${rating >= n ? styles.starOn : ''}`}
-                      onClick={() => setRating(n)}
-                    >★</button>
-                  ))}
-                </div>
-                <div className={styles.ratingActions}>
-                  <button
-                    className={styles.btnCancel}
-                    onClick={() => { setShowRating(false); setRating(0); setConfirmClose(false) }}
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    className={styles.btnConfirm}
-                    onClick={closeRoom}
-                    disabled={closing}
-                  >
-                    {closing ? 'Cerrando…' : 'Confirmar cierre'}
-                  </button>
-                </div>
-              </div>
-            )}
 
             {/* Sala cerrada — banner */}
             {activeRoom.status === 'closed' && (
@@ -728,28 +817,25 @@ export default function LawyerChatDashboard({ lawyerId }) {
                         <AudioPlayer src={m.file_url} mine={true} />
                       ) : (m.message_type === 'file' || m.file_url) ? (
                         isImage(m.file_name) ? (
-                          <button
-                            className={styles.imgBtn}
-                            onClick={() => setLightbox(m.file_url)}
-                            onContextMenu={(e) => {
+                          <ChatImage
+                            src={m.file_url}
+                            alt={m.file_name || 'imagen'}
+                            btnClassName={styles.imgBtn}
+                            imgClassName={styles.imgPreview}
+                            onOpen={setLightbox}
+                            onBlocked={(e) => {
                               e.preventDefault()
                               setToast('Por políticas de privacidad no puedes guardar esta imagen.')
                             }}
-                            title="Click para ampliar"
-                          >
-                            <img
-                              src={m.file_url}
-                              alt={m.file_name || 'imagen'}
-                              className={styles.imgPreview}
-                              draggable="false"
-                              loading="lazy"
-                            />
-                          </button>
+                          />
                         ) : (
                           <button
                             className={styles.fileBtn}
-                            onClick={() => setToast('Por políticas de privacidad no puedes descargar este archivo.')}
-                            title="Archivo bloqueado por políticas de privacidad"
+                            onClick={() => canDownload
+                              ? openChatFile(m.file_url)
+                              : setToast('Por políticas de privacidad no puedes descargar este archivo.')
+                            }
+                            title={canDownload ? 'Descargar archivo' : 'Archivo bloqueado por políticas de privacidad'}
                           >
                             <IconPaperclip size={16} />
                             <span className={styles.fileName}>{m.file_name}</span>
@@ -757,7 +843,7 @@ export default function LawyerChatDashboard({ lawyerId }) {
                           </button>
                         )
                       ) : (
-                        <p className={styles.msgText}>{m.content}</p>
+                        <p className={styles.msgText}>{renderMensaje(m.content)}</p>
                       )}
                       <p className={esMio ? styles.msgMetaMine : styles.msgMetaOther}>
                         {esMio ? 'Tú' : 'Cliente'} · {fmtHora(m.created_at)}
@@ -815,6 +901,164 @@ export default function LawyerChatDashboard({ lawyerId }) {
           </>
         )}
       </div>
+
+      {/* ── Modal: datos de contacto bloqueados ── */}
+      {contactoBlocked && (
+        <div
+          className={styles.modalOverlay}
+          onClick={() => setContactoBlocked(false)}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="modalContactoTitle"
+        >
+          <div className={styles.modalCard} onClick={e => e.stopPropagation()}>
+            <div className={styles.modalIconRed}>
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.8"/>
+                <path d="M5.6 5.6 18.4 18.4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+              </svg>
+            </div>
+            <h3 id="modalContactoTitle" className={styles.modalTitle}>No puedes compartir datos de contacto</h3>
+            <p className={styles.modalText}>
+              Por seguridad, no está permitido enviar números de teléfono ni correos
+              electrónicos dentro del chat. Continúa la conversación sin compartir
+              datos de contacto.
+            </p>
+            <div className={styles.modalActions}>
+              <button className={styles.btnConfirmDanger} onClick={() => setContactoBlocked(false)}>
+                Entendido
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal: confirmar envío de notificación de revisión ── */}
+      {confirmVerificar && (
+        <div
+          className={styles.modalOverlay}
+          onClick={() => !sendingVerificar && setConfirmVerificar(false)}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="modalVerificarTitle"
+        >
+          <div className={styles.modalCard} onClick={e => e.stopPropagation()}>
+            <div className={styles.modalIconGold}>
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M12 2 4 5v6c0 5 3.4 8.4 8 11 4.6-2.6 8-6 8-11V5l-8-3Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"/>
+                <path d="m9 12 2 2 4-4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </div>
+            <h3 id="modalVerificarTitle" className={styles.modalTitle}>Enviar notificación de revisión</h3>
+            <p className={styles.modalText}>
+              ¿Seguro que deseas enviar al administrador una notificación para que
+              revise este proceso? Quedará registrada en el canal interno.
+            </p>
+            <div className={styles.modalActions}>
+              <button
+                className={styles.btnCancel}
+                onClick={() => setConfirmVerificar(false)}
+                disabled={sendingVerificar}
+              >
+                Cancelar
+              </button>
+              <button
+                className={styles.btnConfirmGold}
+                onClick={enviarVerificacion}
+                disabled={sendingVerificar}
+              >
+                {sendingVerificar ? 'Enviando…' : 'Sí, enviar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal: finalizar consulta (paso 1 confirmar → paso 2 calificar) ── */}
+      {(confirmClose || showRating) && (
+        <div
+          className={styles.modalOverlay}
+          onClick={() => {
+            if (closing) return
+            setConfirmClose(false)
+            setShowRating(false)
+            setRating(0)
+          }}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="modalCloseTitle"
+        >
+          <div className={styles.modalCard} onClick={e => e.stopPropagation()}>
+            {!showRating ? (
+              /* Paso 1 — confirmar la finalización */
+              <>
+                <div className={styles.modalIconRed}>
+                  <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path d="M12 9v4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+                    <path d="M12 17h.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                    <path d="M10.3 3.9 2.4 18a2 2 0 0 0 1.7 3h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"/>
+                  </svg>
+                </div>
+                <h3 id="modalCloseTitle" className={styles.modalTitle}>Finalizar consulta</h3>
+                <p className={styles.modalText}>
+                  ¿Seguro que deseas finalizar esta consulta? El cliente ya no podrá
+                  enviar más mensajes. A continuación podrás calificar la atención.
+                </p>
+                <div className={styles.modalActions}>
+                  <button className={styles.btnCancel} onClick={() => setConfirmClose(false)}>
+                    Cancelar
+                  </button>
+                  <button
+                    className={styles.btnConfirmDanger}
+                    onClick={() => { setConfirmClose(false); setShowRating(true) }}
+                  >
+                    Sí, finalizar
+                  </button>
+                </div>
+              </>
+            ) : (
+              /* Paso 2 — calificar y cerrar */
+              <>
+                <div className={styles.modalIconGold}>
+                  <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path d="M12 3.5l2.6 5.27 5.82.85-4.21 4.1.99 5.78L12 16.77l-5.2 2.73.99-5.78-4.21-4.1 5.82-.85L12 3.5Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round"/>
+                  </svg>
+                </div>
+                <h3 id="modalCloseTitle" className={styles.modalTitle}>Califica esta consulta</h3>
+                <p className={styles.modalText}>
+                  Antes de cerrar, califica la atención brindada en el chat (opcional).
+                </p>
+                <div className={styles.modalStars}>
+                  {[1,2,3,4,5].map(n => (
+                    <button
+                      key={n}
+                      className={`${styles.star} ${rating >= n ? styles.starOn : ''}`}
+                      onClick={() => setRating(n)}
+                      aria-label={`${n} estrella${n === 1 ? '' : 's'}`}
+                    >★</button>
+                  ))}
+                </div>
+                <div className={styles.modalActions}>
+                  <button
+                    className={styles.btnCancel}
+                    onClick={() => { setShowRating(false); setRating(0); setConfirmClose(false) }}
+                    disabled={closing}
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    className={styles.btnConfirmDanger}
+                    onClick={closeRoom}
+                    disabled={closing}
+                  >
+                    {closing ? 'Cerrando…' : 'Confirmar cierre'}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       {toast && (
         <div className={styles.toast} role="status" onClick={() => setToast(null)}>

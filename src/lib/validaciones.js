@@ -54,3 +54,45 @@ export function validarCorreo(email) {
   if (!regex.test(email))            return { valid: false, msg: 'Formato inválido (ej: usuario@gmail.com)' }
   return { valid: true, msg: 'Correo válido ✓' }
 }
+
+// ── Datos de contacto en texto libre (anti-evasión) ────────────────────────
+// Usada por los chats (cliente, abogado, contador) para impedir que se
+// compartan teléfonos o correos. Tolerante a:
+//   · separadores y espacios entre dígitos:  300 123 4567 · 3-0-0-...
+//   · prefijo internacional:  +57, 57, +57 (300) 123-4567
+//   · correos ofuscados:  "juan arroba gmail punto com", "juan (at) x [dot] co"
+// Devuelve true si detecta un teléfono o un correo (estándar u ofuscado).
+export function contieneContacto(texto) {
+  if (!texto) return false
+  const t = String(texto).toLowerCase()
+
+  // ── Correo electrónico ──
+  // 1) Estándar:  usuario@dominio.tld
+  if (/[a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,}/i.test(t)) return true
+  // 2) Ofuscado:  reemplazo de @ por "arroba"/"at" y de . por "punto"/"dot"
+  //    (con o sin paréntesis/corchetes). \b evita falsos positivos dentro de
+  //    palabras (p. ej. "at" en "comparativamente").
+  const atPart  = '(?:@|\\b(?:arroba|at)\\b)'
+  const dotPart = '(?:\\.|\\b(?:punto|dot)\\b)'
+  const emailOfuscado = new RegExp(
+    `[a-z0-9._%+\\-]{2,}\\s*[([]?\\s*${atPart}\\s*[)\\]]?\\s*` +
+    `[a-z0-9\\-]{2,}\\s*[([]?\\s*${dotPart}\\s*[)\\]]?\\s*[a-z]{2,}`,
+    'i'
+  )
+  if (emailOfuscado.test(t)) return true
+
+  // ── Teléfono ──
+  const SEP = '[\\s.\\-()]*'   // separadores tolerados entre dígitos
+  // 1) Internacional con prefijo «+»: el signo + delata un teléfono, así que
+  //    basta con 7+ dígitos (atrapa números cortos que no llegarían a 10).
+  if (new RegExp(`\\+${SEP}\\d(?:${SEP}\\d){6,14}`).test(t)) return true
+  // 2) Celular colombiano: opcional +57/57, luego 3 + 9 dígitos.
+  if (new RegExp(`(?:\\+?${SEP}57${SEP})?3(?:${SEP}\\d){9}`).test(t)) return true
+  // 3) Cualquier secuencia de 10+ dígitos (fijos 60X, cuentas, cédulas de 10
+  //    díg., internacionales sin «+», dígitos espaciados). El umbral 10 deja
+  //    pasar montos comunes (1.500.000 = 7 díg., 15.000.000 = 8 díg.) para no
+  //    bloquear texto legítimo: es el punto justo entre cubrir y no ser extremo.
+  if (new RegExp(`\\d(?:${SEP}\\d){9,}`).test(t)) return true
+
+  return false
+}

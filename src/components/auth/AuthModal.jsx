@@ -382,13 +382,12 @@ export default function AuthModal({ initialTab = 'login', onClose }) {
               ¿Olvidó su contraseña?{' '}
               <button
                 type="button"
-                className={styles.hintLink}
+                className={`${styles.hintLink} ${styles.linkBtn}`}
                 onClick={() => {
                   setForgotEmail(loginIdentifier.includes('@') ? loginIdentifier : '')
                   setForgotError('')
                   setForgotMode('form')
                 }}
-                style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
               >
                 Recuperar
               </button>
@@ -399,7 +398,7 @@ export default function AuthModal({ initialTab = 'login', onClose }) {
         {/* ══════════════════ OLVIDÓ CONTRASEÑA — MICRO-FORM ══════════════════ */}
         {tab === 'login' && !success && forgotMode === 'form' && (
           <form className={styles.form} onSubmit={handleForgotSubmit}>
-            <p className={styles.hint} style={{ marginBottom: 16, textAlign: 'left' }}>
+            <p className={`${styles.hint} ${styles.forgotIntro}`}>
               Te enviaremos un enlace para restablecer tu contraseña.
             </p>
             <div className={styles.field}>
@@ -414,7 +413,7 @@ export default function AuthModal({ initialTab = 'login', onClose }) {
                 autoFocus
               />
             </div>
-            <div style={{ textAlign: 'center', margin: '14px 0 6px' }}>
+            <div className={styles.captchaRow}>
               <ReCAPTCHA
                 ref={forgotRecaptchaRef}
                 sitekey={import.meta.env.VITE_RECAPTCHA_SITE_KEY || '6LeCveUsAAAAAHPFzHpB8KrLMaNEu0E7UORrkgMA'}
@@ -422,9 +421,7 @@ export default function AuthModal({ initialTab = 'login', onClose }) {
               />
             </div>
             {forgotError && (
-              <p style={{ color: '#e07a7a', fontSize: '0.78rem', margin: '4px 0 8px' }}>
-                {forgotError}
-              </p>
+              <p className={styles.forgotError}>{forgotError}</p>
             )}
             <button
               type="submit"
@@ -433,14 +430,11 @@ export default function AuthModal({ initialTab = 'login', onClose }) {
             >
               {forgotLoading ? 'Enviando…' : 'Enviar enlace'}
             </button>
-            <p className={styles.hint} style={{ marginTop: 14 }}>
+            <p className={`${styles.hint} ${styles.forgotBackRow}`}>
               <button
                 type="button"
+                className={styles.forgotBack}
                 onClick={() => { setForgotMode(false); setForgotError(''); setForgotEmail('') }}
-                style={{
-                  background: 'none', border: 'none', padding: 0, cursor: 'pointer',
-                  color: '#c9a84c', fontFamily: 'inherit', fontSize: '0.8rem',
-                }}
               >
                 ← Volver
               </button>
@@ -450,11 +444,14 @@ export default function AuthModal({ initialTab = 'login', onClose }) {
 
         {/* ══════════════════ OLVIDÓ CONTRASEÑA — ENVIADO ══════════════════ */}
         {tab === 'login' && !success && forgotMode === 'sent' && (
-          <div className={styles.form} style={{ textAlign: 'center', padding: '12px 0' }}>
-            <div style={{ fontSize: '2.4rem', color: '#c9a84c', lineHeight: 1, marginBottom: 14 }}>
-              ✉
+          <div className={`${styles.form} ${styles.sentBox}`}>
+            <div className={styles.sentIcon}>
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <rect x="2.5" y="4.5" width="19" height="15" rx="2.5" />
+                <path d="m3 6 9 6 9-6" />
+              </svg>
             </div>
-            <p style={{ color: 'var(--navy, #0d2d5e)', fontSize: '0.95rem', lineHeight: 1.55, margin: '0 0 18px', fontWeight: 500 }}>
+            <p className={styles.sentText}>
               Revisa tu correo. Te enviamos un enlace para restablecer tu contraseña.
             </p>
             <button

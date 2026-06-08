@@ -283,6 +283,34 @@
   letter-spacing: 0.02em;
 }
 
+/* ── Imagen inline (preview tipo WhatsApp) ── */
+.imgBtn {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: zoom-in;
+  display: block;
+  max-width: 240px;
+  border-radius: 12px;
+  overflow: hidden;
+  line-height: 0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+.imgBtn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+}
+.imgBtn:disabled { cursor: default; }
+.imgPreview {
+  display: block;
+  width: 100%;
+  max-height: 300px;
+  object-fit: cover;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
 /* ── Botón micrófono (grabando) ── */
 .recordingBtn {
   height: 40px;

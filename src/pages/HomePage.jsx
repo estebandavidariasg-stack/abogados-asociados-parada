@@ -1,17 +1,21 @@
 import Navbar from '../components/layout/Navbar'
+import IntroSection from '../components/home/IntroSection'
 import Hero from '../components/home/Hero'
 import LawyersSection from '../components/home/LawyersSection'
 import CTASection from '../components/home/CTASection'
-import MapSection from '../components/home/MapSection'
 import ChatSection from '../components/chat/ChatSection'
 import Footer from '../components/layout/Footer'
 import WhatsAppButton from '../components/home/WhatsAppButton'
 import AuthModal from '../components/auth/AuthModal'
 import RegisterContadorModal from '../components/auth/RegisterContadorModal'
-import { useState } from 'react'
+import { useState, lazy, Suspense } from 'react'
 import { useAuth } from '../context/AuthContext'
 import VideoCarousel from '../components/home/VideoCarousel'
 import ModelosContractualesSection from '../components/home/ModelosContractualesSection'
+
+// MapSection arrastra d3 + topojson (pesados) y está abajo del fold → se carga
+// bajo demanda para no bloquear el render inicial del home.
+const MapSection = lazy(() => import('../components/home/MapSection'))
 
 
 export default function HomePage() {
@@ -29,6 +33,7 @@ export default function HomePage() {
         onRegister={() => setModal('register')}
         onRegisterContador={() => setContadorOpen(true)}
       />
+      <IntroSection />
       <VideoCarousel/>
       <ChatSection />
       <CTASection />
@@ -39,7 +44,9 @@ export default function HomePage() {
         onToggleEdit={() => setEditMode((v) => !v)}
         isSuperAdmin={isSuperAdmin}
       />
-      <MapSection />
+      <Suspense fallback={<div style={{ minHeight: 420 }} aria-hidden="true" />}>
+        <MapSection />
+      </Suspense>
       <Footer />
       <WhatsAppButton phone="573124086734" />
       {modal && <AuthModal initialTab={modal} onClose={() => setModal(null)} />}

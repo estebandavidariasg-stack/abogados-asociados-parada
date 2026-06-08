@@ -1,11 +1,16 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { getAuthHeaders } from '../../lib/supabase'
+import { openChatFile, ChatImage, ChatLightbox } from '../../lib/chatFiles'
 import styles from './LawyerInternalChat.module.css'
 import AudioPlayer from './AudioPlayer'
 import { IconMic, IconPaperclip } from '../shared/Icons'
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
 const MAX_FILE_BYTES = 10 * 1024 * 1024 // 10 MB
+
+function isImage(name) {
+  return /\.(jpe?g|png|webp|gif|bmp|svg)$/i.test(name || '')
+}
 
 function fmtFileSize(bytes) {
   if (!bytes) return ''
@@ -67,6 +72,9 @@ export default function LawyerInternalChat({ miId }) {
   const [uploadingFile, setUploadingFile] = useState(false)
   const fileInputRef = useRef(null)
 
+  // ── Lightbox para imágenes ──
+  const [lightbox, setLightbox] = useState(null)
+
   /* ── Obtener id del admin al montar ── */
   useEffect(() => {
     if (!miId) return
@@ -80,8 +88,14 @@ export default function LawyerInternalChat({ miId }) {
   useEffect(() => {
     if (!adminId || !miId) return
     fetchMessages()
-    pollRef.current = setInterval(fetchMessages, 3000)
-    return () => clearInterval(pollRef.current)
+    // Polling pausado con la pestaña oculta + refresco inmediato al volver.
+    pollRef.current = setInterval(() => { if (!document.hidden) fetchMessages() }, 3000)
+    const onVisible = () => { if (!document.hidden) fetchMessages() }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      clearInterval(pollRef.current)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
   }, [adminId, miId])
 
   /* ── Scroll: solo auto-baja si el user YA estaba al fondo ──────────────
@@ -411,15 +425,25 @@ export default function LawyerInternalChat({ miId }) {
                   <AudioPlayer src={m.file_url} mine={mine} />
                 </div>
               ) : m.message_type === 'file' && m.file_url ? (
-                <button
-                  className={styles.fileBtn}
-                  onClick={() => window.open(m.file_url, '_blank', 'noopener,noreferrer')}
-                  title={m.file_name}
-                >
-                  <IconPaperclip size={16} />
-                  <span className={styles.fileName}>{m.file_name}</span>
-                  <span className={styles.fileSize}>{fmtFileSize(m.file_size)}</span>
-                </button>
+                isImage(m.file_name) ? (
+                  <ChatImage
+                    src={m.file_url}
+                    alt={m.file_name || 'imagen'}
+                    btnClassName={styles.imgBtn}
+                    imgClassName={styles.imgPreview}
+                    onOpen={setLightbox}
+                  />
+                ) : (
+                  <button
+                    className={styles.fileBtn}
+                    onClick={() => openChatFile(m.file_url)}
+                    title={m.file_name}
+                  >
+                    <IconPaperclip size={16} />
+                    <span className={styles.fileName}>{m.file_name}</span>
+                    <span className={styles.fileSize}>{fmtFileSize(m.file_size)}</span>
+                  </button>
+                )
               ) : (
                 <p className={styles.burbujaTexto}>{m.mensaje}</p>
               )}
@@ -475,6 +499,8 @@ export default function LawyerInternalChat({ miId }) {
           ➤
         </button>
       </div>
+
+      <ChatLightbox src={lightbox} onClose={() => setLightbox(null)} />
     </div>
   )
 }

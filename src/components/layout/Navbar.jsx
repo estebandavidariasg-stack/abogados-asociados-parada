@@ -58,7 +58,6 @@ export default function Navbar({ onLogin, onRegister, onRegisterContador }) {
             width="96"
             height="96"
             decoding="async"
-            fetchpriority="high"
           />
         </picture>
       </a>

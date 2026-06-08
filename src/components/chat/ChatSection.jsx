@@ -1,10 +1,11 @@
+
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
 import styles from './ChatSection.module.css'
 import AudioPlayer from './AudioPlayer'
 import UbicacionSelector from '../profile/UbicacionSelector'
 import { IconPaperclip, IconMic } from '../shared/Icons'
-import { validarCelular, validarCorreo, normalizarCelular } from '../../lib/validaciones'
+import { validarCelular, validarCorreo, normalizarCelular, contieneContacto } from '../../lib/validaciones'
 
 // Detecta si el archivo es imagen para renderizar preview inline (WhatsApp style).
 function isImage(name) {
@@ -545,28 +546,6 @@ function formatSize(bytes) {
   return `${(bytes/1048576).toFixed(1)} MB`
 }
 
-// ── Detecta teléfono o correo en el texto ──────────────────────────────────
-function contieneContacto(texto) {
-  if (!texto) return false
-  const emailRegex = /[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/i
-  const telRegex   = /(?:\+?57[\s.\-]?)?3\d{2}[\s.\-]?\d{3}[\s.\-]?\d{4}/
-  const telSimple  = /\b3\d{9}\b/
-  return emailRegex.test(texto) || telRegex.test(texto) || telSimple.test(texto)
-}
-
-async function notificarSuperAdminContacto({ roomId, senderType, texto }) {
-  try {
-    await fetch('/api/notify', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        type: 'contact_blocked',
-        data: { roomId, senderType, extracto: texto.substring(0, 120) },
-      }),
-    })
-  } catch (err) { console.error('Error notificando contacto:', err) }
-}
-
 async function notificarAbogado({ lawyerId, nombreAbogado, nombreCliente, area }) {
   // Pasa lawyerId — el endpoint resolverá el email server-side con service
   // role. Antes mandábamos el email desde el front, lo que requería que el
@@ -799,8 +778,14 @@ export default function ChatSection() {
     return () => document.removeEventListener('keydown', onKey)
   }, [lightbox])
 
-  // ── Contacto bloqueado ────────────────────────────────────────────────────
+  // ── Contacto bloqueado (modal) ────────────────────────────────────────────
   const [contactoWarning, setContactoWarning] = useState(false)
+  useEffect(() => {
+    if (!contactoWarning) return
+    const onKey = (e) => { if (e.key === 'Escape') setContactoWarning(false) }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [contactoWarning])
 
   // ── Abogados excluidos (inactividad) ─────────────────────────────────────
   const [excludedLawyerIds, setExcludedLawyerIds] = useState([])
@@ -928,17 +913,8 @@ export default function ChatSection() {
             // Buscar profesionales disponibles excluyendo los del chat cerrado
             if (areas.length > 0) {
               const rol = formRef.current.tipo_profesional || 'abogado'
-              const { data: todos } = await supabase.from('profiles')
-                .select('id, nombre, apellido, area_derecho, ciudad, departamento, foto_url, rol')
-                .eq('aprobado', true).eq('rol', rol)
-              const filtrados = (todos || []).filter(l =>
-                !excluded.includes(l.id) &&
-                areas.some(a => l.area_derecho?.toLowerCase().includes(a.toLowerCase()))
-              )
-              setLawyers({
-                cercanos: filtrados.filter(l => l.departamento === dept),
-                porArea:  filtrados.filter(l => l.departamento !== dept),
-              })
+              // Reutiliza fetchLawyers: mismo filtrado + lista cacheada (CDN).
+              await fetchLawyers(areas, dept, excluded, rol)
             }
             // Flujo de cierre: 1° rating → 2° PQR → 3° opción de elegir otro.
             setStep('rating')
@@ -982,9 +958,13 @@ export default function ChatSection() {
 
   async function fetchLawyers(areas, departamento, excluded = [], rol = 'abogado') {
     setLoadingL(true)
-    const { data } = await supabase.from('profiles')
-      .select('id, nombre, apellido, area_derecho, ciudad, departamento, foto_url, rol')
-      .eq('aprobado', true).eq('rol', rol)
+    // Lista cacheada en el CDN (api/professionals.js) — misma data pública que
+    // el home; evita pegar a Supabase por cada cliente que llega a este paso.
+    let data = []
+    try {
+      const res = await fetch(`/api/professionals?rol=${rol}`)
+      if (res.ok) data = await res.json()
+    } catch { /* sin lista → arreglo vacío */ }
     const filtrados = (data || []).filter(l =>
       !excluded.includes(l.id) &&
       areas.some(a => l.area_derecho?.toLowerCase().includes(a.toLowerCase()))
@@ -1084,11 +1064,9 @@ export default function ChatSection() {
   async function sendMessage() {
     if (!input.trim() || !roomId) return
     const content = input.trim()
-    // ── Bloqueo de datos de contacto ──────────────────────────────────────
+    // ── Bloqueo de datos de contacto (teléfono / correo) ──────────────────
     if (contieneContacto(content)) {
       setContactoWarning(true)
-      setTimeout(() => setContactoWarning(false), 5000)
-      await notificarSuperAdminContacto({ roomId, senderType:'client', texto: content })
       return
     }
     setInput('')
@@ -1348,10 +1326,9 @@ export default function ChatSection() {
                       <div key={msg.id} className={mine ? styles.msgRowMine : styles.msgRowOther}>
                         <div className={`${mine ? styles.msgBubbleMine : styles.msgBubbleOther} ${isAudio ? styles.msgBubbleAudio : ''} ${isImageMsg ? styles.msgBubbleImg : ''}`}>
                           {isAudio ? (
-                            // mine={true} fuerza el skin dorado del AudioPlayer:
-                            // se ve bien sobre fondo claro (fondo translúcido del
-                            // skin "other" desaparece sobre la paleta ivory).
-                            <AudioPlayer src={msg.file_url} mine={true} />
+                            // theme="light": el audio iguala el color de la burbuja
+                            // → cliente (mine) navy como su texto, profesional blanco.
+                            <AudioPlayer src={msg.file_url} mine={mine} theme="light" />
                           ) : msg.file_url ? (
                             isImageMsg ? (
                               <button
@@ -1408,15 +1385,34 @@ export default function ChatSection() {
                   <button className={styles.sendBtn} onClick={sendMessage} disabled={!input.trim()}>Enviar</button>
                 </div>
 
-                {/* ── Aviso de contacto bloqueado ── */}
+                {/* ── Modal: datos de contacto bloqueados ── */}
                 {contactoWarning && (
-                  <div style={{
-                    background:'rgba(220,80,50,0.12)', border:'1px solid rgba(220,80,50,0.35)',
-                    borderRadius:8, padding:'10px 14px', margin:'8px 0 0',
-                    fontSize:'0.78rem', color:'rgba(255,160,130,0.95)',
-                    display:'flex', alignItems:'center', gap:8,
-                  }}>
-                    ⚠ No puedes compartir datos de contacto en el chat. El administrador ha sido notificado.
+                  <div
+                    className={styles.modalOverlay}
+                    onClick={() => setContactoWarning(false)}
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="modalContactoTitleCliente"
+                  >
+                    <div className={styles.modalCard} onClick={e => e.stopPropagation()}>
+                      <div className={styles.modalIconRed}>
+                        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                          <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.8"/>
+                          <path d="M5.6 5.6 18.4 18.4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+                        </svg>
+                      </div>
+                      <h3 id="modalContactoTitleCliente" className={styles.modalTitle}>No puedes compartir datos de contacto</h3>
+                      <p className={styles.modalText}>
+                        Por seguridad, no está permitido enviar números de teléfono ni
+                        correos electrónicos dentro del chat. Continúa la conversación sin
+                        compartir datos de contacto.
+                      </p>
+                      <div className={styles.modalActions}>
+                        <button className={styles.modalBtn} onClick={() => setContactoWarning(false)}>
+                          Entendido
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>

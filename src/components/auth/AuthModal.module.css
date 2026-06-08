@@ -248,6 +248,63 @@
 /* ── Req asterisco ── */
 .req { color: var(--gold, #c9a84c); }
 
+/* ── Botón con apariencia de enlace (reset de <button>) ── */
+.linkBtn {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+/* ── Paso "olvidó contraseña" ── */
+.forgotIntro {
+  text-align: left;
+  margin-bottom: 16px;
+}
+.captchaRow {
+  text-align: center;
+  margin: 14px 0 6px;
+}
+.forgotError {
+  color: #c0392b;
+  font-size: 0.78rem;
+  margin: 4px 0 8px;
+}
+.forgotBackRow {
+  margin-top: 14px;
+}
+.forgotBack {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  color: var(--gold-dk, #b8841c);
+  font-family: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+.forgotBack:hover { text-decoration: underline; }
+
+/* ── Paso "enlace enviado" ── */
+.sentBox {
+  text-align: center;
+  padding: 12px 0;
+}
+.sentIcon {
+  color: var(--gold, #c9a84c);
+  display: flex;
+  justify-content: center;
+  margin-bottom: 14px;
+}
+.sentText {
+  color: var(--navy, #0d2d5e);
+  font-size: 0.95rem;
+  line-height: 1.55;
+  margin: 0 0 18px;
+  font-weight: 500;
+}
+
 /* ── Contraseña input + toggle ── */
 .pwWrap {
   position: relative;

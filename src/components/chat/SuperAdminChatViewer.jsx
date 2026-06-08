@@ -3,12 +3,55 @@ import { supabase, getAuthHeaders } from '../../lib/supabase'
 import styles from './SuperAdminChatViewer.module.css'
 import { IconTrash, IconPaperclip } from '../shared/Icons'
 import AudioPlayer from './AudioPlayer'
+import { openChatFile, ChatImage, ChatLightbox } from '../../lib/chatFiles'
 
 function formatSize(bytes) {
   if (!bytes) return ''
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`
   return `${(bytes / 1048576).toFixed(1)} MB`
+}
+
+function isImage(name) {
+  return /\.(jpe?g|png|webp|gif|bmp|svg)$/i.test(name || '')
+}
+
+// Renderiza **negrillas** estilo markdown conservando los saltos de línea.
+function renderMensaje(text) {
+  if (text == null) return text
+  return String(text).split(/(\*\*[^*\n]+\*\*)/g).map((parte, i) => {
+    const m = parte.match(/^\*\*([^*\n]+)\*\*$/)
+    return m ? <strong key={i}>{m[1]}</strong> : parte
+  })
+}
+
+/* Resuelve en UNA query los nombres de todos los profesionales asignados a un
+   conjunto de salas (byRoom: { roomId: [{lawyer_id, status}] }). Devuelve un
+   mapa id → { nombre, rol } para etiquetar cada tarjeta del sidebar. */
+async function resolveProfessionalNames(byRoom, headers, supaUrl) {
+  const ids = [...new Set(
+    Object.values(byRoom).flat().map(a => a.lawyer_id).filter(Boolean)
+  )]
+  if (!ids.length) return {}
+  const res = await fetch(
+    `${supaUrl}/rest/v1/profiles?id=in.(${ids.join(',')})&select=id,nombre,apellido,rol`,
+    { headers }
+  )
+  const profs = await res.json().catch(() => [])
+  const map = {}
+  if (Array.isArray(profs)) {
+    for (const p of profs) {
+      map[p.id] = { nombre: `${p.nombre} ${p.apellido || ''}`.trim(), rol: p.rol }
+    }
+  }
+  return map
+}
+
+/* Elige el profesional a mostrar: el que está 'active' o, si no, el primero
+   asignado. */
+function pickProfessional(assigns, nameMap) {
+  const chosen = (assigns || []).find(a => a.status === 'active') || (assigns || [])[0]
+  return chosen ? (nameMap[chosen.lawyer_id] || null) : null
 }
 
 const STATUS_COLOR = { waiting: 'var(--gold)', active: '#4caf50', closed: '#555' }
@@ -286,10 +329,11 @@ function PqrPanel({ onUnreadChange }) {
 
 const FIELDS = 'id, area_derecho, status, created_at, client_nombre, client_email, client_celular, client_cedula, codigo_referencia'
 
-export default function SuperAdminChatViewer() {
+export default function SuperAdminChatViewer({ initialRoomId = null }) {
   const [rooms, setRooms]       = useState([])
   const [filtered, setFiltered] = useState([])
   const [activeRoom, setActiveRoom] = useState(null)
+  const openedInitialRef = useRef(false)
   const [messages, setMessages] = useState([])
   const [lawyers, setLawyers]   = useState([])
   const [ratings, setRatings]   = useState([])
@@ -307,12 +351,34 @@ export default function SuperAdminChatViewer() {
   // Tabs Chats / PQR
   const [view,            setView]            = useState('chats')   // 'chats' | 'pqr'
   const [pqrUnreadCount,  setPqrUnreadCount]  = useState(0)
+  const [lightbox,        setLightbox]        = useState(null)      // URL imagen ampliada
   const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
   const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
 
   const messagesRef = useRef(null)
 
   useEffect(() => { loadRooms() }, [])
+
+  // Deep-link: abrir la sala indicada (desde la campanita / correo). La busca
+  // en las salas cargadas; si no está, la trae directo. Solo una vez.
+  useEffect(() => {
+    if (!initialRoomId || openedInitialRef.current) return
+    const found = rooms.find(r => r.id === initialRoomId) || filtered.find(r => r.id === initialRoomId)
+    if (found) { openedInitialRef.current = true; setActiveRoom(found); return }
+    let cancel = false
+    ;(async () => {
+      try {
+        const headers = await getAuthHeaders()
+        const res = await fetch(
+          `${SUPABASE_URL}/rest/v1/chat_rooms?id=eq.${initialRoomId}&select=*&limit=1`,
+          { headers }
+        )
+        const [room] = await res.json()
+        if (!cancel && room) { openedInitialRef.current = true; setActiveRoom(room) }
+      } catch { /* no-op */ }
+    })()
+    return () => { cancel = true }
+  }, [initialRoomId, rooms, filtered])
 
   // Conteo inicial de PQR no leídos para mostrar el badge en el toggle
   // antes de que el admin abra la pestaña.
@@ -394,10 +460,19 @@ export default function SuperAdminChatViewer() {
       if (!byRoom[a.room_id]) byRoom[a.room_id] = []
       byRoom[a.room_id].push({ lawyer_id: a.lawyer_id, status: a.status })
     }
-    const withLawyers = data.map(room => ({
-      ...room,
-      chat_room_lawyers: byRoom[room.id] || [],
-    }))
+    // Nombres de los profesionales asignados (1 query batched) para etiquetar
+    // cada tarjeta del sidebar con el profesional que atiende.
+    const nameMap = await resolveProfessionalNames(byRoom, headers, SUPABASE_URL)
+    const withLawyers = data.map(room => {
+      const assigns = byRoom[room.id] || []
+      const prof = pickProfessional(assigns, nameMap)
+      return {
+        ...room,
+        chat_room_lawyers: assigns,
+        _professionalNombre: prof?.nombre || null,
+        _professionalRol:    prof?.rol || null,
+      }
+    })
     setRooms(withLawyers)
   }
 
@@ -458,10 +533,17 @@ export default function SuperAdminChatViewer() {
             if (!byRoom[a.room_id]) byRoom[a.room_id] = []
             byRoom[a.room_id].push({ lawyer_id: a.lawyer_id, status: a.status })
           }
-          const withLawyers = data.map(room => ({
-            ...room,
-            chat_room_lawyers: byRoom[room.id] || [],
-          }))
+          const nameMap = await resolveProfessionalNames(byRoom, headers, SUPABASE_URL)
+          const withLawyers = data.map(room => {
+            const assigns = byRoom[room.id] || []
+            const prof = pickProfessional(assigns, nameMap)
+            return {
+              ...room,
+              chat_room_lawyers: assigns,
+              _professionalNombre: prof?.nombre || null,
+              _professionalRol:    prof?.rol || null,
+            }
+          })
           setFiltered(withLawyers)
         }
 
@@ -472,7 +554,10 @@ export default function SuperAdminChatViewer() {
         // Ahora: 3 queries con IN() + agrupado en memoria.
         const q = searchQuery.trim()
         const enc = encodeURIComponent(q)
-        const headers = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` }
+        // Credenciales del superadmin: con la anon key, RLS bloquea
+        // `chat_room_lawyers` (devuelve 0 filas) y la búsqueda nunca encontraba
+        // chats, sin importar el nombre. getAuthHeaders() resuelve el JWT.
+        const headers = await getAuthHeaders()
 
         // 1) Buscar profesionales que matcheen (acepta abogado Y contador
         //    porque tipo_profesional en chat_rooms los maneja a ambos).
@@ -520,7 +605,7 @@ export default function SuperAdminChatViewer() {
         const rooms = await roomsRes.json()
         const allRooms = (Array.isArray(rooms) ? rooms : []).map(room => ({
           ...room,
-          _lawyerNombre: lawyerNameById[lawyerByRoom[room.id]] || 'Profesional',
+          _professionalNombre: lawyerNameById[lawyerByRoom[room.id]] || 'Profesional',
           chat_room_lawyers: [],
         }))
 
@@ -667,7 +752,7 @@ export default function SuperAdminChatViewer() {
           {[
             { key: 'all',     label: 'Todos los chats' },
             { key: 'cedula',  label: 'Por cédula' },
-            { key: 'abogado', label: 'Por abogado' },
+            { key: 'abogado', label: 'Por profesional' },
           ].map(m => (
             <button
               key={m.key}
@@ -688,7 +773,7 @@ export default function SuperAdminChatViewer() {
               onKeyDown={e => e.key === 'Enter' && handleAdvancedSearch()}
               placeholder={searchMode === 'cedula'
                 ? 'Número de cédula del cliente…'
-                : 'Nombre o apellido del abogado…'}
+                : 'Nombre o apellido del abogado o contador…'}
             />
             <button className={styles.searchBtn} onClick={handleAdvancedSearch} disabled={searching}>
               {searching ? 'Buscando…' : 'Buscar'}
@@ -752,16 +837,25 @@ export default function SuperAdminChatViewer() {
               onClick={() => setActiveRoom(room)}
             >
               <div className={styles.roomTop}>
-                <p className={styles.roomArea}>{room.area_derecho}</p>
+                <p className={styles.roomClientName}>{room.client_nombre || 'Cliente anónimo'}</p>
                 <span className={styles.roomStatus} style={{ color: STATUS_COLOR[room.status] }}>
                   {STATUS_LABEL[room.status]}
                 </span>
               </div>
-              {room.client_nombre && (
-                <p className={styles.roomClient}>{room.client_nombre}</p>
-              )}
-              {room._lawyerNombre && (
-                <p className={styles.roomClient}>{room._lawyerNombre}</p>
+              <p className={styles.roomArea}>{room.area_derecho}</p>
+              {room._professionalNombre && (
+                <p className={styles.roomProfesional}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <circle cx="12" cy="8" r="4" stroke="currentColor" strokeWidth="1.8"/>
+                    <path d="M4 20c0-3.3 3.6-6 8-6s8 2.7 8 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+                  </svg>
+                  <span className={styles.roomProfNombre}>{room._professionalNombre}</span>
+                  {room._professionalRol && (
+                    <span className={styles.roomProfRol}>
+                      · {room._professionalRol === 'contador' ? 'Contador' : 'Abogado'}
+                    </span>
+                  )}
+                </p>
               )}
               {room.codigo_referencia && (
                 <p className={styles.roomCodigo}>{room.codigo_referencia}</p>
@@ -865,15 +959,25 @@ export default function SuperAdminChatViewer() {
                         // sobre fondos claros y oscuros del viewer del admin)
                         <AudioPlayer src={msg.file_url} mine={true} />
                       ) : msg.file_url ? (
-                        <button className={styles.fileBtn}
-                          onClick={() => window.open(msg.file_url, '_blank')}
-                          title={msg.file_name}>
-                          <IconPaperclip size={16} />
-                          <span className={styles.fileName}>{msg.file_name}</span>
-                          <span className={styles.fileSize}>{formatSize(msg.file_size)}</span>
-                        </button>
+                        isImage(msg.file_name) ? (
+                          <ChatImage
+                            src={msg.file_url}
+                            alt={msg.file_name || 'imagen'}
+                            btnClassName={styles.imgBtn}
+                            imgClassName={styles.imgPreview}
+                            onOpen={setLightbox}
+                          />
+                        ) : (
+                          <button className={styles.fileBtn}
+                            onClick={() => openChatFile(msg.file_url)}
+                            title={msg.file_name}>
+                            <IconPaperclip size={16} />
+                            <span className={styles.fileName}>{msg.file_name}</span>
+                            <span className={styles.fileSize}>{formatSize(msg.file_size)}</span>
+                          </button>
+                        )
                       ) : (
-                        <p className={styles.msgText}>{msg.content}</p>
+                        <p className={styles.msgText}>{renderMensaje(msg.content)}</p>
                       )}
                       <p className={isLawyer ? styles.msgMetaMine : styles.msgMetaOther}>
                         {new Date(msg.created_at).toLocaleString('es-CO', {
@@ -971,6 +1075,8 @@ export default function SuperAdminChatViewer() {
       )}
 
       </>)}
+
+      <ChatLightbox src={lightbox} onClose={() => setLightbox(null)} />
     </div>
   )
 }

@@ -580,7 +580,7 @@ export default function ProfilePage() {
               Aquí aparecen los chats de clientes asignados a tu área.
             </p>
           </div>
-          <LawyerChatDashboard lawyerId={user?.id} />
+          <LawyerChatDashboard lawyerId={user?.id} canDownloadFiles={!!profile?.puede_descargar_archivos} />
         </div>
 
         {/* ── Chat interno con el administrador ── */}

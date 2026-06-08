@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import { PASSWORD_RULES, getPasswordStrength, isPasswordValid } from '../lib/validaciones'
 import styles from './ResetPasswordPage.module.css'
 
 /* Cuando Supabase redirige al usuario aquí, llega con el hash:
@@ -97,8 +98,9 @@ export default function ResetPasswordPage() {
   async function handleSubmit(e) {
     e.preventDefault()
     setError('')
-    if (pw1.length < 8) { setError('La contraseña debe tener mínimo 8 caracteres.'); return }
-    if (pw1 !== pw2)    { setError('Las contraseñas no coinciden.'); return }
+    // Misma exigencia que el registro (PASSWORD_RULES), no solo longitud.
+    if (!isPasswordValid(pw1)) { setError('La contraseña no cumple todos los requisitos.'); return }
+    if (pw1 !== pw2)           { setError('Las contraseñas no coinciden.'); return }
     setLoading(true)
     const { error: err } = await supabase.auth.updateUser({ password: pw1 })
     setLoading(false)
@@ -107,6 +109,11 @@ export default function ResetPasswordPage() {
     await supabase.auth.signOut()
     setDone(true)
   }
+
+  const strength      = getPasswordStrength(pw1)
+  const rules         = PASSWORD_RULES.map(r => ({ ...r, ok: r.test(pw1) }))
+  const showChecklist = pw1.length > 0
+  const canSubmit     = isPasswordValid(pw1) && pw1 === pw2
 
   return (
     <div className={styles.page}>
@@ -146,9 +153,51 @@ export default function ResetPasswordPage() {
                   autoComplete="new-password"
                   required
                   minLength={8}
+                  autoFocus
                 />
                 <PwToggle shown={show1} onClick={() => setShow1(s => !s)} />
               </div>
+
+              {/* Medidor de fuerza + requisitos (mismas reglas que el registro) */}
+              {showChecklist && strength && (
+                <div className={styles.strengthRow}>
+                  <div className={styles.strengthBars}>
+                    {[1, 2, 3].map(lvl => (
+                      <div
+                        key={lvl}
+                        className={styles.strengthBar}
+                        style={{ background: strength.level >= lvl ? strength.color : 'rgba(13,45,94,0.1)' }}
+                      />
+                    ))}
+                  </div>
+                  <span className={styles.strengthLabel} style={{ color: strength.color }}>
+                    {strength.label}
+                  </span>
+                </div>
+              )}
+              {showChecklist && (
+                <ul className={styles.checklist}>
+                  {rules.map(rule => (
+                    <li
+                      key={rule.id}
+                      className={`${styles.checkItem} ${rule.ok ? styles.checkOk : styles.checkPending}`}
+                    >
+                      <span className={styles.checkIcon} aria-hidden="true">
+                        {rule.ok ? (
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M20 6 9 17l-5-5" />
+                          </svg>
+                        ) : (
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
+                            <circle cx="12" cy="12" r="8" />
+                          </svg>
+                        )}
+                      </span>
+                      <span className={styles.checkLabel}>{rule.label}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
 
             <div className={styles.field}>
@@ -173,7 +222,7 @@ export default function ResetPasswordPage() {
             <button
               type="submit"
               className={styles.btnPrimary}
-              disabled={loading || !pw1 || !pw2}
+              disabled={loading || !canSubmit}
             >
               {loading ? 'Guardando…' : 'Guardar contraseña'}
             </button>
@@ -188,7 +237,11 @@ export default function ResetPasswordPage() {
         {/* Éxito */}
         {done && (
           <>
-            <div className={styles.successIcon}>✓</div>
+            <div className={styles.successIcon}>
+              <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M20 6 9 17l-5-5" />
+              </svg>
+            </div>
             <p className={styles.successText}>
               ¡Contraseña actualizada! Ya puedes iniciar sesión.
             </p>

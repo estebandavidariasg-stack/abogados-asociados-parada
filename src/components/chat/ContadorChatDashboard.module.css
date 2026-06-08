@@ -425,6 +425,7 @@
   font-size: 0.9rem;
   line-height: 1.5;
   word-break: break-word;
+  white-space: pre-wrap;
   margin: 0;
 }
 
@@ -715,6 +716,16 @@
   text-overflow: ellipsis;
   max-width: 130px;
 }
+/* Nombre del cliente — identificador principal de la fila (arriba). */
+.itemNombre {
+  font-size: 0.84rem;
+  font-weight: 700;
+  color: #0d2d5e;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 150px;
+}
 .itemFecha {
   font-size: 0.68rem;
   color: #b0bdd4;
@@ -843,3 +854,139 @@
 
 /* ── Audio ── */
 .audioMsg { width: 100%; max-width: 240px; height: 36px; }
+
+/* ── Modal de confirmación / aviso (centrado, navy + dorado) ───────────── */
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 22, 40, 0.55);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10001;
+  padding: 20px;
+  animation: modalOverlayIn 0.2s ease-out;
+}
+.modalCard {
+  background: #ffffff;
+  border-radius: 16px;
+  border: 1px solid rgba(201, 168, 76, 0.35);
+  box-shadow: 0 24px 70px rgba(10, 22, 40, 0.45);
+  width: min(420px, 100%);
+  padding: 28px 26px 22px;
+  text-align: center;
+  animation: modalCardIn 0.26s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.modalIcon {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 14px;
+}
+.modalIconRed {
+  composes: modalIcon;
+  background: rgba(220, 60, 60, 0.12);
+  color: #c0392b;
+}
+.modalTitle {
+  font-family: 'Cinzel', serif;
+  font-size: 1.05rem;
+  color: #0d2d5e;
+  margin: 0 0 8px;
+}
+.modalText {
+  font-size: 0.86rem;
+  line-height: 1.55;
+  color: #5a6f96;
+  margin: 0 0 22px;
+}
+.modalActions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+.modalActions > button { flex: 1; min-height: 44px; }
+.btnConfirmDanger {
+  background: rgba(200, 45, 45, 0.95);
+  border: none;
+  border-radius: 8px;
+  color: #fff;
+  font-family: 'Cinzel', serif;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0.6rem 1rem;
+  transition: background 0.2s, opacity 0.2s;
+}
+.btnConfirmDanger:hover:not(:disabled) { background: rgba(180, 35, 35, 1); }
+.btnConfirmDanger:disabled { opacity: 0.55; cursor: not-allowed; }
+
+/* ── Acciones del header (Verificar + Finalizar) ── */
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  flex-wrap: nowrap;
+}
+.btnVerificar {
+  background: rgba(201, 168, 76, 0.12);
+  border: 1px solid rgba(201, 168, 76, 0.4);
+  border-radius: 7px;
+  color: #C9A84C;
+  font-family: inherit;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 0.5rem 0.9rem;
+  cursor: pointer;
+  transition: background 0.2s;
+  white-space: nowrap;
+}
+.btnVerificar:hover { background: rgba(201, 168, 76, 0.22); }
+.verificadoTag {
+  font-size: 0.68rem;
+  color: rgba(80, 220, 130, 0.9);
+  background: rgba(80, 220, 130, 0.08);
+  border: 1px solid rgba(80, 220, 130, 0.22);
+  border-radius: 6px;
+  padding: 0.4rem 0.8rem;
+  white-space: nowrap;
+}
+.modalIconGold {
+  composes: modalIcon;
+  background: rgba(201, 168, 76, 0.14);
+  color: #b8841c;
+}
+.btnConfirmGold {
+  background: #c9a84c;
+  border: none;
+  border-radius: 8px;
+  color: #0a1628;
+  font-family: 'Cinzel', serif;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0.6rem 1rem;
+  transition: background 0.2s, opacity 0.2s;
+}
+.btnConfirmGold:hover:not(:disabled) { background: #d8b95e; }
+.btnConfirmGold:disabled { opacity: 0.55; cursor: not-allowed; }
+
+@keyframes modalOverlayIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes modalCardIn {
+  from { opacity: 0; transform: translateY(14px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .modalOverlay, .modalCard { animation: none; }
+}

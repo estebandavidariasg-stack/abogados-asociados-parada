@@ -544,7 +544,7 @@ export default function ProfileContadorPage() {
               Aquí aparecen los chats de clientes asignados a tu especialidad.
             </p>
           </div>
-          <ContadorChatDashboard contadorId={user?.id} />
+          <ContadorChatDashboard contadorId={user?.id} canDownloadFiles={!!profile?.puede_descargar_archivos} />
         </div>
 
         {/* Canal interno con el administrador (sí aplica al contador) */}

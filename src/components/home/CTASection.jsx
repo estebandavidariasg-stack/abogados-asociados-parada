@@ -19,7 +19,7 @@ export default function CTASection() {
     <section className={styles.section} id="contacto" ref={ref}>
       <span className={`${styles.label} fade-up`}>¿Necesita asesoría?</span>
       <h2 className={`${styles.title} fade-up`}>
-        Escríbemos <br /> si tienes dudas
+        Escríbanos <br /> si tiene dudas
       </h2>
       <div className={`${styles.actions} fade-up`}>
         <a 

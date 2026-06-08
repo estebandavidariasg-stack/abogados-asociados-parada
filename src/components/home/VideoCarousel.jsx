@@ -272,12 +272,17 @@ export default function VideoCarousel() {
   /* ── Cargar lista de videos ── */
   useEffect(() => { fetchVideos() }, [])
 
-  async function fetchVideos() {
+  async function fetchVideos(fresh = false) {
     try {
-      const res = await fetch(
-        `${SUPABASE_URL}/rest/v1/videos_carrusel?select=*&order=orden.asc&activo=eq.true`,
-        { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } }
-      )
+      // Carga pública → endpoint cacheado en el CDN (api/carousel.js), para no
+      // pegar a Supabase en cada visita. Tras editar (admin) → directo a
+      // Supabase con `fresh=true`, así ve su cambio sin esperar la caché.
+      const res = fresh
+        ? await fetch(
+            `${SUPABASE_URL}/rest/v1/videos_carrusel?select=*&order=orden.asc&activo=eq.true`,
+            { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } }
+          )
+        : await fetch('/api/carousel')
       const data = await res.json()
       if (Array.isArray(data) && data.length > 0) setVideos(data)
     } catch { /* sin videos aún */ }
@@ -534,7 +539,7 @@ export default function VideoCarousel() {
           })
         }
       }
-      await fetchVideos()
+      await fetchVideos(true)   // directo a Supabase: el admin ve su cambio ya
       setEditing(false)
       setEditVideos([])
       setCurrent(0)

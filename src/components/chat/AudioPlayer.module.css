@@ -17,6 +17,19 @@
   border: 1px solid rgba(255,255,255,0.1);
 }
 
+/* ── Variante tema claro (ChatSection): el audio iguala el color de la
+      burbuja → cliente navy, profesional blanco. ── */
+.playerMineLight { background: var(--navy, #0d2d5e); }
+.playerMineLight .playBtn { background: rgba(255,255,255,0.18); color: #fff; }
+.playerMineLight .time { color: rgba(255,255,255,0.7); }
+
+.playerOtherLight {
+  background: #ffffff;
+  border: 1px solid rgba(13,45,94,0.12);
+}
+.playerOtherLight .playBtn { background: rgba(13,45,94,0.08); color: var(--navy, #0d2d5e); }
+.playerOtherLight .time { color: rgba(13,45,94,0.55); }
+
 .playBtn {
   width: 34px;
   height: 34px;

@@ -60,7 +60,8 @@
 /* ── FAB SUPERADMIN ───────────────────────────────────── */
 .fab {
   position: absolute;
-  top: 2rem;
+  /* Debajo del navbar fijo (72px) para que no lo tape */
+  top: 6rem;
   right: 2rem;
   z-index: 50;
   background: var(--navy);
@@ -84,7 +85,8 @@
 /* ── TOOLBAR ──────────────────────────────────────────── */
 .toolbar {
   position: absolute;
-  top: 2rem;
+  /* Debajo del navbar fijo (72px) para que no lo tape */
+  top: 6rem;
   left: 50%;
   transform: translateX(-50%);
   z-index: 50;

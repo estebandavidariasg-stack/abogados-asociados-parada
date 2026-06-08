@@ -220,3 +220,199 @@
   .stats     { gap: 1rem; }
   .divider   { display: none; }
 }
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   APPEND-ONLY — Dashboard de métricas alrededor del mapa (recharts)
+   Añadido para la tarea de rediseño de MapSection. Todo nuevo; no modifica
+   reglas anteriores.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* ── País resaltado: Colombia ── */
+.colombia {
+  fill: rgba(13, 45, 94, 0.20);
+  stroke: rgba(201, 168, 76, 0.9);
+  stroke-width: 0.9;
+  transition: fill 0.35s, stroke 0.35s;
+}
+.colombia:hover {
+  fill: rgba(201, 168, 76, 0.22);
+  cursor: pointer;
+}
+
+/* ── Grid: columnas de gráficos rodeando el mapa central ── */
+.dashboard {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2.1fr) minmax(0, 1fr);
+  gap: 1.5rem;
+  align-items: center;
+  max-width: 1600px;
+  margin: 0 auto;
+  position: relative;
+  z-index: 2;
+}
+
+.colLeft,
+.colRight {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  min-width: 0;
+}
+
+/* Respaldo del mapa: el "mar" vacío alrededor de la tierra se lee como un
+   halo intencional (no como espacio muerto). Muy sutil sobre el fondo claro. */
+.mapStage {
+  border-radius: 24px;
+  background:
+    radial-gradient(ellipse 62% 58% at 50% 46%, rgba(13, 45, 94, 0.07), transparent 72%);
+}
+
+/* ── Tarjeta de gráfico ── */
+.card {
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid rgba(13, 45, 94, 0.08);
+  border-radius: 14px;
+  padding: 1rem 1rem 0.85rem;
+  box-shadow: 0 8px 30px rgba(13, 45, 94, 0.06);
+  backdrop-filter: blur(4px);
+  min-width: 0;
+}
+
+.cardHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.6rem;
+}
+
+.cardTitle {
+  font-family: 'Cinzel', serif;
+  font-size: clamp(0.72rem, 1.4vw, 0.86rem);
+  font-weight: 700;
+  color: #0d2d5e;
+  margin: 0;
+  letter-spacing: 0.03em;
+  line-height: 1.2;
+}
+
+.cardHint {
+  font-size: 0.52rem;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: #4a5568;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.cardBody {
+  width: 100%;
+}
+
+/* ── Leyenda de la dona ── */
+.legend {
+  display: flex;
+  justify-content: center;
+  gap: 1.1rem;
+  margin-top: 0.4rem;
+  flex-wrap: wrap;
+}
+.legendItem {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: clamp(0.6rem, 1.2vw, 0.68rem);
+  color: #4a5568;
+  font-weight: 600;
+}
+.legendDot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* ── Tooltip compartido ── */
+.tip {
+  background: #ffffff;
+  border: 1px solid rgba(13, 45, 94, 0.12);
+  border-radius: 8px;
+  padding: 6px 10px;
+  box-shadow: 0 4px 16px rgba(13, 45, 94, 0.12);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.tipLabel {
+  font-size: 0.58rem;
+  color: #4a5568;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+.tipVal {
+  font-size: 0.74rem;
+  color: #0d2d5e;
+}
+
+/* ── Contador "en vivo" (ilustrativo) ── */
+.live {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  position: relative;
+  padding-left: 2px;
+}
+.liveDot {
+  position: absolute;
+  top: 2px;
+  left: -12px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #c9a84c;
+  box-shadow: 0 0 0 0 rgba(201, 168, 76, 0.6);
+  animation: liveBlink 1.8s ease-out infinite;
+}
+@keyframes liveBlink {
+  0%   { box-shadow: 0 0 0 0 rgba(201, 168, 76, 0.55); opacity: 1; }
+  70%  { box-shadow: 0 0 0 7px rgba(201, 168, 76, 0); opacity: 0.85; }
+  100% { box-shadow: 0 0 0 0 rgba(201, 168, 76, 0); opacity: 1; }
+}
+.liveNum {
+  font-family: 'Cinzel', serif;
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: #C9A84C;
+  line-height: 1;
+}
+.liveLbl {
+  font-size: 0.58rem;
+  text-transform: uppercase;
+  letter-spacing: 0.22em;
+  color: #7a8fad;
+  font-weight: 600;
+}
+
+/* ── Responsive: una columna, gráficos apilados bajo el mapa ── */
+@media (max-width: 768px) {
+  .dashboard {
+    grid-template-columns: 1fr;
+    gap: 1.25rem;
+  }
+  .mapWrap  { order: 1; }
+  .colLeft  { order: 2; }
+  .colRight { order: 3; }
+  /* Decorativos laterales ocultos en móvil */
+  .glowLeft,
+  .glowRight { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .liveDot,
+  .line,
+  .pulse,
+  .ring { animation: none; }
+  .line { stroke-dashoffset: 0; opacity: 0.6; }
+}

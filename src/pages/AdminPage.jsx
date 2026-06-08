@@ -8,6 +8,7 @@ import CodigosReferencia from '../components/admin/CodigosReferencia'
 import MisContratos from '../components/profile/MisContratos'
 import AdminInternalChat from '../components/chat/AdminInternalChat'
 import ProfileDetailModal from '../components/admin/ProfileDetailModal'
+import NotificationBell from '../components/admin/NotificationBell'
 import { IconCheck, IconX, IconArrowLeft } from '../components/shared/Icons'
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
@@ -38,6 +39,8 @@ export default function AdminPage() {
   const [rolFilter, setRolFilter]             = useState('todos') // 'todos' | 'abogado' | 'contador'
   // Vista detalle del perfil (modal)
   const [previewProfile, setPreviewProfile]   = useState(null)
+  // Sala a abrir en el visor (deep-link desde la campanita / correo)
+  const [chatRoomToOpen, setChatRoomToOpen]   = useState(null)
 
   useEffect(() => {
     if (loading) return
@@ -46,6 +49,21 @@ export default function AdminPage() {
     fetchAlertas()
     fetchChatsCerrados()
   }, [user, profile, loading])
+
+  // Deep-link: /admin?tab=chats&room=<id> (desde el correo de verificación).
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const tab = params.get('tab')
+    const room = params.get('room')
+    if (tab === 'chats') setActiveTab('chats')
+    if (room) setChatRoomToOpen(room)
+  }, [])
+
+  // Abrir una conversación desde la campanita (ya estamos en /admin).
+  function handleOpenRoom(roomId) {
+    setActiveTab('chats')
+    setChatRoomToOpen(roomId)
+  }
 
   async function fetchAll() {
     setLoadingData(true)
@@ -99,6 +117,15 @@ export default function AdminPage() {
       body: JSON.stringify({ aprobado: false }),
     })
     fetchAll()
+  }
+
+  async function toggleDescargaArchivos(id, current) {
+    const headers = await getAuthHeaders()
+    await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${id}`, {
+      method: 'PATCH', headers,
+      body: JSON.stringify({ puede_descargar_archivos: !current }),
+    })
+    setApproved(prev => prev.map(p => p.id === id ? { ...p, puede_descargar_archivos: !current } : p))
   }
 
   async function fetchAlertas() {
@@ -296,9 +323,12 @@ export default function AdminPage() {
               Abogados y Asociados <em>Parada</em>
             </h1>
           </div>
-          <button className={styles.btnBack} onClick={() => navigate('/')}>
-            <IconArrowLeft /> Volver al sitio
-          </button>
+          <div className={styles.headerActions}>
+            <NotificationBell onOpenRoom={handleOpenRoom} />
+            <button className={styles.btnBack} onClick={() => navigate('/')}>
+              <IconArrowLeft /> Volver al sitio
+            </button>
+          </div>
         </div>
 
         {/* Stats */}
@@ -489,6 +519,20 @@ export default function AdminPage() {
                   </div>
                   <div className={styles.cardActions}>
                     <button
+                      type="button"
+                      className={`${styles.toggleDescarga} ${p.puede_descargar_archivos ? styles.toggleDescargaOn : ''}`}
+                      onClick={e => { e.stopPropagation(); toggleDescargaArchivos(p.id, p.puede_descargar_archivos) }}
+                      title={p.puede_descargar_archivos ? 'Deshabilitar descarga de archivos' : 'Habilitar descarga de archivos'}
+                      aria-pressed={!!p.puede_descargar_archivos}
+                    >
+                      <span className={styles.toggleDescargaTrack}>
+                        <span className={styles.toggleDescargaThumb} />
+                      </span>
+                      <span className={styles.toggleDescargaLabel}>
+                        Descargar archivos
+                      </span>
+                    </button>
+                    <button
                       className={styles.btnReject}
                       onClick={e => { e.stopPropagation(); removeApproved(p.id) }}
                     >
@@ -503,7 +547,7 @@ export default function AdminPage() {
           {/* ── Historial de chats ── */}
           {activeTab === 'chats' && (
             <div className={styles.section}>
-              <SuperAdminChatViewer />
+              <SuperAdminChatViewer initialRoomId={chatRoomToOpen} />
             </div>
           )}
 

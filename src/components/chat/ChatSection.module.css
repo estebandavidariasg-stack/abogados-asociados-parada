@@ -1299,3 +1299,82 @@
   .pqrTipoPill,
   .pqrTipoPillSelected { flex: 0 0 auto; }
 }
+
+/* ── Modal: datos de contacto bloqueados (centrado, navy + dorado) ──────── */
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 22, 40, 0.6);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10001;
+  padding: 20px;
+  animation: modalOverlayIn 0.2s ease-out;
+}
+.modalCard {
+  background: #ffffff;
+  border-radius: 16px;
+  border: 1px solid rgba(201, 168, 76, 0.35);
+  box-shadow: 0 24px 70px rgba(10, 22, 40, 0.5);
+  width: min(420px, 100%);
+  padding: 28px 26px 22px;
+  text-align: center;
+  animation: modalCardIn 0.26s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.modalIconRed {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 14px;
+  background: rgba(220, 60, 60, 0.12);
+  color: #c0392b;
+}
+.modalTitle {
+  font-family: 'Cinzel', serif;
+  font-size: 1.05rem;
+  color: #0d2d5e;
+  margin: 0 0 8px;
+}
+.modalText {
+  font-size: 0.86rem;
+  line-height: 1.55;
+  color: #5a6f96;
+  margin: 0 0 22px;
+}
+.modalActions {
+  display: flex;
+  justify-content: center;
+}
+.modalBtn {
+  flex: 1;
+  min-height: 44px;
+  background: rgba(200, 45, 45, 0.95);
+  border: none;
+  border-radius: 8px;
+  color: #fff;
+  font-family: 'Cinzel', serif;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0.6rem 1rem;
+  transition: background 0.2s;
+}
+.modalBtn:hover { background: rgba(180, 35, 35, 1); }
+
+@keyframes modalOverlayIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes modalCardIn {
+  from { opacity: 0; transform: translateY(14px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .modalOverlay, .modalCard { animation: none; }
+}

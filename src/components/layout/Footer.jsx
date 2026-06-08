@@ -74,7 +74,7 @@ export default function Footer() {
         <div className={styles.col}>
           <h4 className={styles.colTitle}>Áreas de práctica</h4>
           <ul className={styles.linkList}>
-            {AREAS.map(item => <li key={item}><a href="#">{item}</a></li>)}
+            {AREAS.map(item => <li key={item}><a href="/#lawyers">{item}</a></li>)}
           </ul>
           {/* Redes sociales */}
           <div className={styles.socials}>

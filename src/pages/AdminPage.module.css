@@ -144,6 +144,13 @@
   color: var(--gold, #C9A84C);
 }
 
+.headerActions {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
 .btnBack {
   display: inline-flex;
   align-items: center;
@@ -477,6 +484,74 @@
 .btnReject:hover {
   background: rgba(220, 50, 50, 0.14);
   box-shadow: 0 2px 8px rgba(220, 50, 50, 0.12);
+}
+
+/* ── Toggle descarga de archivos ── */
+.toggleDescarga {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: none;
+  border: 1px solid rgba(13, 45, 94, 0.16);
+  border-radius: 8px;
+  padding: 0.42rem 0.9rem;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+  min-height: 44px;
+  white-space: nowrap;
+}
+.toggleDescarga:hover {
+  background: rgba(13, 45, 94, 0.04);
+  border-color: rgba(13, 45, 94, 0.28);
+}
+.toggleDescargaOn {
+  border-color: rgba(201, 168, 76, 0.45);
+  background: rgba(201, 168, 76, 0.06);
+}
+.toggleDescargaOn:hover {
+  background: rgba(201, 168, 76, 0.12);
+  border-color: rgba(201, 168, 76, 0.6);
+}
+
+.toggleDescargaTrack {
+  position: relative;
+  width: 32px;
+  height: 18px;
+  border-radius: 9px;
+  background: rgba(13, 45, 94, 0.18);
+  flex-shrink: 0;
+  transition: background 0.22s;
+}
+.toggleDescargaOn .toggleDescargaTrack {
+  background: var(--gold, #C9A84C);
+}
+
+.toggleDescargaThumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.22);
+  transition: transform 0.22s cubic-bezier(.4,0,.2,1);
+}
+.toggleDescargaOn .toggleDescargaThumb {
+  transform: translateX(14px);
+}
+
+.toggleDescargaLabel {
+  font-family: 'Raleway', sans-serif;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #7a8fad;
+  transition: color 0.2s;
+}
+.toggleDescargaOn .toggleDescargaLabel {
+  color: #a07c20;
 }
 
 .btnRefresh {
