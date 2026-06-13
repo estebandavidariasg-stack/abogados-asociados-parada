@@ -110,7 +110,7 @@ export default function SolicitudesAbiertas({ tipoProfesional = 'abogado', onTom
       // Endpoint service-role: trae las salas open + un resumen corto del caso
       // (extraído del primer mensaje), aunque la RLS no deje al profesional
       // leer salas que aún no tomó.
-      const res = await fetch('/api/solicitudes-abiertas', { headers })
+      const res = await fetch('/api/solicitudes', { headers })
       if (!res.ok) return
       const data = await res.json().catch(() => ({}))
       const rows = Array.isArray(data?.solicitudes) ? data.solicitudes : []
@@ -160,8 +160,8 @@ export default function SolicitudesAbiertas({ tipoProfesional = 'abogado', onTom
     setTomando(roomId)
     try {
       const headers = await getAuthHeaders()
-      const res = await fetch('/api/tomar-solicitud', {
-        method: 'POST', headers, body: JSON.stringify({ roomId }),
+      const res = await fetch('/api/solicitudes', {
+        method: 'POST', headers, body: JSON.stringify({ accion: 'tomar', roomId }),
       })
       if (res.status === 409) {
         quitar(roomId)
