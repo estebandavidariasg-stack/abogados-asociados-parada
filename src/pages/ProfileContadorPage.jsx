@@ -7,7 +7,9 @@ import { useNavigate } from 'react-router-dom'
 import styles from './ProfilePage.module.css'
 import MisContratos from '../components/profile/MisContratos'
 import LawyerInternalChat from '../components/chat/LawyerInternalChat'
+import AsistenteIA from '../components/chat/AsistenteIA'
 import ContadorChatDashboard from '../components/chat/ContadorChatDashboard'
+import SolicitudesAbiertas from '../components/chat/SolicitudesAbiertas'
 import UbicacionSelector from '../components/profile/UbicacionSelector'
 import TarjetaPreview from '../components/profile/TarjetaPreview'
 import { supabase, getAuthHeaders } from '../lib/supabase'
@@ -62,6 +64,9 @@ const ESPECIALIDADES_CONTADURIA = [
   'Finanzas Corporativas',
   'Contabilidad Internacional (NIIF)',
   'Nómina y Seguridad Social',
+  'Contabilidad Pública y Gubernamental',
+  'Contabilidad Digital y Analítica de Datos',
+  'Contabilidad de Sostenibilidad (ESG) y Sector Solidario',
   'Otro',
 ]
 
@@ -72,9 +77,28 @@ const EXPERIENCIA_OPTIONS = [
 
 const MAX_VIDEO_MB = 200
 
+// ── Iconos SVG (estilo Lucide, currentColor) — sin emojis como iconos ──
+const IconUser     = (p) => (<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>)
+const IconChat     = (p) => (<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>)
+const IconSparkles = (p) => (<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M12 3l1.9 4.6L18.5 9.5 13.9 11.4 12 16l-1.9-4.6L5.5 9.5l4.6-1.9z"/><path d="M19 14l.7 1.8L21.5 16.5 19.7 17.2 19 19l-.7-1.8L16.5 16.5l1.8-.7z"/></svg>)
+const IconShield   = (p) => (<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>)
+const IconDoc      = (p) => (<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 13h6M9 17h6"/></svg>)
+const IconHome     = (p) => (<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>)
+const IconLogout   = (p) => (<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg>)
+
+const SECCIONES = [
+  { id: 'perfil',    label: 'Mi perfil',    Icon: IconUser },
+  { id: 'consultas', label: 'Consultas',    Icon: IconChat },
+  { id: 'asistente', label: 'IA Parada Precise', Icon: IconSparkles },
+  { id: 'interno',   label: 'Chat interno', Icon: IconShield },
+  { id: 'contratos', label: 'Contratos',    Icon: IconDoc },
+]
+
 export default function ProfileContadorPage() {
   const { user, profile, signOut, loading } = useAuth()
   const navigate = useNavigate()
+  const [seccion, setSeccion] = useState('perfil')
+  const [consultasKey, setConsultasKey] = useState(0) // fuerza recargar el dashboard al tomar un caso
   const fileInputRef    = useRef(null)
   const videoInputRef   = useRef(null)
   const tarjetaInputRef = useRef(null)
@@ -310,18 +334,77 @@ export default function ProfileContadorPage() {
 
   return (
     <div className={styles.page}>
-      <div className={styles.pageInner}>
+      {/* Solicitudes abiertas: visibles en CUALQUIER sección del panel (portal a body) */}
+      {profile?.aprobado && (
+        <SolicitudesAbiertas
+          tipoProfesional="contador"
+          onTomada={() => { setSeccion('consultas'); setConsultasKey(k => k + 1) }}
+        />
+      )}
+      <div className={styles.shell}>
 
-        {/* Header */}
-        <div className={styles.header}>
-          <button className={styles.backBtn} onClick={() => navigate('/')}>← Volver</button>
-          <h1 className={styles.pageTitle}>Mi Perfil — <em>Contador</em></h1>
-          <span className={styles.status}>
-            {profile?.aprobado ? '✦ Aprobado — visible en la página' : '◌ Pendiente de aprobación'}
-          </span>
-        </div>
+        {/* ── Sidebar de navegación (riel que se expande al pasar el mouse) ── */}
+        <aside className={styles.sidebar}>
+          <div className={styles.sidebarInner}>
+            <div className={styles.sideBrand}>
+              {(fotoPreview || fotoUrl || profile?.foto_url)
+                ? <img className={styles.brandAvatar} src={fotoPreview || fotoUrl || profile?.foto_url} alt="Tu foto de perfil" />
+                : <span className={styles.brandMark}>AAP</span>}
+              <div className={styles.brandText}>
+                <strong>{[profile?.nombre, profile?.apellido].filter(Boolean).join(' ') || 'Contador'}</strong>
+                <small className={profile?.aprobado ? styles.badgeOk : styles.badgePend}>
+                  {profile?.aprobado ? 'Aprobado' : 'Pendiente'}
+                </small>
+              </div>
+            </div>
 
-        <form className={styles.form} onSubmit={handleSave}>
+            <nav className={styles.sideNav} aria-label="Secciones del panel">
+              {SECCIONES.map(({ id, label, Icon }) => (
+                <button
+                  key={id}
+                  type="button"
+                  className={`${styles.navItem} ${seccion === id ? styles.navItemActive : ''}`}
+                  onClick={() => setSeccion(id)}
+                  aria-current={seccion === id ? 'page' : undefined}
+                  title={label}
+                >
+                  <Icon className={styles.navIcon} aria-hidden="true" />
+                  <span className={styles.navLabel}>{label}</span>
+                </button>
+              ))}
+            </nav>
+
+            <div className={styles.sideFoot}>
+              <button type="button" className={styles.navItem} onClick={() => navigate('/')} title="Ir al inicio">
+                <IconHome className={styles.navIcon} aria-hidden="true" />
+                <span className={styles.navLabel}>Ir al inicio</span>
+              </button>
+              <button
+                type="button"
+                className={`${styles.navItem} ${styles.logout}`}
+                onClick={async () => { await signOut(); navigate('/') }}
+                title="Cerrar sesión"
+              >
+                <IconLogout className={styles.navIcon} aria-hidden="true" />
+                <span className={styles.navLabel}>Cerrar sesión</span>
+              </button>
+            </div>
+          </div>
+        </aside>
+
+        {/* ── Contenido por sección ── */}
+        <main className={styles.content}>
+
+        {seccion === 'perfil' && (
+        <section className={styles.panel}>
+          <div className={styles.panelHead}>
+            <h1 className={styles.panelTitle}>Mi perfil — <em>Contador</em></h1>
+            <span className={styles.status}>
+              {profile?.aprobado ? '✦ Aprobado — visible en la página' : '◌ Pendiente de aprobación'}
+            </span>
+          </div>
+
+          <form className={styles.form} onSubmit={handleSave}>
 
           {/* Foto */}
           <div className={styles.photoSection}>
@@ -522,41 +605,48 @@ export default function ProfileContadorPage() {
             </div>
 
           </div>
-        </form>
+          </form>
+        </section>
+        )}
 
-        {/* ── Sección de Chat con clientes ── */}
-        <div className={styles.sectionBlock}>
-          <div className={styles.sectionHeader}>
-            <h2 className={styles.sectionTitle}>
-              Consultas de <em>clientes</em>
-            </h2>
-            <p className={styles.sectionSub}>
-              Aquí aparecen los chats de clientes asignados a tu especialidad.
-            </p>
+        {seccion === 'consultas' && (
+        <section className={styles.panel}>
+          <div className={styles.panelHead}>
+            <h1 className={styles.panelTitle}>Consultas de <em>clientes</em></h1>
+            <span className={styles.panelSub}>Chats de clientes asignados a tu especialidad.</span>
           </div>
-          <ContadorChatDashboard contadorId={user?.id} canDownloadFiles={!!profile?.puede_descargar_archivos} />
-        </div>
+          <ContadorChatDashboard key={consultasKey} contadorId={user?.id} canDownloadFiles={!!profile?.puede_descargar_archivos} />
+        </section>
+        )}
 
-        {/* Canal interno con el administrador (sí aplica al contador) */}
-        <div className={styles.sectionBlock}>
-          <div className={styles.sectionHeader}>
-            <h2 className={styles.sectionTitle}>
-              Canal interno · <em>Administración</em>
-            </h2>
-            <p className={styles.sectionSub}>
-              Comunicación directa y privada con el equipo de AAP.
-            </p>
+        {seccion === 'asistente' && (
+        <section className={styles.panel}>
+          <AsistenteIA />
+        </section>
+        )}
+
+        {seccion === 'interno' && (
+        <section className={styles.panel}>
+          <div className={styles.panelHead}>
+            <h1 className={styles.panelTitle}>Canal interno · <em>Administración</em></h1>
+            <span className={styles.panelSub}>Comunicación directa y privada con el equipo de AAP.</span>
           </div>
           <LawyerInternalChat miId={user?.id} />
-        </div>
+        </section>
+        )}
 
-        {/* Mis Contratos (storage genérico, también aplica) */}
-        <div className={styles.sectionBlock}>
+        {seccion === 'contratos' && (
+        <section className={styles.panel}>
+          <div className={styles.panelHead}>
+            <h1 className={styles.panelTitle}>Mis <em>contratos</em></h1>
+          </div>
           <div className={styles.contractsWrap}>
             <MisContratos abogadoId={user?.id} isSuperAdmin={false} />
           </div>
-        </div>
+        </section>
+        )}
 
+        </main>
       </div>
     </div>
   )

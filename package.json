@@ -10,6 +10,7 @@
     "optimize:hero": "node scripts/optimize-hero.js"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.104.1",
     "@ffmpeg/ffmpeg": "^0.12.15",
     "@ffmpeg/util": "^0.12.2",
     "@supabase/supabase-js": "^2.38.4",
@@ -19,8 +20,10 @@
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-google-recaptcha": "^3.1.0",
+    "react-markdown": "^10.1.0",
     "react-router-dom": "^6.26.0",
     "recharts": "^3.8.1",
+    "remark-gfm": "^4.0.1",
     "topojson-client": "^3.1.0"
   },
   "devDependencies": {

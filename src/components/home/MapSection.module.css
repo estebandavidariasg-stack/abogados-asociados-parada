@@ -66,43 +66,46 @@
   letter-spacing: 0.05em;
 }
 
-/* ── Dashboard: 3 columnas simétricas ── */
+/* ── Dashboard: mapa mundial con gráficas superpuestas a los lados ── */
 .dashboard {
-  display: grid;
-  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1.4fr) minmax(0, 1.15fr);
-  gap: 1.75rem;
-  align-items: center;
+  position: relative;
   max-width: 1520px;
   margin: 0 auto;
-  position: relative;
   z-index: 2;
 }
 
-.colLeft,
-.colRight {
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
-  min-width: 0;
+/* ── Mapa mundial (centro, ancho) ── */
+.mapHero {
+  position: relative;
+  width: 100%;
+  max-width: 1280px;
+  margin: 0 auto;
+  border-radius: 22px;
+  background:
+    radial-gradient(ellipse 65% 70% at 50% 50%, rgba(13,45,94,0.06), transparent 72%);
 }
 
-/* ── Mapa ── */
-.mapWrap {
-  position: relative;
-  min-width: 0;
+/* ── Columnas de gráficas flotando sobre los bordes del mapa ── */
+.colLeft,
+.colRight {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: clamp(280px, 23vw, 330px);
+  display: flex;
+  flex-direction: column;
+  gap: 1.4rem;
+  z-index: 3;
 }
-.mapStage {
-  border-radius: 20px;
-  background:
-    radial-gradient(ellipse 65% 60% at 50% 48%, rgba(13,45,94,0.06), transparent 72%);
-}
+.colLeft  { left: 0; }
+.colRight { right: 0; }
 .glowCenter {
   position: absolute;
   top: 50%; left: 50%;
   transform: translate(-50%, -50%);
-  width: 70%; height: 60%;
+  width: 72%; height: 66%;
   border-radius: 50%;
-  background: radial-gradient(ellipse, rgba(201,168,76,0.06) 0%, transparent 70%);
+  background: radial-gradient(ellipse, rgba(201,168,76,0.07) 0%, transparent 70%);
   pointer-events: none; z-index: 0;
 }
 .svg {
@@ -113,42 +116,29 @@
   z-index: 1;
 }
 
-/* ── Colombia base (siempre visible) ── */
-.colombia {
+
+/* ── Territorio mundial (fill base) — sin stroke (el contorno lo maneja .worldOutline) ── */
+.land {
   fill: rgba(13, 45, 94, 0.22);
-  stroke: rgba(201, 168, 76, 0.88);
-  stroke-width: 1;
-  stroke-linejoin: round;
+  stroke: none;
 }
 
-/* ── Departamentos (capa encima, si están disponibles) ── */
-.dept {
-  fill: rgba(13, 45, 94, 0.18);
-  stroke: rgba(255, 255, 255, 0.6);
-  stroke-width: 0.6;
-  stroke-linejoin: round;
-  transition: fill 0.25s;
-}
-.dept:hover {
-  fill: rgba(13, 45, 94, 0.30);
-  cursor: default;
-}
-
-/* Bordes internos entre departamentos — línea blanca tenue */
-.deptBorder {
+/* Fronteras internas entre países — línea blanca tenue */
+.countryBorder {
   fill: none;
-  stroke: rgba(255, 255, 255, 0.55);
-  stroke-width: 0.7;
+  stroke: rgba(255, 255, 255, 0.45);
+  stroke-width: 0.45;
   pointer-events: none;
 }
 
-/* Contorno exterior de Colombia — trazo dorado */
-.colombiaOutline {
+/* Contorno exterior del territorio — halo dorado visible y difuminado */
+.worldOutline {
   fill: none;
-  stroke: rgba(201, 168, 76, 0.90);
-  stroke-width: 1.2;
+  stroke: rgba(201, 168, 76, 0.7);
+  stroke-width: 4.5;
   stroke-linejoin: round;
   pointer-events: none;
+  filter: blur(2.6px);
 }
 
 /* ── Líneas animadas ── */
@@ -376,26 +366,34 @@
 }
 
 /* ── Responsive ── */
-@media (max-width: 1024px) {
-  .dashboard {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr) minmax(0, 1fr);
-    gap: 1.25rem;
+/* Cuando ya no caben superpuestas, las columnas bajan a flujo normal en grilla */
+@media (max-width: 1180px) {
+  .dashboard { display: flex; flex-direction: column; gap: 1.75rem; }
+  .mapHero   { order: -1; max-width: 1080px; }
+  .colLeft,
+  .colRight {
+    position: static;
+    transform: none;
+    width: auto;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
   }
 }
 
 @media (max-width: 768px) {
-  .section  { padding: 4rem 1rem 3rem; }
-  .dashboard {
-    grid-template-columns: 1fr;
-    gap: 1.25rem;
-  }
-  .mapWrap  { order: 1; }
-  .colLeft  { order: 2; }
-  .colRight { order: 3; }
-  .stats    { gap: 1.5rem; }
+  .section   { padding: 4rem 1rem 3rem; }
+  .dashboard { gap: 1.5rem; }
+  .mapHero   { border-radius: 16px; }
+  .stats     { gap: 1.5rem; }
   .num, .liveNum { font-size: 1.4rem; }
   .lbl, .liveLbl { font-size: 0.5rem; }
-  .divider  { height: 28px; }
+  .divider   { height: 28px; }
+}
+
+@media (max-width: 560px) {
+  .colLeft,
+  .colRight { grid-template-columns: 1fr; gap: 1rem; }
 }
 
 @media (max-width: 480px) {

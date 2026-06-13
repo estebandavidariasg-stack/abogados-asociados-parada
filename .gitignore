@@ -7,3 +7,6 @@ dist/
 
 # Claude Code - config personal, no compartir
 .claude/
+
+# Visual companion (brainstorming) mockups
+.superpowers/

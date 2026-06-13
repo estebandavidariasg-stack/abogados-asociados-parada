@@ -1,0 +1,55 @@
+# Abogados y Asociados Parada
+
+> Bufete jurídico y de servicios contables en Bogotá, Colombia. Plataforma de consultas en línea con abogados y contadores verificados. Asesoría en derecho penal, civil, corporativo, de familia, laboral y administrativo.
+
+## Información general
+
+- **Nombre:** Abogados y Asociados Parada
+- **Tipo:** Bufete jurídico y contable
+- **Sede:** Calle 93 # 15-23, Of. 804, Bogotá D.C., Colombia
+- **Teléfono:** +57 312 408 6734
+- **Correo:** abogadosyasociados.parada@gmail.com
+- **Cobertura:** Nacional — Colombia (Bogotá, Medellín, Cali, Barranquilla, Cartagena, Bucaramanga, Pereira, Cúcuta, Santa Marta, Pasto, Villavicencio, Manizales)
+- **Consultas:** En línea, en tiempo real, sin desplazamiento, desde cualquier dispositivo
+
+## Áreas de práctica
+
+- **Derecho Penal:** Defensa y asesoría en procesos penales, Fiscalía General de la Nación, juicio oral (Ley 906 de 2004).
+- **Derecho Civil:** Contratos, responsabilidad civil, sucesiones, bienes inmuebles, litigios patrimoniales (Código Civil colombiano).
+- **Derecho Corporativo:** Constitución de empresas, contratos mercantiles, fusiones y adquisiciones, gobierno corporativo (Código de Comercio, Ley 1258/2008 SAS).
+- **Derecho de Familia:** Divorcios, custodia de menores, alimentos, adopciones, violencia intrafamiliar.
+- **Derecho Laboral:** Contratos laborales, despidos, liquidaciones, acoso laboral, litigios laborales (CST, Ley 1010/2006).
+- **Derecho Administrativo:** Tutelas, derechos de petición, nulidades, contratación estatal, recursos ante entidades públicas.
+- **Servicios Contables:** Auditoría, gestión tributaria, NIIF, planeación financiera para personas naturales y jurídicas.
+
+## Plataforma digital de consultas
+
+La plataforma permite a cualquier ciudadano colombiano acceder a asesoría jurídica o contable en tiempo real:
+1. Seleccionar tipo de profesional (abogado o contador)
+2. Indicar área de consulta
+3. Elegir profesional verificado
+4. Chatear en tiempo real (texto, audio, archivos)
+5. Calificar el servicio al finalizar
+
+Los profesionales son verificados y aprobados por el equipo administrativo. Las cédulas de clientes se procesan de forma anónima.
+
+## Contenido del sitio disponible para IA
+
+- Descripción del bufete y sus servicios
+- Perfiles públicos de profesionales aprobados (nombre, especialidad, ciudad)
+- Modelos contractuales descargables
+- Información de contacto y cobertura geográfica
+
+## Contenido restringido (no indexar)
+
+- `/admin` — Panel de administración (requiere autenticación superadmin)
+- `/perfil` — Dashboard de abogado (requiere autenticación)
+- `/perfil-contador` — Dashboard de contador (requiere autenticación)
+- `/nueva-contrasena` — Recuperación de contraseña
+- Conversaciones de chat (privadas, protegidas)
+- Datos personales de clientes
+
+## Recursos
+
+- Sitio web: https://abogadosyasociadosparada.com/
+- Sitemap: https://abogadosyasociadosparada.com/sitemap.xml

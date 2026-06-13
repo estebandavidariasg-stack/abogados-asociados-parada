@@ -567,7 +567,7 @@ export default function VideoCarousel() {
         viewport={VIEWPORT}
       >
         <motion.span className={styles.eyebrow} variants={eyebrowReveal}>
-          Plataforma de servicios jurídicos y contables en Colombia
+          Plataforma de servicios jurídicos y contables a nivel global
         </motion.span>
         <motion.h2 className={styles.title} variants={fadeUp}>
           Conoce nuestra <em>firma</em>

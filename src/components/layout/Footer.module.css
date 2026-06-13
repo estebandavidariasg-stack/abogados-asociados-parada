@@ -89,6 +89,12 @@
   color: #c9a84c;
   margin-bottom: 1.2rem;
 }
+.colTitleCenter {
+  text-align: center;
+}
+.colTitleContact {
+  padding-left: 1.2rem;
+}
 
 /* ── COLUMNA CONTACTO ─────────────────────────────────────────── */
 .contact {
@@ -164,6 +170,29 @@
   flex-direction: column;
 }
 
+.areasGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.areasSub {
+  font-family: 'Cinzel', serif;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #0d2d5e;
+  margin: 0 0 0.75rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 1px solid rgba(201, 168, 76, 0.4);
+}
+
+.areasGrid .linkList {
+  margin-bottom: 0;
+}
+
 .linkList {
   list-style: none;
   padding: 0;
@@ -191,6 +220,7 @@
   display: flex;
   gap: 0.65rem;
   margin-top: auto;
+  justify-content: center;
 }
 
 .socialBtn {

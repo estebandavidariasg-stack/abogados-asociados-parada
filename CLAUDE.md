@@ -26,6 +26,13 @@ GMAIL_PASS                   # Gmail app password (server-side only)
 SUPABASE_SERVICE_ROLE_KEY    # Service-role JWT — required by api/forgot-password.js (admin/generate_link)
                              # AND by api/send-verification-code.js / api/verify-code.js
                              # (admin user lookup + writes to verification_codes table)
+                             # AND by the notification endpoints (verify-request, reassign, cron)
+CRON_SECRET                  # Protects api/cron/gen-inactividad (Vercel sends it as Bearer token)
+ADMIN_NOTIFY_EMAIL           # Recipient of verification emails (default: abogadosyasociados.parada@gmail.com)
+ANTHROPIC_API_KEY            # Anthropic key — used ONLY by api/ai.js (server-side); never exposed to the browser
+AI_CLIENTE_MAX_MSGS          # Message cap per client triage session (default 6)
+AI_MAX_SESIONES_IP_HORA      # Max triage sessions per IP per hour (default 10)
+AI_IP_SALT                   # Salt used to hash client IPs stored in ai_sesiones
 ```
 
 ## Architecture
@@ -45,6 +52,8 @@ Routes are declared in [src/App.jsx](src/App.jsx):
 | `/nueva-contrasena` | `ResetPasswordPage` | Public — landing for the recovery email link |
 
 `BrowserRouter` and `AuthProvider` are mounted in [src/main.jsx](src/main.jsx).
+
+**Code-splitting:** every route EXCEPT `/` (HomePage) is `React.lazy`-loaded behind a `<Suspense>` in `App.jsx` — public visitors don't download the Profile/Admin/Reset bundles up front. `MapSection` (d3 + topojson) is likewise lazy-loaded inside `HomePage`. If you add a new heavy/private page, lazy-load it the same way.
 
 ⚠️ **`<ProtectedRoute>` exists ([src/components/auth/ProtectedRoute.jsx](src/components/auth/ProtectedRoute.jsx)) but is currently NOT wired into `App.jsx`.** Each protected page enforces auth itself with a `useEffect` that calls `navigate('/')` when `!user` (or when `requireAdmin` and the role doesn't match). If you add new private pages, follow the same pattern OR wire them through `<ProtectedRoute>` in `App.jsx`.
 
@@ -109,15 +118,20 @@ Two distinct paths, both client-side:
 
 ### Serverless Functions
 
-Five Vercel serverless functions live under [api/](api/). All of them share the same navy + gold AAP-branded HTML email card (matching the verification-code email).
+Vercel serverless functions live under [api/](api/). The email functions share the same navy + gold AAP-branded HTML email card; the two read endpoints (`professionals`, `carousel`) are cached at the Vercel CDN; the notification endpoints (`verify-request`, `reassign`, `cron/gen-inactividad`) write with the service-role key and validate the caller's role server-side (shared helpers in [api/_lib/](api/_lib/) — `_`-prefixed files are not published as routes).
 
 | File | Purpose |
 |------|---------|
-| [api/notify.js](api/notify.js) | Transactional emails via Nodemailer (Gmail SMTP). Dispatches by `type`: `new_consultation` (notify lawyer when a client opens a consultation) and `lawyer_joined` (notify client when professional joins). CTA link points to `https://abogadosyasociadosparada.com`. ⚠️ The frontend ([ChatSection.jsx](src/components/chat/ChatSection.jsx)) still calls `notificarSuperAdminContacto` with `type: 'contact_blocked'` for messages containing phone/email regex matches, but the endpoint no longer handles that branch — the call silently no-ops. |
+| [api/notify.js](api/notify.js) | Transactional emails via Nodemailer (Gmail SMTP). Dispatches by `type`: `new_consultation` (notify lawyer when a client opens a consultation) and `lawyer_joined` (notify client when professional joins). CTA link points to `https://abogadosyasociadosparada.com`. |
 | [api/forgot-password.js](api/forgot-password.js) | Custom password-reset flow. Uses `auth/v1/admin/generate_link` (requires `SUPABASE_SERVICE_ROLE_KEY`) to mint the recovery link, then sends a branded email. Always responds 200 to avoid user enumeration. The link points to `/nueva-contrasena`. |
 | [api/send-contact-card.js](api/send-contact-card.js) | Sends a lawyer's contact card to a client by email. |
 | [api/send-verification-code.js](api/send-verification-code.js) | Issues a 6-digit OTP for new lawyer/contador registration. Rate-limited 3/10min per email, 10-min TTL. Previous unused codes are marked `used=true` (NOT deleted) so the rolling rate-limit count remains accurate. Requires `SUPABASE_SERVICE_ROLE_KEY` (admin user lookup + writes to `verification_codes`). |
 | [api/verify-code.js](api/verify-code.js) | Validates `(email, code)`. A single PostgREST PATCH with `used=false` + `expires_at>now()` filters → atomic update, no TOCTOU window. Returns generic "Código inválido o expirado" on any failure (no enumeration). On success returns `tipoRegistro` so the caller can route to the correct signup path. Requires `SUPABASE_SERVICE_ROLE_KEY`. |
+| [api/professionals.js](api/professionals.js) | **Cached** public list of approved professionals (`GET ?rol=abogado\|contador`). Reads `profiles` with the anon key, returns ONLY public columns (whitelist enforced server-side — must mirror `LawyersSection`'s `PUBLIC_COLS`). Sets `Cache-Control: public, s-maxage=300, stale-while-revalidate=600` so the Vercel CDN absorbs repeated home loads instead of hitting Postgres per-visitor. Consumed by [LawyersSection.jsx](src/components/home/LawyersSection.jsx) (filters by area/ciudad happen client-side). |
+| [api/carousel.js](api/carousel.js) | **Cached** active carousel videos (`GET`). Same `Cache-Control` strategy. Consumed by [VideoCarousel.jsx](src/components/home/VideoCarousel.jsx) on public load; after a superadmin edit the component re-fetches **directly** from Supabase (`fetchVideos(true)`) to bypass the cache and see the change immediately. |
+| [api/verify-request.js](api/verify-request.js) | Lawyer/contador "Verificar" → inserts a `verificacion` row in `notificaciones`, posts to `mensajes_internos`, and emails the admin. Validates (via `_lib/adminAuth`) that the caller is a professional **assigned to that room**. |
+| [api/reassign.js](api/reassign.js) | Admin confirms reassigning an inactive room: removes the inactive lawyer, assigns the chosen one (`status='invited'`, room → `waiting`), posts a system message, marks the notification `atendida`. Validates **superadmin** + that the chosen lawyer is approved. |
+| [api/cron/gen-inactividad.js](api/cron/gen-inactividad.js) | **Vercel Cron** (`0 * * * *` in [vercel.json](vercel.json)). Scans `waiting`/`active` rooms with no message in 24h and inserts `inactividad` notifications (dedup by room). Protected by `CRON_SECRET`. |
 
 Call from the frontend with `fetch('/api/<endpoint>', { method: 'POST', body: JSON.stringify(...) })`.
 
@@ -140,7 +154,13 @@ These use **Supabase Realtime** (`postgres_changes` over Phoenix WS) for live me
 
 **Sidebar unread badge (lawyer/contador dashboards):** counts client messages since the professional's last response OR last opening of that room (whichever is more recent). "Last opened" is persisted in `localStorage` under `chat_seen_${userId}` so the badge stays at 0 across switches between rooms (WhatsApp-style — opening a chat marks it seen even without replying). No `seen_at` column exists in the BD; state is per-browser, not synced cross-device.
 
-Client cédulas are stored as **SHA-256 hashes** for anonymity. Outgoing messages are scanned for phone/email regexes; matches don't block the message but trigger a `contact_blocked` notification call (currently a no-op endpoint — see Serverless Functions note).
+Client cédulas are stored as **SHA-256 hashes** for anonymity. Outgoing messages are scanned for phone/email (incl. obfuscated `juan arroba gmail punto com`) by `contieneContacto` in [src/lib/validaciones.js](src/lib/validaciones.js); a match **blocks** the send and shows a modal (client, lawyer AND contador dashboards). No notification is sent. The 10-digit threshold for bare digit runs is deliberate — it catches phones/accounts/cédulas while letting monetary amounts (`1.500.000`) through. Note this is text-only: contact data inside audio/images/PDFs is not detected.
+
+**Chat media URLs ([src/lib/chatFiles.jsx](src/lib/chatFiles.jsx)):** `chat_messages.file_url` stores a **signed URL that expires after 7 days** — stale links 400 even though the file lives on in the `chat-files` bucket. The shared `resolveSignedUrl(srcOrPath)` re-signs a **fresh** URL on demand from either a stored path or an old (expired) signed URL. This module also exports `openChatFile` (popup-safe new-tab open) and the shared `ChatImage` (inline thumbnail) / `ChatLightbox` (fullscreen, portaled to `<body>`) components used by every chat surface.
+
+**"Verificar" (lawyer & contador dashboards):** a header button that posts a "🔔 Solicitud de revisión de proceso" message into `mensajes_internos` addressed to the superadmin, so the admin sees it in `AdminInternalChat`. "Already requested" is per-browser session state (`verifiedRooms` Set), not persisted.
+
+**Per-professional download permission:** `profiles.puede_descargar_archivos` (boolean) gates whether a lawyer/contador can download non-image chat files. Toggled per professional in AdminPage → Aprobados; dashboards poll it every 60s so changes apply without reload. Images always open in the lightbox regardless.
 
 **2. Internal staff chat (polling, NOT Realtime)** — backed by `mensajes_internos` table. Professional ↔ superadmin DM:
 
@@ -197,7 +217,7 @@ The public homepage (`/`) composes these key sections (all in [src/components/ho
 
 | Table | Purpose |
 |-------|---------|
-| `profiles` | Lawyer / contador / superadmin accounts — `id`, `rol`, `aprobado`, personal/professional fields, social links, `foto_url`, `video_url`, `tarjeta_archivo_url`, `area_derecho` (comma-joined specialties; meaning depends on `rol`) |
+| `profiles` | Lawyer / contador / superadmin accounts — `id`, `rol`, `aprobado`, personal/professional fields, social links, `foto_url`, `video_url`, `tarjeta_archivo_url`, `area_derecho` (comma-joined specialties; meaning depends on `rol`), `puede_descargar_archivos` (boolean — lets that professional download non-image chat files; defaults false) |
 | `chat_rooms` / `chat_messages` | Client consultation sessions with status (`waiting` / `active` / `closed`) and `tipo_profesional` (`abogado`/`contador`). ⚠️ `chat_rooms.codigo_referencia` should NOT be UNIQUE — the AAP-XXXXXX referral code can be reused. The frontend has a 23505-fallback that retries the insert with `codigo_referencia=null` if the constraint is still in place; the proper fix is `ALTER TABLE chat_rooms DROP CONSTRAINT chat_rooms_codigo_referencia_key`. |
 | `chat_room_lawyers` | Many-to-many room↔professional assignment; `lawyer_id` is reused for contadores |
 | `chat_ratings` | Star rating + comment a client leaves at the end of a consultation |
@@ -207,5 +227,6 @@ The public homepage (`/`) composes these key sections (all in [src/components/ho
 | `codigos_referencia` | QR reference codes (`AAP-XXXXXX`) managed via [src/components/admin/CodigosReferencia.jsx](src/components/admin/CodigosReferencia.jsx) |
 | `videos_carrusel` | Promotional videos — `video_url`, `poster_url` (thumbnail of first frame, generated client-side by [src/utils/extractPoster.js](src/utils/extractPoster.js)), `orden`, `activo`. Managed via [src/components/home/VideoCarousel.jsx](src/components/home/VideoCarousel.jsx) |
 | `verification_codes` | Email OTPs for registration (`email`, `code`, `tipo_registro`, `expires_at`, `used`, `created_at`). Written/read **only by the two verification serverless functions** using the service-role key — never queried from the client. |
+| `notificaciones` | Admin notification center (`tipo` `inactividad`\|`verificacion`, `room_id`, `lawyer_id`, `client_nombre`, `area`, `mensaje`, `leido`, `atendida`, `created_at`). **RLS-locked: only superadmin SELECT/UPDATE; INSERT/DELETE service-role only.** The bell ([NotificationBell.jsx](src/components/admin/NotificationBell.jsx), mounted in AdminPage header) reads unread rows directly via REST; writes happen in the `verify-request`/`reassign`/`cron` endpoints. Schema (table + indexes + RLS) was applied by hand in Supabase, not tracked in-repo. |
 
 Storage buckets in use: `profile-photos`, `profile-videos`, `contratos`, `tarjetas-profesionales`.

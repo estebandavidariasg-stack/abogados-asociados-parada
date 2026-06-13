@@ -1,0 +1,33 @@
+# ── Rastreadores de IA — acceso explícito al contenido público ──
+User-agent: GPTBot
+Allow: /
+
+User-agent: OAI-SearchBot
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+User-agent: Amazonbot
+Allow: /
+
+User-agent: Bytespider
+Allow: /
+
+# ── Todos los demás crawlers ──
+User-agent: *
+Allow: /
+
+# Rutas privadas (no aportan a SEO; redirigen a / sin sesión)
+Disallow: /admin
+Disallow: /perfil
+Disallow: /perfil-contador
+Disallow: /nueva-contrasena
+
+Sitemap: https://abogadosyasociadosparada.com/sitemap.xml

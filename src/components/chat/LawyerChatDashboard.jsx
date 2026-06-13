@@ -5,6 +5,9 @@ import styles from './LawyerChatDashboard.module.css'
 import AudioPlayer from './AudioPlayer'
 import { ChatImage, openChatFile } from '../../lib/chatFiles'
 import { IconPaperclip, IconMic } from '../shared/Icons'
+import { pedirIA } from '../../lib/aiClient'
+import { motion, AnimatePresence } from 'framer-motion'
+import Markdown from '../shared/Markdown'
 
 // Detecta si el archivo es imagen para renderizar preview inline (WhatsApp style).
 function isImage(name) {
@@ -114,6 +117,10 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
   const [rating,      setRating]      = useState(0)
   const [showRating,  setShowRating]  = useState(false)
   const [loadingRooms, setLoadingRooms] = useState(true)
+  const [iaResultado, setIaResultado] = useState(null)
+  const [iaCargando, setIaCargando]   = useState(false)
+  const [iaTipo, setIaTipo]           = useState('resumen')
+  const [iaCopiado, setIaCopiado]     = useState(false)
 
   const fileRef   = useRef(null)
   const mensajesRef = useRef(null)
@@ -656,6 +663,24 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
     }
   }
 
+  async function pedirResumenIA(tipo) {
+    if (!activeRoom || iaCargando) return
+    setIaTipo(tipo); setIaCopiado(false); setIaCargando(true); setIaResultado(null)
+    const transcripcion = (messages || [])
+      .map(m => `${m.sender_type === 'client' ? 'Cliente' : 'Profesional'}: ${m.content || ''}`)
+      .join('\n')
+    const instruccion = tipo === 'analisis'
+      ? `Analiza este caso para el profesional (área, hechos, pretensión, riesgos, próximos pasos).\n\nTranscripción:\n${transcripcion}`
+      : `Resume esta consulta para el profesional en pocas líneas (área, hechos clave y qué busca el cliente).\n\nTranscripción:\n${transcripcion}`
+    const { Authorization } = await getAuthHeaders()
+    const { ok, data } = await pedirIA(
+      { modo: 'abogado', mensajes: [{ role: 'user', content: instruccion }], roomId: activeRoom.id, accion: tipo },
+      { authHeader: Authorization }
+    )
+    setIaResultado(ok && data?.reply ? data.reply : (data?.mensaje || 'El asistente no está disponible ahora.'))
+    setIaCargando(false)
+  }
+
   const hasVideos = activeRoom && messages.some(m => m.message_type === 'video_call')
 
   return (
@@ -779,6 +804,12 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
                       >
                         Verificar
                       </button>}
+                  <button type="button" className={styles.btnVerificar} disabled={iaCargando} onClick={() => pedirResumenIA('resumen')}>
+                    {iaCargando ? '✨ Generando…' : '✨ Resumir con IA'}
+                  </button>
+                  <button type="button" className={styles.btnVerificar} disabled={iaCargando} onClick={() => pedirResumenIA('analisis')}>
+                    ✨ Analizar caso
+                  </button>
                   <button className={styles.btnClose} onClick={() => setConfirmClose(true)}>
                     Finalizar consulta
                   </button>
@@ -792,6 +823,50 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
                 Consulta finalizada · Solo lectura
               </div>
             )}
+
+            <AnimatePresence>
+              {(iaCargando || iaResultado) && (
+                  <motion.aside
+                    initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }}
+                    transition={{ type: 'spring', stiffness: 320, damping: 34 }}
+                    role="dialog" aria-label="Resultado de IA Parada Precise"
+                    style={{ position: 'fixed', top: 0, right: 0, bottom: 0, width: 'min(460px, 92vw)', background: '#fff', zIndex: 1001, display: 'flex', flexDirection: 'column', boxShadow: '-12px 0 40px rgba(13,45,94,0.25)' }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '16px 18px', background: 'linear-gradient(135deg,#15376b,#0d2d5e)', color: '#fff' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+                        <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: '#f2d580' }}>IA Parada Precise</span>
+                        <strong style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: '1.2rem', fontWeight: 600 }}>
+                          {iaTipo === 'analisis' ? 'Análisis del caso' : 'Resumen de la consulta'}
+                        </strong>
+                      </div>
+                      <button type="button" onClick={() => setIaResultado(null)} disabled={iaCargando} aria-label="Cerrar"
+                        style={{ background: 'rgba(255,255,255,0.14)', border: 'none', color: '#fff', width: 32, height: 32, borderRadius: 8, cursor: iaCargando ? 'not-allowed' : 'pointer', fontSize: 16, lineHeight: 1, flexShrink: 0 }}>✕</button>
+                    </div>
+                    <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: 18 }}>
+                      {iaCargando ? (
+                        <div style={{ display: 'flex', gap: 6, alignItems: 'center', color: '#6b7689', fontSize: 13 }}>
+                          {[0, 1, 2].map(i => (
+                            <motion.span key={i}
+                              style={{ width: 8, height: 8, borderRadius: '50%', background: '#9aa8c0', display: 'inline-block' }}
+                              animate={{ opacity: [0.3, 1, 0.3], y: [0, -3, 0] }}
+                              transition={{ duration: 1.1, repeat: Infinity, delay: i * 0.18 }}
+                            />
+                          ))}
+                          <span style={{ marginLeft: 6 }}>Generando…</span>
+                        </div>
+                      ) : <Markdown>{iaResultado}</Markdown>}
+                    </div>
+                    {!iaCargando && iaResultado && (
+                      <div style={{ padding: '12px 18px', borderTop: '1px solid #e1e8f2', display: 'flex', justifyContent: 'flex-end' }}>
+                        <button type="button" onClick={() => { navigator.clipboard?.writeText(iaResultado); setIaCopiado(true); setTimeout(() => setIaCopiado(false), 1600) }}
+                          style={{ background: 'linear-gradient(135deg,#f2d580,#c9a84c 55%,#9a7a2c)', color: '#0d2d5e', border: 'none', borderRadius: 8, padding: '8px 16px', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
+                          {iaCopiado ? 'Copiado ✓' : 'Copiar'}
+                        </button>
+                      </div>
+                    )}
+                  </motion.aside>
+              )}
+            </AnimatePresence>
 
             {/* Mensajes */}
             <div className={styles.messages} ref={mensajesRef}>
