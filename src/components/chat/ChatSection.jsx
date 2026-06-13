@@ -4,6 +4,8 @@ import { motion, useInView, useReducedMotion } from 'framer-motion'
 import { supabase } from '../../lib/supabase'
 import styles from './ChatSection.module.css'
 import AudioPlayer from './AudioPlayer'
+import TriagePanel from './TriagePanel'
+import { ChatImage, ChatLightbox, openChatFile } from '../../lib/chatFiles'
 import UbicacionSelector from '../profile/UbicacionSelector'
 import { IconPaperclip, IconMic } from '../shared/Icons'
 import { validarCelular, validarCorreo, normalizarCelular, contieneContacto } from '../../lib/validaciones'
@@ -445,8 +447,23 @@ const AREAS_CONTADURIA = [
   'Contabilidad General', 'Auditoría', 'Tributaria y Fiscal',
   'Contabilidad Forense', 'Costos y Presupuestos', 'Revisoría Fiscal',
   'Finanzas Corporativas', 'Contabilidad Internacional (NIIF)',
-  'Nómina y Seguridad Social', 'Otro',
+  'Nómina y Seguridad Social',
+  'Contabilidad Pública y Gubernamental',
+  'Contabilidad Digital y Analítica de Datos',
+  'Contabilidad de Sostenibilidad (ESG) y Sector Solidario',
+  'Otro',
 ]
+
+// La IA devuelve un área detallada (ej. "Derecho Laboral - Despido sin causa").
+// La mapeamos a los chips canónicos para que el formulario muestre la selección
+// correcta. Si no hay coincidencia, conserva el texto de la IA como única área.
+function normalizarAreas(detectada, tipo) {
+  const lista = tipo === 'contador' ? AREAS_CONTADURIA : AREAS_DERECHO
+  const low = String(detectada || '').toLowerCase()
+  const matches = lista.filter(a => low.includes(a.toLowerCase()))
+  if (matches.length) return matches.slice(0, 3)
+  return detectada ? [detectada] : []
+}
 
 // SVG inline para no depender de assets externos
 const TIPO_OPTIONS = [
@@ -538,9 +555,9 @@ const CARDS_LEFT = [
     floatDuration: 5.2, floatDelay: 0.3, entranceDelay: 0.1,
   },
   {
-    icon: (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>),
-    title: 'Cobertura nacional',
-    text: 'Abogados en todo el territorio colombiano listos para atenderte.',
+    icon: (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>),
+    title: 'Cobertura nacional e internacional',
+    text: 'Abogados en Colombia y en el exterior, listos para atender tu caso.',
     xOffset: -50, yFloat: [0, -14, 0], rotate: -1.5,
     floatDuration: 4.5, floatDelay: 0.6, entranceDelay: 0.2,
   },
@@ -562,8 +579,8 @@ const CARDS_RIGHT = [
   },
   {
     icon: (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>),
-    title: 'Atención 24/7',
-    text: 'Consulta cuando lo necesites, sin importar la hora ni el lugar.',
+    title: 'Atención oportuna',
+    text: 'Un profesional disponible toma tu caso lo antes posible.',
     xOffset: 50, yFloat: [0, -15, 0], rotate: 1.5,
     floatDuration: 5.4, floatDelay: 0.75, entranceDelay: 0.25,
   },
@@ -813,6 +830,10 @@ function StepCedula({ onNew, onResume }) {
 
 export default function ChatSection() {
   const [step, setStep]         = useState('cedula')
+  const [triageResumen, setTriageResumen] = useState('')   // resumen de la IA → primer mensaje de la sala
+  const [solicitudAbierta, setSolicitudAbierta] = useState(false) // flujo "publicar" (no hay profesional del área)
+  const [areasBloqueadas, setAreasBloqueadas] = useState(false)   // área pre-detectada por la IA → no editable
+  const prefersReducedMotion = useReducedMotion()
   const [form, setForm]         = useState({
     nombre:'', apellido:'', ciudad:'', departamento:'', barrio:'',
     areas:[], correo:'', celular:'', descripcion:'',
@@ -835,14 +856,8 @@ export default function ChatSection() {
   const [sending, setSending]       = useState(false)
   const [uploading, setUploading]   = useState(false)
 
-  // ── Lightbox para ver imagenes en grande (click en thumbnail) ────────────
+  // ── Lightbox para ver imágenes en grande — ChatLightbox maneja Escape internamente
   const [lightbox, setLightbox] = useState(null)
-  useEffect(() => {
-    if (!lightbox) return
-    const onKey = (e) => { if (e.key === 'Escape') setLightbox(null) }
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [lightbox])
 
   // ── Contacto bloqueado (modal) ────────────────────────────────────────────
   const [contactoWarning, setContactoWarning] = useState(false)
@@ -886,10 +901,11 @@ export default function ChatSection() {
     if (messagesRef.current) messagesRef.current.scrollTop = messagesRef.current.scrollHeight
   }, [messages])
 
-  // Cuando se abre el listado o el cierre del chat, llevar la vista a la sección
+  // Cuando se abre el listado, el cierre del chat o la pantalla de espera,
+  // llevar la vista a la sección correspondiente.
   useEffect(() => {
-    if ((step === 'lawyers' || step === 'choose_another' || step === 'post_chat') && lawyersRef.current) {
-      lawyersRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    if ((step === 'lawyers' || step === 'choose_another' || step === 'post_chat' || step === 'esperando') && lawyersRef.current) {
+      lawyersRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' })
     }
   }, [step])
 
@@ -963,6 +979,10 @@ export default function ChatSection() {
       .on('postgres_changes', { event:'UPDATE', schema:'public', table:'chat_rooms', filter:`id=eq.${roomId}` },
         async p => {
           setRoomStatus(p.new.status)
+          // Solicitud abierta tomada por un profesional → entra al chat.
+          if (p.new.status === 'active') {
+            setStep(s => s === 'esperando' ? 'chat' : s)
+          }
           if (p.new.status === 'closed') {
             // Guardar roomId cerrado para rating posterior
             setClosedRoomId(p.new.id)
@@ -1004,6 +1024,7 @@ export default function ChatSection() {
     setPicked([])
     setExcludedLawyerIds([]); setClosedRoomId(null)
     setPqrTipo(''); setPqrMensaje(''); setPqrSent(false); setPqrError(''); setPqrYaExiste(false)
+    setTriageResumen(''); setSolicitudAbierta(false); setAreasBloqueadas(false)
     localStorage.removeItem('chat_cedula_hash'); localStorage.removeItem('chat_nombre'); localStorage.removeItem('chat_codigo_ref')
   }
 
@@ -1018,6 +1039,15 @@ export default function ChatSection() {
     if (!descripcion.trim())               { setFormError('Describe brevemente tu caso.'); return }
     setSubmitting(true); setFormError('')
     localStorage.setItem('chat_nombre', `${nombre.trim()} ${apellido.trim()}`)
+
+    // Flujo "solicitud abierta": no hay profesional del área → publicar directo
+    // y pasar a la pantalla de espera (sin paso de selección ni segundo botón).
+    if (solicitudAbierta) {
+      setSubmitting(false)
+      await publicarSolicitud()
+      return
+    }
+
     await fetchLawyers(areas, departamento, excludedLawyerIds, form.tipo_profesional)
     setStep('lawyers'); setSubmitting(false)
   }
@@ -1102,9 +1132,12 @@ export default function ChatSection() {
     }
 
     await supabase.from('chat_room_lawyers').insert(picked.map(lid => ({ room_id: room.id, lawyer_id: lid, status:'invited' })))
+    const resumenBloque = triageResumen
+      ? `\n\n📋 Resumen del asistente IA:\n${triageResumen}`
+      : ''
     await supabase.from('chat_messages').insert({
       room_id: room.id, sender_type:'client', lawyer_id: null,
-      content: `Hola, mi nombre es ${nombre} ${apellido}.\n\nUbicación: ${ubicacionTxt}\nÁrea(s): ${areas.join(', ')}\n\nDescripción del caso:\n${descripcion}`,
+      content: `Hola, mi nombre es ${nombre} ${apellido}.\n\nUbicación: ${ubicacionTxt}\nÁrea(s): ${areas.join(', ')}\n\nDescripción del caso:\n${descripcion}${resumenBloque}`,
     })
     const todosAbogados = [...lawyers.cercanos, ...lawyers.porArea]
     for (const abogado of todosAbogados.filter(l => picked.includes(l.id))) {
@@ -1120,6 +1153,50 @@ export default function ChatSection() {
     setRoomId(room.id); setRoomStatus(room.status || 'waiting'); setRoomArea(areas.join(', '))
     setRoomCodigo(codigoRef || ''); setPicked([])
     setStep('chat'); setSending(false)
+  }
+
+  // ── Publicar "solicitud abierta" (modelo claim tipo Uber/DiDi) ──────────
+  // Se usa SOLO como respaldo cuando no hay ningún profesional del área.
+  // Crea la sala con status='open' (sin profesional asignado) y deja al
+  // cliente en estado "esperando"; el primer profesional que la tome la
+  // pasa a 'active' (lo detecta el realtime de chat_rooms más abajo).
+  async function publicarSolicitud() {
+    setSending(true); setFormError('')
+    const hash      = localStorage.getItem('chat_cedula_hash')
+    const codigoRef = localStorage.getItem('chat_codigo_ref') || null
+    const { nombre, apellido, areas, descripcion, ciudad, departamento, barrio, correo, celular, genero } = form
+    const ubicacionTxt = barrio ? `${ciudad} - ${barrio}, ${departamento}` : `${ciudad}, ${departamento}`
+
+    // La sala 'open' + su mensaje de intro se crean en el servidor con
+    // service-role (api/publicar-solicitud). Así el mensaje queda garantizado:
+    // la RLS de chat_messages no deja al cliente anónimo escribir en una sala
+    // sin profesional asignado. El profesional que la tome ve el caso completo.
+    try {
+      const res = await fetch('/api/publicar-solicitud', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          cedulaHash: hash, codigoRef,
+          tipoProfesional: form.tipo_profesional || 'abogado',
+          nombre, apellido, areas, descripcion,
+          ubicacion: ubicacionTxt,
+          correo: correo || null, celular: celular || null, genero: genero || null,
+          resumen: triageResumen || '',
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok || !data?.roomId) {
+        setFormError(data?.error || 'No se pudo publicar la consulta. Intenta de nuevo.')
+        setSending(false)
+        return
+      }
+      setRoomId(data.roomId); setRoomStatus('open'); setRoomArea(areas.join(', '))
+      setRoomCodigo(codigoRef || ''); setPicked([])
+      setStep('esperando'); setSending(false)
+    } catch {
+      setFormError('No se pudo publicar la consulta. Revisa tu conexión.')
+      setSending(false)
+    }
   }
 
   async function loadMessages(rid) {
@@ -1222,7 +1299,7 @@ export default function ChatSection() {
     setUploading(true)
     try {
       const ext  = mimeType.includes('ogg') ? 'ogg' : mimeType.includes('mp4') ? 'mp4' : 'webm'
-      const path = `${roomId}/audio_${Date.now()}.${ext}`
+      const path = `chats/${roomId}/audio_${Date.now()}.${ext}`
       const cleanMime = mimeType.split(';')[0] || 'audio/webm'
       const res  = await fetch(`${SUPABASE_URL}/storage/v1/object/chat-files/${path}`, {
         method: 'POST',
@@ -1252,10 +1329,19 @@ export default function ChatSection() {
         {loadingL ? <p className={styles.loadingText}>Buscando abogados disponibles…</p>
           : allLawyers.length === 0 ? (
             <div className={styles.emptyLawyers}>
-              <p className={styles.emptyText}>
-                No hay más {form.tipo_profesional === 'contador' ? 'contadores' : 'abogados'} disponibles en esta {form.tipo_profesional === 'contador' ? 'especialidad' : 'área'}.
-              </p>
-              <button className={styles.btnOutline} onClick={resetToStart}>Volver al inicio</button>
+              <div className={styles.openCard}>
+                <span className={styles.openBadge}>Sin profesional disponible</span>
+                <p className={styles.openTitle}>
+                  No hay un {form.tipo_profesional === 'contador' ? 'contador' : 'abogado'} de esta {form.tipo_profesional === 'contador' ? 'especialidad' : 'área'} disponible ahora mismo.
+                </p>
+                <p className={styles.openText}>
+                  Publica tu consulta y te atenderá el <b>primer profesional disponible</b> que la tome — como pedir un servicio. Entrarás al chat automáticamente apenas alguien la acepte.
+                </p>
+                <button className={styles.btnPublicar} onClick={publicarSolicitud} disabled={sending}>
+                  {sending ? 'Publicando…' : 'Publicar mi consulta'}
+                </button>
+                <button className={styles.btnBack} onClick={resetToStart} style={{ paddingTop: 14, paddingBottom: 0 }}>Volver al inicio</button>
+              </div>
             </div>
           ) : (
             <>
@@ -1330,7 +1416,7 @@ export default function ChatSection() {
       <div className={styles.header}>
         <h2 className={styles.title}>Consulta <span className={styles.titleGold}>Privada</span></h2>
         <p className={styles.subtitle}>
-          Conecta directamente con abogados especializados. Tu cédula se convierte en un código anónimo.
+          Conecta directamente con abogados y contadores especializados. Tu cédula se convierte en un código anónimo.
         </p>
       </div>
 
@@ -1341,7 +1427,7 @@ export default function ChatSection() {
 
           <div className={styles.centerContent}>
             {step === 'cedula' && (
-              <StepCedula onNew={() => setStep('form')} onResume={handleResume} />
+              <StepCedula onNew={() => setStep('triage')} onResume={handleResume} />
             )}
 
             {step === 'chat' && (
@@ -1397,23 +1483,17 @@ export default function ChatSection() {
                             <AudioPlayer src={msg.file_url} mine={mine} theme="light" />
                           ) : msg.file_url ? (
                             isImageMsg ? (
-                              <button
-                                className={styles.imgBtn}
-                                onClick={() => setLightbox(msg.file_url)}
-                                title="Click para ampliar"
-                              >
-                                <img
-                                  src={msg.file_url}
-                                  alt={msg.file_name || 'imagen'}
-                                  className={styles.imgPreview}
-                                  draggable="false"
-                                  loading="lazy"
-                                />
-                              </button>
+                              <ChatImage
+                                src={msg.file_url}
+                                alt={msg.file_name || 'imagen'}
+                                btnClassName={styles.imgBtn}
+                                imgClassName={styles.imgPreview}
+                                onOpen={setLightbox}
+                              />
                             ) : (
                               <button
                                 className={styles.fileBtn}
-                                onClick={() => window.open(msg.file_url,'_blank')}
+                                onClick={() => openChatFile(msg.file_url)}
                                 title={msg.file_name}
                               >
                                 <IconPaperclip size={16} />
@@ -1485,6 +1565,48 @@ export default function ChatSection() {
             )}
           </div>
 
+          <SideCards cards={CARDS_RIGHT} side="right" />
+        </div>
+      )}
+
+      {step === 'triage' && (
+        <div className={styles.floatingLayout} ref={lawyersRef}>
+          <SideCards cards={CARDS_LEFT} side="left" />
+          <div className={styles.centerContent}>
+          <TriagePanel
+            tipoProfesional={form.tipo_profesional}
+            onManual={() => { setSolicitudAbierta(false); setAreasBloqueadas(false); setStep('form') }}
+            onIniciarChat={({ profesionalId, area, resumen }) => {
+              // Pre-llenar el form con lo detectado por la IA y pre-seleccionar el profesional.
+              setSolicitudAbierta(false)
+              const areasNorm = normalizarAreas(area, form.tipo_profesional)
+              setAreasBloqueadas(areasNorm.length > 0)
+              setForm(f => ({
+                ...f,
+                areas: areasNorm.length ? areasNorm : f.areas,
+                descripcion: resumen || f.descripcion,
+              }))
+              setTriageResumen(resumen || '')
+              setPicked([profesionalId])
+              setStep('form')
+            }}
+            onPublicar={({ area, resumen }) => {
+              // No hay profesional del área → pre-llena el form y activa el modo
+              // "publicar": al enviar el form se publica directo y pasa a esperar.
+              setSolicitudAbierta(true)
+              const areasNorm = normalizarAreas(area, form.tipo_profesional)
+              setAreasBloqueadas(areasNorm.length > 0)
+              setForm(f => ({
+                ...f,
+                areas: areasNorm.length ? areasNorm : f.areas,
+                descripcion: resumen || f.descripcion,
+              }))
+              setTriageResumen(resumen || '')
+              setPicked([])
+              setStep('form')
+            }}
+          />
+          </div>
           <SideCards cards={CARDS_RIGHT} side="right" />
         </div>
       )}
@@ -1665,23 +1787,37 @@ export default function ChatSection() {
             <div className={styles.field}>
               <label className={styles.label}>
                 {form.tipo_profesional === 'contador' ? 'Especialidad' : 'Área del caso'} <span className={styles.required}>*</span>
-                <span style={{ color:'rgba(13,45,94,0.45)', fontWeight:400, marginLeft:8 }}>(mínimo 1, máximo 3)</span>
+                {!areasBloqueadas && <span style={{ color:'rgba(13,45,94,0.45)', fontWeight:400, marginLeft:8 }}>(mínimo 1, máximo 3)</span>}
               </label>
-              <div className={styles.areasGrid}>
-                {(form.tipo_profesional === 'contador' ? AREAS_CONTADURIA : AREAS_DERECHO).map(area => {
-                  const selected = form.areas.includes(area)
-                  const disabled = !selected && form.areas.length >= 3
-                  return (
-                    <button key={area} type="button"
-                      className={selected ? styles.areaChipSelected : styles.areaChip}
-                      disabled={disabled}
-                      onClick={() => setForm(f => ({ ...f, areas: selected ? f.areas.filter(a => a!==area) : [...f.areas, area] }))}>
-                      {area}
-                    </button>
-                  )
-                })}
-              </div>
-              {form.areas.length > 0 && <p className={styles.areasSelected}>Seleccionadas: <strong>{form.areas.join(' · ')}</strong></p>}
+              {areasBloqueadas ? (
+                <div className={styles.areasLocked} aria-readonly="true">
+                  {form.areas.map(a => (
+                    <span key={a} className={styles.areaChipLocked}>
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                      {a}
+                    </span>
+                  ))}
+                  <span className={styles.areaLockHint}>Área detectada por el asistente</span>
+                </div>
+              ) : (
+                <>
+                  <div className={styles.areasGrid}>
+                    {(form.tipo_profesional === 'contador' ? AREAS_CONTADURIA : AREAS_DERECHO).map(area => {
+                      const selected = form.areas.includes(area)
+                      const disabled = !selected && form.areas.length >= 3
+                      return (
+                        <button key={area} type="button"
+                          className={selected ? styles.areaChipSelected : styles.areaChip}
+                          disabled={disabled}
+                          onClick={() => setForm(f => ({ ...f, areas: selected ? f.areas.filter(a => a!==area) : [...f.areas, area] }))}>
+                          {area}
+                        </button>
+                      )
+                    })}
+                  </div>
+                  {form.areas.length > 0 && <p className={styles.areasSelected}>Seleccionadas: <strong>{form.areas.join(' · ')}</strong></p>}
+                </>
+              )}
             </div>
             <div className={styles.field}>
               <label className={styles.label}>Descripción del caso <span className={styles.required}>*</span></label>
@@ -1690,10 +1826,12 @@ export default function ChatSection() {
                 placeholder="Describe la situación. No incluyas datos personales sensibles aún." rows={4} />
             </div>
             {formError && <p className={styles.formError}>{formError}</p>}
-            <button className={styles.btnGold} onClick={handleFormSubmit} disabled={submitting}>
-              {submitting
-                ? (form.tipo_profesional === 'contador' ? 'Buscando contadores…' : 'Buscando abogados…')
-                : (form.tipo_profesional === 'contador' ? 'Buscar contadores disponibles' : 'Buscar abogados disponibles')}
+            <button className={styles.btnGold} onClick={handleFormSubmit} disabled={submitting || sending}>
+              {solicitudAbierta
+                ? ((submitting || sending) ? 'Publicando…' : 'Publicar mi consulta')
+                : (submitting
+                    ? (form.tipo_profesional === 'contador' ? 'Buscando contadores…' : 'Buscando abogados…')
+                    : (form.tipo_profesional === 'contador' ? 'Buscar contadores disponibles' : 'Buscar abogados disponibles'))}
             </button>
             <button className={styles.btnBack} onClick={() => setStep('cedula')}>← Volver</button>
           </div>
@@ -1714,6 +1852,54 @@ export default function ChatSection() {
               ? 'Iniciando chat…'
               : `Iniciar chat con el ${form.tipo_profesional === 'contador' ? 'contador' : 'abogado'}`}
           />
+        </div>
+      )}
+
+      {/* ── Esperando que un profesional tome la solicitud abierta ── */}
+      {step === 'esperando' && (
+        <div className={styles.esperandoWrap} ref={lawyersRef}>
+          <motion.div
+            className={styles.esperandoCard}
+            initial={{ opacity: 0, y: 16, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+          >
+            <div className={styles.radar} aria-hidden="true">
+              {prefersReducedMotion ? (
+                <span className={styles.radarCore} />
+              ) : (
+                <>
+                  {[0, 1, 2].map(i => (
+                    <motion.span
+                      key={i}
+                      className={styles.radarWave}
+                      initial={{ scale: 0.3, opacity: 0.55 }}
+                      animate={{ scale: 1.8, opacity: 0 }}
+                      transition={{ duration: 2.4, ease: 'easeOut', repeat: Infinity, delay: i * 0.8 }}
+                    />
+                  ))}
+                  <motion.span
+                    className={styles.radarCore}
+                    animate={{ scale: [1, 1.12, 1] }}
+                    transition={{ duration: 1.8, ease: 'easeInOut', repeat: Infinity }}
+                  />
+                </>
+              )}
+            </div>
+
+            <p className={styles.esperandoTitle}>Tu consulta fue publicada</p>
+            <p className={styles.esperandoText}>
+              Estamos avisando a los profesionales disponibles. En cuanto uno tome tu caso, entrarás automáticamente al chat.
+            </p>
+
+            <div className={styles.esperandoStatus}>
+              <span className={styles.esperandoDots} aria-hidden="true"><i /><i /><i /></span>
+              Buscando un profesional para ti
+            </div>
+
+            <p className={styles.esperandoHint}>Puedes dejar esta ventana abierta, no necesitas recargar.</p>
+            <button className={styles.esperandoCancel} onClick={resetToStart}>Cancelar</button>
+          </motion.div>
         </div>
       )}
 
@@ -1827,23 +2013,7 @@ export default function ChatSection() {
         <RatingPanel roomId={roomId} onDone={() => setStep('post_chat')} />
       )}
 
-      {lightbox && (
-        <div className={styles.lightbox} onClick={() => setLightbox(null)} role="dialog" aria-label="Vista de imagen">
-          <img
-            src={lightbox}
-            alt=""
-            className={styles.lightboxImg}
-            onClick={(e) => e.stopPropagation()}
-            draggable="false"
-          />
-          <button
-            className={styles.lightboxClose}
-            onClick={() => setLightbox(null)}
-            aria-label="Cerrar"
-            type="button"
-          >×</button>
-        </div>
-      )}
+      <ChatLightbox src={lightbox} onClose={() => setLightbox(null)} />
     </section>
   )
 }

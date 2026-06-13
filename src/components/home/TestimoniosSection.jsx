@@ -1,4 +1,4 @@
-import React, { useRef } from 'react'
+import React, { useRef, useEffect } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
 import styles from './TestimoniosSection.module.css'
 
@@ -77,65 +77,127 @@ const testimonios = [
   },
 ]
 
-const col1 = testimonios.slice(0, 3)
-const col2 = testimonios.slice(3, 6)
-const col3 = testimonios.slice(6, 9)
+// Calificaciones variadas (no todas 5); admite medias estrellas.
+const RATINGS = [5, 4.5, 5, 4, 4.5, 5, 4, 4.5, 5]
+const testimoniosRated = testimonios.map((t, i) => ({ ...t, rating: RATINGS[i] ?? 5 }))
 
-function ColumnaTestimonios({ testimonios: items, duracion = 18, className }) {
+const fila1 = testimoniosRated
+const fila2 = [...testimoniosRated].reverse()
+
+const IconComillas = (props) => (
+  <svg viewBox="0 0 44 40" width="38" height="34" fill="currentColor" aria-hidden="true" {...props}>
+    <path d="M33.172 5.469q2.555 0 4.547 1.547a7.4 7.4 0 0 1 2.695 4.007q.47 1.711.469 3.61 0 2.883-1.125 5.86a22.8 22.8 0 0 1-3.094 5.577 33 33 0 0 1-4.57 4.922A35 35 0 0 1 26.539 35l-3.398-3.398q5.296-4.243 7.218-6.563 1.946-2.32 2.016-4.617-2.86-.329-4.781-2.461-1.923-2.133-1.922-4.992 0-3.117 2.18-5.297 2.202-2.203 5.32-2.203m-20.625 0q2.555 0 4.547 1.547a7.4 7.4 0 0 1 2.695 4.007q.47 1.711.469 3.61 0 2.883-1.125 5.86a22.8 22.8 0 0 1-3.094 5.577 33 33 0 0 1-4.57 4.922A35 35 0 0 1 5.914 35l-3.398-3.398q5.296-4.243 7.218-6.563 1.946-2.32 2.016-4.617-2.86-.329-4.781-2.461-1.922-2.133-1.922-4.992 0-3.117 2.18-5.297 2.202-2.203 5.32-2.203" />
+  </svg>
+)
+
+const IconEstrella = (props) => (
+  <svg viewBox="0 0 16 15" width="15" height="14" fill="currentColor" aria-hidden="true" {...props}>
+    <path d="M7.524.464a.5.5 0 0 1 .952 0l1.432 4.41a.5.5 0 0 0 .476.345h4.637a.5.5 0 0 1 .294.904L11.563 8.85a.5.5 0 0 0-.181.559l1.433 4.41a.5.5 0 0 1-.77.559L8.294 11.65a.5.5 0 0 0-.588 0l-3.751 2.726a.5.5 0 0 1-.77-.56l1.433-4.41a.5.5 0 0 0-.181-.558L.685 6.123A.5.5 0 0 1 .98 5.22h4.637a.5.5 0 0 0 .476-.346z" />
+  </svg>
+)
+
+// 5 estrellas con relleno parcial (admite 4, 4.5, etc.).
+function Estrellas({ rating }) {
+  return (
+    <div className={styles.estrellas} role="img" aria-label={`Calificación ${rating} de 5`}>
+      {Array.from({ length: 5 }).map((_, i) => {
+        const relleno = Math.max(0, Math.min(1, rating - i)) // 0..1 por estrella
+        return (
+          <span key={i} className={styles.estrella}>
+            <IconEstrella />
+            <span className={styles.estrellaFill} style={{ width: `${relleno * 100}%` }}>
+              <IconEstrella />
+            </span>
+          </span>
+        )
+      })}
+    </div>
+  )
+}
+
+function Tarjeta({ texto, imagen, nombre, rol, rating = 5, oculto, onMouseEnter, onMouseLeave }) {
+  return (
+    <article
+      className={styles.tarjeta}
+      aria-hidden={oculto ? 'true' : undefined}
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
+    >
+      <IconComillas className={styles.comillas} />
+      <Estrellas rating={rating} />
+      <p className={styles.texto}>{texto}</p>
+      <div className={styles.pie}>
+        <img
+          src={imagen}
+          alt={oculto ? '' : `Foto de ${nombre}`}
+          className={styles.avatar}
+          loading="lazy"
+          draggable="false"
+        />
+        <div>
+          <p className={styles.nombre}>{nombre}</p>
+          <p className={styles.rol}>{rol}</p>
+        </div>
+      </div>
+    </article>
+  )
+}
+
+// Una fila marquee: renderiza los items dos veces para un bucle continuo.
+// La velocidad baja al pasar el mouse (regla .fila:hover .track en el CSS).
+// Desplazamiento continuo manejado con requestAnimationFrame: al pasar el
+// cursor baja la VELOCIDAD (no se detiene). Cambiar la velocidad aquí no
+// produce saltos, a diferencia de animar la duración en CSS.
+function Fila({ items, reverse, velocidad = 40 }) {
+  const trackRef = useRef(null)
+  const lento = useRef(false)
   const prefersReduced = useReducedMotion()
 
+  useEffect(() => {
+    if (prefersReduced) return
+    const el = trackRef.current
+    if (!el) return
+
+    const mitad = el.scrollWidth / 2 // ancho de una copia (hay dos)
+    let offset = reverse ? -mitad : 0
+    let raf
+    let last = null
+
+    const tick = (t) => {
+      if (last == null) last = t
+      const dt = Math.min((t - last) / 1000, 0.05) // limita saltos al volver de pestaña oculta
+      last = t
+      const v = velocidad * (lento.current ? 0.18 : 1)
+      offset += (reverse ? v : -v) * dt
+      if (!reverse && offset <= -mitad) offset += mitad
+      if (reverse && offset >= 0) offset -= mitad
+      el.style.transform = `translate3d(${offset.toFixed(2)}px, 0, 0)`
+      raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [reverse, velocidad, prefersReduced])
+
+  const frenar = () => { lento.current = true }
+  const acelerar = () => { lento.current = false }
+
   return (
-    <div className={`${styles.columna} ${className ?? ''}`}>
-      <motion.ul
-        animate={prefersReduced ? false : { y: '-50%' }}
-        transition={{
-          duration: duracion,
-          repeat: Infinity,
-          ease: 'linear',
-          repeatType: 'loop',
-        }}
-        className={styles.lista}
-      >
-        {[0, 1].map((copy) => (
-          <React.Fragment key={copy}>
-            {items.map(({ texto, imagen, nombre, rol }, i) => (
-              <motion.li
-                key={`${copy}-${i}`}
-                aria-hidden={copy === 1 ? 'true' : 'false'}
-                tabIndex={copy === 1 ? -1 : 0}
-                whileHover={
-                  prefersReduced
-                    ? {}
-                    : {
-                        scale: 1.025,
-                        y: -6,
-                        transition: { type: 'spring', stiffness: 380, damping: 18 },
-                      }
-                }
-                className={styles.tarjeta}
-              >
-                <blockquote className={styles.blockquote}>
-                  <p className={styles.texto}>{texto}</p>
-                  <footer className={styles.pie}>
-                    <img
-                      src={imagen}
-                      alt={`Foto de ${nombre}`}
-                      width={40}
-                      height={40}
-                      className={styles.avatar}
-                      loading="lazy"
-                    />
-                    <div>
-                      <cite className={styles.nombre}>{nombre}</cite>
-                      <span className={styles.rol}>{rol}</span>
-                    </div>
-                  </footer>
-                </blockquote>
-              </motion.li>
+    <div className={styles.fila}>
+      <div className={styles.track} ref={trackRef}>
+        {[0, 1].map((copia) => (
+          <React.Fragment key={copia}>
+            {items.map((t, i) => (
+              <Tarjeta
+                key={`${copia}-${i}`}
+                {...t}
+                oculto={copia === 1}
+                onMouseEnter={frenar}
+                onMouseLeave={acelerar}
+              />
             ))}
           </React.Fragment>
         ))}
-      </motion.ul>
+      </div>
     </div>
   )
 }
@@ -143,34 +205,31 @@ function ColumnaTestimonios({ testimonios: items, duracion = 18, className }) {
 export default function TestimoniosSection() {
   return (
     <section className={styles.section} aria-labelledby="testimonios-heading">
-      <motion.div
+      <motion.header
         initial={{ opacity: 0, y: 36 }}
         whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: true, amount: 0.12 }}
-        transition={{ duration: 0.85, ease: [0.16, 1, 0.3, 1] }}
-        className={styles.container}
+        viewport={{ once: true, amount: 0.3 }}
+        transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
+        className={styles.header}
       >
-        <header className={styles.header}>
-          <span className={styles.eyebrow}>Testimonios</span>
-          <h2 id="testimonios-heading" className={styles.heading}>
-            Lo que dicen <em>nuestros clientes</em>
-          </h2>
-          <p className={styles.desc}>
-            Personas de todo Colombia han confiado en nosotros para resolver sus asuntos jurídicos y
-            contables con respaldo profesional.
-          </p>
-        </header>
+        <span className={styles.eyebrow}>Testimonios</span>
+        <h2 id="testimonios-heading" className={styles.heading}>
+          Lo que dicen <em>nuestros clientes</em>
+        </h2>
+        <p className={styles.desc}>
+          Personas de todo Colombia han confiado en nosotros para resolver sus asuntos jurídicos y
+          contables con respaldo profesional. Pasa el cursor sobre una tarjeta para leerla con calma.
+        </p>
+      </motion.header>
 
-        <div
-          className={styles.columnas}
-          role="region"
-          aria-label="Testimonios de clientes en desplazamiento continuo"
-        >
-          <ColumnaTestimonios testimonios={col1} duracion={20} />
-          <ColumnaTestimonios testimonios={col2} duracion={25} className={styles.ocultaMd} />
-          <ColumnaTestimonios testimonios={col3} duracion={22} className={styles.ocultaLg} />
-        </div>
-      </motion.div>
+      <div
+        className={styles.filas}
+        role="region"
+        aria-label="Testimonios de clientes en desplazamiento continuo"
+      >
+        <Fila items={fila1} velocidad={42} />
+        <Fila items={fila2} reverse velocidad={34} />
+      </div>
     </section>
   )
 }

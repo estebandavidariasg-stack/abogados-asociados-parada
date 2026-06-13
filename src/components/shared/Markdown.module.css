@@ -1,0 +1,63 @@
+/* Estilos del markdown renderizado (respuestas de IA). Marca navy + dorado. */
+.md { font-size: 14px; line-height: 1.6; color: #2f3a4d; }
+.md > :first-child { margin-top: 0; }
+.md > :last-child { margin-bottom: 0; }
+
+.md h1, .md h2, .md h3, .md h4 {
+  font-family: 'Cormorant Garamond', serif;
+  color: #0d2d5e;
+  line-height: 1.2;
+  margin: 1.1em 0 0.5em;
+  font-weight: 600;
+}
+.md h1 { font-size: 1.4rem; }
+.md h2 { font-size: 1.2rem; }
+.md h3 { font-size: 1.05rem; }
+.md h4 { font-size: 0.95rem; }
+
+.md p { margin: 0.6em 0; }
+.md strong { color: #13305f; font-weight: 700; }
+.md em { font-style: italic; }
+.md a { color: var(--gold-dk, #9a7a2c); text-decoration: underline; }
+
+.md ul, .md ol { margin: 0.6em 0; padding-left: 1.4em; }
+.md li { margin: 0.25em 0; }
+.md ul li::marker { color: var(--gold, #c9a84c); }
+
+.md hr { border: none; border-top: 1px solid #e1e8f2; margin: 1.1em 0; }
+
+.md blockquote {
+  margin: 0.8em 0;
+  padding: 0.5em 0.9em;
+  background: #f4f7fc;
+  border-radius: 8px;
+  color: #46546e;
+}
+
+.md code {
+  background: #eef2f9;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 0.88em;
+  color: #0d2d5e;
+}
+.md pre {
+  background: #0d2d5e;
+  color: #eef2f9;
+  padding: 12px 14px;
+  border-radius: 10px;
+  overflow-x: auto;
+}
+.md pre code { background: none; color: inherit; padding: 0; }
+
+.md table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 0.8em 0;
+  font-size: 13px;
+  display: block;
+  overflow-x: auto;
+}
+.md th, .md td { border: 1px solid #dbe4f1; padding: 7px 10px; text-align: left; }
+.md th { background: #eef2f9; color: #0d2d5e; font-weight: 700; }
+.md tr:nth-child(even) td { background: #f8fafd; }

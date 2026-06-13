@@ -338,7 +338,7 @@ export default function ModelosContractualesSection() {
           Recursos Legales
         </motion.span>
         <motion.h2 className={styles.title} variants={fadeUp}>
-          Modelos <em>contractuales</em>
+          Modelos <em>Contractuales</em>
         </motion.h2>
         <motion.p className={styles.desc} variants={fadeUp}>
           Plantillas profesionales en Word, Excel y PDF — listas para descargar y adaptar a tu caso.

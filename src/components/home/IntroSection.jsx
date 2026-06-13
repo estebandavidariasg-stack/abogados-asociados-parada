@@ -32,8 +32,8 @@ export default function IntroSection({ onUnirse }) {
         <div className={styles.divider} aria-hidden="true" />
 
         <p className={styles.subtitle}>
-          Asesoría jurídica integral en Colombia: derecho civil, penal, laboral,
-          comercial y más. Acceso directo desde aquí.
+          Asesoría jurídica y contable con presencia en Colombia y cobertura
+          internacional. Derecho civil, penal, laboral, comercial y más.
         </p>
 
         <div className={styles.actions}>

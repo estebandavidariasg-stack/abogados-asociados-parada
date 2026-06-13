@@ -7,9 +7,10 @@
 
 .dashboard {
   display: grid;
-  grid-template-columns: 260px 1fr;
-  height: 75vh;
-  min-height: 420px;
+  grid-template-columns: 280px 1fr;
+  height: 86vh;
+  min-height: 460px;
+  max-height: 900px;
   border: 1px solid rgba(13,45,94,0.1);
   border-radius: 12px;
   overflow: hidden;

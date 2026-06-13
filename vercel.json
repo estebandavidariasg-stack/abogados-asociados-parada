@@ -1,8 +1,17 @@
 {
+  "crons": [
+    { "path": "/api/cron/gen-inactividad", "schedule": "0 13 * * *" }
+  ],
   "rewrites": [
     { "source": "/((?!api/|@|src/|node_modules/|.*\\.).*)", "destination": "/" }
   ],
   "headers": [
+    {
+      "source": "/",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=3600, stale-while-revalidate=86400" }
+      ]
+    },
     {
       "source": "/(.*)",
       "headers": [

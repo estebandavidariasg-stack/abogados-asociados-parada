@@ -125,14 +125,10 @@ export default function LawyersSection() {
           Nuestros Socios
         </motion.span>
         <motion.h2 className={styles.title} variants={fadeUp}>
-          {profesion === 'contador'
-            ? <>Contadores <em>aliados</em></>
-            : <>Abogados de <em>excelencia</em></>}
+          Abogados y Contadores de <em>Excelencia</em>
         </motion.h2>
         <motion.p className={styles.desc} variants={fadeUp}>
-          {profesion === 'contador'
-            ? 'Profesionales contables aliados, especialistas en auditoría, tributaria y gestión financiera.'
-            : 'Profesionales especializados, comprometidos con cada caso y con la defensa de sus derechos.'}
+          Profesionales del derecho y la contaduría, comprometidos con cada caso y con tus resultados.
         </motion.p>
       </motion.div>
 

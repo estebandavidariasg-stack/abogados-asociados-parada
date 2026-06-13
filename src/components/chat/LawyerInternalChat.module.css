@@ -1,13 +1,18 @@
-/* LawyerInternalChat.module.css */
+/* LawyerInternalChat.module.css — tema claro on-brand (navy + dorado) */
 
 .wrap {
   display: flex;
   flex-direction: column;
-  height: 520px;
-  border-radius: 14px;
+  height: 80vh;
+  min-height: 480px;
+  max-height: 860px;
+  border-radius: 16px;
   overflow: hidden;
-  border: 1px solid rgba(201, 168, 76, 0.18);
-  background: #0f0f0f;
+  border: 1px solid rgba(13, 45, 94, 0.12);
+  background: rgba(255, 255, 255, 0.78);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 10px 30px rgba(13, 45, 94, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.6);
 }
 
 /* ── Header ── */
@@ -16,8 +21,8 @@
   align-items: center;
   gap: 12px;
   padding: 14px 18px;
-  background: #111;
-  border-bottom: 1px solid rgba(201, 168, 76, 0.15);
+  background: linear-gradient(135deg, #15376b 0%, #0d2d5e 100%);
+  border-bottom: 1px solid rgba(201, 168, 76, 0.35);
   flex-shrink: 0;
 }
 
@@ -25,8 +30,8 @@
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #c9a84c 0%, #8a6a20 100%);
-  color: #000;
+  background: linear-gradient(135deg, #f2d580 0%, #c9a84c 50%, #9a7a2c 100%);
+  color: #0d2d5e;
   font-weight: 700;
   font-size: 1rem;
   display: flex;
@@ -37,7 +42,7 @@
 }
 
 .headNombre {
-  color: #e8dfc0;
+  color: #f5edd4;
   font-size: 0.88rem;
   font-weight: 600;
   font-family: 'Cinzel', serif;
@@ -48,14 +53,14 @@
 }
 
 .headSub {
-  color: rgba(240, 235, 224, 0.35);
+  color: rgba(245, 237, 212, 0.6);
   font-size: 0.72rem;
   margin: 2px 0 0;
 }
 
 .badge {
   background: #c9a84c;
-  color: #000;
+  color: #0d2d5e;
   font-size: 0.68rem;
   font-weight: 700;
   border-radius: 10px;
@@ -66,20 +71,21 @@
 /* ── Mensajes ── */
 .mensajes {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
-  padding: 16px;
+  padding: 18px;
   display: flex;
   flex-direction: column;
   gap: 10px;
   scroll-behavior: smooth;
 }
 
-.mensajes::-webkit-scrollbar { width: 4px; }
+.mensajes::-webkit-scrollbar { width: 6px; }
 .mensajes::-webkit-scrollbar-track { background: transparent; }
-.mensajes::-webkit-scrollbar-thumb { background: rgba(201,168,76,0.2); border-radius: 2px; }
+.mensajes::-webkit-scrollbar-thumb { background: rgba(13, 45, 94, 0.18); border-radius: 3px; }
 
 .cargando {
-  color: rgba(240, 235, 224, 0.3);
+  color: #6b7fa3;
   font-size: 0.8rem;
   text-align: center;
   padding: 20px 0;
@@ -91,7 +97,7 @@
   align-items: center;
   gap: 6px;
   padding: 40px 20px;
-  color: rgba(240, 235, 224, 0.25);
+  color: #8a93a5;
   font-size: 0.8rem;
   text-align: center;
 }
@@ -102,7 +108,7 @@
 .burbuja {
   display: flex;
   flex-direction: column;
-  max-width: 75%;
+  max-width: 72%;
   gap: 3px;
 }
 
@@ -120,28 +126,28 @@
   margin: 0;
   padding: 9px 13px;
   border-radius: 14px;
-  font-size: 0.85rem;
+  font-size: 0.88rem;
   line-height: 1.45;
   word-break: break-word;
 }
 
 .mia .burbujaTexto {
-  background: rgba(201, 168, 76, 0.18);
-  border: 1px solid rgba(201, 168, 76, 0.3);
-  color: #e8dfc0;
+  background: linear-gradient(135deg, #15376b 0%, #0d2d5e 100%);
+  border: 1px solid rgba(13, 45, 94, 0.2);
+  color: #ffffff;
   border-bottom-right-radius: 4px;
 }
 
 .suya .burbujaTexto {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  color: rgba(240, 235, 224, 0.85);
+  background: #eef2f9;
+  border: 1px solid #d7e0ef;
+  color: #13305f;
   border-bottom-left-radius: 4px;
 }
 
 .burbujaHora {
   font-size: 0.68rem;
-  color: rgba(240, 235, 224, 0.28);
+  color: #8a93a5;
   padding: 0 4px;
 }
 
@@ -150,30 +156,31 @@
   display: flex;
   gap: 8px;
   padding: 12px 14px;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
-  background: #111;
+  border-top: 1px solid rgba(13, 45, 94, 0.1);
+  background: rgba(255, 255, 255, 0.55);
   flex-shrink: 0;
 }
 
 .inputMsg {
   flex: 1;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: #fff;
+  border: 1px solid #cdd6e6;
   border-radius: 22px;
   padding: 9px 16px;
-  color: #e8dfc0;
-  font-size: 0.85rem;
+  color: #13305f;
+  font-size: 0.88rem;
   font-family: inherit;
   outline: none;
-  transition: border-color 0.2s;
+  transition: border-color 0.2s, box-shadow 0.2s;
 }
 
 .inputMsg:focus {
-  border-color: rgba(201, 168, 76, 0.4);
+  border-color: var(--gold, #c9a84c);
+  box-shadow: 0 0 0 3px rgba(201, 168, 76, 0.15);
 }
 
 .inputMsg::placeholder {
-  color: rgba(240, 235, 224, 0.25);
+  color: #94a3b8;
 }
 
 .btnEnviar {
@@ -181,35 +188,35 @@
   height: 40px;
   border-radius: 50%;
   border: none;
-  background: #c9a84c;
-  color: #000;
+  background: linear-gradient(135deg, #f2d580 0%, #c9a84c 50%, #9a7a2c 100%);
+  color: #0d2d5e;
   font-size: 1rem;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  transition: opacity 0.2s, transform 0.15s;
+  transition: opacity 0.2s, transform 0.15s, box-shadow 0.2s;
 }
 
 .btnEnviar:disabled {
-  opacity: 0.35;
+  opacity: 0.4;
   cursor: not-allowed;
 }
 
 .btnEnviar:not(:disabled):hover {
-  opacity: 0.85;
-  transform: scale(1.05);
+  box-shadow: 0 4px 12px rgba(201, 168, 76, 0.35);
+  transform: translateY(-1px);
 }
 
-/* ── Botón micrófono (idle) — paleta dark dorada ── */
+/* ── Botón adjuntar / micrófono (idle) ── */
 .attachBtn {
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: rgba(240, 235, 224, 0.7);
+  background: rgba(13, 45, 94, 0.05);
+  border: 1px solid rgba(13, 45, 94, 0.14);
+  color: #46546e;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -220,24 +227,24 @@
 }
 .attachBtn:hover:not(:disabled) {
   background: rgba(201, 168, 76, 0.12);
-  border-color: rgba(201, 168, 76, 0.35);
-  color: #c9a84c;
+  border-color: rgba(201, 168, 76, 0.4);
+  color: var(--gold-dk, #9a7a2c);
 }
 .attachBtn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
 }
 
-/* ── Burbuja con archivo adjunto (boton clicable) ─────────────────────── */
+/* ── Burbuja con archivo adjunto (boton clicable) ── */
 .fileBtn {
   display: flex;
   align-items: center;
   gap: 10px;
   padding: 10px 14px;
-  background: rgba(201, 168, 76, 0.14);
-  border: 1px solid rgba(201, 168, 76, 0.42);
+  background: rgba(201, 168, 76, 0.12);
+  border: 1px solid rgba(201, 168, 76, 0.45);
   border-radius: 10px;
-  color: #fef8e1;
+  color: #7a5e15;
   cursor: pointer;
   font-family: inherit;
   font-size: 0.86rem;
@@ -248,23 +255,25 @@
   min-width: 0;
 }
 .fileBtn:hover {
-  background: rgba(201, 168, 76, 0.24);
+  background: rgba(201, 168, 76, 0.2);
   border-color: rgba(201, 168, 76, 0.7);
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(201, 168, 76, 0.2);
 }
 .fileBtn svg {
-  color: var(--gold, #c9a84c);
+  color: var(--gold-dk, #9a7a2c);
   flex-shrink: 0;
 }
 .mia .fileBtn {
-  background: rgba(201, 168, 76, 0.22);
-  border-color: rgba(201, 168, 76, 0.5);
-  color: #fef8e1;
+  background: linear-gradient(135deg, #15376b 0%, #0d2d5e 100%);
+  border-color: rgba(13, 45, 94, 0.3);
+  color: #ffffff;
 }
+.mia .fileBtn svg { color: #f2d580; }
+.mia .fileBtn .fileSize { color: rgba(255, 255, 255, 0.75); }
 .mia .fileBtn:hover {
-  background: rgba(201, 168, 76, 0.32);
-  border-color: rgba(201, 168, 76, 0.7);
+  background: linear-gradient(135deg, #1a4080 0%, #123a73 100%);
+  border-color: rgba(201, 168, 76, 0.5);
 }
 .fileName {
   flex: 1;
@@ -278,7 +287,7 @@
 .fileSize {
   flex-shrink: 0;
   font-size: 0.72rem;
-  color: rgba(255, 248, 225, 0.7);
+  opacity: 0.75;
   font-weight: 500;
   letter-spacing: 0.02em;
 }
@@ -294,12 +303,12 @@
   border-radius: 12px;
   overflow: hidden;
   line-height: 0;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 2px 8px rgba(13, 45, 94, 0.18);
   transition: transform 0.2s, box-shadow 0.2s;
 }
 .imgBtn:hover {
   transform: translateY(-1px);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 6px 20px rgba(13, 45, 94, 0.28);
 }
 .imgBtn:disabled { cursor: default; }
 .imgPreview {
@@ -316,9 +325,9 @@
   height: 40px;
   padding: 0 14px;
   border-radius: 20px;
-  background: rgba(220, 50, 50, 0.15);
+  background: rgba(220, 50, 50, 0.12);
   border: 1px solid rgba(220, 50, 50, 0.4);
-  color: #e8704a;
+  color: #c0392b;
   font-size: 0.75rem;
   font-weight: 600;
   font-family: inherit;
@@ -329,7 +338,7 @@
   white-space: nowrap;
   transition: background 0.2s;
 }
-.recordingBtn:hover { background: rgba(220, 50, 50, 0.22); }
+.recordingBtn:hover { background: rgba(220, 50, 50, 0.2); }
 
 .recordDot {
   display: inline-block;
@@ -347,24 +356,28 @@
   50%      { opacity: 0.45; }
 }
 
-/* ── Wrapper para AudioPlayer en burbujas (espeja a .burbujaTexto) ── */
+@media (prefers-reduced-motion: reduce) {
+  .recordDot { animation: none; }
+}
+
+/* ── Wrapper para AudioPlayer en burbujas ── */
 .audioWrap {
   padding: 6px 10px;
   border-radius: 14px;
   min-width: 220px;
 }
 .mia .audioWrap {
-  background: rgba(201, 168, 76, 0.18);
-  border: 1px solid rgba(201, 168, 76, 0.3);
+  background: rgba(201, 168, 76, 0.14);
+  border: 1px solid rgba(201, 168, 76, 0.4);
   border-bottom-right-radius: 4px;
 }
 .suya .audioWrap {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: #eef2f9;
+  border: 1px solid #d7e0ef;
   border-bottom-left-radius: 4px;
 }
 
 @media (max-width: 600px) {
-  .wrap { height: 460px; border-radius: 10px; }
+  .wrap { border-radius: 12px; }
   .burbuja { max-width: 88%; }
 }

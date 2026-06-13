@@ -69,10 +69,11 @@
 
 .title {
   font-family: 'Cormorant Garamond', serif;
-  font-size: 1.85rem;
+  font-size: clamp(1.25rem, 3.2vw, 1.85rem);
   font-weight: 400;
   color: var(--navy);
   margin-bottom: 1.6rem;
+  white-space: nowrap;
   line-height: 1.2;
 }
 

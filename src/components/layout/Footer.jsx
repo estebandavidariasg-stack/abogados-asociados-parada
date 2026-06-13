@@ -1,6 +1,16 @@
 import styles from './Footer.module.css'
 
-const AREAS = ['Derecho Penal', 'Derecho Civil', 'Derecho Corporativo', 'Derecho de Familia', 'Derecho Laboral', 'Derecho Administrativo']
+const AREAS_DERECHO = [
+  'Derecho Penal', 'Derecho Civil', 'Derecho Corporativo',
+  'Derecho de Familia', 'Derecho Laboral', 'Derecho Administrativo',
+]
+const AREAS_CONTADURIA = [
+  'Auditoría y Revisoría Fiscal',
+  'Tributaria y Fiscal',
+  'Contabilidad Forense',
+  'Finanzas Corporativas',
+  'Contabilidad Internacional (NIIF)',
+]
 const FIRMA = ['Nuestro equipo', 'Historia', 'Noticias', 'Trabaje con nosotros']
 
 const IconMail = () => (
@@ -42,21 +52,21 @@ export default function Footer() {
               />
             </picture>
           </a>
-          <p className={styles.tagline}>Bufete jurídico comprometido con la excelencia y la defensa de sus derechos.</p>
+          <p className={styles.tagline}>Somos una plataforma web de intermediación que facilita la conexión entre personas que necesitan orientación jurídica y contable.</p>
           <div className={styles.address}>
             <IconMapPin />
-            <span>Calle 93 # 15-23, Of. 804<br />Bogotá D.C., Colombia</span>
+            <span>Carrera 66 #19-72<br />Bogotá D.C., Colombia</span>
           </div>
         </div>
 
         {/* ── Columna 2: Contacto ── */}
         <div className={styles.contact}>
-          <h4 className={styles.colTitle}>Contacto</h4>
-          <a href="mailto:abogadosyasociados.parada@gmail.com" className={styles.contactItem}>
+          <h4 className={`${styles.colTitle} ${styles.colTitleContact}`}>Contacto</h4>
+          <a href="mailto:gerencia@abogadosparada.com" className={styles.contactItem}>
             <span className={styles.contactIcon}><IconMail /></span>
             <div>
               <span className={styles.contactLabel}>En cualquier momento</span>
-              <span className={styles.contactValue}>abogadosyasociados.parada@gmail.com</span>
+              <span className={styles.contactValue}>gerencia@abogadosparada.com</span>
               <span className={styles.contactSub}>Respondemos en menos de 24 horas</span>
             </div>
           </a>
@@ -72,10 +82,21 @@ export default function Footer() {
 
         {/* ── Columna 3: Áreas + Social ── */}
         <div className={styles.col}>
-          <h4 className={styles.colTitle}>Áreas de práctica</h4>
-          <ul className={styles.linkList}>
-            {AREAS.map(item => <li key={item}><a href="/#lawyers">{item}</a></li>)}
-          </ul>
+          <h4 className={`${styles.colTitle} ${styles.colTitleCenter}`}>Áreas de práctica</h4>
+          <div className={styles.areasGrid}>
+            <div>
+              <p className={styles.areasSub}>Derecho</p>
+              <ul className={styles.linkList}>
+                {AREAS_DERECHO.map(item => <li key={item}><a href="/#lawyers">{item}</a></li>)}
+              </ul>
+            </div>
+            <div>
+              <p className={styles.areasSub}>Contaduría</p>
+              <ul className={styles.linkList}>
+                {AREAS_CONTADURIA.map(item => <li key={item}><a href="/#lawyers">{item}</a></li>)}
+              </ul>
+            </div>
+          </div>
           {/* Redes sociales */}
           <div className={styles.socials}>
             {[

@@ -1,111 +1,115 @@
-.wrap { display: flex; flex-direction: column; gap: 16px; }
+.wrap { display: flex; flex-direction: column; gap: 16px; flex: 1; min-height: 0; }
 
 .topBar {
   display: flex; justify-content: space-between;
   align-items: flex-start; gap: 12px; flex-wrap: wrap;
 }
 .titulo {
-  font-family: 'Cinzel', serif; font-size: 1rem;
-  color: #C9A84C; margin: 0 0 4px; letter-spacing: 0.05em;
+  font-family: 'Cinzel', serif; font-size: 1.05rem;
+  color: #0d2d5e; margin: 0 0 4px; letter-spacing: 0.04em;
 }
-.subtitulo { font-size: 0.74rem; color: rgba(240,235,224,0.35); margin: 0; max-width: 460px; }
+.subtitulo { font-size: 0.78rem; color: #6b7fa3; margin: 0; max-width: 460px; }
 
 .btnSubir {
   padding: 9px 20px;
-  background: linear-gradient(135deg, #C9A84C, #a0822e);
-  color: #0d0d0d; border: none; border-radius: 20px;
+  background: linear-gradient(135deg, #f2d580, #c9a84c 55%, #9a7a2c);
+  color: #0d2d5e; border: none; border-radius: 20px;
   font-weight: 700; font-size: 0.78rem; cursor: pointer;
-  font-family: inherit; transition: opacity 0.2s; white-space: nowrap;
+  font-family: inherit; transition: box-shadow 0.2s, transform 0.15s; white-space: nowrap;
 }
-.btnSubir:hover { opacity: 0.88; }
+.btnSubir:hover { box-shadow: 0 4px 14px rgba(201,168,76,0.35); transform: translateY(-1px); }
 
 .msgError {
-  font-size: 0.78rem; color: rgba(220,80,80,0.9);
-  background: rgba(220,80,80,0.08); border: 1px solid rgba(220,80,80,0.2);
+  font-size: 0.78rem; color: #b00020;
+  background: rgba(220,80,80,0.08); border: 1px solid rgba(220,80,80,0.25);
   border-radius: 6px; padding: 10px 14px;
 }
 .msgOk {
-  font-size: 0.78rem; color: rgba(46,204,113,0.9);
-  background: rgba(46,204,113,0.08); border: 1px solid rgba(46,204,113,0.2);
+  font-size: 0.78rem; color: #1f7a4d;
+  background: rgba(46,204,113,0.1); border: 1px solid rgba(46,204,113,0.28);
   border-radius: 6px; padding: 10px 14px;
 }
 
 /* Formulario */
 .form {
   display: flex; flex-direction: column; gap: 12px;
-  background: rgba(255,255,255,0.02);
-  border: 1px solid rgba(201,168,76,0.2); border-radius: 10px; padding: 20px;
+  background: rgba(13,45,94,0.035);
+  border: 1px solid rgba(13,45,94,0.1); border-radius: 12px; padding: 20px;
 }
 .dropZone {
-  border: 2px dashed rgba(201,168,76,0.3); border-radius: 8px;
+  border: 2px dashed rgba(201,168,76,0.45); border-radius: 10px;
   padding: 28px 20px; cursor: pointer;
   transition: border-color 0.2s, background 0.2s;
   display: flex; align-items: center; justify-content: center; min-height: 100px;
+  background: rgba(255,255,255,0.5);
 }
-.dropZone:hover { border-color: rgba(201,168,76,0.6); background: rgba(201,168,76,0.03); }
+.dropZone:hover { border-color: rgba(201,168,76,0.75); background: rgba(201,168,76,0.06); }
 .dropPlaceholder { display: flex; flex-direction: column; align-items: center; gap: 6px; }
-.dropTexto { font-size: 0.85rem; font-weight: 600; color: rgba(240,235,224,0.6); margin: 0; }
-.dropSub   { font-size: 0.7rem; color: rgba(240,235,224,0.28); margin: 0; }
+.dropTexto { font-size: 0.85rem; font-weight: 600; color: #46546e; margin: 0; }
+.dropSub   { font-size: 0.7rem; color: #8a93a5; margin: 0; }
 .archivoSel { display: flex; align-items: center; gap: 14px; }
-.archNombre { font-size: 0.83rem; font-weight: 600; color: #C9A84C; margin: 0; word-break: break-all; }
-.archSize   { font-size: 0.68rem; color: rgba(240,235,224,0.3); margin: 2px 0 0; }
+.archNombre { font-size: 0.83rem; font-weight: 600; color: #0d2d5e; margin: 0; word-break: break-all; }
+.archSize   { font-size: 0.68rem; color: #8a93a5; margin: 2px 0 0; }
 .inputDesc {
-  background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
-  border-radius: 6px; color: rgba(240,235,224,0.85);
-  padding: 10px 14px; font-size: 0.82rem; font-family: inherit;
-  outline: none; transition: border-color 0.2s;
+  background: #fff; border: 1px solid #cdd6e6;
+  border-radius: 8px; color: #13305f;
+  padding: 10px 14px; font-size: 0.84rem; font-family: inherit;
+  outline: none; transition: border-color 0.2s, box-shadow 0.2s;
 }
-.inputDesc:focus { border-color: rgba(201,168,76,0.4); }
-.inputDesc::placeholder { color: rgba(240,235,224,0.22); }
+.inputDesc:focus { border-color: var(--gold, #c9a84c); box-shadow: 0 0 0 3px rgba(201,168,76,0.15); }
+.inputDesc::placeholder { color: #94a3b8; }
 .btnConfirmar {
-  padding: 11px; background: linear-gradient(135deg, #C9A84C, #a0822e);
-  color: #0d0d0d; border: none; border-radius: 8px;
+  padding: 11px; background: linear-gradient(135deg, #f2d580, #c9a84c 55%, #9a7a2c);
+  color: #0d2d5e; border: none; border-radius: 8px;
   font-weight: 700; font-size: 0.85rem; cursor: pointer; font-family: inherit;
+  transition: box-shadow 0.2s, transform 0.15s;
 }
 .btnConfirmar:disabled { opacity: 0.5; cursor: not-allowed; }
-.btnConfirmar:hover:not(:disabled) { opacity: 0.88; }
+.btnConfirmar:hover:not(:disabled) { box-shadow: 0 4px 14px rgba(201,168,76,0.35); transform: translateY(-1px); }
 
 /* Lista */
-.empty { font-size: 0.8rem; color: rgba(240,235,224,0.2); text-align: center; padding: 16px 0; }
+.empty { font-size: 0.8rem; color: #8a93a5; text-align: center; padding: 16px 0; }
 .emptyState { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 40px 0; }
-.emptyTxt { font-size: 0.88rem; font-weight: 600; color: rgba(240,235,224,0.28); margin: 0; }
-.emptySub { font-size: 0.72rem; color: rgba(240,235,224,0.16); margin: 0; }
+.emptyTxt { font-size: 0.9rem; font-weight: 600; color: #46546e; margin: 0; }
+.emptySub { font-size: 0.74rem; color: #8a93a5; margin: 0; }
 
-.lista { display: flex; flex-direction: column; gap: 8px; }
+.lista { display: flex; flex-direction: column; gap: 8px; flex: 1; min-height: 0; overflow-y: auto; }
+.lista::-webkit-scrollbar { width: 6px; }
+.lista::-webkit-scrollbar-thumb { background: rgba(13,45,94,0.18); border-radius: 3px; }
 
 .contratoCard {
   display: flex; align-items: center; gap: 14px;
-  background: rgba(255,255,255,0.025);
-  border: 1px solid rgba(255,255,255,0.06); border-radius: 8px;
-  padding: 14px 16px; transition: border-color 0.2s; flex-wrap: wrap;
+  background: #fff;
+  border: 1px solid rgba(13,45,94,0.1); border-radius: 10px;
+  padding: 14px 16px; transition: border-color 0.2s, box-shadow 0.2s; flex-wrap: wrap;
 }
-.contratoCard:hover { border-color: rgba(201,168,76,0.22); }
+.contratoCard:hover { border-color: rgba(201,168,76,0.5); box-shadow: 0 4px 14px rgba(13,45,94,0.08); }
 .contratoIcono { font-size: 1.8rem; flex-shrink: 0; }
 .contratoInfo { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .contratoNombre {
-  font-size: 0.85rem; font-weight: 600; color: rgba(240,235,224,0.88);
+  font-size: 0.86rem; font-weight: 600; color: #13305f;
   margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .contratoDesc {
-  font-size: 0.72rem; color: rgba(240,235,224,0.38);
+  font-size: 0.72rem; color: #6b7fa3;
   margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.contratoMeta { font-size: 0.66rem; color: rgba(240,235,224,0.22); margin: 0; }
+.contratoMeta { font-size: 0.66rem; color: #8a93a5; margin: 0; }
 .contratoAcciones { display: flex; gap: 8px; align-items: center; flex-shrink: 0; }
 .btnDown {
   padding: 7px 14px;
-  background: rgba(201,168,76,0.1); border: 1px solid rgba(201,168,76,0.3);
-  border-radius: 6px; color: #C9A84C; font-size: 0.74rem; font-weight: 600;
+  background: rgba(201,168,76,0.12); border: 1px solid rgba(201,168,76,0.4);
+  border-radius: 6px; color: #9a7a2c; font-size: 0.74rem; font-weight: 600;
   cursor: pointer; font-family: inherit; transition: background 0.2s; white-space: nowrap;
 }
-.btnDown:hover { background: rgba(201,168,76,0.2); }
+.btnDown:hover { background: rgba(201,168,76,0.22); }
 .btnDel {
   padding: 7px 10px;
-  background: rgba(220,50,50,0.08); border: 1px solid rgba(220,50,50,0.2);
-  border-radius: 6px; color: rgba(220,80,80,0.7);
+  background: rgba(220,50,50,0.07); border: 1px solid rgba(220,50,50,0.22);
+  border-radius: 6px; color: #c0392b;
   font-size: 0.82rem; cursor: pointer; transition: background 0.2s;
 }
-.btnDel:hover { background: rgba(220,50,50,0.18); }
+.btnDel:hover { background: rgba(220,50,50,0.16); }
 
 @media (max-width: 600px) {
   .contratoAcciones { width: 100%; }

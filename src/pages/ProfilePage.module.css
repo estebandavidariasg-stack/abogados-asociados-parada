@@ -9,9 +9,9 @@
     radial-gradient(ellipse 65% 50% at 55% 105%, rgba(10, 35, 130, 0.16) 0%, transparent 65%),
     radial-gradient(ellipse 40% 35% at 80% 60%,  rgba(30, 80, 180, 0.08) 0%, transparent 50%),
     linear-gradient(165deg, #dde7f7 0%, #e8eef8 35%, #dce6f5 70%, #d8e3f2 100%);
-  padding: 7rem 2rem 6rem;
+  padding: 1.75rem clamp(1rem, 2.5vw, 2.75rem);
   position: relative;
-  overflow: hidden;
+  overflow: clip;
 }
 
 /* Blob grande top-right */
@@ -131,11 +131,15 @@
   -webkit-backdrop-filter: blur(12px);
   border: 1px solid rgba(255, 255, 255, 0.85);
   border-radius: 20px;
-  padding: 2.5rem 2.5rem 2rem;
+  padding: 2.25rem 2.5rem;
   box-shadow:
     0 4px 32px rgba(10, 30, 100, 0.1),
     0 1px 4px  rgba(10, 30, 100, 0.06),
     0 0 0 1px  rgba(255, 255, 255, 0.5) inset;
+  display: grid;
+  grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
+  gap: 1.5rem 2.75rem;
+  align-items: start;
 }
 
 /* ══════════════════════════════════════════
@@ -145,10 +149,10 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  margin-bottom: 2rem;
-  padding-bottom: 2rem;
-  border-bottom: 1px solid rgba(13, 45, 94, 0.09);
-  gap: 0.6rem;
+  text-align: center;
+  padding-right: 1.75rem;
+  border-right: 1px solid rgba(13, 45, 94, 0.09);
+  gap: 0.7rem;
 }
 
 .photoWrap {
@@ -503,18 +507,23 @@ select.input option {
   line-height: 1.5;
 }
 
-/* Tarjeta oscura para MisContratos */
+/* Tarjeta glass clara para MisContratos */
 .contractsWrap {
-  background: linear-gradient(155deg, #06102a 0%, #0c1e4a 45%, #081530 100%);
+  background: rgba(255, 255, 255, 0.78);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   border-radius: 18px;
-  padding: 30px 30px 34px;
-  border: 1px solid rgba(201, 168, 76, 0.2);
+  padding: 26px 28px;
+  border: 1px solid rgba(255, 255, 255, 0.85);
   box-shadow:
-    0 12px 48px rgba(6, 15, 50, 0.22),
-    0 2px  8px  rgba(6, 15, 50, 0.14),
-    0 0 0 1px   rgba(201, 168, 76, 0.07) inset;
+    0 10px 30px rgba(13, 45, 94, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.6);
   position: relative;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  max-height: 76vh;
 }
 
 /* Glow dorado top-right dentro de la tarjeta */
@@ -543,7 +552,7 @@ select.input option {
    RESPONSIVE
    ══════════════════════════════════════════ */
 @media (max-width: 768px) {
-  .page         { padding: 5rem 1.25rem 3.5rem; }
+  .page         { padding: 1rem 1.25rem; }
   .form         { padding: 1.75rem 1.25rem 1.5rem; border-radius: 14px; }
   .fieldsGrid   { grid-template-columns: 1fr; column-gap: 0; }
   .fullWidth    { grid-column: 1; }
@@ -554,9 +563,264 @@ select.input option {
 }
 
 @media (max-width: 480px) {
-  .page         { padding: 4.5rem 1rem 3rem; }
+  .page         { padding: 0.75rem 1rem; }
   .form         { padding: 1.4rem 1rem 1.25rem; }
   .photoWrap    { width: 120px; height: 120px; }
   .checkboxGrid { grid-template-columns: 1fr; }
   .status       { font-size: 0.54rem; }
+}
+
+/* ══════════════════════════════════════════
+   PANEL CON SIDEBAR (navegación del profesional)
+   ══════════════════════════════════════════ */
+.shell {
+  width: 100%;
+  max-width: 1880px;
+  margin: 0 auto;
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: flex-start;
+  gap: clamp(1rem, 1.8vw, 2rem);
+}
+
+/* Riel que se expande al pasar el mouse: 76px (foto + iconos) ↔ 258px.
+   Es un item flex real: al expandirse EMPUJA el contenido (no lo tapa).
+   Sin :focus-within → no se queda "pegado" abierto tras un clic. */
+.sidebar {
+  position: sticky;
+  top: 1.75rem;
+  align-self: flex-start;
+  height: calc(100vh - 3.5rem);
+  flex: 0 0 76px;
+  width: 76px;
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  border-radius: 18px;
+  box-shadow:
+    0 10px 30px rgba(13, 45, 94, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  overflow: hidden;
+  transition: flex-basis 0.32s cubic-bezier(0.16, 1, 0.3, 1), width 0.32s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.3s;
+  z-index: 4;
+}
+.sidebar:hover {
+  flex-basis: 258px;
+  width: 258px;
+  box-shadow: 0 16px 40px rgba(13, 45, 94, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+.sidebarInner {
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 1.1rem 0.7rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  transition: padding 0.32s;
+}
+.sidebar:hover .sidebarInner { padding: 1.1rem; }
+
+/* Etiquetas que se revelan al expandir el riel */
+.navLabel {
+  max-width: 0;
+  opacity: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  transition: max-width 0.32s ease, opacity 0.22s;
+}
+.sidebar:hover .navLabel { max-width: 170px; opacity: 1; }
+@media (prefers-reduced-motion: reduce) {
+  .sidebar, .sidebarInner, .navLabel, .brandText { transition: none; }
+}
+
+.sideBrand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.7rem;
+  padding: 0.35rem 0.4rem 0.95rem;
+  border-bottom: 1px solid rgba(13, 45, 94, 0.10);
+}
+.sidebar:hover .sideBrand { justify-content: flex-start; }
+.brandMark {
+  flex: 0 0 auto;
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: linear-gradient(145deg, #f2d580 0%, #c9a84c 50%, #9a7a2c 100%);
+  color: #0d2d5e;
+  font-family: 'Cormorant Garamond', serif;
+  font-weight: 700;
+  font-size: 1.05rem;
+  letter-spacing: 0.03em;
+  box-shadow: 0 4px 12px rgba(201, 168, 76, 0.35);
+}
+.brandAvatar {
+  flex: 0 0 auto;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  object-fit: cover;
+  border: 1px solid rgba(201, 168, 76, 0.55);
+  box-shadow: 0 4px 12px rgba(13, 45, 94, 0.20);
+}
+.brandText {
+  display: flex; flex-direction: column; min-width: 0;
+  max-width: 0; opacity: 0; overflow: hidden;
+  transition: max-width 0.3s ease, opacity 0.22s;
+}
+.sidebar:hover .brandText { max-width: 150px; opacity: 1; }
+.brandText strong {
+  font-family: 'Raleway', sans-serif;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #0d2d5e;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.badgeOk, .badgePend {
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  margin-top: 3px;
+}
+.badgeOk   { color: #1f7a4d; }
+.badgePend { color: #b08400; }
+
+.sideNav { display: flex; flex-direction: column; gap: 0.25rem; }
+
+.navItem {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  width: 100%;
+  padding: 0.62rem 0.8rem;
+  border: 1px solid transparent;
+  border-radius: 11px;
+  background: transparent;
+  color: #46546e;
+  font-family: 'Raleway', sans-serif;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, gap 0.3s ease;
+}
+.sidebar:hover .navItem { justify-content: flex-start; gap: 0.7rem; }
+.navItem:hover { background: rgba(13, 45, 94, 0.06); color: #0d2d5e; }
+.navItem:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.navIcon { flex: 0 0 auto; }
+
+.navItemActive,
+.navItemActive:hover {
+  background: linear-gradient(135deg, #15376b 0%, #0d2d5e 100%);
+  color: #fff;
+  border-color: rgba(201, 168, 76, 0.45);
+  box-shadow: 0 6px 16px rgba(13, 45, 94, 0.28);
+}
+.navItemActive .navIcon { color: #e7c977; }
+
+.sideFoot {
+  margin-top: auto;
+  padding-top: 0.9rem;
+  border-top: 1px solid rgba(13, 45, 94, 0.10);
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.logout { color: #a23b3b; }
+.logout:hover { background: rgba(162, 59, 59, 0.08); color: #8c2f2f; }
+
+.content { flex: 1 1 auto; min-width: 0; }
+
+.panel { position: relative; z-index: 1; }
+.panelHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.4rem;
+}
+.panelTitle {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: clamp(1.7rem, 3.5vw, 2.4rem);
+  font-weight: 300;
+  color: #0d2d5e;
+  margin: 0;
+  line-height: 1.1;
+}
+.panelTitle em { font-style: italic; color: var(--gold); }
+.panelSub {
+  font-family: 'Raleway', sans-serif;
+  font-size: 0.78rem;
+  color: #6b7fa3;
+}
+
+/* Sidebar -> barra superior en pantallas medianas/pequeñas */
+@media (max-width: 860px) {
+  .shell { flex-direction: column; gap: 1rem; }
+  /* En móvil el riel es una barra horizontal completa (sin colapso ni hover) */
+  .sidebar,
+  .sidebar:hover {
+    position: sticky;
+    top: 0.5rem;
+    z-index: 5;
+    height: auto;
+    flex: none;
+    width: 100%;
+    overflow-x: auto;
+    overflow-y: visible;
+  }
+  .sidebarInner,
+  .sidebar:hover .sidebarInner {
+    flex-direction: row;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.6rem 0.7rem;
+    height: auto;
+    overflow: visible;
+  }
+  .sideBrand { display: none; }
+  .sideNav { flex-direction: row; flex: 1 1 auto; gap: 0.35rem; }
+  .navItem,
+  .sidebar:hover .navItem { white-space: nowrap; padding: 0.5rem 0.8rem; justify-content: center; gap: 0.5rem; }
+  /* Etiquetas siempre visibles en la barra móvil */
+  .navLabel,
+  .sidebar:hover .navLabel { max-width: none; opacity: 1; }
+  .sideFoot {
+    margin: 0;
+    padding: 0;
+    border: none;
+    flex-direction: row;
+    gap: 0.35rem;
+  }
+  .form {
+    grid-template-columns: 1fr;
+    gap: 1.25rem;
+  }
+  .photoSection {
+    border-right: none;
+    border-bottom: 1px solid rgba(13, 45, 94, 0.09);
+    padding-right: 0;
+    padding-bottom: 1.5rem;
+  }
+}
+
+/* Solo iconos en pantallas muy estrechas */
+@media (max-width: 480px) {
+  .navItem span { display: none; }
+  .navItem { padding: 0.55rem 0.7rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .navItem { transition: none; }
 }

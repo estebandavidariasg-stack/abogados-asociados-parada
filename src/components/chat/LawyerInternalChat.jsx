@@ -422,7 +422,7 @@ export default function LawyerInternalChat({ miId }) {
             >
               {m.message_type === 'audio' && m.file_url ? (
                 <div className={styles.audioWrap}>
-                  <AudioPlayer src={m.file_url} mine={mine} />
+                  <AudioPlayer src={m.file_url} mine={mine} theme="light" />
                 </div>
               ) : m.message_type === 'file' && m.file_url ? (
                 isImage(m.file_name) ? (

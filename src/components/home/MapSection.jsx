@@ -5,56 +5,55 @@ import {
   PieChart, Pie, Cell,
   BarChart, Bar, XAxis, YAxis,
   AreaChart, Area,
-  CartesianGrid, LabelList,
+  CartesianGrid,
   ResponsiveContainer, Tooltip,
 } from 'recharts'
 import styles from './MapSection.module.css'
 
-const W = 680, H = 800
-const COLOMBIA_ID = 170
+const W = 960, H = 470
 
-// Ciudades colombianas en [lng, lat]
+// Hubs globales en [lng, lat] — presencia/alcance de la firma
 const CITIES = [
-  { id: 0,  name: 'Bogotá',        coords: [-74.07,  4.71], main: true },
-  { id: 1,  name: 'Medellín',      coords: [-75.56,  6.25] },
-  { id: 2,  name: 'Cali',          coords: [-76.53,  3.45] },
-  { id: 3,  name: 'Barranquilla',  coords: [-74.80, 10.97] },
-  { id: 4,  name: 'Cartagena',     coords: [-75.51, 10.42] },
-  { id: 5,  name: 'Bucaramanga',   coords: [-73.12,  7.13] },
-  { id: 6,  name: 'Pereira',       coords: [-75.69,  4.81] },
-  { id: 7,  name: 'Cúcuta',        coords: [-72.51,  7.89] },
-  { id: 8,  name: 'Santa Marta',   coords: [-74.20, 11.24] },
-  { id: 9,  name: 'Pasto',         coords: [-77.28,  1.21] },
-  { id: 10, name: 'Villavicencio', coords: [-73.63,  4.14] },
-  { id: 11, name: 'Manizales',     coords: [-75.51,  5.07] },
+  { id: 0,  name: 'Bogotá',           coords: [-74.07,   4.71], main: true },
+  { id: 1,  name: 'Ciudad de México', coords: [-99.13,  19.43] },
+  { id: 2,  name: 'Miami',            coords: [-80.19,  25.76] },
+  { id: 3,  name: 'Nueva York',       coords: [-74.00,  40.71] },
+  { id: 4,  name: 'Madrid',           coords: [ -3.70,  40.41] },
+  { id: 5,  name: 'Lima',             coords: [-77.04, -12.04] },
+  { id: 6,  name: 'Santiago',         coords: [-70.65, -33.45] },
+  { id: 7,  name: 'Buenos Aires',     coords: [-58.38, -34.60] },
+  { id: 8,  name: 'São Paulo',        coords: [-46.63, -23.55] },
+  { id: 9,  name: 'Panamá',           coords: [-79.53,   8.98] },
+  { id: 10, name: 'Londres',          coords: [ -0.12,  51.50] },
+  { id: 11, name: 'Toronto',          coords: [-79.38,  43.65] },
 ]
 
+// Arcos desde Bogotá (hub principal) + algunos cruces
 const CONNECTIONS = [
-  { from: 0, to: 1,  delay: 0   },
+  { from: 0, to: 1,  delay: 0.4 },
   { from: 0, to: 2,  delay: 1.2 },
-  { from: 0, to: 3,  delay: 2.4 },
-  { from: 0, to: 5,  delay: 0.8 },
-  { from: 0, to: 7,  delay: 3.0 },
-  { from: 0, to: 9,  delay: 2.0 },
-  { from: 0, to: 10, delay: 1.6 },
-  { from: 1, to: 4,  delay: 1.0 },
-  { from: 2, to: 9,  delay: 2.8 },
-  { from: 1, to: 6,  delay: 0.5 },
-  { from: 3, to: 8,  delay: 1.8 },
-  { from: 5, to: 7,  delay: 3.4 },
-  { from: 1, to: 11, delay: 2.2 },
+  { from: 0, to: 4,  delay: 0.0 },
+  { from: 0, to: 5,  delay: 1.8 },
+  { from: 0, to: 7,  delay: 0.8 },
+  { from: 0, to: 9,  delay: 2.4 },
+  { from: 0, to: 10, delay: 1.5 },
+  { from: 2, to: 3,  delay: 2.0 },
+  { from: 4, to: 10, delay: 2.8 },
+  { from: 5, to: 6,  delay: 1.0 },
+  { from: 7, to: 8,  delay: 2.2 },
+  { from: 2, to: 11, delay: 3.0 },
 ]
 
 function curvePath(x1, y1, x2, y2) {
   const dx = x2 - x1, dy = y2 - y1
-  const dist = Math.sqrt(dx * dx + dy * dy)
-  const curve = dist * 0.28
+  const dist = Math.sqrt(dx * dx + dy * dy) || 1
+  const curve = dist * 0.18
   const mx = (x1 + x2) / 2, my = (y1 + y2) / 2
   const nx = -dy / dist, ny = dx / dist
   return `M ${x1} ${y1} Q ${mx + nx * curve} ${my + ny * curve} ${x2} ${y2}`
 }
 
-// Datos ilustrativos
+// Datos ilustrativos (reemplazados por datos reales cuando hay profesionales)
 const PH_ROLES   = [{ name: 'Abogados', value: 8 }, { name: 'Contadores', value: 4 }]
 const PH_AREAS   = [
   { name: 'Civil', value: 7 }, { name: 'Penal', value: 5 }, { name: 'Laboral', value: 4 },
@@ -72,10 +71,8 @@ const ACTIVIDAD  = [
 
 const NAVY = '#0d2d5e'
 const GOLD = '#c9a84c'
-// Barra líder → oro; resto → navy con opacidad descendente (jerarquía visual clara)
 const barColor = (i) => i === 0 ? GOLD : `rgba(13,45,94,${Math.max(0.45, 0.82 - i * 0.09)})`
 
-// Tooltip: usa el nombre de la fila, no el dataKey genérico
 function ChartTip({ active, payload, label }) {
   if (!active || !payload?.length) return null
   const p = payload[0]
@@ -105,12 +102,11 @@ function ChartCard({ title, hint, children }) {
 
 export default function MapSection() {
   const sectionRef = useRef(null)
-  const [basePath,    setBasePath]    = useState(null)   // contorno Colombia — siempre disponible
-  const [deptPaths,   setDeptPaths]   = useState([])     // fills por departamento (opcional)
-  const [borderPath,  setBorderPath]  = useState(null)   // bordes internos (opcional)
-  const [projected,    setProjected]    = useState([])
-  const [paths,        setPaths]        = useState([])
-  const [loading,      setLoading]      = useState(true)
+  const [landPath,    setLandPath]    = useState(null)   // todo el territorio (merge de países)
+  const [bordersPath, setBordersPath] = useState(null)   // fronteras internas tenues
+  const [projected,   setProjected]   = useState([])
+  const [paths,       setPaths]       = useState([])
+  const [loading,     setLoading]     = useState(true)
 
   const [roleData,    setRoleData]    = useState(PH_ROLES)
   const [areaData,    setAreaData]    = useState(PH_AREAS)
@@ -119,96 +115,38 @@ export default function MapSection() {
   const [totalDeptos, setTotalDeptos] = useState(8)
   const [activos,     setActivos]     = useState(0)
 
-  // Cargar mapa: primero world-atlas (base garantizada), luego departamentos como capa encima
+  // Cargar mapa mundial (world-atlas) y proyectar hubs
   useEffect(() => {
     let cancel = false
-
     async function load() {
-      // ── PASO 1: world-atlas siempre disponible ────────────────────────────
-      let projection, pathGen, colombia
-
       try {
         const world = await fetch(
           'https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json'
         ).then(r => r.json())
         if (cancel) return
 
-        const countries = topojson.feature(world, world.objects.countries)
-        colombia = countries.features.find(f => +f.id === COLOMBIA_ID)
-        if (!colombia) { setLoading(false); return }
+        const land    = topojson.merge(world, world.objects.countries.geometries)
+        const borders = topojson.mesh(world, world.objects.countries, (a, b) => a !== b)
 
-        projection = d3.geoMercator()
-        projection.fitExtent([[36, 36], [W - 36, H - 36]], colombia)
-        pathGen = d3.geoPath().projection(projection)
+        const projection = d3.geoNaturalEarth1()
+        projection.fitExtent([[12, 12], [W - 12, H - 12]], { type: 'Sphere' })
+        const pathGen = d3.geoPath().projection(projection)
 
-        setBasePath(pathGen(colombia))
-      } catch {
-        if (!cancel) setLoading(false)
-        return
-      }
+        setLandPath(pathGen(land))
+        setBordersPath(pathGen(borders))
 
-      // Proyectar ciudades con la proyección ya establecida
-      const pts = CITIES.map(c => {
-        const [x, y] = projection(c.coords) || [0, 0]
-        return { ...c, x, y }
-      })
-      setProjected(pts)
-      setPaths(CONNECTIONS.map((c, i) => {
-        const a = pts[c.from], b = pts[c.to]
-        return { ...c, i, path: curvePath(a.x, a.y, b.x, b.y) }
-      }))
-
-      if (!cancel) setLoading(false)
-
-      // ── PASO 2: departamentos opcionales (encima del contorno base) ───────
-      const DEPT_URLS = [
-        '/colombia-departamentos.json',                                                                        // local /public — más confiable
-        'https://cdn.jsdelivr.net/gh/deldersveld/topojson@master/countries/colombia/colombia-departments.json', // GitHub CDN
-        'https://cdn.jsdelivr.net/npm/colombia-topojson@1.0.0/colombia.json',                                  // npm fallback
-      ]
-
-      for (const url of DEPT_URLS) {
-        if (cancel) break
-        try {
-          const data = await fetch(url).then(r => r.ok ? r.json() : Promise.reject())
-          if (cancel) break
-
-          // Acepta tanto TopoJSON como GeoJSON (Natural Earth devuelve GeoJSON)
-          let collection
-          let topology = null
-          let objKey   = null
-
-          if (data.type === 'Topology') {
-            objKey = Object.keys(data.objects).find(k =>
-              k.toLowerCase().includes('depart') || k.toLowerCase().includes('adm1')
-            ) ?? Object.keys(data.objects)[0]
-            collection = topojson.feature(data, data.objects[objKey])
-            topology   = data
-          } else {
-            collection = data  // ya es FeatureCollection
-          }
-
-          if (!collection.features?.length) continue
-
-          // Validar coordenadas WGS84 dentro del rango de Colombia
-          const firstCoords = collection.features[0].geometry?.coordinates
-          const sample = firstCoords?.[0]?.[0] ?? firstCoords?.[0]
-          const [lng]  = Array.isArray(sample?.[0]) ? sample[0] : (sample ?? [])
-          if (typeof lng !== 'number' || lng < -90 || lng > -55) continue
-
-          setDeptPaths(collection.features.map(f => pathGen(f)).filter(Boolean))
-
-          // Bordes internos solo disponibles con TopoJSON
-          if (topology && objKey) {
-            setBorderPath(
-              pathGen(topojson.mesh(topology, topology.objects[objKey], (a, b) => a !== b))
-            )
-          }
-          break
-        } catch { continue }
-      }
+        const pts = CITIES.map(c => {
+          const [x, y] = projection(c.coords) || [0, 0]
+          return { ...c, x, y }
+        })
+        setProjected(pts)
+        setPaths(CONNECTIONS.map((c, i) => {
+          const a = pts[c.from], b = pts[c.to]
+          return { ...c, i, path: curvePath(a.x, a.y, b.x, b.y) }
+        }))
+      } catch { /* sin mapa → la sección sigue mostrando gráficas */ }
+      finally { if (!cancel) setLoading(false) }
     }
-
     load()
     return () => { cancel = true }
   }, [])
@@ -284,23 +222,116 @@ export default function MapSection() {
 
       <div className={styles.header}>
         <span className={styles.label}>Alcance</span>
-        <h2 className={styles.title}>Cobertura <em>nacional</em></h2>
-        <p className={styles.subtitle}>Presencia jurídica y contable en toda Colombia</p>
+        <h2 className={styles.title}>Cobertura <em>Global</em></h2>
+        <p className={styles.subtitle}>Presencia jurídica y contable a nivel global</p>
       </div>
 
       <div className={styles.dashboard}>
 
-        {/* ── Columna izquierda ── */}
+        {/* ── Mapa mundial (banda principal) ── */}
+        <div className={styles.mapHero}>
+          <div className={styles.glowCenter} />
+          <svg
+            viewBox={`0 0 ${W} ${H}`}
+            className={styles.svg}
+            xmlns="http://www.w3.org/2000/svg"
+            role="img"
+            aria-label="Mapa mundial con los hubs donde la firma tiene presencia"
+          >
+            <title>Cobertura global de la firma</title>
+            <defs>
+              <linearGradient id="lineGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%"   stopColor="#C9A84C" stopOpacity="0"   />
+                <stop offset="45%"  stopColor="#C9A84C" stopOpacity="0.9" />
+                <stop offset="55%"  stopColor="#e8c96a" stopOpacity="1"   />
+                <stop offset="100%" stopColor="#C9A84C" stopOpacity="0"   />
+              </linearGradient>
+              <radialGradient id="dotGlow">
+                <stop offset="0%"   stopColor="#C9A84C" stopOpacity="0.55" />
+                <stop offset="100%" stopColor="#C9A84C" stopOpacity="0"    />
+              </radialGradient>
+              <filter id="softGlow" x="-50%" y="-50%" width="200%" height="200%">
+                <feGaussianBlur stdDeviation="2" result="blur" />
+                <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+              </filter>
+              <filter id="strongGlow" x="-100%" y="-100%" width="300%" height="300%">
+                <feGaussianBlur stdDeviation="5" result="blur" />
+                <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+              </filter>
+              <filter id="mapGlow" x="-4%" y="-4%" width="108%" height="108%">
+                <feGaussianBlur stdDeviation="1.2" result="blur" />
+                <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+              </filter>
+            </defs>
+
+            {/* Fill base del territorio mundial */}
+            {!loading && landPath && (
+              <path d={landPath} className={styles.land} filter="url(#mapGlow)" />
+            )}
+
+            {/* Fronteras internas entre países */}
+            {!loading && bordersPath && (
+              <path d={bordersPath} className={styles.countryBorder} />
+            )}
+
+            {/* Contorno dorado difuminado — encima de todo, sin filtro nítido */}
+            {!loading && landPath && (
+              <path d={landPath} className={styles.worldOutline} />
+            )}
+
+            {/* Líneas base estáticas */}
+            {!loading && paths.map(c => (
+              <path key={`base-${c.i}`} d={c.path} fill="none" stroke="rgba(201,168,76,0.12)" strokeWidth="0.8" />
+            ))}
+
+            {/* Arcos animados + partícula */}
+            {!loading && paths.map(c => (
+              <g key={`anim-${c.i}`}>
+                <path
+                  d={c.path} fill="none" stroke="url(#lineGrad)" strokeWidth="1.4"
+                  className={styles.line} style={{ animationDelay: `${c.delay}s` }}
+                />
+                <circle r="2.5" fill="#e8c96a" opacity="0.92" filter="url(#softGlow)">
+                  <animateMotion dur="4.5s" repeatCount="indefinite" begin={`${c.delay}s`} path={c.path} />
+                </circle>
+                <circle r="1.1" fill="#ffffff" opacity="0.65">
+                  <animateMotion dur="4.5s" repeatCount="indefinite" begin={`${c.delay + 0.05}s`} path={c.path} />
+                </circle>
+              </g>
+            ))}
+
+            {/* Puntos de hub */}
+            {!loading && projected.map(p => (
+              <g key={`pt-${p.id}`}>
+                <circle cx={p.x} cy={p.y} r={p.main ? 20 : 11}
+                  fill="url(#dotGlow)" className={styles.pulse}
+                  style={{ animationDelay: `${p.id * 0.22}s` }} />
+                {p.main && (
+                  <>
+                    <circle cx={p.x} cy={p.y} r="13" fill="none" stroke="rgba(201,168,76,0.32)" strokeWidth="0.9" className={styles.ring} />
+                    <circle cx={p.x} cy={p.y} r="8" fill="none" stroke="rgba(201,168,76,0.18)" strokeWidth="0.5" />
+                  </>
+                )}
+                <circle cx={p.x} cy={p.y} r={p.main ? 5 : 3}
+                  fill={p.main ? '#e8c96a' : '#C9A84C'}
+                  filter={p.main ? 'url(#strongGlow)' : 'url(#softGlow)'} />
+                <circle cx={p.x} cy={p.y} r={p.main ? 2 : 1.1} fill="#ffffff" opacity={p.main ? 1 : 0.7} />
+              </g>
+            ))}
+          </svg>
+        </div>
+
+        {/* ── Gráficas a los lados (superpuestas al mapa) ── */}
         <aside className={styles.colLeft}>
 
           {/* Donut: Abogados vs Contadores */}
           <ChartCard title="Abogados vs Contadores">
             <div className={styles.donutWrap}>
-              <ResponsiveContainer width="100%" height={220}>
+              <ResponsiveContainer width="100%" height={200}>
                 <PieChart>
                   <Pie
                     data={roleData} dataKey="value" nameKey="name"
-                    cx="50%" cy="50%" innerRadius={56} outerRadius={88}
+                    cx="50%" cy="50%" innerRadius={52} outerRadius={82}
                     paddingAngle={4} stroke="none"
                     isAnimationActive animationDuration={900}
                   >
@@ -330,16 +361,18 @@ export default function MapSection() {
 
           {/* Barras: Profesionales por área */}
           <ChartCard title="Profesionales por área">
-            <ResponsiveContainer width="100%" height={250}>
-              <BarChart data={areaData} margin={{ top: 22, right: 8, left: -22, bottom: 8 }} barCategoryGap="38%">
+            <ResponsiveContainer width="100%" height={232}>
+              <BarChart data={areaData} margin={{ top: 22, right: 8, left: 8, bottom: 8 }} barCategoryGap="38%">
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(13,45,94,0.07)" vertical={false} />
                 <XAxis
-                  dataKey="name" interval={0} angle={-28} textAnchor="end" height={60}
+                  dataKey="name"
+                  tickFormatter={n => { const s = String(n).replace(/^Derecho\s+/i, ''); return s.length > 12 ? s.slice(0, 11) + '…' : s }}
+                  interval={0} angle={-28} textAnchor="end" height={60}
                   tick={{ fontSize: 10, fill: '#7a8fad' }} tickLine={false} axisLine={false}
                 />
-                <YAxis hide allowDecimals={false} />
+                <YAxis hide width={0} allowDecimals={false} />
                 <Tooltip content={<ChartTip />} cursor={{ fill: 'rgba(13,45,94,0.04)' }} />
-                <Bar dataKey="value" radius={[6, 6, 0, 0]} isAnimationActive animationDuration={900} maxBarSize={44}>
+                <Bar dataKey="value" radius={[6, 6, 0, 0]} isAnimationActive animationDuration={900} maxBarSize={40}>
                   {areaData.map((e, i) => (
                     <Cell key={i} fill={barColor(i)} />
                   ))}
@@ -349,136 +382,10 @@ export default function MapSection() {
           </ChartCard>
         </aside>
 
-        {/* ── Mapa central — solo Colombia ── */}
-        <div className={`${styles.mapWrap} ${styles.mapStage}`}>
-          <div className={styles.glowCenter} />
-
-          <svg
-            viewBox={`0 0 ${W} ${H}`}
-            className={styles.svg}
-            xmlns="http://www.w3.org/2000/svg"
-            role="img"
-            aria-label="Mapa de Colombia con ciudades donde la firma tiene presencia"
-          >
-            <title>Cobertura nacional de la firma en Colombia</title>
-            <defs>
-              <linearGradient id="lineGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-                <stop offset="0%"   stopColor="#C9A84C" stopOpacity="0"   />
-                <stop offset="45%"  stopColor="#C9A84C" stopOpacity="0.9" />
-                <stop offset="55%"  stopColor="#e8c96a" stopOpacity="1"   />
-                <stop offset="100%" stopColor="#C9A84C" stopOpacity="0"   />
-              </linearGradient>
-              <radialGradient id="dotGlow">
-                <stop offset="0%"   stopColor="#C9A84C" stopOpacity="0.55" />
-                <stop offset="100%" stopColor="#C9A84C" stopOpacity="0"    />
-              </radialGradient>
-              <radialGradient id="mainGlow">
-                <stop offset="0%"   stopColor="#e8c96a" stopOpacity="0.8" />
-                <stop offset="40%"  stopColor="#C9A84C" stopOpacity="0.3" />
-                <stop offset="100%" stopColor="#C9A84C" stopOpacity="0"   />
-              </radialGradient>
-              <filter id="softGlow" x="-50%" y="-50%" width="200%" height="200%">
-                <feGaussianBlur stdDeviation="2" result="blur" />
-                <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
-              </filter>
-              <filter id="strongGlow" x="-100%" y="-100%" width="300%" height="300%">
-                <feGaussianBlur stdDeviation="5" result="blur" />
-                <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
-              </filter>
-              <filter id="mapGlow" x="-4%" y="-4%" width="108%" height="108%">
-                <feGaussianBlur stdDeviation="1.2" result="blur" />
-                <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
-              </filter>
-            </defs>
-
-            {/* Contorno base de Colombia — siempre visible */}
-            {!loading && basePath && (
-              <path d={basePath} className={styles.colombia} filter="url(#mapGlow)" />
-            )}
-
-            {/* Fills de departamentos — capa encima si se cargaron */}
-            {!loading && deptPaths.map((d, i) => (
-              <path key={`dept-${i}`} d={d} className={styles.dept} />
-            ))}
-
-            {/* Bordes internos entre departamentos */}
-            {!loading && borderPath && (
-              <path d={borderPath} className={styles.deptBorder} />
-            )}
-
-            {/* Líneas base estáticas */}
-            {!loading && paths.map(c => (
-              <path
-                key={`base-${c.i}`}
-                d={c.path}
-                fill="none"
-                stroke="rgba(201,168,76,0.12)"
-                strokeWidth="0.8"
-              />
-            ))}
-
-            {/* Líneas animadas + partícula */}
-            {!loading && paths.map(c => (
-              <g key={`anim-${c.i}`}>
-                <path
-                  d={c.path}
-                  fill="none"
-                  stroke="url(#lineGrad)"
-                  strokeWidth="1.4"
-                  className={styles.line}
-                  style={{ animationDelay: `${c.delay}s` }}
-                />
-                <circle r="2.5" fill="#e8c96a" opacity="0.92" filter="url(#softGlow)">
-                  <animateMotion dur="4.5s" repeatCount="indefinite" begin={`${c.delay}s`} path={c.path} />
-                </circle>
-                <circle r="1.1" fill="#ffffff" opacity="0.65">
-                  <animateMotion dur="4.5s" repeatCount="indefinite" begin={`${c.delay + 0.05}s`} path={c.path} />
-                </circle>
-              </g>
-            ))}
-
-            {/* Puntos de ciudad */}
-            {!loading && projected.map(p => (
-              <g key={`pt-${p.id}`}>
-                <circle
-                  cx={p.x} cy={p.y}
-                  r={p.main ? 22 : 12}
-                  fill="url(#dotGlow)"
-                  className={styles.pulse}
-                  style={{ animationDelay: `${p.id * 0.22}s` }}
-                />
-                {p.main && (
-                  <>
-                    <circle cx={p.x} cy={p.y} r="15"
-                      fill="none" stroke="rgba(201,168,76,0.32)" strokeWidth="0.9"
-                      className={styles.ring} />
-                    <circle cx={p.x} cy={p.y} r="9.5"
-                      fill="none" stroke="rgba(201,168,76,0.18)" strokeWidth="0.5" />
-                  </>
-                )}
-                <circle
-                  cx={p.x} cy={p.y}
-                  r={p.main ? 5.5 : 3.2}
-                  fill={p.main ? '#e8c96a' : '#C9A84C'}
-                  filter={p.main ? 'url(#strongGlow)' : 'url(#softGlow)'}
-                />
-                <circle
-                  cx={p.x} cy={p.y}
-                  r={p.main ? 2.2 : 1.1}
-                  fill="#ffffff"
-                  opacity={p.main ? 1 : 0.7}
-                />
-              </g>
-            ))}
-          </svg>
-        </div>
-
-        {/* ── Columna derecha ── */}
         <aside className={styles.colRight}>
-
           {/* Barras horizontales: Profesionales por departamento */}
           <ChartCard title="Profesionales por departamento">
-            <ResponsiveContainer width="100%" height={220}>
+            <ResponsiveContainer width="100%" height={200}>
               <BarChart
                 layout="vertical" data={deptData}
                 margin={{ top: 4, right: 12, left: 4, bottom: 4 }}
@@ -496,19 +403,15 @@ export default function MapSection() {
                   tick={{ fontSize: 11, fill: '#4a5568' }} tickLine={false} axisLine={false}
                 />
                 <Tooltip content={<ChartTip />} cursor={{ fill: 'rgba(13,45,94,0.04)' }} />
-                <Bar
-                  dataKey="value" radius={[0, 6, 6, 0]} fill="url(#hBarGrad)"
-                  barSize={26} maxBarSize={30}
-                  isAnimationActive animationDuration={900}
-                >
-                </Bar>
+                <Bar dataKey="value" radius={[0, 6, 6, 0]} fill="url(#hBarGrad)" barSize={24} maxBarSize={28}
+                  isAnimationActive animationDuration={900} />
               </BarChart>
             </ResponsiveContainer>
           </ChartCard>
 
           {/* Área: Actividad de la firma */}
           <ChartCard title="Actividad de la firma" hint="Últimos 12 meses">
-            <ResponsiveContainer width="100%" height={250}>
+            <ResponsiveContainer width="100%" height={232}>
               <AreaChart data={ACTIVIDAD} margin={{ top: 16, right: 10, left: -22, bottom: 0 }}>
                 <defs>
                   <linearGradient id="actGrad" x1="0" y1="0" x2="0" y2="1">

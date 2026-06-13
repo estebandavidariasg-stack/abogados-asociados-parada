@@ -333,6 +333,119 @@
   padding: 40px 0;
 }
 
+/* ── Solicitud abierta (modelo claim tipo Uber/DiDi) ── */
+.openCard {
+  max-width: 460px;
+  margin: 0 auto;
+  text-align: left;
+  background: var(--surface, #f5f8fc);
+  border: 1px solid rgba(13, 45, 94, 0.12);
+  border-radius: 16px;
+  padding: 26px 24px;
+  box-shadow: 0 8px 28px rgba(13, 45, 94, 0.08);
+}
+.openBadge {
+  display: inline-block;
+  font-size: 0.66rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;
+  color: var(--gold-dk, #9a7a2c);
+  background: rgba(201, 168, 76, 0.14);
+  border: 1px solid rgba(201, 168, 76, 0.4);
+  border-radius: 999px; padding: 4px 12px; margin-bottom: 12px;
+}
+.openTitle {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 1.3rem; font-weight: 600; color: var(--navy);
+  margin: 0 0 8px; line-height: 1.25;
+}
+.openText { font-size: 0.9rem; color: var(--muted); line-height: 1.55; margin: 0 0 18px; }
+.openText b { color: var(--navy); }
+.btnPublicar {
+  width: 100%;
+  background: linear-gradient(135deg, #f2d580, #c9a84c 55%, #9a7a2c);
+  color: #0d2d5e; border: none; border-radius: 12px;
+  padding: 13px 20px; font-weight: 700; font-size: 0.92rem; cursor: pointer;
+  box-shadow: 0 6px 18px rgba(201, 168, 76, 0.32);
+  transition: transform 0.15s, box-shadow 0.2s;
+}
+.btnPublicar:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 10px 24px rgba(201, 168, 76, 0.42); }
+.btnPublicar:disabled { opacity: 0.6; cursor: not-allowed; box-shadow: none; }
+
+/* ── Estado: esperando que un profesional tome la solicitud ── */
+.esperandoWrap { max-width: 680px; width: 100%; }
+.esperandoCard {
+  max-width: 470px; margin: 40px auto; text-align: center;
+  background: linear-gradient(180deg, #f0f6fc 0%, #e3eefb 100%);
+  border: 1px solid rgba(42, 100, 150, 0.22);
+  border-radius: 22px; padding: 40px 32px 30px;
+  box-shadow: 0 18px 48px rgba(26, 82, 118, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+
+/* Radar: ondas que se expanden buscando profesionales */
+.radar {
+  position: relative;
+  width: 92px; height: 92px; margin: 4px auto 24px;
+  display: grid; place-items: center;
+}
+.radarWave {
+  position: absolute; inset: 0; margin: auto;
+  width: 92px; height: 92px; border-radius: 50%;
+  border: 1.5px solid var(--navy-lt, #2a6496);
+}
+.radarCore {
+  position: relative; z-index: 1;
+  width: 46px; height: 46px; border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #e8c96a, var(--gold, #c9a84c) 55%, #a9842f 100%);
+  box-shadow: 0 6px 18px rgba(201, 168, 76, 0.4), inset 0 1px 2px rgba(255, 255, 255, 0.6);
+  display: grid; place-items: center;
+}
+.radarCore::after {
+  content: ''; width: 15px; height: 15px; border-radius: 50%;
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.esperandoTitle {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 1.7rem; font-weight: 600; color: var(--navy-md, #1a5276); margin: 0 0 10px;
+  letter-spacing: -0.01em;
+}
+.esperandoText {
+  font-size: 0.94rem; color: var(--muted); line-height: 1.65;
+  margin: 0 auto 18px; max-width: 38ch;
+}
+
+.esperandoStatus {
+  display: inline-flex; align-items: center; gap: 9px;
+  font-size: 0.82rem; font-weight: 600; color: var(--navy-md, #1a5276);
+  background: rgba(42, 100, 150, 0.09);
+  border: 1px solid rgba(201, 168, 76, 0.4);
+  border-radius: 999px; padding: 8px 16px; margin-bottom: 22px;
+}
+.esperandoDots { display: inline-flex; gap: 4px; }
+.esperandoDots i {
+  width: 6px; height: 6px; border-radius: 50%; background: var(--gold, #c9a84c);
+  animation: espDot 1.3s infinite ease-in-out;
+}
+.esperandoDots i:nth-child(2) { animation-delay: 0.18s; }
+.esperandoDots i:nth-child(3) { animation-delay: 0.36s; }
+@keyframes espDot {
+  0%, 80%, 100% { opacity: 0.3; transform: translateY(0); }
+  40% { opacity: 1; transform: translateY(-4px); }
+}
+
+.esperandoHint { font-size: 0.78rem; color: var(--muted); opacity: 0.75; margin: 0 0 20px; }
+.esperandoCancel {
+  background: none; border: 1px solid rgba(13, 45, 94, 0.2);
+  color: var(--navy-md, #1a5276); border-radius: 999px;
+  padding: 9px 22px; font-size: 0.82rem; font-weight: 600; cursor: pointer;
+  font-family: 'Raleway', sans-serif;
+  transition: border-color 0.2s, background 0.2s, color 0.2s;
+}
+.esperandoCancel:hover { border-color: var(--navy-md, #1a5276); background: rgba(26, 82, 118, 0.06); color: var(--navy); }
+
+@media (prefers-reduced-motion: reduce) {
+  .esperandoDots i { animation: none; opacity: 0.6; }
+}
+
 /* ── Chat ── */
 .chatWrap {
   max-width: 100%;      /* ocupa todo el centro */
@@ -780,6 +893,23 @@
   color: var(--navy-md);
   letter-spacing: 0.03em;
 }
+
+/* Área pre-detectada por la IA: pill de solo lectura (no editable) */
+.areasLocked {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px;
+}
+.areaChipLocked {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 15px;
+  border: 1px solid var(--gold, #c9a84c);
+  border-radius: 20px;
+  background: rgba(201,168,76,0.14);
+  color: #8a6a28;
+  font-size: 0.82rem; font-weight: 600;
+  box-shadow: 0 0 0 1px rgba(201,168,76,0.35) inset;
+}
+.areaChipLocked svg { color: var(--gold-dk, #8a6a28); opacity: 0.85; }
+.areaLockHint { font-size: 0.72rem; color: var(--muted); font-style: italic; }
 
 .sectionLabel {
   display: flex;
