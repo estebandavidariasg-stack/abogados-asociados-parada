@@ -1172,10 +1172,11 @@ export default function ChatSection() {
     // la RLS de chat_messages no deja al cliente anónimo escribir en una sala
     // sin profesional asignado. El profesional que la tome ve el caso completo.
     try {
-      const res = await fetch('/api/publicar-solicitud', {
+      const res = await fetch('/api/solicitudes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          accion: 'publicar',
           cedulaHash: hash, codigoRef,
           tipoProfesional: form.tipo_profesional || 'abogado',
           nombre, apellido, areas, descripcion,
