@@ -81,6 +81,9 @@ const IconClip = (p) => (<svg viewBox="0 0 24 24" width="19" height="19" fill="n
 const IconDoc = (p) => (<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...p}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6" /></svg>);
 const IconBombilla = (p) => (<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...p}><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.3 1 2.1V17h6v-.2c0-.8.4-1.6 1-2.1A7 7 0 0 0 12 2z" /></svg>);
 const IconChevron = (p) => (<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...p}><path d="m6 9 6 6 6-6" /></svg>);
+const IconCopy = (p) => (<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...p}><rect x="9" y="9" width="12" height="12" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg>);
+const IconCheck = (p) => (<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...p}><path d="M20 6 9 17l-5-5" /></svg>);
+const IconEdit = (p) => (<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...p}><path d="M12 20h9" /><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z" /></svg>);
 
 export default function AsistenteIA() {
   const { profile } = useAuth();
@@ -97,6 +100,7 @@ export default function AsistenteIA() {
   const [copiedIdx, setCopiedIdx] = useState(null);
   const [focused, setFocused] = useState(false);
   const [phIndex, setPhIndex] = useState(0);
+  const [stream, setStream] = useState(null); // efecto "escritura": { idx, n }
   const threadRef = useRef(null);
   const inputRef = useRef(null);
   const fileRef = useRef(null);
@@ -136,7 +140,19 @@ export default function AsistenteIA() {
 
   useEffect(() => {
     if (threadRef.current) threadRef.current.scrollTop = threadRef.current.scrollHeight;
-  }, [thread, busy]);
+  }, [thread, busy, stream]);
+
+  // Efecto "modo escritura": revela la última respuesta de la IA progresivamente.
+  useEffect(() => {
+    if (!stream) return;
+    const msg = thread[stream.idx];
+    if (!msg || msg.role !== 'assistant') { setStream(null); return; }
+    const full = msg.content || '';
+    if (stream.n >= full.length) { setStream(null); return; }
+    const step = Math.max(2, Math.ceil(full.length / 140)); // ~2s sin importar el largo
+    const t = setTimeout(() => setStream((s) => (s ? { ...s, n: Math.min(full.length, s.n + step) } : s)), 16);
+    return () => clearTimeout(t);
+  }, [stream, thread]);
 
   useEffect(() => {
     const el = inputRef.current;
@@ -189,6 +205,7 @@ export default function AsistenteIA() {
     setThread(finalThread);
     persistir(id, finalThread);
     setBusy(false);
+    if (!reduce) setStream({ idx: finalThread.length - 1, n: 0 }); // arranca la animación de escritura
   }
 
   const copiar = (i, texto) => {
@@ -196,6 +213,17 @@ export default function AsistenteIA() {
     setCopiedIdx(i);
     setTimeout(() => setCopiedIdx((c) => (c === i ? null : c)), 1600);
   };
+
+  // Editar un prompt enviado: recorta la conversación hasta ese punto y lo carga
+  // en el composer (re-enviar reemplaza en vez de acumular → menos tokens).
+  function editarMensaje(i) {
+    const msg = thread[i];
+    if (!msg) return;
+    setStream(null);
+    setThread((t) => t.slice(0, i));
+    setInput(msg.content);
+    setTimeout(() => inputRef.current?.focus(), 0);
+  }
 
   const puedeEnviar = (!!input.trim() || adjuntos.length > 0) && !busy;
   const phVacio = !focused && !input;
@@ -392,27 +420,39 @@ export default function AsistenteIA() {
       </header>
 
       <div className={styles.thread} ref={threadRef}>
-        {thread.map((m, i) =>
-          m.role === 'user' ? (
-            <motion.div key={i} className={styles.bubMe} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}>
-              {m.content}
-              {m.files?.length > 0 && (
-                <div className={styles.bubFiles}>
-                  {m.files.map((n, j) => <span key={j} className={styles.bubFile}><IconDoc /> {n}</span>)}
+        <div className={styles.threadInner}>
+          {thread.map((m, i) =>
+            m.role === 'user' ? (
+              <motion.div key={i} className={styles.meRow} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}>
+                <button className={styles.editBtn} onClick={() => editarMensaje(i)} aria-label="Editar y reenviar" title="Editar y reenviar"><IconEdit /></button>
+                <div className={styles.bubMe}>
+                  {m.content}
+                  {m.files?.length > 0 && (
+                    <div className={styles.bubFiles}>
+                      {m.files.map((n, j) => <span key={j} className={styles.bubFile}><IconDoc /> {n}</span>)}
+                    </div>
+                  )}
                 </div>
-              )}
-            </motion.div>
-          ) : (
-            <motion.div key={i} className={styles.bubAi} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }}>
-              <div className={styles.aiHead}>
-                <span>IA Parada Precise</span>
-                <button className={styles.copyBtn} onClick={() => copiar(i, m.content)}>{copiedIdx === i ? 'Copiado ✓' : 'Copiar'}</button>
-              </div>
-              <Markdown>{m.content}</Markdown>
-            </motion.div>
-          )
-        )}
-        {busy && (<div className={styles.thinking} aria-label="Generando respuesta"><span /><span /><span /></div>)}
+              </motion.div>
+            ) : (
+              <motion.div key={i} className={styles.aiMsg} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }}>
+                <div className={styles.aiBody}>
+                  <Markdown>{stream && stream.idx === i ? (m.content.slice(0, stream.n) || '…') : m.content}</Markdown>
+                  {stream && stream.idx === i && <span className={styles.caret} aria-hidden="true" />}
+                </div>
+                <button
+                  className={`${styles.copyBtn} ${copiedIdx === i ? styles.copyBtnDone : ''}`}
+                  onClick={() => copiar(i, m.content)}
+                  aria-label={copiedIdx === i ? 'Copiado' : 'Copiar respuesta'}
+                  title={copiedIdx === i ? 'Copiado' : 'Copiar'}
+                >
+                  {copiedIdx === i ? <IconCheck /> : <IconCopy />}
+                </button>
+              </motion.div>
+            )
+          )}
+          {busy && (<div className={styles.thinking} aria-label="Generando respuesta"><span /><span /><span /></div>)}
+        </div>
       </div>
 
       {composer}
