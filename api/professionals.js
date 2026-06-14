@@ -21,6 +21,10 @@ const SUPABASE_URL =
   process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL
 const SUPABASE_ANON_KEY =
   process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY
+// Para leer chat_ratings sin depender de una policy pública: si está la
+// service-role la usamos (salta RLS); si no, caemos a la anon.
+const SUPABASE_RATINGS_KEY =
+  process.env.SUPABASE_SERVICE_ROLE_KEY || SUPABASE_ANON_KEY
 
 // Debe coincidir con PUBLIC_COLS de LawyersSection.jsx. Si agregas una
 // columna pública nueva, agrégala en AMBOS lugares.
@@ -66,12 +70,46 @@ export default async function handler(req, res) {
     }
 
     const data = await upstream.json()
+    const lista = Array.isArray(data) ? data : []
+
+    // Agregar la calificación (promedio + total) de cada profesional en una
+    // sola query, en vez de que cada tarjeta del home dispare la suya (N+1).
+    const ids = lista.map(p => p.id).filter(Boolean)
+    if (ids.length) {
+      try {
+        const inList = ids.map(encodeURIComponent).join(',')
+        const rRes = await fetch(
+          `${SUPABASE_URL}/rest/v1/chat_ratings?lawyer_id=in.(${inList})&select=lawyer_id,rating`,
+          {
+            headers: {
+              apikey: SUPABASE_RATINGS_KEY,
+              Authorization: `Bearer ${SUPABASE_RATINGS_KEY}`,
+            },
+          }
+        )
+        if (rRes.ok) {
+          const ratings = await rRes.json()
+          const acc = {} // lawyer_id → { sum, total }
+          for (const r of (Array.isArray(ratings) ? ratings : [])) {
+            const v = Number(r.rating)
+            if (!r.lawyer_id || !Number.isFinite(v)) continue
+            const a = acc[r.lawyer_id] || (acc[r.lawyer_id] = { sum: 0, total: 0 })
+            a.sum += v; a.total += 1
+          }
+          for (const p of lista) {
+            const a = acc[p.id]
+            p.rating_promedio = a ? parseFloat((a.sum / a.total).toFixed(1)) : null
+            p.rating_total    = a ? a.total : 0
+          }
+        }
+      } catch { /* si falla, las tarjetas caen a su propia query */ }
+    }
 
     // Cache en el CDN de Vercel: 5 min fresco + 10 min sirviendo stale
     // mientras revalida en background. La lista cambia solo cuando el admin
     // aprueba/revoca un profesional → 5 min de desfase es irrelevante.
     res.setHeader('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600')
-    return res.status(200).json(Array.isArray(data) ? data : [])
+    return res.status(200).json(lista)
   } catch (err) {
     res.setHeader('Cache-Control', 'no-store')
     return res.status(500).json({ error: 'Error al cargar la lista.' })

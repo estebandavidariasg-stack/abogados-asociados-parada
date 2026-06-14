@@ -17,7 +17,7 @@ function StarDisplay({ rating, total, dark = false }) {
           }}>★</span>
         ))}
       </div>
-      <span style={{ color: dark ? '#888' : 'rgba(255,255,255,0.55)', fontSize: '0.73rem' }}>
+      <span style={{ color: dark ? '#4a6080' : 'rgba(255,255,255,0.6)', fontSize: '0.73rem', fontWeight: 600 }}>
         {rating} ({total})
       </span>
     </div>
@@ -26,25 +26,35 @@ function StarDisplay({ rating, total, dark = false }) {
 
 export default function LawyerCard({ lawyer, delay = 0, isSuperAdmin = false }) {
   const [open, setOpen] = useState(false)
-  const [rating, setRating] = useState(null) // { promedio, total }
+  // El endpoint /api/professionals ya agrega la calificación (rating_promedio
+  // + rating_total). La usamos directo y evitamos una query por tarjeta.
+  const [rating, setRating] = useState(
+    lawyer.rating_promedio != null
+      ? { promedio: lawyer.rating_promedio, total: lawyer.rating_total || 0 }
+      : null
+  )
 
   const initials = (lawyer.nombre?.[0] || '?') + (lawyer.apellido?.[0] || '')
 
-  // Cargar calificación del abogado
+  // Fallback: si la calificación no vino en el payload (p. ej. la tarjeta se
+  // renderiza fuera del home), la pedimos directamente.
   useEffect(() => {
+    if (lawyer.rating_promedio !== undefined) return
+    let cancelled = false
     async function loadRating() {
       const { data } = await supabase
         .from('chat_ratings')
         .select('rating')
         .eq('lawyer_id', lawyer.id)
-      if (data && data.length > 0) {
+      if (!cancelled && data && data.length > 0) {
         const total   = data.length
         const promedio = parseFloat((data.reduce((s, r) => s + r.rating, 0) / total).toFixed(1))
         setRating({ promedio, total })
       }
     }
     loadRating()
-  }, [lawyer.id])
+    return () => { cancelled = true }
+  }, [lawyer.id, lawyer.rating_promedio])
 
   useEffect(() => {
     document.body.style.overflow = open ? 'hidden' : ''
@@ -116,10 +126,10 @@ export default function LawyerCard({ lawyer, delay = 0, isSuperAdmin = false }) 
           )}
           {lawyer.universidad && <p className={styles.subtitle}>{lawyer.universidad}</p>}
 
-          {/* Estrellas en la tarjeta */}
+          {/* Estrellas en la tarjeta (fondo claro → variante de texto oscuro) */}
           {rating && (
             <div style={{ marginTop: 8 }}>
-              <StarDisplay rating={rating.promedio} total={rating.total} dark={false} />
+              <StarDisplay rating={rating.promedio} total={rating.total} dark={true} />
             </div>
           )}
 

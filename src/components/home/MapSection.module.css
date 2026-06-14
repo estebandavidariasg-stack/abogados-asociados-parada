@@ -131,14 +131,14 @@
   pointer-events: none;
 }
 
-/* Contorno exterior del territorio — halo dorado visible y difuminado */
+/* Contorno exterior del territorio — línea dorada nítida y fina */
 .worldOutline {
   fill: none;
-  stroke: rgba(201, 168, 76, 0.7);
-  stroke-width: 4.5;
+  stroke: rgba(201, 168, 76, 0.85);
+  stroke-width: 2;
   stroke-linejoin: round;
   pointer-events: none;
-  filter: blur(2.6px);
+  filter: blur(0.6px);
 }
 
 /* ── Líneas animadas ── */
