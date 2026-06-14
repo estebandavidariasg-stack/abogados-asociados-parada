@@ -741,6 +741,51 @@ select.input option {
 
 .content { flex: 1 1 auto; min-width: 0; }
 
+/* ── Modal de confirmación de cierre de sesión ── */
+.logoutOverlay {
+  position: fixed; inset: 0; z-index: 1300;
+  display: grid; place-items: center;
+  background: rgba(13, 45, 94, 0.32);
+  backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px);
+  animation: logoutFade 0.18s ease;
+  padding: 1rem;
+}
+@keyframes logoutFade { from { opacity: 0; } to { opacity: 1; } }
+.logoutModal {
+  width: 100%; max-width: 380px;
+  background: #fff;
+  border: 1px solid rgba(13, 45, 94, 0.1);
+  border-radius: 18px;
+  box-shadow: 0 24px 60px rgba(13, 45, 94, 0.3);
+  padding: 26px 24px 22px;
+  text-align: center;
+  animation: logoutPop 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes logoutPop { from { opacity: 0; transform: translateY(12px) scale(0.97); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .logoutOverlay, .logoutModal { animation: none; } }
+.logoutIcon {
+  display: grid; place-items: center; width: 46px; height: 46px; margin: 0 auto 12px;
+  border-radius: 12px; color: #a23b3b; background: rgba(162, 59, 59, 0.1);
+}
+.logoutTitle {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 1.5rem; font-weight: 600; color: #0d2d5e; margin: 0 0 6px;
+}
+.logoutText {
+  font-family: 'Raleway', sans-serif;
+  font-size: 0.86rem; color: #4a6080; line-height: 1.55; margin: 0 0 20px;
+}
+.logoutActions { display: flex; gap: 10px; }
+.logoutCancel, .logoutConfirm {
+  flex: 1; font-family: 'Raleway', sans-serif; font-size: 0.86rem; font-weight: 600;
+  border-radius: 11px; padding: 11px 14px; cursor: pointer;
+  transition: background 0.18s, border-color 0.18s, box-shadow 0.18s, color 0.18s;
+}
+.logoutCancel { background: none; border: 1px solid rgba(13, 45, 94, 0.2); color: var(--navy-md, #1a5276); }
+.logoutCancel:hover { border-color: var(--navy-md, #1a5276); background: rgba(13, 45, 94, 0.05); color: var(--navy, #0d2d5e); }
+.logoutConfirm { background: #a23b3b; border: 1px solid #a23b3b; color: #fff; box-shadow: 0 4px 12px rgba(162, 59, 59, 0.28); }
+.logoutConfirm:hover { background: #8c2f2f; box-shadow: 0 6px 16px rgba(162, 59, 59, 0.38); }
+
 .panel { position: relative; z-index: 1; }
 .panelHead {
   display: flex;

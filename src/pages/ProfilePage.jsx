@@ -99,6 +99,7 @@ export default function ProfilePage() {
   const [msg, setMsg]             = useState(null)
   const [error, setError]         = useState(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [confirmLogout, setConfirmLogout] = useState(false)
 
   // ── Campos del perfil ─────────────────────────────────────────────────
   const [nombre, setNombre]           = useState('')
@@ -408,7 +409,7 @@ export default function ProfilePage() {
               <button
                 type="button"
                 className={`${styles.navItem} ${styles.logout}`}
-                onClick={async () => { await signOut(); navigate('/') }}
+                onClick={() => setConfirmLogout(true)}
                 title="Cerrar sesión"
               >
                 <IconLogout className={styles.navIcon} aria-hidden="true" />
@@ -681,6 +682,20 @@ export default function ProfilePage() {
 
         </main>
       </div>
+
+      {confirmLogout && (
+        <div className={styles.logoutOverlay} role="dialog" aria-modal="true" aria-labelledby="logoutTitle" onClick={() => setConfirmLogout(false)}>
+          <div className={styles.logoutModal} onClick={(e) => e.stopPropagation()}>
+            <span className={styles.logoutIcon}><IconLogout /></span>
+            <h2 id="logoutTitle" className={styles.logoutTitle}>¿Cerrar sesión?</h2>
+            <p className={styles.logoutText}>Saldrás de tu panel. Tendrás que iniciar sesión de nuevo para volver a entrar.</p>
+            <div className={styles.logoutActions}>
+              <button type="button" className={styles.logoutCancel} onClick={() => setConfirmLogout(false)}>Cancelar</button>
+              <button type="button" className={styles.logoutConfirm} onClick={async () => { setConfirmLogout(false); await signOut(); navigate('/') }}>Cerrar sesión</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

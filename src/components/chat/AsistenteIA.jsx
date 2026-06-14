@@ -76,6 +76,37 @@ function tituloDe(messages) {
   const t = primero.replace(/\s+/g, ' ').trim();
   return t ? (t.length > 46 ? t.slice(0, 46).trimEnd() + '…' : t) : 'Nuevo chat';
 }
+
+// Documento exportable (Word/PDF) con el MISMO contenido de la respuesta, ya
+// renderizado a HTML, envuelto en un formato AAP más organizado (membrete + estilos).
+function construirDocumento(innerHTML) {
+  let fecha = '';
+  try { fecha = new Date().toLocaleDateString('es-CO', { year: 'numeric', month: 'long', day: 'numeric' }); } catch { /* */ }
+  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Documento — Abogados & Asociados Parada</title>
+<style>
+  @page { margin: 2.5cm; }
+  body { font-family: 'Calibri','Segoe UI',Arial,sans-serif; color:#1f2d44; line-height:1.6; font-size:12pt; margin:0; }
+  .doc-head { border-bottom: 2px solid #c9a84c; padding-bottom: 10px; margin-bottom: 24px; }
+  .doc-firm { font-family:'Georgia','Times New Roman',serif; font-size:19pt; font-weight:700; color:#0d2d5e; margin:0; letter-spacing:.3px; }
+  .doc-meta { font-size:9.5pt; color:#6b7689; margin:4px 0 0; }
+  h1,h2,h3,h4 { font-family:'Georgia','Times New Roman',serif; color:#0d2d5e; line-height:1.25; }
+  h1{font-size:16pt} h2{font-size:14pt} h3{font-size:12.5pt}
+  p,li{font-size:12pt}
+  ul,ol{padding-left:1.2cm}
+  table{border-collapse:collapse;width:100%;margin:10px 0} th,td{border:1px solid #cdd6e6;padding:6px 9px;text-align:left} th{background:#f1f4fa;color:#0d2d5e}
+  blockquote{border-left:3px solid #c9a84c;margin:0;padding-left:14px;color:#46546e}
+  code{background:#f1f4fa;padding:1px 4px;border-radius:3px;font-family:Consolas,monospace;font-size:11pt}
+  .doc-foot{margin-top:30px;border-top:1px solid #e2e8f3;padding-top:10px;font-size:9pt;color:#8a93a6;font-style:italic}
+</style></head>
+<body>
+  <div class="doc-head">
+    <p class="doc-firm">Abogados &amp; Asociados Parada</p>
+    <p class="doc-meta">Documento generado${fecha ? ' el ' + fecha : ''} con IA Parada Precise</p>
+  </div>
+  ${innerHTML}
+  <p class="doc-foot">Borrador generado con asistencia de IA. Requiere revisión profesional antes de su uso o presentación.</p>
+</body></html>`;
+}
 const IconEnviar = (p) => (<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...p}><path d="M22 2 11 13" /><path d="M22 2 15 22l-4-9-9-4z" /></svg>);
 const IconClip = (p) => (<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...p}><path d="M21.44 11.05 12.25 20.24a5 5 0 0 1-7.07-7.07l8.49-8.49a3 3 0 0 1 4.24 4.24l-8.49 8.49a1 1 0 0 1-1.41-1.41l7.78-7.78" /></svg>);
 const IconDoc = (p) => (<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...p}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6" /></svg>);
@@ -213,6 +244,28 @@ export default function AsistenteIA() {
     setCopiedIdx(i);
     setTimeout(() => setCopiedIdx((c) => (c === i ? null : c)), 1600);
   };
+
+  // Exporta la respuesta como Word (.doc) o PDF (vía impresión), reusando el
+  // mismo HTML ya renderizado de la respuesta para conservar el formato.
+  function exportar(i, formato) {
+    const el = document.getElementById(`aimsg-body-${i}`);
+    const inner = el ? el.innerHTML : '';
+    if (!inner) return;
+    const html = construirDocumento(inner);
+    if (formato === 'word') {
+      const blob = new Blob(['﻿', html], { type: 'application/msword' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'documento-aap.doc';
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } else {
+      const w = window.open('', '_blank');
+      if (!w) { setError('Permite las ventanas emergentes para descargar el PDF.'); return; }
+      w.document.open(); w.document.write(html); w.document.close(); w.focus();
+      setTimeout(() => { try { w.print(); } catch { /* */ } }, 400);
+    }
+  }
 
   // Reutilizar un prompt enviado: carga su texto en el composer SIN borrar la
   // conversación. El usuario lo corrige/afina y lo reenvía como un mensaje nuevo.
@@ -434,18 +487,28 @@ export default function AsistenteIA() {
               </motion.div>
             ) : (
               <motion.div key={i} className={styles.aiMsg} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }}>
-                <div className={styles.aiBody}>
+                <div className={styles.aiBody} id={`aimsg-body-${i}`}>
                   <Markdown>{stream && stream.idx === i ? (m.content.slice(0, stream.n) || '…') : m.content}</Markdown>
                   {stream && stream.idx === i && <span className={styles.caret} aria-hidden="true" />}
                 </div>
-                <button
-                  className={`${styles.copyBtn} ${copiedIdx === i ? styles.copyBtnDone : ''}`}
-                  onClick={() => copiar(i, m.content)}
-                  aria-label={copiedIdx === i ? 'Copiado' : 'Copiar respuesta'}
-                  title={copiedIdx === i ? 'Copiado' : 'Copiar'}
-                >
-                  {copiedIdx === i ? <IconCheck /> : <IconCopy />}
-                </button>
+                {!(stream && stream.idx === i) && (
+                  <div className={styles.aiActions}>
+                    <button
+                      className={`${styles.actBtn} ${copiedIdx === i ? styles.actBtnDone : ''}`}
+                      onClick={() => copiar(i, m.content)}
+                      title={copiedIdx === i ? 'Copiado' : 'Copiar respuesta'}
+                    >
+                      {copiedIdx === i ? <IconCheck /> : <IconCopy />}
+                      <span>{copiedIdx === i ? 'Copiado' : 'Copiar'}</span>
+                    </button>
+                    <button className={styles.actBtn} onClick={() => exportar(i, 'word')} title="Descargar como Word">
+                      <IconDoc /><span>Word</span>
+                    </button>
+                    <button className={styles.actBtn} onClick={() => exportar(i, 'pdf')} title="Descargar como PDF">
+                      <IconDoc /><span>PDF</span>
+                    </button>
+                  </div>
+                )}
               </motion.div>
             )
           )}
