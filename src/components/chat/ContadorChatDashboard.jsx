@@ -899,7 +899,7 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
                   >
                     <div className={`${esMio ? styles.bubbleMine : styles.bubbleOther} ${isAudio ? styles.bubbleAudio : ''} ${isFirstClientMsg ? styles.bubbleFirst : ''} ${isImageMsg ? styles.bubbleImg : ''}`}>
                       {isAudio ? (
-                        <AudioPlayer src={m.file_url} mine={esMio} theme="light" />
+                        <AudioPlayer src={m.file_url} mine={true} theme={esMio ? 'light' : 'dark'} />
                       ) : (m.message_type === 'file' || m.file_url) ? (
                         isImage(m.file_name) ? (
                           <ChatImage

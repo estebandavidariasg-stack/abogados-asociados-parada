@@ -362,20 +362,11 @@
 }
 
 /* ── Wrapper para AudioPlayer en burbujas ── */
+/* El AudioPlayer trae su propio fondo (navy para profesional, dorado para
+   admin), así que el wrapper queda transparente. */
 .audioWrap {
-  padding: 6px 10px;
-  border-radius: 14px;
+  padding: 0;
   min-width: 220px;
-}
-.mia .audioWrap {
-  background: linear-gradient(135deg, #15376b 0%, #0d2d5e 100%);
-  border: 1px solid rgba(201, 168, 76, 0.4);
-  border-bottom-right-radius: 4px;
-}
-.suya .audioWrap {
-  background: #fffdf6;
-  border: 1px solid rgba(201, 168, 76, 0.45);
-  border-bottom-left-radius: 4px;
 }
 
 @media (max-width: 600px) {

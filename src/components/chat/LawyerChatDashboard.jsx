@@ -887,9 +887,9 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
                   >
                     <div className={`${esMio ? styles.bubbleMine : styles.bubbleOther} ${isAudio ? styles.bubbleAudio : ''} ${isFirstClientMsg ? styles.bubbleFirst : ''} ${isImageMsg ? styles.bubbleImg : ''}`}>
                       {isAudio ? (
-                        // Color por remitente: profesional (esMio) → skin navy;
-                        // cliente → skin claro. theme="light" sobre el fondo ivory.
-                        <AudioPlayer src={m.file_url} mine={esMio} theme="light" />
+                        // Color por rol: profesional (esMio) → player navy (theme light);
+                        // cliente → player dorado (theme dark).
+                        <AudioPlayer src={m.file_url} mine={true} theme={esMio ? 'light' : 'dark'} />
                       ) : (m.message_type === 'file' || m.file_url) ? (
                         isImage(m.file_name) ? (
                           <ChatImage

@@ -1479,8 +1479,9 @@ export default function ChatSection() {
                       <div key={msg.id} className={mine ? styles.msgRowMine : styles.msgRowOther}>
                         <div className={`${mine ? styles.msgBubbleMine : styles.msgBubbleOther} ${isAudio ? styles.msgBubbleAudio : ''} ${isImageMsg ? styles.msgBubbleImg : ''}`}>
                           {isAudio ? (
-                            // Color por rol: cliente (mine) → skin claro; profesional → skin navy.
-                            <AudioPlayer src={msg.file_url} mine={!mine} theme="light" />
+                            // Color por rol: cliente (mine) → player dorado (theme dark);
+                            // profesional → player navy (theme light).
+                            <AudioPlayer src={msg.file_url} mine={true} theme={mine ? 'dark' : 'light'} />
                           ) : msg.file_url ? (
                             isImageMsg ? (
                               <ChatImage
