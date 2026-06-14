@@ -447,9 +447,10 @@
    Override .bubbleMine (burbuja navy oscura = archivos propios):
      texto cream + icono dorado + tinte gold — sin esto el chip se
      volvia invisible (texto navy sobre fondo navy). */
+/* Archivo del CLIENTE (burbuja .bubbleOther): tarjeta blanca con acento dorado */
 .fileBtn {
-  background: rgba(13, 45, 94, 0.04);
-  border: 1px solid rgba(13, 45, 94, 0.22);
+  background: #ffffff;
+  border: 1px solid rgba(201, 168, 76, 0.45);
   border-radius: 8px;
   padding: 10px 14px;
   cursor: pointer;
@@ -465,31 +466,32 @@
   transition: background 0.2s, border-color 0.2s, transform 0.15s, box-shadow 0.2s;
 }
 .fileBtn:hover {
-  background: rgba(13, 45, 94, 0.08);
-  border-color: var(--navy, #0d2d5e);
+  background: #fffdf7;
+  border-color: rgba(201, 168, 76, 0.75);
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(13, 45, 94, 0.12);
+  box-shadow: 0 4px 12px rgba(201, 168, 76, 0.2);
 }
 .fileBtn svg {
   color: #b8841c;
   flex-shrink: 0;
 }
 
+/* Archivo del PROFESIONAL (burbuja navy .bubbleMine): panel claro translúcido */
 .bubbleMine .fileBtn {
-  background: rgba(201, 168, 76, 0.16);
-  border-color: rgba(201, 168, 76, 0.45);
-  color: #fef8e1;
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.28);
+  color: #ffffff;
 }
 .bubbleMine .fileBtn:hover {
-  background: rgba(201, 168, 76, 0.26);
-  border-color: rgba(201, 168, 76, 0.7);
-  box-shadow: 0 4px 12px rgba(201, 168, 76, 0.22);
+  background: rgba(255, 255, 255, 0.18);
+  border-color: rgba(201, 168, 76, 0.6);
+  box-shadow: 0 4px 12px rgba(13, 45, 94, 0.25);
 }
 .bubbleMine .fileBtn svg {
-  color: var(--gold, #c9a84c);
+  color: var(--gold-lt, #e8c96a);
 }
 .bubbleMine .fileSize {
-  color: rgba(255, 248, 225, 0.7);
+  color: rgba(255, 255, 255, 0.7);
 }
 
 .fileName {
