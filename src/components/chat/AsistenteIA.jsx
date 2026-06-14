@@ -149,8 +149,8 @@ export default function AsistenteIA() {
     if (!msg || msg.role !== 'assistant') { setStream(null); return; }
     const full = msg.content || '';
     if (stream.n >= full.length) { setStream(null); return; }
-    const step = Math.max(2, Math.ceil(full.length / 140)); // ~2s sin importar el largo
-    const t = setTimeout(() => setStream((s) => (s ? { ...s, n: Math.min(full.length, s.n + step) } : s)), 16);
+    const step = Math.max(1, Math.ceil(full.length / 190)); // ~4.5s sin importar el largo
+    const t = setTimeout(() => setStream((s) => (s ? { ...s, n: Math.min(full.length, s.n + step) } : s)), 24);
     return () => clearTimeout(t);
   }, [stream, thread]);
 
@@ -214,13 +214,11 @@ export default function AsistenteIA() {
     setTimeout(() => setCopiedIdx((c) => (c === i ? null : c)), 1600);
   };
 
-  // Editar un prompt enviado: recorta la conversación hasta ese punto y lo carga
-  // en el composer (re-enviar reemplaza en vez de acumular → menos tokens).
+  // Reutilizar un prompt enviado: carga su texto en el composer SIN borrar la
+  // conversación. El usuario lo corrige/afina y lo reenvía como un mensaje nuevo.
   function editarMensaje(i) {
     const msg = thread[i];
     if (!msg) return;
-    setStream(null);
-    setThread((t) => t.slice(0, i));
     setInput(msg.content);
     setTimeout(() => inputRef.current?.focus(), 0);
   }
@@ -455,7 +453,7 @@ export default function AsistenteIA() {
         </div>
       </div>
 
-      {composer}
+      <div className={styles.composerWrap}>{composer}</div>
     </>
   );
 

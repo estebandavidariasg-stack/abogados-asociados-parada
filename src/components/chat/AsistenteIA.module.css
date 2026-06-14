@@ -288,6 +288,15 @@
   margin: 0 0 4px;
 }
 
+/* En conversación: el composer comparte el ancho del texto (768) y se separa
+   más de la última respuesta. */
+.composerWrap {
+  max-width: 768px;
+  width: 100%;
+  margin: 0 auto;
+  padding-top: 20px;
+}
+
 /* ── Composer (pill estilo chat) ── */
 .composer { display: flex; flex-direction: column; gap: 0.45rem; }
 
