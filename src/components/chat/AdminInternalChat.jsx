@@ -461,7 +461,8 @@ export default function AdminInternalChat({ miId }) {
                   >
                     {m.message_type === 'audio' && m.file_url ? (
                       <div className={styles.audioWrap}>
-                        <AudioPlayer src={m.file_url} mine={mine} />
+                        {/* admin (mine) → player dorado (theme dark); profesional → navy (light) */}
+                        <AudioPlayer src={m.file_url} mine={true} theme={mine ? 'dark' : 'light'} />
                       </div>
                     ) : m.message_type === 'file' && m.file_url ? (
                       isImage(m.file_name) ? (

@@ -1,38 +1,43 @@
 /* ── Contenedor principal ── */
 .wrap {
+  font-family: 'Raleway', sans-serif;
   display: flex;
   height: clamp(420px, 62vh, 640px);
-  border-radius: 10px;
+  border-radius: 16px;
   overflow: hidden;
-  background: transparent;
-  border: 1px solid rgba(201, 168, 76, 0.12);
+  background: rgba(255, 255, 255, 0.78);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(13, 45, 94, 0.12);
+  box-shadow: 0 10px 30px rgba(13, 45, 94, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.6);
 }
 
 /* ── Sidebar ── */
 .sidebar {
   width: 230px;
   flex-shrink: 0;
-  border-right: 1px solid rgba(255, 255, 255, 0.07);
+  border-right: 1px solid rgba(13, 45, 94, 0.1);
   display: flex;
   flex-direction: column;
-  background: rgba(0, 0, 0, 0.15);
+  background: linear-gradient(160deg, #eef3fb, #e9f0fa);
 }
 
 .sidebarHead {
   padding: 16px 16px 12px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid rgba(13, 45, 94, 0.1);
   flex-shrink: 0;
 }
 .sidebarTitulo {
   font-family: 'Cinzel', serif;
-  font-size: 0.75rem;
-  color: #C9A84C;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #0d2d5e;
   margin: 0 0 2px;
   letter-spacing: 0.04em;
 }
 .sidebarSub {
   font-size: 0.6rem;
-  color: rgba(240, 235, 224, 0.28);
+  color: #5a6e90;
   margin: 0;
 }
 
@@ -40,14 +45,14 @@
   flex: 1;
   overflow-y: auto;
   scrollbar-width: thin;
-  scrollbar-color: rgba(201, 168, 76, 0.15) transparent;
+  scrollbar-color: rgba(13, 45, 94, 0.18) transparent;
 }
 .lista::-webkit-scrollbar { width: 4px; }
-.lista::-webkit-scrollbar-thumb { background: rgba(201, 168, 76, 0.15); border-radius: 4px; }
+.lista::-webkit-scrollbar-thumb { background: rgba(13, 45, 94, 0.18); border-radius: 4px; }
 
 .cargando {
   font-size: 0.74rem;
-  color: rgba(240, 235, 224, 0.25);
+  color: #5a6e90;
   text-align: center;
   padding: 20px 16px;
 }
@@ -60,30 +65,30 @@
   padding: 11px 14px;
   background: none;
   border: none;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid rgba(13, 45, 94, 0.07);
   cursor: pointer;
   text-align: left;
   transition: background 0.15s;
   position: relative;
 }
-.item:hover { background: rgba(255, 255, 255, 0.05); }
+.item:hover { background: rgba(13, 45, 94, 0.05); }
 .itemActive {
-  background: rgba(201, 168, 76, 0.09) !important;
-  border-left: 2px solid #C9A84C;
+  background: rgba(201, 168, 76, 0.14) !important;
+  border-left: 2px solid #c9a84c;
 }
 
 .avatar {
   width: 36px;
   height: 36px;
   border-radius: 50%;
-  background: rgba(201, 168, 76, 0.12);
-  border: 1px solid rgba(201, 168, 76, 0.28);
+  background: rgba(201, 168, 76, 0.14);
+  border: 1px solid rgba(201, 168, 76, 0.4);
   display: flex;
   align-items: center;
   justify-content: center;
   font-family: 'Cinzel', serif;
   font-size: 0.68rem;
-  color: #C9A84C;
+  color: #8a6a28;
   flex-shrink: 0;
   overflow: hidden;
 }
@@ -95,9 +100,11 @@
 
 .itemInfo { flex: 1; min-width: 0; }
 .itemNombre {
-  font-size: 0.76rem;
-  font-weight: 600;
-  color: rgba(240, 235, 224, 0.85);
+  font-family: 'Cinzel', serif;
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #0d2d5e;
   margin: 0;
   white-space: nowrap;
   overflow: hidden;
@@ -105,7 +112,7 @@
 }
 .itemCiudad {
   font-size: 0.6rem;
-  color: rgba(240, 235, 224, 0.28);
+  color: #5a6e90;
   margin: 4px 0 0;
   display: flex;
   align-items: center;
@@ -117,8 +124,8 @@
 }
 
 .badge {
-  background: #C9A84C;
-  color: #0d0d0d;
+  background: #c9a84c;
+  color: #0d2d5e;
   font-size: 0.58rem;
   font-weight: 800;
   border-radius: 50%;
@@ -136,7 +143,7 @@
   display: flex;
   flex-direction: column;
   min-width: 0;
-  background: rgba(0, 0, 0, 0.08);
+  background: rgba(255, 255, 255, 0.55);
   overflow: hidden;
 }
 
@@ -150,42 +157,42 @@
   gap: 10px;
   padding: 20px;
 }
-.placeholderIcon { font-size: 2.6rem; opacity: 0.18; }
+.placeholderIcon { font-size: 2.6rem; opacity: 0.35; }
 .placeholderTxt {
   font-size: 0.84rem;
-  color: rgba(240, 235, 224, 0.28);
+  color: #46546e;
   margin: 0;
   text-align: center;
 }
 .placeholderSub {
   font-size: 0.68rem;
-  color: rgba(240, 235, 224, 0.16);
+  color: #5a6e90;
   margin: 0;
   text-align: center;
 }
 
-/* Header del chat */
+/* Header del chat — elemento clave navy */
 .chatHead {
   display: flex;
   align-items: center;
   gap: 12px;
   padding: 14px 18px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-  background: rgba(0, 0, 0, 0.1);
+  border-bottom: 1px solid rgba(201, 168, 76, 0.35);
+  background: linear-gradient(135deg, #15376b 0%, #0d2d5e 100%);
   flex-shrink: 0;
 }
 .chatHeadAvatar {
   width: 38px;
   height: 38px;
   border-radius: 50%;
-  background: rgba(201, 168, 76, 0.12);
-  border: 1.5px solid rgba(201, 168, 76, 0.3);
+  background: linear-gradient(135deg, #f2d580 0%, #c9a84c 50%, #9a7a2c 100%);
+  border: 1.5px solid rgba(201, 168, 76, 0.5);
   display: flex;
   align-items: center;
   justify-content: center;
   font-family: 'Cinzel', serif;
   font-size: 0.72rem;
-  color: #C9A84C;
+  color: #0d2d5e;
   flex-shrink: 0;
   overflow: hidden;
 }
@@ -195,14 +202,15 @@
   object-fit: cover;
 }
 .chatHeadNombre {
-  font-size: 0.88rem;
-  font-weight: 600;
-  color: rgba(240, 235, 224, 0.92);
+  font-family: 'Cinzel', serif;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #f5edd4;
   margin: 0;
 }
 .chatHeadSub {
   font-size: 0.6rem;
-  color: rgba(240, 235, 224, 0.28);
+  color: rgba(245, 237, 212, 0.6);
   margin: 2px 0 0;
 }
 
@@ -216,17 +224,17 @@
   flex-direction: column;
   gap: 10px;
   scrollbar-width: thin;
-  scrollbar-color: rgba(201, 168, 76, 0.12) transparent;
+  scrollbar-color: rgba(13, 45, 94, 0.18) transparent;
 }
 .mensajes::-webkit-scrollbar { width: 4px; }
 .mensajes::-webkit-scrollbar-thumb {
-  background: rgba(201, 168, 76, 0.15);
+  background: rgba(13, 45, 94, 0.18);
   border-radius: 4px;
 }
 
 .sinMsgs {
   font-size: 0.74rem;
-  color: rgba(240, 235, 224, 0.2);
+  color: #5a6e90;
   text-align: center;
   margin: auto;
   font-style: italic;
@@ -250,38 +258,32 @@
   line-height: 1.55;
   word-break: break-word;
 }
+/* Convención de rol: el ADMIN (mensajes propios, .mia) es blanco/dorado;
+   el PROFESIONAL (.suya) es navy. Coherente con LawyerInternalChat. */
 .mia .burbujaTexto {
-  background: linear-gradient(135deg, #C9A84C, #a0822e);
-  color: #0d0d0d;
+  background: #fffdf6;
+  color: #13305f;
+  border: 1px solid rgba(201, 168, 76, 0.45);
   border-bottom-right-radius: 4px;
-  font-weight: 500;
 }
 .suya .burbujaTexto {
-  background: rgba(255, 255, 255, 0.1);
-  color: rgba(240, 235, 224, 0.88);
+  background: linear-gradient(135deg, #15376b 0%, #0d2d5e 100%);
+  border: 1px solid rgba(13, 45, 94, 0.2);
+  color: #ffffff;
   border-bottom-left-radius: 4px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  font-weight: 500;
 }
 
-/* ── Wrapper para AudioPlayer en burbujas (espeja a .burbujaTexto) ── */
+/* El AudioPlayer trae su propio fondo (dorado para admin, navy para
+   profesional), así que el wrapper queda transparente. */
 .audioWrap {
-  padding: 6px 10px;
-  border-radius: 14px;
+  padding: 0;
   min-width: 220px;
-}
-.mia .audioWrap {
-  background: linear-gradient(135deg, #C9A84C, #a0822e);
-  border-bottom-right-radius: 4px;
-}
-.suya .audioWrap {
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-bottom-left-radius: 4px;
 }
 
 .burbujaHora {
   font-size: 0.58rem;
-  color: rgba(240, 235, 224, 0.25);
+  color: #8a93a5;
   padding: 0 4px;
 }
 
@@ -290,35 +292,35 @@
   display: flex;
   gap: 8px;
   padding: 12px 16px;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
-  background: rgba(0, 0, 0, 0.12);
+  border-top: 1px solid rgba(13, 45, 94, 0.1);
+  background: rgba(255, 255, 255, 0.55);
   flex-shrink: 0;
 }
 .inputMsg {
   flex: 1;
-  background: rgba(255, 255, 255, 0.07);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: #fff;
+  border: 1px solid #cdd6e6;
   border-radius: 20px;
-  color: rgba(240, 235, 224, 0.9);
+  color: #13305f;
   padding: 10px 18px;
   font-size: 0.82rem;
   font-family: inherit;
   outline: none;
-  transition: border-color 0.2s, background 0.2s;
+  transition: border-color 0.2s, box-shadow 0.2s;
 }
 .inputMsg:focus {
-  border-color: rgba(201, 168, 76, 0.4);
-  background: rgba(255, 255, 255, 0.1);
+  border-color: var(--gold, #c9a84c);
+  box-shadow: 0 0 0 3px rgba(201, 168, 76, 0.15);
 }
-.inputMsg::placeholder { color: rgba(240, 235, 224, 0.22); }
+.inputMsg::placeholder { color: #94a3b8; }
 
 .btnEnviar {
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #C9A84C, #a0822e);
+  background: linear-gradient(135deg, #f2d580 0%, #c9a84c 50%, #9a7a2c 100%);
   border: none;
-  color: #0d0d0d;
+  color: #0d2d5e;
   font-size: 1rem;
   font-weight: 700;
   cursor: pointer;
@@ -326,27 +328,27 @@
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  transition: opacity 0.2s, transform 0.15s;
+  transition: opacity 0.2s, transform 0.15s, box-shadow 0.2s;
   box-shadow: 0 2px 10px rgba(201, 168, 76, 0.3);
 }
 .btnEnviar:not(:disabled):hover {
-  opacity: 0.88;
+  box-shadow: 0 4px 12px rgba(201, 168, 76, 0.35);
   transform: scale(1.06);
 }
 .btnEnviar:disabled {
-  opacity: 0.3;
+  opacity: 0.4;
   cursor: not-allowed;
   box-shadow: none;
 }
 
-/* ── Botón micrófono (idle) — paleta dark dorada del archivo ── */
+/* ── Botón micrófono (idle) ── */
 .attachBtn {
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: rgba(240, 235, 224, 0.7);
+  background: rgba(13, 45, 94, 0.05);
+  border: 1px solid rgba(13, 45, 94, 0.14);
+  color: #46546e;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -357,8 +359,8 @@
 }
 .attachBtn:hover:not(:disabled) {
   background: rgba(201, 168, 76, 0.12);
-  border-color: rgba(201, 168, 76, 0.35);
-  color: #c9a84c;
+  border-color: rgba(201, 168, 76, 0.4);
+  color: var(--gold-dk, #9a7a2c);
 }
 .attachBtn:disabled {
   opacity: 0.4;
@@ -366,20 +368,18 @@
 }
 
 /* ── Burbuja con archivo adjunto (boton clicable) ─────────────────────── */
-/* La burbuja .suya tiene tinte blanco translucido sobre el panel oscuro:
-   chip default con gold tint + texto cream funciona perfecto.
-   La burbuja .mia es GOLD SOLIDO con texto negro -> el chip override
-   pasa a paleta oscura (fondo dark + texto navy) para contrastar
-   sobre el oro brillante y mantenerse legible. */
+/* La burbuja .mia (admin) es ivory con borde dorado y texto navy (base).
+   La burbuja .suya (profesional) es navy -> el chip override pasa a navy
+   gradient con icono dorado para mantener coherencia. */
 .fileBtn {
   display: flex;
   align-items: center;
   gap: 10px;
   padding: 10px 14px;
-  background: rgba(201, 168, 76, 0.14);
-  border: 1px solid rgba(201, 168, 76, 0.42);
+  background: #fffdf6;
+  border: 1px solid rgba(201, 168, 76, 0.45);
   border-radius: 10px;
-  color: #fef8e1;
+  color: #13305f;
   cursor: pointer;
   font-family: inherit;
   font-size: 0.86rem;
@@ -390,36 +390,32 @@
   min-width: 0;
 }
 .fileBtn:hover {
-  background: rgba(201, 168, 76, 0.24);
+  background: #fff8e8;
   border-color: rgba(201, 168, 76, 0.7);
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(201, 168, 76, 0.2);
+  box-shadow: 0 4px 12px rgba(201, 168, 76, 0.18);
 }
 .fileBtn svg {
-  color: var(--gold, #c9a84c);
+  color: var(--gold-dk, #9a7a2c);
   flex-shrink: 0;
 }
 
-/* Override para burbuja propia (.mia): chip "gold solido" con texto
-   negro, espejando el gradient de .mia .burbujaTexto. Antes le ponia
-   dark transparente asumiendo gold de fondo, pero el .fileBtn esta
-   directo en .burbuja (sin bg) — quedaba dark sobre dark = invisible. */
-.mia .fileBtn {
-  background: linear-gradient(135deg, #C9A84C, #a0822e);
-  border: 1px solid rgba(140, 94, 14, 0.55);
-  color: #0d0d0d;
-  box-shadow: 0 4px 14px rgba(201, 168, 76, 0.28);
+/* Override para burbuja del profesional (.suya): chip navy solido con texto
+   blanco e icono dorado, espejando el gradient de .suya .burbujaTexto. */
+.suya .fileBtn {
+  background: linear-gradient(135deg, #15376b 0%, #0d2d5e 100%);
+  border: 1px solid rgba(13, 45, 94, 0.3);
+  color: #ffffff;
 }
-.mia .fileBtn:hover {
-  background: linear-gradient(135deg, #d4b35a, #b08f2a);
-  border-color: rgba(140, 94, 14, 0.75);
-  box-shadow: 0 6px 20px rgba(201, 168, 76, 0.4);
+.suya .fileBtn:hover {
+  background: linear-gradient(135deg, #1a4080 0%, #123a73 100%);
+  border-color: rgba(201, 168, 76, 0.5);
 }
-.mia .fileBtn svg {
-  color: #0d0d0d;
+.suya .fileBtn svg {
+  color: #f2d580;
 }
-.mia .fileSize {
-  color: rgba(13, 13, 13, 0.65);
+.suya .fileSize {
+  color: rgba(255, 255, 255, 0.75);
 }
 
 .fileName {
@@ -434,7 +430,7 @@
 .fileSize {
   flex-shrink: 0;
   font-size: 0.72rem;
-  color: rgba(255, 248, 225, 0.7);
+  color: #6b7fa3;
   font-weight: 500;
   letter-spacing: 0.02em;
 }
@@ -450,12 +446,12 @@
   border-radius: 12px;
   overflow: hidden;
   line-height: 0;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 2px 8px rgba(13, 45, 94, 0.18);
   transition: transform 0.2s, box-shadow 0.2s;
 }
 .imgBtn:hover {
   transform: translateY(-1px);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 6px 20px rgba(13, 45, 94, 0.28);
 }
 .imgBtn:disabled { cursor: default; }
 .imgPreview {
@@ -472,9 +468,9 @@
   height: 40px;
   padding: 0 14px;
   border-radius: 20px;
-  background: rgba(220, 50, 50, 0.15);
+  background: rgba(220, 50, 50, 0.12);
   border: 1px solid rgba(220, 50, 50, 0.4);
-  color: #e8704a;
+  color: #c0392b;
   font-size: 0.75rem;
   font-weight: 600;
   font-family: inherit;
@@ -485,7 +481,7 @@
   white-space: nowrap;
   transition: background 0.2s;
 }
-.recordingBtn:hover { background: rgba(220, 50, 50, 0.22); }
+.recordingBtn:hover { background: rgba(220, 50, 50, 0.2); }
 
 .recordDot {
   display: inline-block;
@@ -513,7 +509,7 @@
     width: 100%;
     max-height: 110px;
     border-right: none;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    border-bottom: 1px solid rgba(13, 45, 94, 0.1);
   }
   .sidebarHead { display: none; }
   .lista {
@@ -530,13 +526,13 @@
     min-width: 68px;
     max-width: 80px;
     padding: 8px 6px;
-    border: 1px solid rgba(255, 255, 255, 0.07);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+    border: 1px solid rgba(13, 45, 94, 0.1);
+    border-bottom: 1px solid rgba(13, 45, 94, 0.1);
     border-radius: 10px;
     align-items: center;
     justify-content: center;
   }
-  .itemActive { border-left: 1px solid rgba(201,168,76,0.4); border-top: 2px solid #C9A84C; }
+  .itemActive { border-left: 1px solid rgba(201,168,76,0.4); border-top: 2px solid #c9a84c; }
   .itemCiudad { display: none; }
   .itemNombre { font-size: 0.58rem; text-align: center; white-space: normal; }
   .burbuja { max-width: 82%; }
@@ -564,14 +560,17 @@
    espacio de la izquierda (allí no hay flex-gap que lo separe) */
 .chatHeadNombre .rolPill { margin-left: 8px; }
 
+/* Los pills aparecen sobre dos superficies: el item del sidebar (claro) y
+   el header navy del chat. Por eso usan relleno claro casi opaco para que el
+   texto navy/dorado mantenga contraste en ambos fondos. */
 .rolPillAbogado {
-  background: rgba(255, 255, 255, 0.1);
-  color: rgba(255, 255, 255, 0.85);
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.9);
+  color: #13305f;
+  border: 1px solid rgba(13, 45, 94, 0.2);
 }
 
 .rolPillContador {
-  background: rgba(201, 168, 76, 0.18);
-  color: #e8c96a;
-  border: 1px solid rgba(201, 168, 76, 0.45);
+  background: #fffdf6;
+  color: #8a6a28;
+  border: 1px solid rgba(201, 168, 76, 0.6);
 }

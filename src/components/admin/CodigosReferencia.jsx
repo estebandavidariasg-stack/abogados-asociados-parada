@@ -1,12 +1,13 @@
 import { useState, useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { supabase } from '../../lib/supabase'
 import { getAuthHeaders } from '../../lib/supabase'
 import styles from './CodigosReferencia.module.css'
-import { IconPlus, IconX, IconCheck, IconDownload, IconQR } from '../shared/Icons'
+import { IconPlus, IconX, IconCheck, IconDownload, IconQR, IconPencil } from '../shared/Icons'
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
-const APP_URL      = 'https://abogadosyasociadosparada.com'
+const APP_URL      = 'https://abogadosparada.com'
 
 function generarCodigo() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
@@ -25,9 +26,13 @@ export default function CodigosReferencia() {
   const [loading, setLoading]   = useState(true)
   const [saving, setSaving]     = useState(false)
   const [showForm, setShowForm] = useState(false)
+  const [editingId, setEditingId] = useState(null) // null = crear; id = editar (abre modal)
+  const [editingCodigo, setEditingCodigo] = useState('')
   const [selectedQR, setSelectedQR] = useState(null)
   const [error, setError]       = useState('')
   const [success, setSuccess]   = useState('')
+
+  const FORM_VACIO = { nombre: '', apellido: '', cedula: '', correo: '', cuentas_bancarias: '', entidad: '' }
 
   const [form, setForm] = useState({
     nombre: '', apellido: '', cedula: '',
@@ -48,30 +53,64 @@ export default function CodigosReferencia() {
     setLoading(false)
   }
 
-  async function handleCreate(e) {
+  async function handleSubmit(e) {
     e.preventDefault()
     if (!form.nombre.trim() || !form.apellido.trim() || !form.cedula.trim() || !form.correo.trim()) {
       setError('Nombre, apellido, cédula y correo son obligatorios.'); return
     }
     setSaving(true); setError(''); setSuccess('')
     try {
-      const codigo  = generarCodigo()
       const headers = await getAuthHeaders()
-      const res = await fetch(`${SUPABASE_URL}/rest/v1/codigos_referencia`, {
-        method: 'POST',
-        headers: { ...headers, Prefer: 'return=representation' },
-        body: JSON.stringify({ ...form, codigo }),
-      })
-      if (!res.ok) { const err = await res.json(); throw new Error(err.message || 'Error creando código') }
-      setSuccess(`Código ${codigo} creado exitosamente.`)
-      setForm({ nombre: '', apellido: '', cedula: '', correo: '', cuentas_bancarias: '', entidad: '' })
+      if (editingId) {
+        // Editar: actualiza solo la información (el código y su QR no cambian).
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/codigos_referencia?id=eq.${editingId}`, {
+          method: 'PATCH',
+          headers: { ...headers, Prefer: 'return=representation' },
+          body: JSON.stringify({ ...form }),
+        })
+        if (!res.ok) { const err = await res.json(); throw new Error(err.message || 'Error actualizando código') }
+        setSuccess('Información actualizada correctamente.')
+      } else {
+        const codigo = generarCodigo()
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/codigos_referencia`, {
+          method: 'POST',
+          headers: { ...headers, Prefer: 'return=representation' },
+          body: JSON.stringify({ ...form, codigo }),
+        })
+        if (!res.ok) { const err = await res.json(); throw new Error(err.message || 'Error creando código') }
+        setSuccess(`Código ${codigo} creado exitosamente.`)
+      }
+      setForm(FORM_VACIO)
       setShowForm(false)
+      setEditingId(null)
+      setEditingCodigo('')
       await fetchCodigos()
     } catch (err) {
       setError(err.message)
     } finally {
       setSaving(false)
     }
+  }
+
+  function startEdit(c) {
+    setForm({
+      nombre: c.nombre || '', apellido: c.apellido || '', cedula: c.cedula || '',
+      correo: c.correo || '', cuentas_bancarias: c.cuentas_bancarias || '', entidad: c.entidad || '',
+    })
+    setEditingId(c.id)
+    setEditingCodigo(c.codigo || '')
+    setShowForm(false)   // el inline es solo para crear; editar usa el modal
+    setError(''); setSuccess('')
+  }
+
+  function closeEdit() {
+    setEditingId(null); setEditingCodigo(''); setForm(FORM_VACIO); setError('')
+  }
+
+  function toggleForm() {
+    setError(''); setSuccess('')
+    setShowForm(s => !s)
+    setForm(FORM_VACIO)
   }
 
   async function toggleActivo(id, activo) {
@@ -94,11 +133,11 @@ export default function CodigosReferencia() {
     const ctx = canvas.getContext('2d')
     ctx.scale(SCALE, SCALE)
 
-    // Fondo degradado navy
+    // Fondo degradado navy (tono de marca, no casi-negro: mejor legibilidad)
     const bg = ctx.createLinearGradient(0, 0, 0, H)
-    bg.addColorStop(0,   '#060f28')
-    bg.addColorStop(0.5, '#0c1d4a')
-    bg.addColorStop(1,   '#060f28')
+    bg.addColorStop(0,   '#15376b')
+    bg.addColorStop(0.5, '#1d4d86')
+    bg.addColorStop(1,   '#15376b')
     ctx.fillStyle = bg
     ctx.fillRect(0, 0, W, H)
 
@@ -130,7 +169,7 @@ export default function CodigosReferencia() {
 
     // Cabecera firma
     ctx.textAlign = 'center'
-    ctx.fillStyle = 'rgba(201,168,76,0.5)'
+    ctx.fillStyle = 'rgba(232,201,106,0.85)'
     ctx.font = '600 9px sans-serif'
     ctx.fillText('─── DESPACHO JURÍDICO ───', W / 2, 74)
 
@@ -148,7 +187,7 @@ export default function CodigosReferencia() {
     ctx.beginPath(); ctx.moveTo(W/2,143); ctx.lineTo(W/2+5,148); ctx.lineTo(W/2,153); ctx.lineTo(W/2-5,148); ctx.closePath(); ctx.fill()
 
     // Etiqueta
-    ctx.fillStyle = 'rgba(255,255,255,0.25)'
+    ctx.fillStyle = 'rgba(255,255,255,0.62)'
     ctx.font = '600 10px sans-serif'
     ctx.fillText('CÓDIGO DE REFERENCIA AUTORIZADO', W / 2, 178)
 
@@ -194,23 +233,23 @@ export default function CodigosReferencia() {
     ctx.beginPath(); ctx.moveTo(W/2,577); ctx.lineTo(W/2+4,582); ctx.lineTo(W/2,587); ctx.lineTo(W/2-4,582); ctx.closePath(); ctx.fill()
 
     // Nombre
-    ctx.fillStyle = 'rgba(255,255,255,0.92)'
+    ctx.fillStyle = '#fbf7ec'
     ctx.font = 'bold 20px serif'
     ctx.fillText(`${nombre} ${apellido}`, W/2, 632)
 
-    ctx.fillStyle = 'rgba(201,168,76,0.45)'
+    ctx.fillStyle = 'rgba(232,201,106,0.8)'
     ctx.font = '600 9.5px sans-serif'
     ctx.fillText('COMISIONISTA AUTORIZADO', W/2, 656)
 
     // Instrucción
-    ctx.fillStyle = 'rgba(255,255,255,0.2)'
+    ctx.fillStyle = 'rgba(255,255,255,0.6)'
     ctx.font = '11px sans-serif'
     ctx.fillText('Escanea el código QR para iniciar tu consulta jurídica', W/2, 722)
 
     // URL
-    ctx.fillStyle = 'rgba(201,168,76,0.6)'
+    ctx.fillStyle = 'rgba(232,201,106,0.85)'
     ctx.font = '600 12px sans-serif'
-    ctx.fillText('abogadosyasociadosparada.com', W/2, 806)
+    ctx.fillText('abogadosparada.com', W/2, 806)
 
     // Descargar
     const link = document.createElement('a')
@@ -218,6 +257,44 @@ export default function CodigosReferencia() {
     link.href = canvas.toDataURL('image/png')
     link.click()
   }
+
+  // Campos del formulario (compartidos por el form inline de crear y el modal de editar)
+  const camposForm = (
+    <div className={styles.formGrid}>
+      <div className={styles.field}>
+        <label className={styles.label}>Nombre <span className={styles.req}>*</span></label>
+        <input className={styles.input} value={form.nombre}
+          onChange={e => setForm(f => ({ ...f, nombre: e.target.value }))} placeholder="Nombre" />
+      </div>
+      <div className={styles.field}>
+        <label className={styles.label}>Apellido <span className={styles.req}>*</span></label>
+        <input className={styles.input} value={form.apellido}
+          onChange={e => setForm(f => ({ ...f, apellido: e.target.value }))} placeholder="Apellido" />
+      </div>
+      <div className={styles.field}>
+        <label className={styles.label}>Cédula <span className={styles.req}>*</span></label>
+        <input className={styles.input} value={form.cedula}
+          onChange={e => setForm(f => ({ ...f, cedula: e.target.value.replace(/\D/g, '') }))}
+          placeholder="Número de cédula" maxLength={12} />
+      </div>
+      <div className={styles.field}>
+        <label className={styles.label}>Correo <span className={styles.req}>*</span></label>
+        <input className={styles.input} type="email" value={form.correo}
+          onChange={e => setForm(f => ({ ...f, correo: e.target.value }))} placeholder="correo@ejemplo.com" />
+      </div>
+      <div className={styles.field}>
+        <label className={styles.label}>Entidad en la que trabaja</label>
+        <input className={styles.input} value={form.entidad}
+          onChange={e => setForm(f => ({ ...f, entidad: e.target.value }))} placeholder="Nombre de la entidad" />
+      </div>
+      <div className={`${styles.field} ${styles.fullWidth}`}>
+        <label className={styles.label}>Cuentas bancarias</label>
+        <textarea className={styles.textarea} value={form.cuentas_bancarias} rows={3}
+          onChange={e => setForm(f => ({ ...f, cuentas_bancarias: e.target.value }))}
+          placeholder="Banco, tipo de cuenta, número..." />
+      </div>
+    </div>
+  )
 
   return (
     <div className={styles.wrap}>
@@ -233,7 +310,7 @@ export default function CodigosReferencia() {
         <button
           className={styles.btnNew}
           style={{ display:'inline-flex', alignItems:'center', gap:'7px' }}
-          onClick={() => { setShowForm(s => !s); setError(''); setSuccess('') }}
+          onClick={toggleForm}
         >
           {showForm ? <><IconX /> Cancelar</> : <><IconPlus /> Nuevo código</>}
         </button>
@@ -243,44 +320,11 @@ export default function CodigosReferencia() {
       {error   && <p className={styles.error}>{error}</p>}
       {success && <p className={styles.successMsg}>{success}</p>}
 
-      {/* Formulario */}
+      {/* Formulario para CREAR (inline). Editar usa el modal de abajo. */}
       {showForm && (
-        <form className={styles.form} onSubmit={handleCreate}>
+        <form className={styles.form} onSubmit={handleSubmit}>
           <p className={styles.formTitle}>Datos del comisionista</p>
-          <div className={styles.formGrid}>
-            <div className={styles.field}>
-              <label className={styles.label}>Nombre <span className={styles.req}>*</span></label>
-              <input className={styles.input} value={form.nombre}
-                onChange={e => setForm(f => ({ ...f, nombre: e.target.value }))} placeholder="Nombre" />
-            </div>
-            <div className={styles.field}>
-              <label className={styles.label}>Apellido <span className={styles.req}>*</span></label>
-              <input className={styles.input} value={form.apellido}
-                onChange={e => setForm(f => ({ ...f, apellido: e.target.value }))} placeholder="Apellido" />
-            </div>
-            <div className={styles.field}>
-              <label className={styles.label}>Cédula <span className={styles.req}>*</span></label>
-              <input className={styles.input} value={form.cedula}
-                onChange={e => setForm(f => ({ ...f, cedula: e.target.value.replace(/\D/g, '') }))}
-                placeholder="Número de cédula" maxLength={12} />
-            </div>
-            <div className={styles.field}>
-              <label className={styles.label}>Correo <span className={styles.req}>*</span></label>
-              <input className={styles.input} type="email" value={form.correo}
-                onChange={e => setForm(f => ({ ...f, correo: e.target.value }))} placeholder="correo@ejemplo.com" />
-            </div>
-            <div className={styles.field}>
-              <label className={styles.label}>Entidad en la que trabaja</label>
-              <input className={styles.input} value={form.entidad}
-                onChange={e => setForm(f => ({ ...f, entidad: e.target.value }))} placeholder="Nombre de la entidad" />
-            </div>
-            <div className={`${styles.field} ${styles.fullWidth}`}>
-              <label className={styles.label}>Cuentas bancarias</label>
-              <textarea className={styles.textarea} value={form.cuentas_bancarias} rows={3}
-                onChange={e => setForm(f => ({ ...f, cuentas_bancarias: e.target.value }))}
-                placeholder="Banco, tipo de cuenta, número..." />
-            </div>
-          </div>
+          {camposForm}
           <div className={styles.formActions}>
             <button type="submit" className={styles.btnSave} disabled={saving}
               style={{ display:'inline-flex', alignItems:'center', gap:'7px' }}>
@@ -332,6 +376,14 @@ export default function CodigosReferencia() {
                   <IconDownload /> Descargar
                 </button>
                 <button
+                  className={styles.btnEdit}
+                  style={{ display:'inline-flex', alignItems:'center', gap:'6px' }}
+                  onClick={() => startEdit(c)}
+                  title="Editar información"
+                >
+                  <IconPencil /> Editar
+                </button>
+                <button
                   className={c.activo ? styles.btnDeactivate : styles.btnActivate}
                   onClick={() => toggleActivo(c.id, c.activo)}
                 >
@@ -372,7 +424,7 @@ export default function CodigosReferencia() {
 
                     <div className={styles.qrCardName}>{c.nombre} {c.apellido}</div>
                     <div className={styles.qrCardRole}>Comisionista Autorizado</div>
-                    <div className={styles.qrCardUrl}>abogadosyasociadosparada.com</div>
+                    <div className={styles.qrCardUrl}>abogadosparada.com</div>
                   </div>
 
                   <button
@@ -390,6 +442,54 @@ export default function CodigosReferencia() {
             </div>
           ))}
         </div>
+      )}
+
+      {/* ── Ventana (modal) para editar la información del código ──
+          Portal a <body>: el position:fixed se ancla al viewport (no a un
+          ancestro con transform/backdrop-filter) → fijo y centrado. */}
+      {editingId && createPortal(
+        <div
+          className={styles.modalOverlay}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="qrEditTitle"
+          onClick={closeEdit}
+        >
+          <div className={styles.modalCard} onClick={e => e.stopPropagation()}>
+            <div className={styles.modalHead}>
+              <div>
+                <h3 id="qrEditTitle" className={styles.modalTitle}>Editar información</h3>
+                <p className={styles.modalSub}>
+                  Código <strong>{editingCodigo}</strong> · el QR no cambia
+                </p>
+              </div>
+              <button
+                type="button"
+                className={styles.modalClose}
+                onClick={closeEdit}
+                aria-label="Cerrar"
+              >
+                <IconX />
+              </button>
+            </div>
+
+            {error && <p className={styles.error}>{error}</p>}
+
+            <form onSubmit={handleSubmit}>
+              {camposForm}
+              <div className={styles.modalActions}>
+                <button type="button" className={styles.btnCancel} onClick={closeEdit}>
+                  Cancelar
+                </button>
+                <button type="submit" className={styles.btnSave} disabled={saving}
+                  style={{ display:'inline-flex', alignItems:'center', gap:'7px' }}>
+                  {saving ? 'Guardando…' : <><IconCheck /> Guardar cambios</>}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>,
+        document.body
       )}
     </div>
   )

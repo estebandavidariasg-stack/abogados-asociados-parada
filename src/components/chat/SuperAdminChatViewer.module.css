@@ -758,11 +758,14 @@
 .confirmOverlay {
   position: fixed;
   inset: 0;
-  background: rgba(13, 45, 94, 0.55);
+  /* Fondo oscuro con desenfoque, como el overlay de las tarjetas de profesional */
+  background: rgba(10, 28, 64, 0.55);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: 1200;
   padding: 1rem;
   animation: confirmFadeIn 0.18s ease;
 }

@@ -3,18 +3,21 @@
    ══════════════════════════════════════════ */
 .page {
   min-height: 100vh;
+  /* Degradados azules suaves sobre base clara — tono navy de marca (no el
+     azul brillante anterior), con un toque dorado para no perder el acento. */
   background:
-    radial-gradient(ellipse 70% 50% at 5%  0%,   rgba(13, 45, 160, 0.18) 0%, transparent 60%),
-    radial-gradient(ellipse 55% 45% at 95% 10%,  rgba(20, 60, 200, 0.14) 0%, transparent 55%),
-    radial-gradient(ellipse 65% 50% at 55% 105%, rgba(10, 35, 130, 0.16) 0%, transparent 65%),
-    radial-gradient(ellipse 40% 35% at 80% 60%,  rgba(30, 80, 180, 0.08) 0%, transparent 50%),
-    linear-gradient(165deg, #dde7f7 0%, #e8eef8 35%, #dce6f5 70%, #d8e3f2 100%);
-  padding: 3rem 2rem 5rem;
+    radial-gradient(ellipse 60% 45% at 8%  0%,   rgba(13, 45, 94, 0.10) 0%, transparent 60%),
+    radial-gradient(ellipse 48% 40% at 94% 6%,   rgba(201, 168, 76, 0.07) 0%, transparent 55%),
+    radial-gradient(ellipse 60% 48% at 55% 106%, rgba(13, 45, 94, 0.08) 0%, transparent 65%),
+    linear-gradient(165deg, #eef3fb 0%, #f4f7fc 38%, #edf2fb 72%, #e9eff9 100%);
+  /* Padding vertical simétrico (3.5rem total) que coincide con el
+     calc(100vh - 3.5rem) del riel sticky → sin scroll sobrante. */
+  padding: 1.75rem clamp(1rem, 2.5vw, 2.75rem);
   position: relative;
-  overflow: hidden;
+  overflow: clip;
 }
 
-/* Blob decorativo top-right */
+/* Blob decorativo top-right — navy tenue */
 .page::before {
   content: '';
   position: fixed;
@@ -24,15 +27,15 @@
   height: 580px;
   border-radius: 50%;
   background: radial-gradient(circle,
-    rgba(20, 70, 220, 0.12) 0%,
-    rgba(15, 50, 180, 0.06) 45%,
+    rgba(13, 45, 94, 0.07) 0%,
+    rgba(13, 45, 94, 0.035) 45%,
     transparent 70%
   );
   pointer-events: none;
   z-index: 0;
 }
 
-/* Blob decorativo bottom-left */
+/* Blob decorativo bottom-left — dorado tenue */
 .page::after {
   content: '';
   position: fixed;
@@ -42,8 +45,8 @@
   height: 520px;
   border-radius: 50%;
   background: radial-gradient(circle,
-    rgba(10, 40, 160, 0.1) 0%,
-    rgba(8,  30, 130, 0.05) 50%,
+    rgba(201, 168, 76, 0.06) 0%,
+    rgba(201, 168, 76, 0.03) 50%,
     transparent 70%
   );
   pointer-events: none;
@@ -71,14 +74,269 @@
 }
 
 /* ══════════════════════════════════════════
+   SHELL — riel lateral + contenido
+   (mismo patrón que la página de perfil)
+   ══════════════════════════════════════════ */
+.shell {
+  width: 100%;
+  max-width: 1880px;
+  margin: 0 auto;
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: flex-start;
+  gap: clamp(1rem, 1.8vw, 2rem);
+}
+
+/* Riel que se expande al pasar el mouse: 76px ↔ 258px. Item flex real:
+   al expandirse EMPUJA el contenido (no lo tapa). Sin :focus-within. */
+.sidebar {
+  position: sticky;
+  top: 1.75rem;
+  align-self: flex-start;
+  height: calc(100vh - 3.5rem);
+  flex: 0 0 76px;
+  width: 76px;
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  border-radius: 18px;
+  box-shadow:
+    0 10px 30px rgba(13, 45, 94, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  overflow: hidden;
+  transition: flex-basis 0.32s cubic-bezier(0.16, 1, 0.3, 1), width 0.32s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.3s;
+  z-index: 4;
+}
+.sidebar:hover {
+  flex-basis: 258px;
+  width: 258px;
+  box-shadow: 0 16px 40px rgba(13, 45, 94, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+.sidebarInner {
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 1.1rem 0.7rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  transition: padding 0.32s;
+}
+.sidebar:hover .sidebarInner { padding: 1.1rem; }
+.sidebarInner::-webkit-scrollbar { width: 5px; }
+.sidebarInner::-webkit-scrollbar-thumb { background: rgba(13, 45, 94, 0.16); border-radius: 3px; }
+
+/* Etiquetas que se revelan al expandir el riel */
+.navLabel {
+  flex: 1 1 auto;
+  max-width: 0;
+  opacity: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  transition: max-width 0.32s ease, opacity 0.22s;
+}
+.sidebar:hover .navLabel { max-width: 170px; opacity: 1; }
+@media (prefers-reduced-motion: reduce) {
+  .sidebar, .sidebarInner, .navLabel, .brandText { transition: none; }
+}
+
+.sideBrand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  padding: 0.35rem 0.4rem 0.95rem;
+  border-bottom: 1px solid rgba(13, 45, 94, 0.10);
+}
+.sidebar:hover .sideBrand { justify-content: flex-start; gap: 0.7rem; }
+.brandMark {
+  flex: 0 0 auto;
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: linear-gradient(145deg, #f2d580 0%, #c9a84c 50%, #9a7a2c 100%);
+  color: #0d2d5e;
+  font-family: 'Cinzel', serif;
+  font-weight: 700;
+  font-size: 0.82rem;
+  letter-spacing: 0.04em;
+  box-shadow: 0 4px 12px rgba(201, 168, 76, 0.35);
+}
+.brandText {
+  display: flex; flex-direction: column; min-width: 0;
+  max-width: 0; opacity: 0; overflow: hidden;
+  transition: max-width 0.3s ease, opacity 0.22s;
+}
+.sidebar:hover .brandText { max-width: 160px; opacity: 1; }
+.brandText strong {
+  font-family: 'Cinzel', serif;
+  font-size: 0.82rem;
+  font-weight: 400;
+  color: #0d2d5e;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.brandRole {
+  font-size: 0.56rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--gold-dk, #8a6a28);
+  margin-top: 3px;
+}
+
+.sideNav { display: flex; flex-direction: column; gap: 0.25rem; }
+
+.navItem {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  width: 100%;
+  padding: 0.62rem 0.8rem;
+  border: 1px solid transparent;
+  border-radius: 11px;
+  background: transparent;
+  color: #46546e;
+  font-family: 'Raleway', sans-serif;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, gap 0.3s ease;
+}
+.sidebar:hover .navItem { justify-content: flex-start; gap: 0.7rem; }
+.navItem:hover { background: rgba(13, 45, 94, 0.06); color: #0d2d5e; }
+.navItem:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.navIcon { flex: 0 0 auto; }
+
+.navItemActive,
+.navItemActive:hover {
+  background: linear-gradient(135deg, #15376b 0%, #0d2d5e 100%);
+  color: #fff;
+  border-color: rgba(201, 168, 76, 0.45);
+  box-shadow: 0 6px 16px rgba(13, 45, 94, 0.28);
+}
+.navItemActive .navIcon { color: #e7c977; }
+
+/* Contador en el item de navegación (esquina del icono cuando está colapsado;
+   junto a la etiqueta cuando está expandido). */
+/* Colapsado: pill dorado SÓLIDO con anillo blanco → el número se ve nítido
+   tanto sobre el riel claro como sobre el item activo navy. */
+.navBadge {
+  flex: 0 0 auto;
+  min-width: 17px;
+  height: 17px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--gold, #c9a84c);
+  color: #0d2d5e;
+  font-size: 0.6rem;
+  font-weight: 800;
+  line-height: 1;
+  position: absolute;
+  top: 4px;
+  right: 5px;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.92), 0 1px 3px rgba(13, 45, 94, 0.3);
+}
+.navBadgeAlert {
+  background: #d94444;
+  color: #fff;
+}
+
+/* Riel desplegado: pill sutil junto a la etiqueta (como estaba). */
+.sidebar:hover .navBadge {
+  position: static;
+  margin-left: auto;
+  background: rgba(201, 168, 76, 0.18);
+  color: var(--gold-dk, #8a6a28);
+  box-shadow: none;
+}
+.sidebar:hover .navBadgeAlert {
+  background: rgba(220, 70, 70, 0.16);
+  color: #d94444;
+}
+.sidebar:hover .navItemActive .navBadge {
+  background: rgba(255, 255, 255, 0.22);
+  color: #fff;
+}
+.sidebar:hover .navItemActive .navBadgeAlert {
+  background: rgba(255, 255, 255, 0.22);
+  color: #ffd9d9;
+}
+
+.content { flex: 1 1 auto; min-width: 0; }
+
+/* ── Riel -> barra superior horizontal en pantallas medianas/pequeñas ── */
+@media (max-width: 860px) {
+  .shell { flex-direction: column; gap: 1rem; }
+  .sidebar,
+  .sidebar:hover {
+    position: sticky;
+    top: 0.5rem;
+    z-index: 5;
+    height: auto;
+    flex: none;
+    width: 100%;
+    overflow-x: auto;
+    overflow-y: visible;
+  }
+  .sidebarInner,
+  .sidebar:hover .sidebarInner {
+    flex-direction: row;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.6rem 0.7rem;
+    height: auto;
+    overflow: visible;
+  }
+  .sideBrand { display: none; }
+  .sideNav { flex-direction: row; flex: 1 1 auto; gap: 0.35rem; }
+  .navItem,
+  .sidebar:hover .navItem { white-space: nowrap; padding: 0.5rem 0.85rem; justify-content: center; gap: 0.45rem; }
+  .navLabel,
+  .sidebar:hover .navLabel { max-width: none; opacity: 1; }
+  /* En la barra móvil el contador va siempre junto a la etiqueta */
+  .navBadge,
+  .sidebar:hover .navBadge { position: static; margin-left: 4px; top: auto; right: auto; }
+  /* Pie (inicio / logout) en línea con la barra */
+  .sideFoot {
+    margin: 0;
+    padding: 0;
+    border: none;
+    flex-direction: row;
+    gap: 0.35rem;
+    flex-shrink: 0;
+  }
+}
+
+/* Solo iconos + contador en pantallas muy estrechas */
+@media (max-width: 480px) {
+  .navLabel { display: none; }
+  .navItem { padding: 0.55rem 0.7rem; }
+  .navBadge,
+  .sidebar:hover .navBadge { position: absolute; top: 3px; right: 4px; margin: 0; }
+}
+
+/* ══════════════════════════════════════════
    LOADING
    ══════════════════════════════════════════ */
 .loading {
   min-height: 100vh;
   background:
-    radial-gradient(ellipse 70% 50% at 5% 0%,   rgba(13, 45, 160, 0.18) 0%, transparent 60%),
-    radial-gradient(ellipse 55% 45% at 95% 10%, rgba(20, 60, 200, 0.14) 0%, transparent 55%),
-    linear-gradient(165deg, #dde7f7 0%, #e8eef8 60%, #d8e3f2 100%);
+    radial-gradient(ellipse 60% 45% at 8% 0%,   rgba(13, 45, 94, 0.10) 0%, transparent 60%),
+    radial-gradient(ellipse 48% 40% at 94% 6%,  rgba(201, 168, 76, 0.07) 0%, transparent 55%),
+    linear-gradient(165deg, #eef3fb 0%, #f4f7fc 60%, #e9eff9 100%);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -133,7 +391,7 @@
 .title {
   font-family: 'Cinzel', serif;
   font-size: clamp(1.4rem, 3vw, 2.2rem);
-  font-weight: 400;
+  font-weight: 700;
   color: #0d2d5e;
   letter-spacing: 0.04em;
   margin: 0;
@@ -225,7 +483,7 @@
   font-weight: 700;
   letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: #7a8fad;
+  color: #5a6e90;
   line-height: 1.4;
 }
 
@@ -249,7 +507,7 @@
   background: none;
   border: none;
   border-bottom: 2px solid transparent;
-  color: rgba(13, 45, 94, 0.35);
+  color: rgba(13, 45, 94, 0.52);
   font-family: 'Raleway', sans-serif;
   font-size: 0.67rem;
   font-weight: 700;
@@ -265,7 +523,7 @@
   align-items: center;
   gap: 5px;
 }
-.tab:hover { color: rgba(13, 45, 94, 0.65); }
+.tab:hover { color: rgba(13, 45, 94, 0.8); }
 .tabActive  { color: var(--gold, #C9A84C) !important; border-bottom-color: var(--gold, #C9A84C); }
 
 .tabBadge {
@@ -307,11 +565,11 @@
 }
 .sectionTitle {
   font-family: 'Cinzel', serif;
-  font-size: 0.92rem;
+  font-size: 0.98rem;
   color: #0d2d5e;
   margin: 0;
   letter-spacing: 0.04em;
-  font-weight: 400;
+  font-weight: 700;
 }
 
 .emptyState {
@@ -321,16 +579,16 @@
   gap: 8px;
   padding: 60px 0;
 }
-.emptyIcon { font-size: 2.8rem; opacity: 0.2; }
+.emptyIcon { font-size: 2.8rem; opacity: 0.28; }
 .emptyTxt {
   font-size: 0.88rem;
   font-weight: 600;
-  color: rgba(13, 45, 94, 0.28);
+  color: rgba(13, 45, 94, 0.5);
   margin: 0;
 }
 .emptySub {
   font-size: 0.72rem;
-  color: rgba(13, 45, 94, 0.18);
+  color: rgba(13, 45, 94, 0.35);
   margin: 0;
 }
 
@@ -398,7 +656,7 @@
 }
 .cardMeta {
   font-size: 0.71rem;
-  color: #7a8fad;
+  color: #5a6e90;
   line-height: 1.5;
   display: block;
 }
@@ -421,7 +679,7 @@
 }
 .cardDesc {
   font-size: 0.72rem;
-  color: #7a8fad;
+  color: #5a6e90;
   font-style: italic;
   margin: 0.2rem 0 0;
   max-width: 420px;
@@ -547,7 +805,7 @@
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: #7a8fad;
+  color: #5a6e90;
   transition: color 0.2s;
 }
 .toggleDescargaOn .toggleDescargaLabel {
@@ -558,7 +816,7 @@
   background: rgba(13, 45, 94, 0.05);
   border: 1px solid rgba(13, 45, 94, 0.14);
   border-radius: 8px;
-  color: #7a8fad;
+  color: #5a6e90;
   font-size: 0.7rem;
   padding: 6px 14px;
   cursor: pointer;
@@ -586,6 +844,40 @@
 .btnReabrir:hover {
   background: rgba(201, 168, 76, 0.18);
   box-shadow: 0 2px 8px rgba(201, 168, 76, 0.15);
+}
+
+/* Botón destacado para notificar al profesional (acción de envío) */
+.btnNotificar {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: linear-gradient(135deg, #15376b 0%, #0d2d5e 100%);
+  border: 1px solid rgba(201, 168, 76, 0.5);
+  border-radius: 10px;
+  color: #f5edd4;
+  font-family: 'Raleway', sans-serif;
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  white-space: nowrap;
+  box-shadow: 0 4px 14px rgba(13, 45, 94, 0.28);
+  transition: box-shadow 0.2s, transform 0.15s, filter 0.2s;
+}
+.btnNotificar:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 7px 20px rgba(13, 45, 94, 0.38);
+  filter: brightness(1.08);
+}
+.btnNotificar:active:not(:disabled) { transform: none; }
+.btnNotificar:disabled { cursor: default; opacity: 0.85; }
+/* Estado enviado: verde de confirmación */
+.btnNotificarDone {
+  background: linear-gradient(135deg, #2e9e63 0%, #1f7a4d 100%);
+  border-color: rgba(46, 158, 99, 0.5);
+  color: #fff;
+  box-shadow: 0 4px 14px rgba(31, 122, 77, 0.28);
 }
 
 /* ══════════════════════════════════════════
@@ -641,7 +933,7 @@
 }
 .alertaMeta {
   font-size: 0.7rem;
-  color: #7a8fad;
+  color: #5a6e90;
   margin: 0;
 }
 .alertaFecha {
@@ -677,7 +969,7 @@
    ══════════════════════════════════════════ */
 .contratosHint {
   font-size: 0.74rem;
-  color: #7a8fad;
+  color: #5a6e90;
   margin: 0 0 12px;
 }
 
@@ -713,37 +1005,89 @@
   box-shadow: 0 2px 8px rgba(201, 168, 76, 0.15) !important;
 }
 
-/* Wrapper para MisContratos — mantiene su look oscuro dentro del panel claro */
-.contratosWrap {
-  background: linear-gradient(155deg, #06102a 0%, #0c1e4a 45%, #081530 100%);
-  border-radius: 16px;
-  padding: 26px 26px 30px;
-  border: 1px solid rgba(201, 168, 76, 0.2);
-  box-shadow:
-    0 10px 48px rgba(4, 10, 40, 0.2),
-    0 2px 8px rgba(4, 10, 40, 0.14),
-    0 0 0 1px rgba(201, 168, 76, 0.06) inset;
-  position: relative;
-  overflow: hidden;
+/* ── Pie del riel: volver al inicio + cerrar sesión ── */
+.sideFoot {
+  margin-top: auto;
+  padding-top: 0.9rem;
+  border-top: 1px solid rgba(13, 45, 94, 0.10);
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
 }
-.contratosWrap::before {
-  content: '';
-  position: absolute;
-  top: -70px; right: -70px;
-  width: 220px; height: 220px;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(201,168,76,0.09) 0%, transparent 70%);
-  pointer-events: none;
+.logout { color: #a23b3b; }
+.logout:hover { background: rgba(162, 59, 59, 0.08); color: #8c2f2f; }
+
+/* ── Modal de confirmación de cierre de sesión ── */
+.logoutOverlay {
+  position: fixed; inset: 0; z-index: 1300;
+  display: grid; place-items: center;
+  /* Fondo oscuro con desenfoque, como el overlay de las tarjetas de profesional */
+  background: rgba(10, 28, 64, 0.55);
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  animation: logoutFade 0.18s ease;
+  padding: 1rem;
 }
-.contratosWrap::after {
-  content: '';
-  position: absolute;
-  bottom: -50px; left: -50px;
-  width: 180px; height: 180px;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(20, 60, 180, 0.12) 0%, transparent 70%);
-  pointer-events: none;
+
+/* Botón de confirmar (reutilizable) con variantes por tono */
+.cfOk {
+  flex: 1; font-family: 'Raleway', sans-serif; font-size: 0.86rem; font-weight: 700;
+  border-radius: 11px; padding: 11px 14px; cursor: pointer; border: 1px solid transparent;
+  transition: background 0.18s, box-shadow 0.18s, transform 0.15s;
 }
+.cfOk:hover { transform: translateY(-1px); }
+.cfOk:active { transform: none; }
+.cfOkDanger {
+  background: #a23b3b; border-color: #a23b3b; color: #fff;
+  box-shadow: 0 4px 12px rgba(162, 59, 59, 0.28);
+}
+.cfOkDanger:hover { background: #8c2f2f; box-shadow: 0 6px 16px rgba(162, 59, 59, 0.38); }
+.cfOkGold {
+  background: linear-gradient(135deg, #f2d580 0%, #c9a84c 55%, #9a7a2c 100%);
+  border-color: rgba(201, 168, 76, 0.5); color: #0d2d5e;
+  box-shadow: 0 4px 12px rgba(201, 168, 76, 0.32);
+}
+.cfOkGold:hover { box-shadow: 0 6px 18px rgba(201, 168, 76, 0.42); }
+.cfOkNavy {
+  background: linear-gradient(135deg, #15376b 0%, #0d2d5e 100%);
+  border-color: rgba(201, 168, 76, 0.4); color: #fff;
+  box-shadow: 0 4px 12px rgba(13, 45, 94, 0.3);
+}
+.cfOkNavy:hover { box-shadow: 0 6px 18px rgba(13, 45, 94, 0.42); }
+@keyframes logoutFade { from { opacity: 0; } to { opacity: 1; } }
+.logoutModal {
+  width: 100%; max-width: 380px;
+  background: #fff;
+  border: 1px solid rgba(13, 45, 94, 0.1);
+  border-radius: 18px;
+  box-shadow: 0 24px 60px rgba(13, 45, 94, 0.3);
+  padding: 26px 24px 22px;
+  text-align: center;
+  animation: logoutPop 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes logoutPop { from { opacity: 0; transform: translateY(12px) scale(0.97); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .logoutOverlay, .logoutModal { animation: none; } }
+.logoutIcon {
+  display: grid; place-items: center; width: 46px; height: 46px; margin: 0 auto 12px;
+  border-radius: 12px; color: #a23b3b; background: rgba(162, 59, 59, 0.1);
+}
+.logoutTitle {
+  font-family: 'Cinzel', serif;
+  font-size: 1.35rem; font-weight: 700; color: #0d2d5e; margin: 0 0 6px;
+}
+.logoutText {
+  font-family: 'Raleway', sans-serif;
+  font-size: 0.86rem; color: #4a6080; line-height: 1.55; margin: 0 0 20px;
+}
+.logoutActions { display: flex; gap: 10px; }
+.logoutCancel, .logoutConfirm {
+  flex: 1; font-family: 'Raleway', sans-serif; font-size: 0.86rem; font-weight: 600;
+  border-radius: 11px; padding: 11px 14px; cursor: pointer;
+  transition: background 0.18s, border-color 0.18s, box-shadow 0.18s, color 0.18s;
+}
+.logoutCancel { background: none; border: 1px solid rgba(13, 45, 94, 0.2); color: #1a5276; }
+.logoutCancel:hover { border-color: #1a5276; background: rgba(13, 45, 94, 0.05); color: #0d2d5e; }
+.logoutConfirm { background: #a23b3b; border: 1px solid #a23b3b; color: #fff; box-shadow: 0 4px 12px rgba(162, 59, 59, 0.28); }
+.logoutConfirm:hover { background: #8c2f2f; box-shadow: 0 6px 16px rgba(162, 59, 59, 0.38); }
 
 /* ══════════════════════════════════════════
    MODALES
@@ -795,7 +1139,7 @@
   font-weight: 700;
   letter-spacing: 0.22em;
   text-transform: uppercase;
-  color: #7a8fad;
+  color: #5a6e90;
   margin-bottom: 0.4rem;
 }
 .modalInput {
@@ -952,7 +1296,7 @@
 }
 .heroHint {
   font-size: 0.75rem;
-  color: #7a8fad;
+  color: #5a6e90;
   font-style: italic;
 }
 .slidesGrid {
@@ -1095,16 +1439,17 @@
   .stats { grid-template-columns: 1fr; }
 }
 
-/* ── Contenedor oscuro para componentes dark (Chat interno, Códigos QR) ── */
+/* ── Contenedor claro para Chat interno y Códigos QR (ya convertidos a
+   tema claro). Superficie con degradado azul suave + toque dorado. ── */
 .darkWrap {
-  background: linear-gradient(155deg, #06102a 0%, #0c1e4a 45%, #081530 100%);
+  background: linear-gradient(155deg, #eef3fb 0%, #e9f0fa 45%, #eaf1fb 100%);
   border-radius: 16px;
   padding: 26px 26px 30px;
-  border: 1px solid rgba(201, 168, 76, 0.2);
+  border: 1px solid rgba(13, 45, 94, 0.1);
   box-shadow:
-    0 10px 48px rgba(4, 10, 40, 0.2),
-    0 2px 8px rgba(4, 10, 40, 0.14),
-    0 0 0 1px rgba(201, 168, 76, 0.06) inset;
+    0 6px 26px rgba(13, 45, 94, 0.08),
+    0 1px 4px rgba(13, 45, 94, 0.05),
+    0 0 0 1px rgba(255, 255, 255, 0.6) inset;
   position: relative;
   overflow: hidden;
 }
@@ -1120,14 +1465,14 @@
   pointer-events: none;
 }
 
-/* Glow azul bottom-left */
+/* Glow navy bottom-left */
 .darkWrap::after {
   content: '';
   position: absolute;
   bottom: -50px; left: -50px;
   width: 180px; height: 180px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(20,60,180,0.12) 0%, transparent 70%);
+  background: radial-gradient(circle, rgba(13,45,94,0.07) 0%, transparent 70%);
   pointer-events: none;
 }
 

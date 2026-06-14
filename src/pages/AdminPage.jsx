@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import { useNavigate } from 'react-router-dom'
@@ -10,7 +11,19 @@ import AdminInternalChat from '../components/chat/AdminInternalChat'
 import ProfileDetailModal from '../components/admin/ProfileDetailModal'
 import TarjetaPreview from '../components/profile/TarjetaPreview'
 import NotificationBell from '../components/admin/NotificationBell'
-import { IconCheck, IconX, IconArrowLeft } from '../components/shared/Icons'
+import { IconCheck, IconX } from '../components/shared/Icons'
+
+// ── Iconos SVG (estilo Lucide, currentColor) — sin emojis como iconos ──
+const IconInbox  = (p) => (<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>)
+const IconUsers  = (p) => (<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>)
+const IconChat   = (p) => (<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>)
+const IconRecover= (p) => (<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>)
+const IconAlert  = (p) => (<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg>)
+const IconShield = (p) => (<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>)
+const IconDoc    = (p) => (<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 13h6M9 17h6"/></svg>)
+const IconQRcode = (p) => (<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3M21 14v.01M14 21h.01M21 21v-3h-3"/></svg>)
+const IconHome   = (p) => (<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>)
+const IconLogout = (p) => (<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg>)
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
@@ -26,8 +39,12 @@ async function getAuthHeaders() {
 }
 
 export default function AdminPage() {
-  const { user, profile, loading } = useAuth()
+  const { user, profile, signOut, loading } = useAuth()
   const navigate = useNavigate()
+  const reduceMotion = useReducedMotion()
+  const [confirmLogout, setConfirmLogout] = useState(false)
+  // Diálogo de confirmación reutilizable: { title, message, confirmLabel, toneClass, onConfirm }
+  const [confirmAction, setConfirmAction] = useState(null)
 
   const [activeTab, setActiveTab]             = useState('pending')
   const [pending, setPending]                 = useState([])
@@ -300,37 +317,86 @@ export default function AdminPage() {
     )
 
   const TABS = [
-    { key: 'pending',      label: 'Solicitudes',         count: pending.length },
-    { key: 'approved',     label: 'Aprobados',            count: approved.length },
-    { key: 'chats',        label: 'Historial chats' },
-    { key: 'recuperar',    label: 'Recuperar chats',      count: chatsCerrados.length },
-    { key: 'alertas',      label: 'Alertas',              count: alertas.length, alert: true },
-    { key: 'chat_interno', label: 'Chat interno' },
-    { key: 'contratos',    label: 'Contratos' },
-    { key: 'codigos',      label: 'Códigos QR' },
+    { key: 'pending',      label: 'Solicitudes',         count: pending.length,       Icon: IconInbox },
+    { key: 'approved',     label: 'Aprobados',            count: approved.length,      Icon: IconUsers },
+    { key: 'chats',        label: 'Historial chats',                                   Icon: IconChat },
+    { key: 'recuperar',    label: 'Recuperar chats',      count: chatsCerrados.length, Icon: IconRecover },
+    { key: 'alertas',      label: 'Alertas',              count: alertas.length, alert: true, Icon: IconAlert },
+    { key: 'chat_interno', label: 'Chat interno',                                      Icon: IconShield },
+    { key: 'contratos',    label: 'Contratos',                                         Icon: IconDoc },
+    { key: 'codigos',      label: 'Códigos QR',                                        Icon: IconQRcode },
   ]
 
   return (
     <div className={styles.page}>
+      <div className={styles.shell}>
 
-      {/* ── Contenedor principal (glass card) ── */}
-      <div className={styles.pageInner}>
+        {/* ── Riel lateral de navegación (se expande al pasar el mouse) ── */}
+        <aside className={styles.sidebar}>
+          <div className={styles.sidebarInner}>
+            <div className={styles.sideBrand}>
+              <span className={styles.brandMark}>AAP</span>
+              <div className={styles.brandText}>
+                <strong>Administración</strong>
+                <small className={styles.brandRole}>Superadmin</small>
+              </div>
+            </div>
 
-        {/* Header */}
-        <div className={styles.header}>
-          <div className={styles.headerText}>
-            <span className={styles.eyebrow}>Panel de administración</span>
-            <h1 className={styles.title}>
-              Abogados y Asociados <em>Parada</em>
-            </h1>
+            <nav className={styles.sideNav} aria-label="Secciones del panel">
+              {TABS.map(({ key, label, count, alert, Icon }) => (
+                <button
+                  key={key}
+                  type="button"
+                  className={`${styles.navItem} ${activeTab === key ? styles.navItemActive : ''}`}
+                  onClick={() => setActiveTab(key)}
+                  aria-current={activeTab === key ? 'page' : undefined}
+                  title={label}
+                >
+                  <Icon className={styles.navIcon} aria-hidden="true" />
+                  <span className={styles.navLabel}>{label}</span>
+                  {count > 0 && (
+                    <span className={`${styles.navBadge} ${alert ? styles.navBadgeAlert : ''}`}>
+                      {count}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </nav>
+
+            <div className={styles.sideFoot}>
+              <button type="button" className={styles.navItem} onClick={() => navigate('/')} title="Volver al inicio">
+                <IconHome className={styles.navIcon} aria-hidden="true" />
+                <span className={styles.navLabel}>Volver al inicio</span>
+              </button>
+              <button
+                type="button"
+                className={`${styles.navItem} ${styles.logout}`}
+                onClick={() => setConfirmLogout(true)}
+                title="Cerrar sesión"
+              >
+                <IconLogout className={styles.navIcon} aria-hidden="true" />
+                <span className={styles.navLabel}>Cerrar sesión</span>
+              </button>
+            </div>
           </div>
-          <div className={styles.headerActions}>
-            <NotificationBell onOpenRoom={handleOpenRoom} />
-            <button className={styles.btnBack} onClick={() => navigate('/')}>
-              <IconArrowLeft /> Volver al sitio
-            </button>
-          </div>
-        </div>
+        </aside>
+
+        {/* ── Contenido (glass card) ── */}
+        <main className={styles.content}>
+          <div className={styles.pageInner}>
+
+            {/* Header */}
+            <div className={styles.header}>
+              <div className={styles.headerText}>
+                <span className={styles.eyebrow}>Panel de administración</span>
+                <h1 className={styles.title}>
+                  Abogados y Asociados <em>Parada</em>
+                </h1>
+              </div>
+              <div className={styles.headerActions}>
+                <NotificationBell onOpenRoom={handleOpenRoom} />
+              </div>
+            </div>
 
         {/* Stats */}
         <div className={styles.stats}>
@@ -366,28 +432,16 @@ export default function AdminPage() {
           </div>
         </div>
 
-        {/* Tabs */}
-        <div className={styles.tabsWrap}>
-          <div className={styles.tabs}>
-            {TABS.map(t => (
-              <button
-                key={t.key}
-                className={`${styles.tab} ${activeTab === t.key ? styles.tabActive : ''}`}
-                onClick={() => setActiveTab(t.key)}
-              >
-                {t.label}
-                {t.count > 0 && (
-                  <span className={`${styles.tabBadge} ${t.alert ? styles.tabBadgeAlert : ''}`}>
-                    {t.count}
-                  </span>
-                )}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Contenido de cada tab */}
+        {/* Contenido de la sección activa (transición framer-motion) */}
         <div className={styles.tabContent}>
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={activeTab}
+              initial={reduceMotion ? false : { opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -8 }}
+              transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+            >
 
           {/* ── Solicitudes pendientes ── */}
           {activeTab === 'pending' && (
@@ -527,7 +581,16 @@ export default function AdminPage() {
                     </button>
                     <button
                       className={styles.btnReject}
-                      onClick={e => { e.stopPropagation(); removeApproved(p.id) }}
+                      onClick={e => {
+                        e.stopPropagation()
+                        setConfirmAction({
+                          title: 'Quitar de la página',
+                          message: `${p.nombre} ${p.apellido} dejará de aparecer en el sitio público y no podrá usar su panel. Podrás volver a aprobarlo más adelante. ¿Quitar?`,
+                          confirmLabel: 'Quitar',
+                          toneClass: 'cfOkDanger',
+                          onConfirm: () => removeApproved(p.id),
+                        })
+                      }}
                     >
                       <IconX /> Quitar de la página
                     </button>
@@ -575,7 +638,16 @@ export default function AdminPage() {
                       })}
                     </p>
                   </div>
-                  <button className={styles.btnReabrir} onClick={() => reabrirChat(r.id)}>
+                  <button
+                    className={styles.btnReabrir}
+                    onClick={() => setConfirmAction({
+                      title: 'Reabrir chat',
+                      message: `La conversación de ${r.client_nombre || 'el cliente'} volverá a estado "en espera" para que un profesional la retome. ¿Reabrir?`,
+                      confirmLabel: 'Reabrir',
+                      toneClass: 'cfOkGold',
+                      onConfirm: () => reabrirChat(r.id),
+                    })}
+                  >
                     ↩ Reabrir
                   </button>
                 </div>
@@ -626,12 +698,20 @@ export default function AdminPage() {
                       <span className={styles.alertaBadge}>+24h sin actividad</span>
                       {!sinAbogados && (
                         <button
-                          className={styles.btnRefresh}
-                          onClick={() => notificarInactividad(r)}
+                          className={`${styles.btnNotificar} ${estado === 'sent' ? styles.btnNotificarDone : ''}`}
+                          onClick={() => {
+                            if (estado === 'sending' || estado === 'sent') return
+                            setConfirmAction({
+                              title: 'Notificar al profesional',
+                              message: `Se enviará un correo a ${r.lawyer_ids.length} profesional${r.lawyer_ids.length > 1 ? 'es' : ''} asignado${r.lawyer_ids.length > 1 ? 's' : ''} avisando de la inactividad de esta consulta. ¿Enviar la notificación?`,
+                              confirmLabel: 'Enviar notificación',
+                              toneClass: 'cfOkNavy',
+                              onConfirm: () => notificarInactividad(r),
+                            })
+                          }}
                           disabled={estado === 'sending' || estado === 'sent'}
-                          style={{ fontSize: '0.78rem', padding: '6px 12px' }}
                         >
-                          {estado === 'sending' ? 'Enviando...'
+                          {estado === 'sending' ? 'Enviando…'
                             : estado === 'sent'  ? '✓ Notificado'
                             : estado === 'error' ? '✗ Reintentar'
                             : '✉ Notificar profesional'}
@@ -650,9 +730,7 @@ export default function AdminPage() {
               <div className={styles.sectionHeader}>
                 <h3 className={styles.sectionTitle}>Chat interno con profesionales</h3>
               </div>
-              <div className={styles.darkWrap}>
-                <AdminInternalChat miId={user?.id} />
-              </div>
+              <AdminInternalChat miId={user?.id} />
             </div>
           )}
 
@@ -682,9 +760,7 @@ export default function AdminPage() {
                 ))}
               </div>
               {abogadoContrato ? (
-                <div className={styles.contratosWrap}>
-                  <MisContratos abogadoId={abogadoContrato.id} isSuperAdmin={true} />
-                </div>
+                <MisContratos abogadoId={abogadoContrato.id} isSuperAdmin={true} />
               ) : (
                 <div className={styles.emptyState}>
                   <span className={styles.emptyIcon}>📂</span>
@@ -698,22 +774,66 @@ export default function AdminPage() {
           {/* ── Códigos QR ── */}
           {activeTab === 'codigos' && (
             <div className={styles.section}>
-              <div className={styles.darkWrap}>
-                <CodigosReferencia />
-              </div>
+              <CodigosReferencia />
             </div>
           )}
 
+            </motion.div>
+          </AnimatePresence>
         </div>
 
-        {/* ── Modal de detalle de perfil (Solicitudes / Aprobados) ── */}
-        {previewProfile && (
-          <ProfileDetailModal
-            profile={previewProfile}
-            onClose={() => setPreviewProfile(null)}
-          />
-        )}
+          </div>
+        </main>
       </div>
+
+      {/* ── Modal de detalle de perfil (Solicitudes / Aprobados) ── */}
+      {previewProfile && (
+        <ProfileDetailModal
+          profile={previewProfile}
+          onClose={() => setPreviewProfile(null)}
+        />
+      )}
+
+      {/* ── Modal de confirmación reutilizable (quitar / reabrir / notificar) ── */}
+      {confirmAction && (
+        <div className={styles.logoutOverlay} role="dialog" aria-modal="true" aria-labelledby="cfTitle" onClick={() => setConfirmAction(null)}>
+          <div className={styles.logoutModal} onClick={(e) => e.stopPropagation()}>
+            <h2 id="cfTitle" className={styles.logoutTitle}>{confirmAction.title}</h2>
+            <p className={styles.logoutText}>{confirmAction.message}</p>
+            <div className={styles.logoutActions}>
+              <button type="button" className={styles.logoutCancel} onClick={() => setConfirmAction(null)}>
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className={`${styles.cfOk} ${styles[confirmAction.toneClass] || ''}`}
+                onClick={async () => {
+                  const fn = confirmAction.onConfirm
+                  setConfirmAction(null)
+                  if (fn) await fn()
+                }}
+              >
+                {confirmAction.confirmLabel}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal de confirmación de cierre de sesión ── */}
+      {confirmLogout && (
+        <div className={styles.logoutOverlay} role="dialog" aria-modal="true" aria-labelledby="logoutTitle" onClick={() => setConfirmLogout(false)}>
+          <div className={styles.logoutModal} onClick={(e) => e.stopPropagation()}>
+            <span className={styles.logoutIcon}><IconLogout /></span>
+            <h2 id="logoutTitle" className={styles.logoutTitle}>¿Cerrar sesión?</h2>
+            <p className={styles.logoutText}>Saldrás del panel de administración. Tendrás que iniciar sesión de nuevo para volver a entrar.</p>
+            <div className={styles.logoutActions}>
+              <button type="button" className={styles.logoutCancel} onClick={() => setConfirmLogout(false)}>Cancelar</button>
+              <button type="button" className={styles.logoutConfirm} onClick={async () => { setConfirmLogout(false); await signOut(); navigate('/') }}>Cerrar sesión</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

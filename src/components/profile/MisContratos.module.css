@@ -5,7 +5,7 @@
   align-items: flex-start; gap: 12px; flex-wrap: wrap;
 }
 .titulo {
-  font-family: 'Cinzel', serif; font-size: 1.05rem;
+  font-family: 'Cinzel', serif; font-size: 1.05rem; font-weight: 700;
   color: #0d2d5e; margin: 0 0 4px; letter-spacing: 0.04em;
 }
 .subtitulo { font-size: 0.78rem; color: #6b7fa3; margin: 0; max-width: 460px; }
@@ -104,12 +104,19 @@
 }
 .btnDown:hover { background: rgba(201,168,76,0.22); }
 .btnDel {
-  padding: 7px 10px;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 34px; height: 34px; padding: 0;
   background: rgba(220,50,50,0.07); border: 1px solid rgba(220,50,50,0.22);
-  border-radius: 6px; color: #c0392b;
-  font-size: 0.82rem; cursor: pointer; transition: background 0.2s;
+  border-radius: 8px; color: #c0392b;
+  cursor: pointer; transition: background 0.18s, border-color 0.18s, color 0.18s, transform 0.15s;
 }
-.btnDel:hover { background: rgba(220,50,50,0.16); }
+.btnDel:hover {
+  background: rgba(220,50,50,0.16);
+  border-color: rgba(220,50,50,0.45);
+  color: #a32020;
+  transform: translateY(-1px);
+}
+.btnDel:active { transform: none; }
 
 @media (max-width: 600px) {
   .contratoAcciones { width: 100%; }

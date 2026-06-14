@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { supabase, getAuthHeaders } from '../../lib/supabase'
 import styles from './SuperAdminChatViewer.module.css'
 import { IconTrash, IconPaperclip } from '../shared/Icons'
@@ -1035,8 +1036,10 @@ export default function SuperAdminChatViewer({ initialRoomId = null }) {
         )}
       </div>
 
-      {/* ── Modal de confirmación: Enviar fichas de contacto ── */}
-      {confirmOpen && (
+      {/* ── Modal de confirmación: Enviar fichas de contacto ──
+          Portal a <body>: así el position:fixed se ancla al viewport y no a
+          un ancestro con transform/backdrop-filter (queda fijo y centrado). */}
+      {confirmOpen && createPortal(
         <div
           className={styles.confirmOverlay}
           onClick={() => !sending && setConfirmOpen(false)}
@@ -1071,7 +1074,8 @@ export default function SuperAdminChatViewer({ initialRoomId = null }) {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       </>)}
