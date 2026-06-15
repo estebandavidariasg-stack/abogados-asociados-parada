@@ -588,8 +588,11 @@ const CARDS_RIGHT = [
 
 const FM_EASE = [0.16, 1, 0.3, 1]
 
-function FeatureCardItem({ card, side, triggered, prefersReduced }) {
+function FeatureCardItem({ card, side, triggered, live, prefersReduced }) {
   const xStart = (side === 'left' ? -90 : 90) + card.xOffset
+  // Los bucles (flotar + halo) solo corren cuando la tarjeta ya entró Y sigue
+  // visible. Fuera de viewport se apagan para no repintar/componer en vano.
+  const floating = triggered && live && !prefersReduced
 
   return (
     <motion.div
@@ -600,7 +603,7 @@ function FeatureCardItem({ card, side, triggered, prefersReduced }) {
         opacity: 1,
         x: card.xOffset,
         rotate: card.rotate,
-        y: prefersReduced ? 0 : card.yFloat,
+        y: floating ? card.yFloat : 0,
       } : {
         opacity: 0,
         x: xStart,
@@ -610,40 +613,38 @@ function FeatureCardItem({ card, side, triggered, prefersReduced }) {
         opacity: { duration: 0.72, ease: FM_EASE, delay: card.entranceDelay },
         x:       { duration: 0.88, ease: FM_EASE, delay: card.entranceDelay },
         rotate:  { duration: 0 },
-        y: triggered && !prefersReduced ? {
+        y: floating ? {
           duration: card.floatDuration,
           repeat: Infinity,
           ease: 'easeInOut',
           delay: card.entranceDelay + 0.9,
           times: [0, 0.5, 1],
-        } : { duration: 0 },
+        } : { duration: 0.6, ease: 'easeOut' },
       }}
       whileHover={prefersReduced ? {} : {
         scale: 1.07,
         transition: { type: 'spring', stiffness: 260, damping: 18 },
       }}
     >
-      {/* Icon chip — pulsa suavemente para indicar "seguridad activa" */}
-      <motion.div
-        className={styles.cardIconWrap}
-        animate={prefersReduced ? {} : {
-          boxShadow: [
-            '0 4px 14px rgba(201,168,76,0.40), inset 0 1px 0 rgba(255,255,255,0.60)',
-            '0 4px 28px rgba(201,168,76,0.80), inset 0 1px 0 rgba(255,255,255,0.70)',
-            '0 4px 14px rgba(201,168,76,0.40), inset 0 1px 0 rgba(255,255,255,0.60)',
-          ],
-        }}
-        transition={{
-          boxShadow: {
+      {/* Icon chip — halo dorado "respirando". Animamos opacity/scale de una
+          capa compuesta (GPU); antes se animaba box-shadow, que repinta cada
+          frame en el hilo principal y trababa el scroll. */}
+      <div className={styles.cardIconWrap}>
+        <motion.span
+          className={styles.cardIconGlow}
+          aria-hidden="true"
+          animate={floating
+            ? { opacity: [0.35, 0.85, 0.35], scale: [1, 1.14, 1] }
+            : { opacity: prefersReduced ? 0.5 : 0.45, scale: 1 }}
+          transition={floating ? {
             duration: 2.6,
             repeat: Infinity,
             ease: 'easeInOut',
             delay: card.entranceDelay + 1.4,
-          },
-        }}
-      >
+          } : { duration: 0.4 }}
+        />
         {card.icon}
-      </motion.div>
+      </div>
       <h4 className={styles.cardTitle}>{card.title}</h4>
       <p className={styles.cardText}>{card.text}</p>
     </motion.div>
@@ -652,7 +653,10 @@ function FeatureCardItem({ card, side, triggered, prefersReduced }) {
 
 function SideCards({ cards, side }) {
   const ref = useRef(null)
-  const inView = useInView(ref, { once: true, amount: 0.25 })
+  // Entrada: una sola vez. `live`: visibilidad en vivo que apaga los bucles
+  // cuando la sección sale de pantalla (clave para que no trabe el scroll).
+  const entered = useInView(ref, { once: true, amount: 0.25 })
+  const live = useInView(ref, { amount: 0 })
   const prefersReduced = useReducedMotion()
 
   return (
@@ -662,7 +666,8 @@ function SideCards({ cards, side }) {
           key={card.title}
           card={card}
           side={side}
-          triggered={inView}
+          triggered={entered}
+          live={live}
           prefersReduced={prefersReduced}
         />
       ))}
@@ -731,9 +736,11 @@ function RatingPanel({ roomId, onDone }) {
       <p className={styles.ratingSubtitle}>Califica el servicio de los abogados que te atendieron.</p>
       <div style={{ display:'flex', flexDirection:'column', gap:24, margin:'28px 0' }}>
         {lawyers.length === 0 && (
-          <div>
+          <div style={{ textAlign:'center' }}>
             <p style={{ color:'#666', fontSize:'0.8rem', marginBottom:12 }}>Calificación general</p>
-            <StarRating value={ratings['general']||0} onChange={v => setRatings({ general: v })} />
+            <div style={{ display:'flex', justifyContent:'center' }}>
+              <StarRating value={ratings['general']||0} onChange={v => setRatings({ general: v })} />
+            </div>
           </div>
         )}
         {lawyers.map(l => {
@@ -757,7 +764,7 @@ function RatingPanel({ roomId, onDone }) {
           )
         })}
       </div>
-      <div style={{ marginBottom:20 }}>
+      <div style={{ marginBottom:20, display:'flex', flexDirection:'column', gap:10 }}>
         <label className={styles.label}>Comentario opcional</label>
         <textarea className={styles.textarea} value={comentario}
           onChange={e => setComentario(e.target.value)}
@@ -960,6 +967,21 @@ export default function ChatSection() {
         const detail = await res.text().catch(() => '')
         throw new Error(detail || `HTTP ${res.status}`)
       }
+      // Avisar al equipo administrativo por correo (best-effort, no bloquea).
+      fetch('/api/notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'pqr_received',
+          data: {
+            tipo: pqrTipo,
+            clientNombre: nombreCliente || null,
+            clientEmail: form.correo || null,
+            codigoReferencia: roomCodigo || null,
+            mensaje: pqrMensaje.trim(),
+          },
+        }),
+      }).catch(() => {})
       setPqrSent(true)
     } catch (err) {
       setPqrError('No se pudo enviar tu PQR: ' + (err.message || 'error desconocido'))
@@ -1909,7 +1931,7 @@ export default function ChatSection() {
         <div className={styles.lawyersWrap} ref={lawyersRef}>
           <div className={styles.closedBanner}>
             <strong>Tu consulta anterior fue cerrada.</strong>
-            <br/>Gracias por usar AAP. Si quieres, déjanos un comentario antes de continuar.
+            Gracias por usar AAP. Si quieres, déjanos un comentario antes de continuar.
           </div>
 
           {!pqrYaExiste && (
@@ -1968,14 +1990,6 @@ export default function ChatSection() {
           )}
 
           <div className={styles.postChatActions}>
-            <button
-              className={styles.btnOutline}
-              onClick={() => setStep('choose_another')}
-            >
-              {form.tipo_profesional === 'contador'
-                ? 'Buscar otro contador'
-                : 'Buscar otro abogado'}
-            </button>
             <button className={styles.btnBack} onClick={resetToStart}>
               Salir
             </button>

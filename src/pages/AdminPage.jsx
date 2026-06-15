@@ -116,6 +116,15 @@ export default function AdminPage() {
       method: 'PATCH', headers,
       body: JSON.stringify({ aprobado: true }),
     })
+    // Avisar al profesional por correo (best-effort: no bloquea la aprobación).
+    // El endpoint valida superadmin con este mismo token.
+    try {
+      await fetch('/api/notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: headers.Authorization },
+        body: JSON.stringify({ type: 'account_approved', data: { lawyerId: id } }),
+      })
+    } catch { /* el correo es secundario; la aprobación ya quedó */ }
     fetchAll()
   }
 
@@ -125,6 +134,14 @@ export default function AdminPage() {
       method: 'PATCH', headers,
       body: JSON.stringify({ aprobado: false }),
     })
+    // Avisar al profesional (best-effort; el endpoint valida superadmin).
+    try {
+      await fetch('/api/notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: headers.Authorization },
+        body: JSON.stringify({ type: 'account_rejected', data: { lawyerId: id } }),
+      })
+    } catch { /* el correo es secundario */ }
     fetchAll()
   }
 

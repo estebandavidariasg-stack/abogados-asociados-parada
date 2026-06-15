@@ -1,4 +1,5 @@
 import nodemailer from 'nodemailer'
+import { renderShell, emailButton, infoBox, em, C } from './_lib/emailTemplate.js'
 
 /* ────────────────────────────────────────────────────────────────────────
    Endpoint de "olvidé mi contraseña" con correo customizado estilo AAP.
@@ -25,7 +26,7 @@ const SUPABASE_URL =
   process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
 
-const DEFAULT_REDIRECT = 'https://abogadosyasociadosparada.com/nueva-contrasena'
+const DEFAULT_REDIRECT = 'https://abogadosparada.com/nueva-contrasena'
 
 /* ── Verificación de reCAPTCHA contra Google ──────────────────────────────
    Sin esto, un atacante hace flooding de correos de recuperación a víctimas
@@ -107,59 +108,23 @@ async function recordAttempt(email) {
 }
 
 function renderResetEmailHtml({ actionLink }) {
-  return `
-<div style="margin:0;background-color:#0d1b2a;padding:32px 16px;font-family:Georgia,'Times New Roman',serif;">
-  <div style="max-width:480px;margin:0 auto;background-color:#132237;border-radius:12px;overflow:hidden;">
-
-    <div style="background-color:#0a1628;padding:28px 24px;text-align:center;">
-      <div style="color:#c9a84c;font-size:20px;letter-spacing:3px;text-transform:uppercase;font-weight:bold;">
-        Abogados y Asociados Parada
-      </div>
-      <div style="color:#ffffff;font-size:13px;letter-spacing:1px;margin-top:6px;">
-        Restablecer contraseña
-      </div>
-    </div>
-
-    <div style="padding:28px 24px;">
-      <p style="margin:0 0 18px 0;color:#cccccc;font-size:15px;line-height:1.7;">
-        Recibimos una solicitud para restablecer la contraseña de tu cuenta.
-        Si fuiste tú, haz clic en el botón a continuación para crear una nueva contraseña:
-      </p>
-
-      <div style="text-align:center;margin:28px 0 22px;">
-        <a href="${actionLink}"
-           style="display:inline-block;background-color:#c9a84c;color:#0d1b2a;font-size:15px;font-weight:bold;padding:14px 36px;border-radius:8px;text-decoration:none;letter-spacing:1px;text-transform:uppercase;font-family:Georgia,'Times New Roman',serif;">
-          Restablecer mi contraseña
-        </a>
-      </div>
-
-      <div style="border:1px solid #1e3a5f;border-radius:8px;background-color:#0d1b2a;padding:14px 16px;margin-top:8px;">
-        <p style="margin:0;color:#888888;font-size:12px;line-height:1.6;">
-          Si el botón no funciona, copia y pega este enlace en tu navegador:
-        </p>
-        <p style="margin:8px 0 0;word-break:break-all;">
-          <a href="${actionLink}" style="color:#c9a84c;font-size:12px;text-decoration:none;">
-            ${actionLink}
-          </a>
-        </p>
-      </div>
-
-      <p style="margin:22px 0 0;color:#999999;font-size:13px;line-height:1.6;">
-        El enlace expira en <strong style="color:#c9a84c;">1 hora</strong>.
-        Si no solicitaste este cambio, puedes ignorar este correo — tu contraseña actual seguirá funcionando.
-      </p>
-    </div>
-
-    <div style="border-top:1px solid #c9a84c;opacity:0.3;margin:0 24px;"></div>
-
-    <div style="color:#555555;font-size:11px;text-align:center;padding:20px 24px;line-height:1.6;">
-      Este correo fue generado automáticamente por el sistema de Abogados y Asociados Parada.
-      No responda a este mensaje.
-    </div>
-
-  </div>
-</div>
-  `
+  const inner =
+    `<p style="margin:0 0 26px;font-size:15px;line-height:1.75;color:${C.body};text-align:justify;">
+       Recibimos una solicitud para restablecer la contraseña de tu cuenta. Si fuiste tú, usa el botón para crear una nueva contraseña.
+     </p>
+     <div style="text-align:center;margin:0 0 26px;">${emailButton('Restablecer contraseña', actionLink)}</div>
+     ${infoBox(
+       `<p style="margin:0;color:${C.muted};font-size:12px;line-height:1.6;">Si el botón no funciona, copia y pega este enlace en tu navegador:</p>
+        <p style="margin:8px 0 0;word-break:break-all;"><a href="${actionLink}" target="_blank" style="color:${C.navy};font-size:12px;text-decoration:underline;">${actionLink}</a></p>`
+     )}
+     <p style="margin:22px 0 0;font-size:13px;line-height:1.65;color:${C.body};">
+       El enlace expira en ${em('1 hora')}. Si no solicitaste este cambio, puedes ignorar este correo; tu contraseña actual seguirá funcionando.
+     </p>`
+  return renderShell({
+    subjectLine: 'Restablecer contraseña',
+    preheader: 'Crea una nueva contraseña para tu cuenta.',
+    innerHtml: inner,
+  })
 }
 
 export default async function handler(req, res) {
@@ -245,7 +210,7 @@ export default async function handler(req, res) {
     await transporter.sendMail({
       from:    `"Abogados y Asociados Parada" <${process.env.GMAIL_USER}>`,
       to:      normalizedEmail,
-      subject: 'Restablece tu contraseña — Abogados y Asociados Parada',
+      subject: 'Restablece tu contraseña',
       html:    renderResetEmailHtml({ actionLink }),
     })
 

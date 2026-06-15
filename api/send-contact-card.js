@@ -1,4 +1,5 @@
 import nodemailer from 'nodemailer'
+import { renderShell, infoBox, C, FONT_SERIF } from './_lib/emailTemplate.js'
 
 // Reutiliza el mismo patrón de transporte que /api/notify.js (Gmail SMTP).
 const transporter = nodemailer.createTransport({
@@ -65,53 +66,37 @@ function renderContactCardHtml({ recipient, contact, codigoReferencia }) {
   const waPhone   = sanitizeColPhone(contact.celular)
   const waUrl     = waPhone ? `https://wa.me/57${waPhone}` : ''
 
-  return `
-<div style="margin:0;background-color:#0d1b2a;padding:32px 16px;font-family:Georgia,'Times New Roman',serif;">
-  <div style="max-width:480px;margin:0 auto;background-color:#132237;border-radius:12px;overflow:hidden;">
+  const cardInner =
+    `<div style="text-align:center;">
+       <div style="font-family:${FONT_SERIF};font-size:20px;font-weight:700;color:${C.navy};letter-spacing:0.01em;margin-bottom:${contact.email || waUrl ? '12px' : '0'};">
+         ${fullName || '—'}
+       </div>` +
+    (contact.email
+      ? `<a href="mailto:${contact.email}" style="color:${C.navy};font-size:14px;text-decoration:underline;display:block;margin-bottom:${waUrl ? '18px' : '0'};">${contact.email}</a>`
+      : '') +
+    (waUrl
+      ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto;"><tr>
+           <td align="center" bgcolor="#128C4B" style="border-radius:8px;background-color:#128C4B;">
+             <a href="${waUrl}" target="_blank" style="display:inline-block;padding:12px 26px;font-size:14px;font-weight:700;color:#ffffff;border-radius:8px;letter-spacing:0.02em;">Escribir por WhatsApp</a>
+           </td>
+         </tr></table>`
+      : '') +
+    `</div>`
 
-    <div style="background-color:#0a1628;padding:28px 24px;text-align:center;">
-      <div style="color:#c9a84c;font-size:20px;letter-spacing:3px;text-transform:uppercase;font-weight:bold;">
-        Abogados y Asociados Parada
-      </div>
-      <div style="color:#ffffff;font-size:13px;letter-spacing:1px;margin-top:6px;">
-        Ficha de Contacto
-      </div>
-    </div>
+  const inner =
+    `<p style="margin:0 0 22px;font-size:15px;line-height:1.7;color:${C.body};text-align:center;">
+       Estos son los datos de contacto de tu ${otraParte}:
+     </p>
+     ${infoBox(cardInner)}` +
+    (codigoReferencia
+      ? `<p style="margin:18px 0 0;text-align:center;font-size:12px;color:${C.muted};">Ref. consulta: ${codigoReferencia}</p>`
+      : '')
 
-    <div style="padding:28px 24px;">
-      <p style="margin:0 0 24px 0;color:#cccccc;font-size:15px;line-height:1.7;">
-        Aquí están los datos de contacto de tu ${otraParte}:
-      </p>
-
-      <div style="border:2px solid #c9a84c;border-radius:10px;background-color:#0d1b2a;padding:24px;">
-        <div style="color:#ffffff;font-size:20px;font-family:Georgia,'Times New Roman',serif;font-weight:bold;margin-bottom:10px;">
-          ${fullName || '—'}
-        </div>
-        ${contact.email ? `
-        <a href="mailto:${contact.email}" style="color:#c9a84c;font-size:14px;text-decoration:none;display:block;margin-bottom:16px;">
-          ${contact.email}
-        </a>` : ''}
-        ${waUrl ? `
-        <a href="${waUrl}" style="display:inline-block;background-color:#25D366;color:#ffffff;font-size:14px;font-weight:bold;padding:12px 28px;border-radius:6px;text-decoration:none;">
-          💬 Escribir por WhatsApp
-        </a>` : ''}
-      </div>
-    </div>
-
-    ${codigoReferencia ? `
-    <div style="color:#888888;font-size:12px;text-align:center;padding:16px 24px;border-top:1px solid #1e3a5f;">
-      Ref. consulta: ${codigoReferencia}
-    </div>` : ''}
-
-    <div style="border-top:1px solid #c9a84c;opacity:0.3;margin:0 24px;"></div>
-
-    <div style="color:#555555;font-size:11px;text-align:center;padding:20px 24px;line-height:1.6;">
-      Este correo fue generado automáticamente por el sistema de Abogados y Asociados Parada. No responda a este mensaje.
-    </div>
-
-  </div>
-</div>
-  `
+  return renderShell({
+    subjectLine: 'Ficha de contacto',
+    preheader: `Datos de contacto de tu ${otraParte}.`,
+    innerHtml: inner,
+  })
 }
 
 // ── Handler principal ─────────────────────────────────────────────────────
@@ -132,7 +117,7 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Faltan correos de destino.' })
   }
 
-  const subject = 'Ficha de contacto — Abogados y Asociados Parada'
+  const subject = 'Ficha de contacto'
   const from    = `"Abogados y Asociados Parada" <${process.env.GMAIL_USER}>`
 
   try {

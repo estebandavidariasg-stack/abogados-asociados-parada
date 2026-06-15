@@ -33,6 +33,8 @@ ANTHROPIC_API_KEY            # Anthropic key — used ONLY by api/ai.js (server-
 AI_CLIENTE_MAX_MSGS          # Message cap per client triage session (default 6)
 AI_MAX_SESIONES_IP_HORA      # Max triage sessions per IP per hour (default 10)
 AI_IP_SALT                   # Salt used to hash client IPs stored in ai_sesiones
+AI_MAX_USOS_SALA_DIA         # Professional-assistant analyses per chat room per day (default 2)
+                             # — caps cost of the "summarize/analyze a room" action in api/ai.js
 ```
 
 ## Architecture
@@ -132,6 +134,8 @@ Vercel serverless functions live under [api/](api/). The email functions share t
 | [api/verify-request.js](api/verify-request.js) | Lawyer/contador "Verificar" → inserts a `verificacion` row in `notificaciones`, posts to `mensajes_internos`, and emails the admin. Validates (via `_lib/adminAuth`) that the caller is a professional **assigned to that room**. |
 | [api/reassign.js](api/reassign.js) | Admin confirms reassigning an inactive room: removes the inactive lawyer, assigns the chosen one (`status='invited'`, room → `waiting`), posts a system message, marks the notification `atendida`. Validates **superadmin** + that the chosen lawyer is approved. |
 | [api/cron/gen-inactividad.js](api/cron/gen-inactividad.js) | **Vercel Cron** (`0 * * * *` in [vercel.json](vercel.json)). Scans `waiting`/`active` rooms with no message in 24h and inserts `inactividad` notifications (dedup by room). Protected by `CRON_SECRET`. |
+| [api/ai.js](api/ai.js) | **Single Claude proxy** for both AI assistants — dispatches by `modo` (`cliente` triage / `abogado` professional assistant). Holds `ANTHROPIC_API_KEY`. See **AI System** above for the full design (sessions, rate limits, JSON contract, attachments, per-room cost cap). |
+| [api/solicitudes.js](api/solicitudes.js) | **Open-request / claim model** (one function, 3 actions): `GET` lists open requests for the caller's `tipo_profesional`; `POST {accion:'publicar'}` (client publishes a consultation with no area match); `POST {accion:'tomar', roomId}` (professional claims it — atomic, first wins). Validates approved-professional on writes. |
 
 Call from the frontend with `fetch('/api/<endpoint>', { method: 'POST', body: JSON.stringify(...) })`.
 
@@ -171,6 +175,23 @@ Client cédulas are stored as **SHA-256 hashes** for anonymity. Outgoing message
 
 Both poll `mensajes_internos` every 3s via `setInterval` and `getAuthHeaders()`-authenticated `fetch`. Messages have `from_id`, `to_id`, `leido` (read flag); unread counts drive badges. **Don't reach for Realtime here** — the polling design is intentional and matches the rest of this feature.
 
+### AI System (Claude)
+
+All model calls go through a **single serverless proxy** ([api/ai.js](api/ai.js)) — `ANTHROPIC_API_KEY` is never exposed to the browser. The proxy dispatches by `req.body.modo` into two **completely separate** assistants. The frontend never calls Anthropic directly: it POSTs to `/api/ai` via the thin [src/lib/aiClient.js](src/lib/aiClient.js) `pedirIA(body, {authHeader})`, which never throws (returns `{ok, status, data}` so each caller picks its own fallback). Server-side helpers live in [api/_lib/](api/_lib/): `anthropic.js` (lazy SDK client + `completar()`), `aiPrompts.js` (the two system prompts), `aiLogic.js` (IP hashing, JSON parsing, candidate block). **Model choice is per-mode** in `api/_lib/anthropic.js` `MODELOS`: triage → Haiku, professional assistant → Sonnet. The system prompt is sent with `cache_control: ephemeral` (prompt caching).
+
+**1. Client triage (`modo: 'cliente'`)** — the **public, unauthenticated** admission assistant, embedded in the consultation flow ([ChatSection.jsx](src/components/chat/ChatSection.jsx)). It asks one question at a time, then classifies the case into an area and recommends 1–3 professionals **by id from a server-injected candidate list** (built from the cached `/api/professionals` list — it can only recommend real, approved people). Key mechanics:
+- **Strict JSON contract.** `SYSTEM_CLIENTE` forces a single JSON object (`mensaje`, `listo_para_recomendar`, `area_detectada`, `recomendados[]`, `costo_rango`, `resumen_para_profesional`, `sugerir_publicar`). `completar()` is called with `prefill: '{'` to force JSON out of Haiku; `parseTriageReply()` extracts the first `{...}` and falls back to a safe object on any parse failure.
+- **Sessions + rate limits** persist in the `ai_sesiones` table (service-role only). Client IPs are SHA-256-hashed (`AI_IP_SALT`). Caps: `AI_CLIENTE_MAX_MSGS` messages/session, `AI_MAX_SESIONES_IP_HORA` new sessions/IP/hour. On the cap the proxy returns `{error:'limite'}` and the UI falls back to manual professional selection.
+- **`sugerir_publicar`** drives the **open-request ("publicar") flow**: when no professional matches the detected area, the client publishes the consultation instead of picking someone — see the claim model below.
+
+**2. Professional assistant — "IA Parada Precise" (`modo: 'abogado'`)** — an **authenticated** drafting/analysis tool for lawyers AND contadores ([AsistenteIA.jsx](src/components/chat/AsistenteIA.jsx), mounted in both `ProfilePage` and `ProfileContadorPage`). `getCallerProfile` enforces `rol ∈ {abogado, contador}`. Unlike the triage it returns **free markdown** (rendered via the shared [Markdown.jsx](src/components/shared/Markdown.jsx)), not JSON. Features:
+- Drafts petitions/tutelas/contracts/concepts, summarizes/analyzes cases. `SYSTEM_ABOGADO` mandates a "Borrador generado por IA — requiere revisión profesional" banner and `[bracket]` placeholders for missing data.
+- **Attachments**: PDF + images (≤4 MB each, 5 max) are sent base64 as Claude content blocks (`bloquesAdjuntos`).
+- **Per-room cost cap**: when invoked with `{accion, roomId}` (summarize/analyze a specific consultation), usage is metered in the `ai_uso_salas` table — `AI_MAX_USOS_SALA_DIA` analyses per room per day, then `429 {error:'limite'}`. ⚠️ If that table doesn't exist the cap is silently skipped (won't break the flow).
+- **Chat history is per-user `localStorage`** (`ia_chats_${uid}`, capped 50) — there is NO server-side store of professional conversations. Responses can be exported to Word/PDF (client-side, reusing the rendered HTML).
+
+**Open-request / "claim" model ([api/solicitudes.js](api/solicitudes.js))** — a single endpoint (consolidated to stay under Vercel Hobby's 12-function limit) backing an Uber/DiDi-style flow for cases with no area match: `POST {accion:'publicar'}` creates an `open` room, `GET` lists open requests of the caller's `tipo_profesional`, `POST {accion:'tomar', roomId}` is an **atomic claim — first professional wins**. Both writes validate the caller is an approved professional.
+
 ### Admin Panel
 
 [src/pages/AdminPage.jsx](src/pages/AdminPage.jsx) is the superadmin control center. Tabs (declared in a single `TABS` array):
@@ -195,7 +216,7 @@ Two profile pages share the same CSS module ([ProfilePage.module.css](src/pages/
 - [src/pages/ProfilePage.jsx](src/pages/ProfilePage.jsx) — lawyers (`rol = 'abogado'`)
 - [src/pages/ProfileContadorPage.jsx](src/pages/ProfileContadorPage.jsx) — accountants (`rol = 'contador'`)
 
-Both let the user edit personal data, social links, profile photo, intro video, and a tarjeta-profesional file; both mount `LawyerInternalChat`, `MisContratos` (`isSuperAdmin={false}`), and a chat dashboard (`LawyerChatDashboard` vs `ContadorChatDashboard`).
+Both let the user edit personal data, social links, profile photo, intro video, and a tarjeta-profesional file; both mount `LawyerInternalChat`, `MisContratos` (`isSuperAdmin={false}`), a chat dashboard (`LawyerChatDashboard` vs `ContadorChatDashboard`), and the `AsistenteIA` panel (the "IA Parada Precise" professional assistant — see **AI System** above).
 
 ⚠️ **Column reuse:** `profiles.area_derecho` stores the comma-joined list of specialties for both roles — for contadores it actually means *especialidades contables* (Auditoría, Tributaria, etc.). The column was kept rather than adding a new one. When reading or filtering by specialty, treat its meaning as role-dependent.
 
@@ -227,6 +248,8 @@ The public homepage (`/`) composes these key sections (all in [src/components/ho
 | `codigos_referencia` | QR reference codes (`AAP-XXXXXX`) managed via [src/components/admin/CodigosReferencia.jsx](src/components/admin/CodigosReferencia.jsx) |
 | `videos_carrusel` | Promotional videos — `video_url`, `poster_url` (thumbnail of first frame, generated client-side by [src/utils/extractPoster.js](src/utils/extractPoster.js)), `orden`, `activo`. Managed via [src/components/home/VideoCarousel.jsx](src/components/home/VideoCarousel.jsx) |
 | `verification_codes` | Email OTPs for registration (`email`, `code`, `tipo_registro`, `expires_at`, `used`, `created_at`). Written/read **only by the two verification serverless functions** using the service-role key — never queried from the client. |
+| `ai_sesiones` | Client-triage sessions (`ip_hash`, `tipo_profesional`, `mensajes_count`, plus the recommendation snapshot `area_detectada`/`resumen`/`recomendados`/`costo_rango`). Written/read **only by api/ai.js** with the service-role key; IPs are SHA-256-hashed (`AI_IP_SALT`). Drives the per-session/per-IP triage rate limits. DDL in [docs/sql/ai_sesiones.sql](docs/sql/ai_sesiones.sql). |
+| `ai_uso_salas` | Per-room/day counter (`room_id`, `fecha`, `usos`, `profesional_id`) capping the professional assistant's summarize/analyze action at `AI_MAX_USOS_SALA_DIA`. Service-role only (RLS-locked). **Optional** — if the table is absent, api/ai.js silently skips the cap. DDL in [docs/sql/ai_uso_salas.sql](docs/sql/ai_uso_salas.sql). |
 | `notificaciones` | Admin notification center (`tipo` `inactividad`\|`verificacion`, `room_id`, `lawyer_id`, `client_nombre`, `area`, `mensaje`, `leido`, `atendida`, `created_at`). **RLS-locked: only superadmin SELECT/UPDATE; INSERT/DELETE service-role only.** The bell ([NotificationBell.jsx](src/components/admin/NotificationBell.jsx), mounted in AdminPage header) reads unread rows directly via REST; writes happen in the `verify-request`/`reassign`/`cron` endpoints. Schema (table + indexes + RLS) was applied by hand in Supabase, not tracked in-repo. |
 
 Storage buckets in use: `profile-photos`, `profile-videos`, `contratos`, `tarjetas-profesionales`.

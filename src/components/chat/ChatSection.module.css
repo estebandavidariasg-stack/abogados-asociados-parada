@@ -9,6 +9,13 @@
   align-items: center;
 }
 
+/* Tipografía de botones del flujo: SIEMPRE la suave (Raleway), nunca la serif
+   de los títulos. <button> no hereda font-family por defecto, así que esta
+   regla unifica todos los botones del apartado en una sola fuente de verdad. */
+.section button {
+  font-family: 'Raleway', sans-serif;
+}
+
 /* ── Encabezado ── */
 .header {
   text-align: center;
@@ -150,11 +157,10 @@
   border-radius: 8px;
   padding: 13px 22px;
   color: #ffffff;
-  font-weight: 700;
+  font-weight: 600;
   font-size: 0.9rem;
   cursor: pointer;
-  font-family: 'Cinzel', serif;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.02em;
   width: 100%;
   transition: opacity 0.2s, transform 0.1s, background 0.2s;
 }
@@ -801,10 +807,9 @@
   border-radius: 8px;
   padding: 10px 18px;
   color: #ffffff;
-  font-weight: 700;
+  font-weight: 600;
   font-size: 0.85rem;
   cursor: pointer;
-  font-family: 'Cinzel', serif;
   flex-shrink: 0;
   transition: opacity 0.2s, background 0.2s;
 }
@@ -832,10 +837,16 @@
   padding: 32px;
 }
 
+/* El tamaño/centrado/regla dorada los fija el <style> global .aap-card-rating;
+   aquí mandamos la familia (Cormorant Garamond, más suave y elegante que la
+   Cinzel anterior) y el peso, que el global no toca. */
 .ratingTitle {
   color: var(--navy);
-  font-family: 'Cinzel', serif;
-  font-size: 1.2rem;
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 1.45rem;
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: 0.005em;
   margin: 0 0 8px;
 }
 
@@ -1063,6 +1074,10 @@
   box-shadow: 0 3px 14px rgba(13, 45, 94, 0.07);
   transition: box-shadow 0.3s, border-color 0.3s;
   cursor: default;
+  /* Capa propia: la sombra (pesada) se rasteriza una vez y el flotar solo
+     compone la capa, en vez de repintar la sombra en cada frame. */
+  will-change: transform;
+  backface-visibility: hidden;
 }
 
 .featureCard:hover {
@@ -1082,6 +1097,19 @@
   justify-content: center;
   flex-shrink: 0;
   color: #c9a84c;
+  position: relative;    /* ancla del halo (z-index auto: el halo cae detrás) */
+}
+
+/* Halo dorado animado por GPU (opacity/scale). z-index negativo + chip con
+   position:relative sin z-index => se pinta DETRÁS del chip, como aura externa. */
+.cardIconGlow {
+  position: absolute;
+  inset: -12px;
+  z-index: -1;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(201, 168, 76, 0.85), rgba(201, 168, 76, 0) 72%);
+  filter: blur(3px);
+  pointer-events: none;
 }
 
 .cardIconWrap svg {
@@ -1223,25 +1251,40 @@
   padding: 20px 22px;
   background: rgba(13,45,94,0.04);
   border: 1px solid rgba(13,45,94,0.14);
-  border-left: 3px solid var(--gold, #c9a84c);
   border-radius: 12px;
   display: flex;
   flex-direction: column;
 }
 
+/* Encabezado y selector centrados (igual que el panel de calificación); el
+   acento dorado pasa del borde lateral a una regla centrada bajo el título. */
 .pqrTitle {
-  font-family: 'Cinzel', serif;
-  font-size: 0.95rem;
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 1.3rem;
   font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: 0.005em;
   color: var(--navy, #0d2d5e);
-  margin: 0 0 4px;
-  letter-spacing: 0.04em;
+  margin: 0 0 8px;
+  text-align: center;
+}
+
+.pqrTitle::after {
+  content: '';
+  display: block;
+  width: 44px;
+  height: 2px;
+  margin: 8px auto 0;
+  background: linear-gradient(90deg, rgba(201,168,76,0.25), rgba(201,168,76,0.95), rgba(201,168,76,0.25));
+  border-radius: 2px;
 }
 
 .pqrSubtitle {
-  font-size: 0.74rem;
-  color: var(--muted, #6b7fa3);
-  margin: 0 0 14px;
+  font-size: 0.8rem;
+  line-height: 1.55;
+  color: #4a5d7a;
+  margin: 0 0 16px;
+  text-align: center;
 }
 
 .pqrTipoPills {
@@ -1249,6 +1292,7 @@
   gap: 10px;
   margin-bottom: 12px;
   flex-wrap: wrap;
+  justify-content: center;
 }
 
 .pqrTipoPill,
@@ -1322,7 +1366,7 @@
    visualmente con el resto). Aquí gold filled, sentence case, mismo radius. */
 .pqrFooter {
   display: flex;
-  justify-content: flex-end;
+  justify-content: center;
   margin-top: 12px;
 }
 
@@ -1332,10 +1376,9 @@
   border: none;
   border-radius: 8px;
   padding: 10px 22px;
-  font-family: 'Cinzel', serif;
   font-size: 0.85rem;
   font-weight: 600;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.02em;
   cursor: pointer;
   transition: background 0.2s ease, transform 0.1s ease;
 }
@@ -1349,15 +1392,25 @@
 }
 
 /* ── Banner "Tu consulta anterior fue cerrada" ── */
+/* Estado neutro de "consulta finalizada": panel sereno azul (no el dorado
+   tipo advertencia anterior). Centrado y coherente con las tarjetas de abajo. */
 .closedBanner {
-  background: rgba(201,168,76,0.08);
-  border: 1px solid rgba(201,168,76,0.35);
-  border-radius: 10px;
-  padding: 14px 18px;
+  text-align: center;
+  background: linear-gradient(180deg, #f6f9fd 0%, #eef3fa 100%);
+  border: 1px solid rgba(13, 45, 94, 0.12);
+  border-radius: 12px;
+  padding: 16px 22px;
   margin-bottom: 20px;
-  font-size: 0.83rem;
-  color: var(--navy, #0d2d5e);
+  font-size: 0.85rem;
+  color: #4a5d7a;
   line-height: 1.6;
+}
+
+.closedBanner strong {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--navy, #0d2d5e);
+  font-weight: 600;
 }
 .closedBanner strong { color: #8a6a28; }
 

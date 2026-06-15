@@ -13,6 +13,7 @@
 ──────────────────────────────────────────────────────────────────────── */
 
 import { SUPABASE_URL, serviceHeaders, getCallerProfile } from './_lib/adminAuth.js'
+import { sendReassignEmail } from './_lib/mailer.js'
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -33,7 +34,7 @@ export default async function handler(req, res) {
   let nuevo = null
   try {
     const r = await fetch(
-      `${SUPABASE_URL}/rest/v1/profiles?id=eq.${newLawyerId}&select=id,nombre,apellido,aprobado&limit=1`,
+      `${SUPABASE_URL}/rest/v1/profiles?id=eq.${newLawyerId}&select=id,nombre,apellido,aprobado,email&limit=1`,
       { headers: serviceHeaders() }
     )
     const [p] = await r.json()
@@ -83,7 +84,21 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'No se pudo completar la reasignación.' })
   }
 
-  // 7) Marcar la notificación como atendida (best-effort).
+  // 7) Avisar por correo al abogado nuevo (best-effort: no bloquea la reasignación).
+  if (nuevo.email) {
+    try {
+      const base = process.env.VITE_APP_URL || 'https://abogadosparada.com'
+      await sendReassignEmail({
+        email: nuevo.email,
+        nombreAbogado: `${nuevo.nombre || ''} ${nuevo.apellido || ''}`.trim() || 'profesional',
+        ctaUrl: `${base}/?loginModal=true`,
+      })
+    } catch (e) {
+      console.error('[reassign] correo al abogado nuevo falló:', e?.message || e)
+    }
+  }
+
+  // 8) Marcar la notificación como atendida (best-effort).
   if (notifId) {
     try {
       await fetch(`${SUPABASE_URL}/rest/v1/notificaciones?id=eq.${notifId}`, {

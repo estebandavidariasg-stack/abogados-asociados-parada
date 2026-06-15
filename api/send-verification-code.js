@@ -1,5 +1,6 @@
 import nodemailer from 'nodemailer'
 import { randomInt } from 'node:crypto'
+import { renderShell, codeBox, em, C } from './_lib/emailTemplate.js'
 
 /* ────────────────────────────────────────────────────────────────────────
    Endpoint: envío de código de verificación de 6 dígitos para registro
@@ -150,56 +151,21 @@ async function insertCode({ email, code, tipoRegistro, expiresAt }) {
   }
 }
 
-// ── Plantilla del correo (estilos 100% inline) ─────────────────────────
-// Sólo la tarjeta — sin wrapper navy alrededor. La tarjeta va flotando
-// sobre el fondo blanco del cliente de correo. Todo el texto del cuerpo
-// en blanco para máximo contraste sobre el navy de la card.
+// ── Plantilla del correo (tema claro compartido) ───────────────────────
 function renderVerificationEmailHtml({ code, tipoRegistro }) {
   const rolLabel = tipoRegistro === 'contador' ? 'Contador' : 'Abogado'
-  return `
-<div style="margin:0;padding:24px 16px;font-family:Georgia,'Times New Roman',serif;">
-  <div style="max-width:480px;margin:0 auto;background-color:#132237;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(13,27,42,0.18);">
-
-    <div style="background-color:#0a1628;padding:28px 24px;text-align:center;">
-      <div style="color:#c9a84c;font-size:18px;letter-spacing:3px;text-transform:uppercase;font-weight:bold;">
-        Abogados y Asociados Parada
-      </div>
-      <div style="color:#ffffff;font-size:13px;margin-top:6px;">
-        Verificación de cuenta
-      </div>
-    </div>
-
-    <div style="padding:32px 24px;">
-      <p style="margin:0;color:#ffffff;font-size:15px;line-height:1.7;">
-        Para completar tu registro como
-        <strong style="color:#c9a84c;">${rolLabel}</strong>,
-        ingresa el siguiente código:
-      </p>
-
-      <div style="background-color:#0a1628;border:2px solid #c9a84c;border-radius:10px;padding:24px;text-align:center;margin:24px 0;">
-        <div style="font-size:42px;font-weight:bold;color:#c9a84c;letter-spacing:12px;font-family:Georgia,'Times New Roman',serif;">
-          ${code}
-        </div>
-      </div>
-
-      <p style="margin:0;color:#ffffff;font-size:13px;text-align:center;">
-        Este código expira en 10 minutos.
-      </p>
-      <p style="margin:16px 0 0;color:#ffffff;font-size:12px;text-align:center;opacity:0.8;">
-        Si no solicitaste este registro, ignora este correo.
-      </p>
-    </div>
-
-    <div style="border-top:1px solid rgba(201,168,76,0.3);margin:0 24px;"></div>
-
-    <div style="color:#ffffff;opacity:0.65;font-size:11px;text-align:center;padding:20px 24px;line-height:1.6;">
-      Este correo fue generado automáticamente por Abogados y Asociados Parada.
-      No responda a este mensaje.
-    </div>
-
-  </div>
-</div>
-  `
+  const inner =
+    `<p style="margin:0;font-size:16px;line-height:1.6;color:${C.navy};text-align:center;">
+       Para completar tu registro como ${em(rolLabel)}, ingresa este código:
+     </p>
+     ${codeBox(code)}
+     <p style="margin:0;text-align:center;font-size:13px;color:${C.body};">Este código expira en 10 minutos.</p>
+     <p style="margin:10px 0 0;text-align:center;font-size:12px;color:${C.muted};">Si no solicitaste este registro, ignora este correo.</p>`
+  return renderShell({
+    subjectLine: 'Verificación de cuenta',
+    preheader: `Tu código de verificación: ${code}`,
+    innerHtml: inner,
+  })
 }
 
 // ── Handler ────────────────────────────────────────────────────────────
@@ -208,6 +174,8 @@ export default async function handler(req, res) {
   // cualquier sitio web podría disparar envíos de OTP usando el navegador
   // de sus visitantes (spam de correos a víctimas arbitrarias).
   const ALLOWED = new Set([
+    'https://abogadosparada.com',
+    'https://www.abogadosparada.com',
     'https://abogadosyasociadosparada.com',
     'https://www.abogadosyasociadosparada.com',
     'https://paradayasociados.co',
@@ -285,7 +253,7 @@ export default async function handler(req, res) {
     await transporter.sendMail({
       from:    `"Abogados y Asociados Parada" <${process.env.GMAIL_USER}>`,
       to:      email,
-      subject: 'Código de verificación — Abogados y Asociados Parada',
+      subject: 'Tu código de verificación',
       html:    renderVerificationEmailHtml({ code, tipoRegistro }),
     })
 

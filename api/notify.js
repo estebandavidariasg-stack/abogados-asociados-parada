@@ -1,4 +1,16 @@
 import nodemailer from 'nodemailer'
+import { renderEmailHtml, renderShell, infoBox, emailButton, em, C } from './_lib/emailTemplate.js'
+import { getCallerProfile } from './_lib/adminAuth.js'
+
+const ADMIN_NOTIFY_EMAIL = process.env.ADMIN_NOTIFY_EMAIL || 'abogadosyasociados.parada@gmail.com'
+
+// Escapa texto del usuario antes de meterlo en el HTML del correo (evita que
+// un mensaje con < > rompa el layout o inyecte marcado).
+function esc(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+}
 
 const transporter = nodemailer.createTransport({
   service: 'gmail',
@@ -8,7 +20,7 @@ const transporter = nodemailer.createTransport({
   },
 })
 
-const SITE_BASE = 'https://abogadosyasociadosparada.com'
+const SITE_BASE = 'https://abogadosparada.com'
 
 const SUPABASE_URL =
   process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL
@@ -24,7 +36,7 @@ async function resolveProfessionalEmail(lawyerId) {
     const url =
       `${SUPABASE_URL}/rest/v1/profiles` +
       `?id=eq.${encodeURIComponent(lawyerId)}` +
-      `&select=email,nombre,apellido&limit=1`
+      `&select=email,nombre,apellido,rol&limit=1`
     const res = await fetch(url, {
       headers: {
         apikey:        SUPABASE_SERVICE_ROLE_KEY,
@@ -56,57 +68,14 @@ function buildCtaUrl(recipientRole, codigoReferencia) {
   }
 }
 
-// Email HTML template — alineado visualmente con send-verification-code.js
-// (tarjeta navy + acentos dorados, sin fondo full-bleed). El navy del header
-// (#0a1628) y el del cuerpo (#132237) son los mismos del correo del código
-// de verificación; mantener este pareo asegura branding consistente.
-function renderEmailHtml({ subjectLine, greetingHtml, bodyHtml, ctaLabel, ctaUrl }) {
-  return `
-<div style="margin:0;padding:24px 16px;font-family:Georgia,'Times New Roman',serif;">
-  <div style="max-width:560px;margin:0 auto;background-color:#132237;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(13,27,42,0.18);">
-
-    <div style="background-color:#0a1628;padding:28px 24px;text-align:center;">
-      <div style="color:#c9a84c;font-size:18px;letter-spacing:3px;text-transform:uppercase;font-weight:bold;">
-        Abogados y Asociados Parada
-      </div>
-      <div style="color:#ffffff;font-size:13px;margin-top:6px;">
-        ${subjectLine}
-      </div>
-    </div>
-
-    <div style="padding:32px 24px;">
-      <p style="margin:0 0 16px;color:#ffffff;font-size:15px;line-height:1.7;">
-        ${greetingHtml}
-      </p>
-      <div style="margin:0 0 28px;color:#ffffff;font-size:15px;line-height:1.7;">
-        ${bodyHtml}
-      </div>
-      <div style="text-align:center;">
-        <a href="${ctaUrl}" style="display:inline-block;background-color:#c9a84c;color:#0a1628;font-weight:bold;padding:14px 32px;border-radius:8px;text-transform:uppercase;letter-spacing:1px;text-decoration:none;font-size:14px;font-family:Georgia,'Times New Roman',serif;">
-          ${ctaLabel}
-        </a>
-      </div>
-    </div>
-
-    <div style="border-top:1px solid rgba(201,168,76,0.3);margin:0 24px;"></div>
-
-    <div style="color:#ffffff;opacity:0.65;font-size:11px;text-align:center;padding:20px 24px;line-height:1.6;">
-      Este correo fue generado automáticamente por Abogados y Asociados Parada.
-      No responda a este mensaje.
-    </div>
-  </div>
-</div>
-  `
-}
-
 function emailAbogado({ nombreAbogado, nombreCliente, area, ctaUrl }) {
-  const subjectLine = `Nueva consulta pendiente — ${area}`
+  const subjectLine = `Nueva consulta pendiente: ${area}`
   return {
     subject: subjectLine,
     html: renderEmailHtml({
       subjectLine,
-      greetingHtml: `Estimado/a <strong style="color:#c9a84c;">${nombreAbogado}</strong>,`,
-      bodyHtml: `Tienes una nueva consulta pendiente por parte de <strong style="color:#c9a84c;">${nombreCliente}</strong> en el área de <strong style="color:#c9a84c;">${area}</strong>. Ingresa a la plataforma para atenderla a la brevedad posible.`,
+      greetingHtml: `Estimado/a <strong style="color:#0d2d5e;font-weight:700;">${nombreAbogado}</strong>,`,
+      bodyHtml: `Tienes una nueva consulta pendiente por parte de <strong style="color:#0d2d5e;font-weight:700;">${nombreCliente}</strong> en el área de <strong style="color:#0d2d5e;font-weight:700;">${area}</strong>. Ingresa a la plataforma para atenderla a la brevedad posible.`,
       ctaLabel: 'Ver consulta',
       ctaUrl,
     }),
@@ -114,13 +83,13 @@ function emailAbogado({ nombreAbogado, nombreCliente, area, ctaUrl }) {
 }
 
 function emailCliente({ nombreCliente, nombreAbogado, area, ctaUrl }) {
-  const subjectLine = `Tu consulta fue recibida — ${area}`
+  const subjectLine = `Tu consulta fue recibida: ${area}`
   return {
     subject: subjectLine,
     html: renderEmailHtml({
       subjectLine,
-      greetingHtml: `Estimado/a <strong style="color:#c9a84c;">${nombreCliente}</strong>,`,
-      bodyHtml: `Tu consulta en el área de <strong style="color:#c9a84c;">${area}</strong> ha sido recibida. El abogado/a <strong style="color:#c9a84c;">${nombreAbogado}</strong> se ha unido y está listo para atenderte. Ingresa a la plataforma para continuar con tu consulta.`,
+      greetingHtml: `Estimado/a <strong style="color:#0d2d5e;font-weight:700;">${nombreCliente}</strong>,`,
+      bodyHtml: `Tu consulta en el área de <strong style="color:#0d2d5e;font-weight:700;">${area}</strong> ha sido recibida. El abogado/a <strong style="color:#0d2d5e;font-weight:700;">${nombreAbogado}</strong> se ha unido y está listo para atenderte. Ingresa a la plataforma para continuar con tu consulta.`,
       ctaLabel: 'Ir al chat',
       ctaUrl,
     }),
@@ -128,7 +97,7 @@ function emailCliente({ nombreCliente, nombreAbogado, area, ctaUrl }) {
 }
 
 function emailInactividad({ nombreAbogado, nombreCliente, area, createdAt, ctaUrl }) {
-  const subjectLine = 'Consulta sin atender — acción requerida'
+  const subjectLine = 'Consulta sin atender: acción requerida'
   const fechaCreacion = createdAt
     ? new Date(createdAt).toLocaleDateString('es-CO', {
         day: 'numeric', month: 'long', year: 'numeric',
@@ -138,10 +107,10 @@ function emailInactividad({ nombreAbogado, nombreCliente, area, createdAt, ctaUr
     subject: subjectLine,
     html: renderEmailHtml({
       subjectLine,
-      greetingHtml: `Estimado/a <strong style="color:#c9a84c;">${nombreAbogado}</strong>,`,
+      greetingHtml: `Estimado/a <strong style="color:#0d2d5e;font-weight:700;">${nombreAbogado}</strong>,`,
       bodyHtml:
-        `Tienes una consulta de <strong style="color:#c9a84c;">${nombreCliente}</strong>` +
-        (area ? ` en el área de <strong style="color:#c9a84c;">${area}</strong>` : '') +
+        `Tienes una consulta de <strong style="color:#0d2d5e;font-weight:700;">${nombreCliente}</strong>` +
+        (area ? ` en el área de <strong style="color:#0d2d5e;font-weight:700;">${area}</strong>` : '') +
         (fechaCreacion ? ` (abierta el ${fechaCreacion})` : '') +
         ` sin actividad por más de 24 horas. ` +
         `El equipo administrativo te solicita ingresar a la plataforma y dar respuesta lo antes posible. ` +
@@ -149,6 +118,68 @@ function emailInactividad({ nombreAbogado, nombreCliente, area, createdAt, ctaUr
       ctaLabel: 'Atender consulta',
       ctaUrl,
     }),
+  }
+}
+
+function emailAprobado({ nombreAbogado, rol, ctaUrl }) {
+  const rolLabel = rol === 'contador' ? 'contador' : 'abogado'
+  const subjectLine = 'Tu cuenta fue aprobada'
+  return {
+    subject: subjectLine,
+    html: renderEmailHtml({
+      subjectLine,
+      preheader: 'Ya apareces en la plataforma. Ingresa para empezar.',
+      greetingHtml: `Estimado/a <strong style="color:#0d2d5e;font-weight:700;">${nombreAbogado}</strong>,`,
+      bodyHtml:
+        `Tu cuenta como <strong style="color:#0d2d5e;font-weight:700;">${rolLabel}</strong> en Abogados y Asociados Parada ya fue aprobada. ` +
+        `Desde ahora apareces en la plataforma y los clientes pueden encontrarte y escribirte. ` +
+        `Ingresa para completar tu perfil y empezar a atender consultas.`,
+      ctaLabel: 'Ingresar a mi cuenta',
+      ctaUrl,
+    }),
+  }
+}
+
+function emailRechazado({ nombreAbogado, rol, ctaUrl }) {
+  const rolLabel = rol === 'contador' ? 'contador' : 'abogado'
+  const subjectLine = 'Sobre tu solicitud de registro'
+  return {
+    subject: subjectLine,
+    html: renderEmailHtml({
+      subjectLine,
+      preheader: 'Información sobre tu solicitud de registro.',
+      greetingHtml: `Estimado/a <strong style="color:#0d2d5e;font-weight:700;">${esc(nombreAbogado)}</strong>,`,
+      bodyHtml:
+        `Revisamos tu solicitud de registro como <strong style="color:#0d2d5e;font-weight:700;">${rolLabel}</strong> en Abogados y Asociados Parada y, por ahora, no fue aprobada. ` +
+        `Si consideras que se trata de un error o deseas enviar información adicional, puedes escribirnos por los canales oficiales que encuentras en nuestro sitio.`,
+      ctaLabel: 'Visitar el sitio',
+      ctaUrl,
+    }),
+  }
+}
+
+// PQR del cliente al equipo administrativo. Ficha con los datos + el mensaje.
+function emailPqr({ tipo, clientNombre, clientEmail, codigoReferencia, mensaje, ctaUrl }) {
+  const tipoLabel = tipo === 'queja' ? 'Queja' : tipo === 'reclamo' ? 'Reclamo' : 'Petición'
+  const subjectLine = `Nueva PQR: ${tipoLabel}`
+  const campo = (label, value) =>
+    `<p style="margin:0 0 2px;font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:${C.muted};">${label}</p>
+     <p style="margin:0 0 12px;font-size:14px;color:${C.navy};font-weight:600;">${esc(value) || '—'}</p>`
+  const inner =
+    `<p style="margin:0 0 22px;font-size:15px;line-height:1.7;color:${C.body};text-align:center;">
+       Un cliente envió una <strong style="color:#0d2d5e;font-weight:700;">${tipoLabel.toLowerCase()}</strong> desde la plataforma.
+     </p>
+     ${infoBox(
+       campo('Cliente', clientNombre) +
+       campo('Correo', clientEmail) +
+       (codigoReferencia ? campo('Referencia', codigoReferencia) : '') +
+       `<p style="margin:6px 0 2px;font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:${C.muted};">Mensaje</p>
+        <p style="margin:0;font-size:14px;line-height:1.6;color:${C.body};white-space:pre-wrap;">${esc(mensaje)}</p>`
+     )}
+     <div style="text-align:center;margin:26px 0 0;">${emailButton('Ver en el panel', ctaUrl)}</div>`
+  return {
+    subject: subjectLine,
+    html: renderShell({ subjectLine, preheader: `${tipoLabel} de ${clientNombre || 'un cliente'}.`, innerHtml: inner }),
   }
 }
 
@@ -161,6 +192,90 @@ export default async function handler(req, res) {
   try {
     const { type, data, recipientRole, codigoReferencia } = req.body
     const ctaUrl = buildCtaUrl(recipientRole, codigoReferencia)
+
+    // ── Aviso al profesional cuando el admin aprueba su cuenta ──
+    // Acción sensible (suplantable para phishing): exige superadmin.
+    if (type === 'account_approved') {
+      const caller = await getCallerProfile(req)
+      if (caller?.rol !== 'superadmin') {
+        return res.status(401).json({ error: 'No autorizado.' })
+      }
+      const { lawyerId } = data || {}
+      if (!lawyerId) {
+        return res.status(400).json({ error: 'Falta lawyerId.' })
+      }
+      const pro = await resolveProfessionalEmail(lawyerId)
+      if (!pro?.email) {
+        return res.status(400).json({ error: 'No se pudo resolver el correo del profesional.' })
+      }
+      const { subject, html } = emailAprobado({
+        nombreAbogado: `${pro.nombre || ''} ${pro.apellido || ''}`.trim() || 'profesional',
+        rol: pro.rol,
+        ctaUrl: `${SITE_BASE}/?loginModal=true`,
+      })
+      await transporter.sendMail({
+        from: `"Abogados y Asociados Parada" <${process.env.GMAIL_USER}>`,
+        to: pro.email,
+        subject,
+        html,
+      })
+      return res.status(200).json({ ok: true, sent: 'account_approved' })
+    }
+
+    // ── Aviso al profesional cuando el admin rechaza su solicitud ──
+    // También sensible → exige superadmin.
+    if (type === 'account_rejected') {
+      const caller = await getCallerProfile(req)
+      if (caller?.rol !== 'superadmin') {
+        return res.status(401).json({ error: 'No autorizado.' })
+      }
+      const { lawyerId } = data || {}
+      if (!lawyerId) {
+        return res.status(400).json({ error: 'Falta lawyerId.' })
+      }
+      const pro = await resolveProfessionalEmail(lawyerId)
+      if (!pro?.email) {
+        return res.status(400).json({ error: 'No se pudo resolver el correo del profesional.' })
+      }
+      const { subject, html } = emailRechazado({
+        nombreAbogado: `${pro.nombre || ''} ${pro.apellido || ''}`.trim() || 'profesional',
+        rol: pro.rol,
+        ctaUrl: SITE_BASE,
+      })
+      await transporter.sendMail({
+        from: `"Abogados y Asociados Parada" <${process.env.GMAIL_USER}>`,
+        to: pro.email,
+        subject,
+        html,
+      })
+      return res.status(200).json({ ok: true, sent: 'account_rejected' })
+    }
+
+    // ── PQR del cliente → correo al equipo administrativo ──
+    // Disparado tras el insert anónimo del PQR. Solo notifica al correo fijo
+    // del admin (no a destinatarios arbitrarios), así que el peor abuso es
+    // ruido en una sola bandeja.
+    if (type === 'pqr_received') {
+      const { tipo, clientNombre, clientEmail, codigoReferencia, mensaje } = data || {}
+      if (!tipo || !mensaje) {
+        return res.status(400).json({ error: 'Faltan datos de la PQR.' })
+      }
+      const { subject, html } = emailPqr({
+        tipo,
+        clientNombre,
+        clientEmail,
+        codigoReferencia,
+        mensaje: String(mensaje).slice(0, 2000),
+        ctaUrl: `${SITE_BASE}/admin`,
+      })
+      await transporter.sendMail({
+        from: `"Abogados y Asociados Parada" <${process.env.GMAIL_USER}>`,
+        to: ADMIN_NOTIFY_EMAIL,
+        subject,
+        html,
+      })
+      return res.status(200).json({ ok: true, sent: 'pqr_received' })
+    }
 
     // ── Notificación al abogado cuando llega consulta nueva ──
     // Acepta `lawyerId` (preferido) o `lawyerEmail` (legacy, compat hacia

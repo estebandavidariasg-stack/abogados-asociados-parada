@@ -82,7 +82,7 @@ export default async function handler(req, res) {
 
   // 4) Correo al admin (best-effort: si falla, la solicitud ya quedó registrada).
   try {
-    const base = process.env.VITE_APP_URL || 'https://abogadosyasociadosparada.com'
+    const base = process.env.VITE_APP_URL || 'https://abogadosparada.com'
     await sendVerificationEmail({
       nombreAbogado, nombreCliente: cliente, area: areaTxt,
       ctaUrl: `${base}/admin?tab=chats&room=${roomId}`,
