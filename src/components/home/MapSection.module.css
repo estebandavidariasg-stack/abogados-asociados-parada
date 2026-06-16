@@ -369,7 +369,10 @@
 /* Cuando ya no caben superpuestas, las columnas bajan a flujo normal en grilla */
 @media (max-width: 1180px) {
   .dashboard { display: flex; flex-direction: column; gap: 1.75rem; }
-  .mapHero   { order: -1; max-width: 1080px; }
+  /* Orden apilado: dos tarjetas, el mapa en medio, las otras dos tarjetas. */
+  .colLeft   { order: 1; }
+  .mapHero   { order: 2; max-width: 1080px; }
+  .colRight  { order: 3; }
   .colLeft,
   .colRight {
     position: static;

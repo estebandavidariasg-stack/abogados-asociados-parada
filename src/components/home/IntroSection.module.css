@@ -252,6 +252,9 @@
     padding: calc(72px + 2.5rem) 1.25rem 6rem;
   }
   .section::after { height: 160px; }
+  /* Tracking más cerrado en móvil para que "Abogados y Asociados Parada"
+     quepa en una sola línea con sus guiones (con 0.42em se partía en dos). */
+  .eyebrow { letter-spacing: 0.3em; }
   .eyebrow::before,
   .eyebrow::after { width: 18px; margin: 0 10px; }
   .heading { font-size: clamp(2rem, 9vw, 2.8rem); margin-bottom: 1.4rem; }
@@ -263,5 +266,15 @@
 @media (max-width: 480px) {
   .section { padding: calc(72px + 2rem) 1rem 5rem; }
   .heading { font-size: clamp(1.8rem, 10vw, 2.4rem); }
-  .eyebrow { font-size: 0.62rem; }
+  .eyebrow { font-size: 0.6rem; letter-spacing: 0.18em; }
+  .eyebrow::before,
+  .eyebrow::after { width: 14px; margin: 0 8px; }
+}
+
+/* Pantallas muy angostas (≤360px): tracking y guiones aún más cerrados para
+   conservar el eyebrow en una sola línea sin que se parta. */
+@media (max-width: 360px) {
+  .eyebrow { font-size: 0.56rem; letter-spacing: 0.11em; }
+  .eyebrow::before,
+  .eyebrow::after { width: 11px; margin: 0 6px; }
 }

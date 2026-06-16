@@ -94,6 +94,17 @@
   box-shadow: 0 6px 28px rgba(13,45,94,0.4);
 }
 
+/* En móvil el FAB absoluto caía sobre el título centrado. Lo ponemos en flujo,
+   centrado debajo del encabezado. */
+@media (max-width: 768px) {
+  .fab {
+    position: static;
+    display: block;
+    margin: 0.75rem auto 0;   /* un poco más arriba */
+    width: fit-content;
+  }
+}
+
 /* ── TOOLBAR ──────────────────────────────────────────── */
 .toolbar {
   position: absolute;
@@ -104,6 +115,20 @@
   z-index: 50;
   display: flex;
   gap: 10px;
+}
+
+/* En móvil la barra de edición (Agregar/Guardar/Cancelar) pasa a flujo,
+   centrada bajo el encabezado, para no superponerse al título. Va DESPUÉS de
+   la regla base para ganarle en orden de cascada. */
+@media (max-width: 768px) {
+  .toolbar {
+    position: static;
+    transform: none;
+    left: auto;
+    margin: 0.75rem auto 0;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
 }
 
 .toolAdd, .toolSave, .toolCancel {

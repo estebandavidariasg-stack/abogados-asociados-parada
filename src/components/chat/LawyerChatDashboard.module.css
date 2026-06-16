@@ -601,10 +601,13 @@
 
 /* ── Mobile ── */
 @media (max-width: 700px) {
+  /* Alto prudente estándar; los mensajes scrollean dentro, no la página.
+     'dvh' descuenta la barra del navegador móvil. */
   .dashboard {
     grid-template-columns: 1fr;
     grid-template-rows: 1fr;
-    height: 78vh;
+    height: 80vh;   /* fallback */
+    height: 80dvh;
     min-height: 500px;
     border-radius: 10px;
   }

@@ -48,9 +48,16 @@ export default function NotificationBell({ onOpenRoom }) {
   const btnRef  = useRef(null)
 
   // Mide la campana y posiciona el panel justo debajo, alineado a la derecha.
+  // En pantallas angostas lo fijamos al borde derecho (sin importar dónde esté
+  // la campana) para que el panel no se salga ni se corte por la izquierda.
   const updateCoords = useCallback(() => {
     const r = btnRef.current?.getBoundingClientRect()
-    if (r) setCoords({ top: r.bottom + 8, right: Math.max(8, window.innerWidth - r.right) })
+    if (!r) return
+    const narrow = window.innerWidth <= 560
+    setCoords({
+      top: r.bottom + 8,
+      right: narrow ? 12 : Math.max(8, window.innerWidth - r.right),
+    })
   }, [])
 
   /* ── Cargar no leídas (RLS superadmin) ── */

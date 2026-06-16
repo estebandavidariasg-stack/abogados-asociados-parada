@@ -113,7 +113,8 @@
     border-right: none; border-bottom: 1px solid rgba(13, 45, 94, 0.09);
     max-height: 40vh;
   }
-  .main { height: 70vh; min-height: 440px; }
+  /* 'dvh' descuenta la barra del navegador móvil: solo el hilo scrollea, no la página. */
+  .main { height: 70vh; height: 70dvh; min-height: 440px; }
 }
 
 /* ── Barra de marca ── */

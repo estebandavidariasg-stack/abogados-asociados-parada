@@ -181,6 +181,23 @@
   background: linear-gradient(135deg, #15376b 0%, #0d2d5e 100%);
   flex-shrink: 0;
 }
+
+/* Botón "Volver" en el header navy — solo móvil (en escritorio se ve lista+chat). */
+.backBtn {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  border-radius: 9px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  cursor: pointer;
+  transition: background 0.18s;
+}
+.backBtn:hover { background: rgba(255, 255, 255, 0.22); }
 .chatHeadAvatar {
   width: 38px;
   height: 38px;
@@ -501,42 +518,82 @@
 
 /* ── Responsive ── */
 @media (max-width: 640px) {
+  /* Patrón panel de profesionales: lista de perfiles en UNA columna; al tocar
+     uno se muestra SOLO el chat (con botón "Volver"). */
   .wrap {
     flex-direction: column;
-    height: 75vh;
+    height: auto;
+    min-height: 0;
+    overflow: visible;
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    /* Al abrir un chat lo llevamos al viewport (scrollIntoView): este margen lo
+       deja DEBAJO del riel admin sticky (top 8px + 156px alto ≈ 164px). */
+    scroll-margin-top: 170px;
   }
   .sidebar {
     width: 100%;
-    max-height: 110px;
-    border-right: none;
-    border-bottom: 1px solid rgba(13, 45, 94, 0.1);
+    max-height: none;
+    border: none;
+    background: transparent;
   }
-  .sidebarHead { display: none; }
+  .sidebarHead { display: block; padding: 0 2px 10px; border: none; }
   .lista {
     display: flex;
-    flex-direction: row;
-    overflow-x: auto;
-    overflow-y: hidden;
-    padding: 6px 8px;
-    gap: 6px;
+    flex-direction: column;
+    overflow: visible;
+    padding: 0;
+    gap: 8px;
   }
   .item {
-    flex-direction: column;
-    gap: 4px;
-    min-width: 68px;
-    max-width: 80px;
-    padding: 8px 6px;
+    flex-direction: row;
+    gap: 11px;
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+    padding: 11px 14px;
     border: 1px solid rgba(13, 45, 94, 0.1);
-    border-bottom: 1px solid rgba(13, 45, 94, 0.1);
-    border-radius: 10px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.7);
     align-items: center;
-    justify-content: center;
+    justify-content: flex-start;
+    text-align: left;
   }
-  .itemActive { border-left: 1px solid rgba(201,168,76,0.4); border-top: 2px solid #c9a84c; }
-  .itemCiudad { display: none; }
-  .itemNombre { font-size: 0.58rem; text-align: center; white-space: normal; }
+  .itemActive { border-left: 1px solid rgba(201,168,76,0.4); border-top: none; border-color: var(--gold); }
+  .itemInfo  { display: block; min-width: 0; flex: 1; }
+  .itemNombre { font-size: 0.86rem; text-align: left; white-space: normal; }
+  .itemCiudad { display: block; }
+  .rolPill { font-size: 0.5rem; padding: 2px 6px; }
+
+  /* Chat con alto prudente estándar: la ALTURA va en el contenedor flex
+     (.wrapOpen), porque .chatArea es flex:1 y colapsaría al contenido si le
+     pusiéramos la altura directamente. Así .chatArea llena el alto y SOLO los
+     mensajes hacen scroll interno. 'dvh' excluye la barra del navegador móvil
+     para que el compositor nunca quede detrás de ella ni fuerce scroll de página. */
+  .wrapOpen {
+    /* El chat ocupa el espacio que queda bajo el riel admin sticky, así entra
+       completo (cabecera → compositor) sin usar el scroll de la página. */
+    height: calc(100vh - 186px);   /* fallback */
+    height: calc(100dvh - 186px);
+    min-height: 360px;
+    overflow: hidden;
+  }
+  .chatArea {
+    border: 1px solid rgba(13, 45, 94, 0.1);
+    border-radius: 14px;
+    overflow: hidden;
+  }
+  .wrapOpen .sidebar { display: none; }          /* con perfil = solo chat */
+  .wrap:not(.wrapOpen) .chatArea { display: none; } /* sin perfil = solo lista */
+  .backBtn { display: inline-flex; }
+
+  /* Composer: que el botón enviar NUNCA se corte (antes no se podía enviar). */
+  .inputArea { gap: 6px; padding: 10px 12px; }
+  .inputMsg  { min-width: 0; }
+  .attachBtn, .recordingBtn, .btnEnviar { flex-shrink: 0; }
+
   .burbuja { max-width: 82%; }
-  .rolPill { font-size: 0.45rem; padding: 1px 5px; }
 }
 
 /* ══════════════════════════════════════════

@@ -1,3 +1,17 @@
+/* El widget reCAPTCHA es fijo (302px) y no se encoge. En pantallas angostas lo
+   escalamos para que no se corte dentro del modal. */
+.captchaWrap {
+  display: flex;
+  justify-content: center;
+  margin: 18px 0 8px;
+}
+@media (max-width: 400px) {
+  .captchaWrap { transform: scale(0.9); transform-origin: center top; }
+}
+@media (max-width: 350px) {
+  .captchaWrap { transform: scale(0.8); transform-origin: center top; }
+}
+
 /* ── OVERLAY ─────────────────────────────────────────────── */
 .overlay {
   position: fixed;

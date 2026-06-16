@@ -279,7 +279,11 @@
 
 /* ── Riel -> barra superior horizontal en pantallas medianas/pequeñas ── */
 @media (max-width: 860px) {
-  .shell { flex-direction: column; gap: 1rem; }
+  /* align-items: stretch para que .content tome el ANCHO del shell (y no su
+     max-content). Sin esto, los tabs con contenido ancho (historial de chats,
+     chat interno) inflaban .content y se recortaban. */
+  .shell { flex-direction: column; gap: 1rem; align-items: stretch; }
+  .content { width: 100%; min-width: 0; }
   .sidebar,
   .sidebar:hover {
     position: sticky;
@@ -320,12 +324,26 @@
   }
 }
 
-/* Solo iconos + contador en pantallas muy estrechas */
+/* Solo iconos + contador en pantallas muy estrechas. Además el riel ENVUELVE
+   (no scroll horizontal): los tabs en una fila, inicio/logout en otra, todo
+   visible sin tener que desplazar a la derecha. */
 @media (max-width: 480px) {
+  .sidebar,
+  .sidebar:hover { overflow-x: visible; }
+  .sidebarInner,
+  .sidebar:hover .sidebarInner { flex-wrap: wrap; justify-content: center; row-gap: 0.45rem; }
   .navLabel { display: none; }
-  .navItem { padding: 0.55rem 0.7rem; }
+  /* width:auto + flex:0 0 auto → cada icono ocupa su ancho y envuelven en
+     filas (sin el width:100% del riel vertical que los apilaba). */
+  .navItem,
+  .sidebar:hover .navItem { width: auto; flex: 0 0 auto; padding: 0.5rem 0.62rem; }
+  /* Badge más grande y en la esquina del icono → el número se ve nítido. */
   .navBadge,
-  .sidebar:hover .navBadge { position: absolute; top: 3px; right: 4px; margin: 0; }
+  .sidebar:hover .navBadge {
+    position: absolute; top: -4px; right: -4px; margin: 0;
+    min-width: 18px; height: 18px; padding: 0 4px;
+    font-size: 0.66rem; line-height: 18px;
+  }
 }
 
 /* ══════════════════════════════════════════
@@ -912,6 +930,17 @@
   box-shadow: 0 4px 16px rgba(10, 30, 100, 0.08);
 }
 
+.alertaActions { display: flex; flex-direction: column; gap: 6px; align-items: flex-end; }
+
+/* En móvil la tarjeta se apila: icono + datos arriba; el bloque badge+botón
+   pasa a una fila propia a todo el ancho, con el botón "Notificar" completo
+   (antes el texto quedaba aplastado y el botón encimado). */
+@media (max-width: 600px) {
+  .alertaCard { align-items: flex-start; gap: 10px; }
+  .alertaActions { flex: 1 1 100%; flex-direction: row; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+  .alertaActions .btnNotificar { flex: 1 1 100%; justify-content: center; }
+}
+
 .alertaIcono { font-size: 1.5rem; flex-shrink: 0; }
 
 .alertaInfo {
@@ -1016,6 +1045,35 @@
 }
 .logout { color: #a23b3b; }
 .logout:hover { background: rgba(162, 59, 59, 0.08); color: #8c2f2f; }
+
+/* ── Riel móvil: tabs agrupados arriba; inicio + salir en su PROPIA fila,
+   separados de los demás por una línea sutil (no se mezclan). Compacto: el
+   pie es una sola fila (inicio y salir lado a lado, no apilados). Va DESPUÉS
+   de la regla base .sideFoot para ganarle en el orden de cascada. ── */
+@media (max-width: 480px) {
+  /* Tabs en grilla pareja de 4 columnas → 8 tabs = 2 filas de 4 (no 7+1
+     huérfano). justify-items:center deja el icono centrado en su celda, así
+     el badge se pega al icono y no a la esquina de la celda. */
+  .sideNav,
+  .sidebar:hover .sideNav {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    justify-items: center;
+    flex: 1 1 100%;
+    gap: 0.5rem 0.2rem;
+  }
+  .sideFoot,
+  .sidebar:hover .sideFoot {
+    display: flex;
+    flex: 1 1 100%;
+    flex-direction: row;
+    justify-content: center;
+    gap: 0.6rem;
+    margin: 0.15rem 0 0;
+    padding: 0.55rem 0 0;
+    border-top: 1px solid rgba(13, 45, 94, 0.09);
+  }
+}
 
 /* ── Modal de confirmación de cierre de sesión ── */
 .logoutOverlay {
@@ -1416,9 +1474,27 @@
   .page       { padding: 2rem 1.25rem 4rem; }
   .pageInner  { padding: 1.75rem 1.5rem 1.75rem; border-radius: 16px; }
   .stats      { grid-template-columns: 1fr 1fr; }
-  .card       { flex-wrap: wrap; gap: 1rem; }
-  .cardActions { flex-direction: row; flex-wrap: wrap; width: 100%; }
+  /* Tarjeta de profesional: avatar alineado al tope (no centrado contra la
+     columna de info), y las acciones como un PIE separado por una línea. */
+  .card       { flex-wrap: wrap; gap: 0.9rem 1.1rem; align-items: flex-start; }
+  .cardInfo   { flex: 1 1 60%; }
+  .cardActions {
+    width: 100%;
+    flex-direction: column;
+    gap: 0.55rem;
+    margin-top: 0.1rem;
+    padding-top: 0.85rem;
+    border-top: 1px solid rgba(13, 45, 94, 0.08);
+  }
+  /* Toggle como fila de ajuste: etiqueta a la izquierda, switch a la derecha. */
+  .toggleDescarga {
+    width: 100%;
+    flex-direction: row-reverse;
+    justify-content: space-between;
+  }
+  .btnReject { width: 100%; justify-content: center; }
   .header     { flex-direction: column; gap: 1rem; }
+  .headerActions { align-self: flex-end; }   /* campana a la derecha en móvil */
   .modalWide  { grid-template-columns: 1fr; }
   .modalPreviewCol { display: none; }
   .slidesGrid { grid-template-columns: 1fr 1fr; }

@@ -812,7 +812,11 @@ select.input option {
 
 /* Sidebar -> barra superior en pantallas medianas/pequeñas */
 @media (max-width: 860px) {
-  .shell { flex-direction: column; gap: 1rem; }
+  /* 'stretch' es CLAVE: en columna, con 'flex-start' (el valor de escritorio)
+     el .content se dimensiona a su ancho max-content y los chats (IA, interno,
+     consultas) se desbordan y quedan cortados. Con 'stretch' el .content toma
+     el ancho del riel y todo el contenido se ajusta al viewport. */
+  .shell { flex-direction: column; gap: 1rem; align-items: stretch; }
   /* En móvil el riel es una barra horizontal completa (sin colapso ni hover) */
   .sidebar,
   .sidebar:hover {

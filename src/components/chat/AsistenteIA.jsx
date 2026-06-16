@@ -180,8 +180,15 @@ export default function AsistenteIA() {
     if (!msg || msg.role !== 'assistant') { setStream(null); return; }
     const full = msg.content || '';
     if (stream.n >= full.length) { setStream(null); return; }
-    const step = Math.max(1, Math.ceil(full.length / 190)); // ~4.5s sin importar el largo
-    const t = setTimeout(() => setStream((s) => (s ? { ...s, n: Math.min(full.length, s.n + step) } : s)), 24);
+    // Revelado PROPORCIONAL a la longitud: una respuesta corta aparece casi al
+    // instante (~0.3s) y una larga se revela rápido pero con tope (~3s). Antes
+    // era fijo ~4.5s para cualquier respuesta, lo que hacía sentir lentas las
+    // respuestas simples.
+    const TICK = 24;
+    const totalMs = Math.min(3000, Math.max(300, (full.length / 700) * 1000));
+    const ticks = Math.max(1, Math.round(totalMs / TICK));
+    const step = Math.max(1, Math.ceil(full.length / ticks));
+    const t = setTimeout(() => setStream((s) => (s ? { ...s, n: Math.min(full.length, s.n + step) } : s)), TICK);
     return () => clearTimeout(t);
   }, [stream, thread]);
 

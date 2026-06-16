@@ -711,7 +711,7 @@ export default function AdminPage() {
                           : `${r.lawyer_ids.length} profesional${r.lawyer_ids.length > 1 ? 'es' : ''} asignado${r.lawyer_ids.length > 1 ? 's' : ''}`}
                       </p>
                     </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end' }}>
+                    <div className={styles.alertaActions}>
                       <span className={styles.alertaBadge}>+24h sin actividad</span>
                       {!sinAbogados && (
                         <button

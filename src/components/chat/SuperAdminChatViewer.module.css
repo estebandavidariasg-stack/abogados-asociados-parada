@@ -279,6 +279,48 @@
   letter-spacing: 0.05em;
 }
 
+/* ── Estado de la sala en pastel (esperando / activo / cerrado) ── */
+.room_waiting { background: rgba(201, 168, 76, 0.07); }
+.room_active  { background: rgba(58, 160, 90, 0.07); }
+.room_closed  { background: rgba(90, 110, 140, 0.045); }
+.room_waiting:hover { background: rgba(201, 168, 76, 0.13); }
+.room_active:hover  { background: rgba(58, 160, 90, 0.13); }
+.room_closed:hover  { background: rgba(90, 110, 140, 0.09); }
+
+/* Píldora de estado (reemplaza el texto suelto) */
+.roomStatusPill {
+  flex-shrink: 0;
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 2px 9px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.pill_waiting { background: rgba(201, 168, 76, 0.18); color: #8a6a28; }
+.pill_active  { background: rgba(58, 160, 90, 0.16); color: #2f7d4f; }
+.pill_closed  { background: rgba(90, 110, 140, 0.14); color: #56688c; }
+
+/* Botón "Volver" — solo visible en móvil (en escritorio se ven lista y chat). */
+.backBtn {
+  display: none;
+  align-items: center;
+  gap: 5px;
+  background: rgba(13, 45, 94, 0.05);
+  border: 1px solid rgba(13, 45, 94, 0.12);
+  border-radius: 8px;
+  color: #0d2d5e;
+  font-family: 'Raleway', sans-serif;
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 7px 12px;
+  margin: 0 0 10px;
+  cursor: pointer;
+  transition: background 0.18s;
+}
+.backBtn:hover { background: rgba(13, 45, 94, 0.1); }
+
 .roomClient {
   font-size: 0.72rem;
   color: #8a9ab5;
@@ -662,26 +704,60 @@
 /* ── Responsive ── */
 @media (max-width: 900px) {
   .stats { grid-template-columns: repeat(2, 1fr); }
-  .grid  { grid-template-columns: 1fr; grid-template-rows: 220px 1fr; height: auto; min-height: 80vh; }
+
+  /* Patrón tipo panel de profesionales: lista de chats en UNA columna; al
+     tocar una sala se muestra SOLO el chat (con botón "Volver"). */
+  .grid {
+    display: block;
+    height: auto;
+    min-height: 0;
+    border: none;
+    border-radius: 0;
+    overflow: visible;
+    box-shadow: none;
+  }
   .sidebar {
-    border-right: none;
-    border-bottom: 1px solid rgba(13,45,94,0.08);
-    overflow-x: auto;
-    overflow-y: hidden;
-    display: flex;
-    flex-direction: row;
+    display: block;
+    border: none;
+    overflow: visible;
+    background: transparent;
+    min-width: 0;
   }
   .roomRow, .roomRowActive {
-    min-width: 200px;
-    border-bottom: none;
-    border-left: none;
-    border-bottom: 2px solid transparent;
-    flex-shrink: 0;
+    width: auto;
+    display: block;
+    flex-shrink: 1;
+    border: 1px solid rgba(13, 45, 94, 0.1);
+    border-radius: 12px;
+    margin-bottom: 10px;
+    padding: 14px 16px;
   }
-  .roomRowActive { border-bottom-color: var(--gold); }
-  .main { min-height: 60vh; }
+  .roomRowActive { border-color: var(--gold); }
+  .roomArea { min-width: 0; white-space: normal; }   /* ya hay ancho: que envuelva */
+
+  /* Alto prudente estándar: el panel scrollea internamente (mensajes), no la
+     página. 'dvh' descuenta la barra del navegador móvil. */
+  .main {
+    border: 1px solid rgba(13, 45, 94, 0.1);
+    border-radius: 12px;
+    height: 80vh;   /* fallback */
+    height: 80dvh;
+    min-width: 0;
+  }
+  .placeholder { display: none; }                     /* sin sala = solo lista */
+  .grid.gridOpen .sidebar { display: none; }          /* con sala = solo chat */
+  .grid:not(.gridOpen) .main { display: none; }
+  .backBtn { display: inline-flex; }
+
   .bubbleMine, .bubbleOther { max-width: 88%; }
   .chatHeader { flex-direction: column; }
+}
+
+@media (max-width: 600px) {
+  /* Filtros apilados a todo el ancho (antes el select de área se cortaba). */
+  .filters { flex-direction: column; align-items: stretch; }
+  .filters > * { width: 100%; }
+  .filterSelect { width: 100%; }
 }
 
 @media (max-width: 480px) {

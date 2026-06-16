@@ -52,6 +52,16 @@ export default function AdminInternalChat({ miId }) {
   const mensajesRef  = useRef(null)
   const lastCountRef = useRef(0)
   const pollRef      = useRef()
+  const wrapRef      = useRef(null)
+
+  // En móvil el chat queda debajo del panel admin; al abrir una conversación lo
+  // llevamos al tope del viewport para operarlo sin usar el scroll de la página
+  // (el alto es 80dvh y los mensajes scrollean internamente).
+  useEffect(() => {
+    if (selected && wrapRef.current && window.matchMedia('(max-width: 640px)').matches) {
+      wrapRef.current.scrollIntoView({ block: 'start', behavior: 'smooth' })
+    }
+  }, [selected])
 
   useEffect(() => {
     fetchAbogados()
@@ -379,7 +389,7 @@ export default function AdminInternalChat({ miId }) {
   }
 
   return (
-    <div className={styles.wrap}>
+    <div ref={wrapRef} className={`${styles.wrap} ${selected ? styles.wrapOpen : ''}`}>
 
       {/* ── Sidebar profesionales ── */}
       <div className={styles.sidebar}>
@@ -429,6 +439,11 @@ export default function AdminInternalChat({ miId }) {
           <>
             {/* Header */}
             <div className={styles.chatHead}>
+              {/* Volver a la lista (solo móvil) */}
+              <button type="button" className={styles.backBtn}
+                onClick={() => setSelected(null)} aria-label="Volver a la lista de profesionales">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+              </button>
               <div className={styles.chatHeadAvatar}>
                 {selected.foto_url
                   ? <img src={selected.foto_url} alt={selected.nombre} width="44" height="44" loading="lazy" decoding="async" />

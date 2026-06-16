@@ -821,7 +821,9 @@
 @media (max-width: 600px) {
   .section { padding: 60px 16px; }
   .card, .formCard { padding: 24px 18px; }
-  .chatWrap { height: 80vh; }
+  /* 'dvh' descuenta la barra del navegador móvil: el compositor queda siempre
+     visible y solo los mensajes hacen scroll interno (no la página). */
+  .chatWrap { height: 80vh; height: 80dvh; }
   .msgBubble { max-width: 90%; }
   .lawyerAvatar { width: 42px; height: 42px; }
   .sendBtn { padding: 10px 14px; font-size: 0.8rem; }

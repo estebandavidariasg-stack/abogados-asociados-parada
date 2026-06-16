@@ -823,7 +823,8 @@ export default function SuperAdminChatViewer({ initialRoomId = null }) {
       </div>
 
       {/* ── Grid ── */}
-      <div className={styles.grid}>
+      {/* gridOpen (con sala activa) controla en móvil mostrar SOLO el chat. */}
+      <div className={`${styles.grid} ${activeRoom ? styles.gridOpen : ''}`}>
 
         {/* Sidebar */}
         <div className={styles.sidebar}>
@@ -834,12 +835,14 @@ export default function SuperAdminChatViewer({ initialRoomId = null }) {
           )}
           {filtered.map(room => (
             <div key={room.id}
-              className={activeRoom?.id === room.id ? styles.roomRowActive : styles.roomRow}
+              className={activeRoom?.id === room.id
+                ? styles.roomRowActive
+                : `${styles.roomRow} ${styles['room_' + room.status] || ''}`}
               onClick={() => setActiveRoom(room)}
             >
               <div className={styles.roomTop}>
                 <p className={styles.roomClientName}>{room.client_nombre || 'Cliente anónimo'}</p>
-                <span className={styles.roomStatus} style={{ color: STATUS_COLOR[room.status] }}>
+                <span className={`${styles.roomStatusPill} ${styles['pill_' + room.status] || ''}`}>
                   {STATUS_LABEL[room.status]}
                 </span>
               </div>
@@ -885,6 +888,12 @@ export default function SuperAdminChatViewer({ initialRoomId = null }) {
             {/* Header */}
             <div className={styles.chatHeader}>
               <div>
+                {/* Volver a la lista (solo móvil) */}
+                <button type="button" className={styles.backBtn}
+                  onClick={() => setActiveRoom(null)} aria-label="Volver a la lista de chats">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+                  Volver
+                </button>
                 <p className={styles.chatTitle}>{activeRoom.area_derecho}</p>
                 {activeRoom.client_nombre && (
                   <p className={styles.chatClient}>

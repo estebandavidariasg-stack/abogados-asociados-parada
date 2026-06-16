@@ -286,8 +286,21 @@
 .profesionChipActive:hover { background: var(--gold-lt); }
 
 @media (max-width: 600px) {
+  /* Solo dos chips: que quepan centrados sin recortarse (antes el row hacía
+     scroll y dejaba "Contadores" cortado). */
   .profesionRow {
-    justify-content: flex-start;
+    justify-content: center;
+    overflow-x: visible;
+    flex-wrap: wrap;
     padding: 0 1rem 4px;
   }
+  .profesionChip {
+    padding: 8px 16px;
+    font-size: 0.72rem;
+    letter-spacing: 0.04em;
+  }
+}
+
+@media (max-width: 360px) {
+  .profesionChip { padding: 7px 13px; font-size: 0.68rem; letter-spacing: 0.02em; }
 }

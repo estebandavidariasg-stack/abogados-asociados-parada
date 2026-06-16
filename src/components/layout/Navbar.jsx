@@ -124,7 +124,7 @@ export default function Navbar({ onLogin, onRegister, onRegisterContador }) {
                   </button>
                 </li>
                 <li>
-                  <button className={styles.dropdownItem}
+                  <button className={`${styles.dropdownItem} ${styles.logoutItem}`}
                     onClick={() => { signOut(); setMenuOpen(false) }}>
                     Cerrar sesión
                   </button>
@@ -208,7 +208,7 @@ export default function Navbar({ onLogin, onRegister, onRegisterContador }) {
                 <span className={styles.mobileUserName}>{displayName}</span>
               </div>
               {isSuperAdmin && (
-                <button className={styles.mobileItem}
+                <button className={`${styles.mobileItem} ${styles.adminItem}`}
                   onClick={() => { window.location.href = '/admin'; setMobileOpen(false) }}>
                   ⚙ Panel Admin
                 </button>
@@ -217,7 +217,7 @@ export default function Navbar({ onLogin, onRegister, onRegisterContador }) {
                 onClick={() => { window.location.href = perfilHref; setMobileOpen(false) }}>
                 Mi perfil
               </button>
-              <button className={styles.mobileItem}
+              <button className={`${styles.mobileItem} ${styles.logoutItem}`}
                 onClick={() => { signOut(); setMobileOpen(false) }}>
                 Cerrar sesión
               </button>

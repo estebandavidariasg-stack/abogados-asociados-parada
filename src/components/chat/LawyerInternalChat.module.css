@@ -370,6 +370,20 @@
 }
 
 @media (max-width: 600px) {
-  .wrap { border-radius: 12px; }
+  /* Alto prudente estándar; 'dvh' descuenta la barra del navegador móvil para
+     que solo los mensajes scrolleen (no la página) y el compositor sea visible. */
+  .wrap {
+    border-radius: 12px;
+    height: 80vh;   /* fallback */
+    height: 80dvh;
+    min-height: 0;
+  }
   .burbuja { max-width: 88%; }
+
+  /* Compositor: el input flex debe poder encogerse (min-width:0); si no, su
+     ancho intrínseco + el placeholder largo empujan el botón enviar fuera del
+     viewport y queda cortado. Los botones no se encogen. */
+  .inputArea { gap: 6px; padding: 10px 12px; }
+  .inputMsg  { min-width: 0; }
+  .attachBtn, .btnEnviar { flex-shrink: 0; }
 }

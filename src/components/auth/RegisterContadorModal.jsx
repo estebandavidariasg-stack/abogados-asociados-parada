@@ -363,7 +363,7 @@ export default function RegisterContadorModal({ onClose }) {
                 </button>
               </div>
             </div>
-            <div style={{ textAlign: 'center', margin: '20px 0' }}>
+            <div className={styles.captchaWrap}>
               <ReCAPTCHA
                 ref={recaptchaRef}
                 sitekey={import.meta.env.VITE_RECAPTCHA_SITE_KEY || '6LeCveUsAAAAAHPFzHpB8KrLMaNEu0E7UORrkgMA'}
@@ -569,7 +569,7 @@ export default function RegisterContadorModal({ onClose }) {
             </label>
 
             {/* Captcha */}
-            <div style={{ textAlign: 'center', margin: '10px 0' }}>
+            <div className={styles.captchaWrap}>
               <ReCAPTCHA
                 ref={recaptchaRef}
                 sitekey={import.meta.env.VITE_RECAPTCHA_SITE_KEY || '6LeCveUsAAAAAHPFzHpB8KrLMaNEu0E7UORrkgMA'}
