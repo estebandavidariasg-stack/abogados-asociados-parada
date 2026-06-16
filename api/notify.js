@@ -1,5 +1,5 @@
 import nodemailer from 'nodemailer'
-import { renderEmailHtml, renderShell, infoBox, emailButton, em, C } from './_lib/emailTemplate.js'
+import { renderEmailHtml, renderShell, infoBox, emailButton, em, C, FONT_SERIF } from './_lib/emailTemplate.js'
 import { getCallerProfile } from './_lib/adminAuth.js'
 
 const ADMIN_NOTIFY_EMAIL = process.env.ADMIN_NOTIFY_EMAIL || 'abogadosyasociados.parada@gmail.com'
@@ -183,6 +183,59 @@ function emailPqr({ tipo, clientNombre, clientEmail, codigoReferencia, mensaje, 
   }
 }
 
+// ── Ficha de contacto (antes en api/send-contact-card.js) ──────────────────
+// Se consolidó aquí para no superar el límite de 12 Serverless Functions del
+// plan Hobby de Vercel. Mismo comportamiento: dos correos cruzados con los
+// datos de la otra parte (cliente ↔ abogado).
+
+// Sanitiza un celular colombiano a sus 10 dígitos para armar https://wa.me/57…
+function sanitizeColPhone(raw = '') {
+  let digits = String(raw).replace(/\D/g, '')
+  if (digits.startsWith('57') && digits.length > 10) digits = digits.slice(2)
+  return digits
+}
+
+// HTML de la ficha de contacto. `recipient` es el rol del DESTINATARIO y
+// `contact` son los datos de la OTRA parte (el contenido de la ficha).
+function renderContactCardHtml({ recipient, contact, codigoReferencia }) {
+  const otraParte = recipient === 'cliente' ? 'abogado' : 'cliente'
+  const fullName  = `${contact.nombre || ''}${contact.apellido ? ' ' + contact.apellido : ''}`.trim()
+  const waPhone   = sanitizeColPhone(contact.celular)
+  const waUrl     = waPhone ? `https://wa.me/57${waPhone}` : ''
+
+  const cardInner =
+    `<div style="text-align:center;">
+       <div style="font-family:${FONT_SERIF};font-size:20px;font-weight:700;color:${C.navy};letter-spacing:0.01em;margin-bottom:${contact.email || waUrl ? '12px' : '0'};">
+         ${esc(fullName) || '—'}
+       </div>` +
+    (contact.email
+      ? `<a href="mailto:${esc(contact.email)}" style="color:${C.navy};font-size:14px;text-decoration:underline;display:block;margin-bottom:${waUrl ? '18px' : '0'};">${esc(contact.email)}</a>`
+      : '') +
+    (waUrl
+      ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto;"><tr>
+           <td align="center" bgcolor="#128C4B" style="border-radius:8px;background-color:#128C4B;">
+             <a href="${waUrl}" target="_blank" style="display:inline-block;padding:12px 26px;font-size:14px;font-weight:700;color:#ffffff;border-radius:8px;letter-spacing:0.02em;">Escribir por WhatsApp</a>
+           </td>
+         </tr></table>`
+      : '') +
+    `</div>`
+
+  const inner =
+    `<p style="margin:0 0 22px;font-size:15px;line-height:1.7;color:${C.body};text-align:center;">
+       Estos son los datos de contacto de tu ${otraParte}:
+     </p>
+     ${infoBox(cardInner)}` +
+    (codigoReferencia
+      ? `<p style="margin:18px 0 0;text-align:center;font-size:12px;color:${C.muted};">Ref. consulta: ${esc(codigoReferencia)}</p>`
+      : '')
+
+  return renderShell({
+    subjectLine: 'Ficha de contacto',
+    preheader: `Datos de contacto de tu ${otraParte}.`,
+    innerHtml: inner,
+  })
+}
+
 // ── Handler principal ──────────────────────────────────────────────────────
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -275,6 +328,42 @@ export default async function handler(req, res) {
         html,
       })
       return res.status(200).json({ ok: true, sent: 'pqr_received' })
+    }
+
+    // ── Ficha de contacto cruzada (cliente ↔ abogado) ──
+    // Acción sensible (envía datos personales) → exige superadmin.
+    if (type === 'contact_card') {
+      const caller = await getCallerProfile(req)
+      if (caller?.rol !== 'superadmin') {
+        return res.status(403).json({ error: 'No autorizado.' })
+      }
+      const { lawyerData, clientData } = req.body || {}
+      if (!lawyerData?.email || !clientData?.email) {
+        return res.status(400).json({ error: 'Faltan correos de destino.' })
+      }
+      const from = `"Abogados y Asociados Parada" <${process.env.GMAIL_USER}>`
+      try {
+        await Promise.all([
+          // El cliente recibe la ficha del ABOGADO.
+          transporter.sendMail({
+            from,
+            to: clientData.email,
+            subject: 'Ficha de contacto',
+            html: renderContactCardHtml({ recipient: 'cliente', contact: lawyerData, codigoReferencia }),
+          }),
+          // El abogado recibe la ficha del CLIENTE.
+          transporter.sendMail({
+            from,
+            to: lawyerData.email,
+            subject: 'Ficha de contacto',
+            html: renderContactCardHtml({ recipient: 'abogado', contact: clientData, codigoReferencia }),
+          }),
+        ])
+        return res.status(200).json({ ok: true, success: true, sent: 'contact_card' })
+      } catch (_err) {
+        // Sin loggear emails/teléfonos: solo error genérico.
+        return res.status(500).json({ error: 'No se pudieron enviar los correos.' })
+      }
     }
 
     // ── Notificación al abogado cuando llega consulta nueva ──

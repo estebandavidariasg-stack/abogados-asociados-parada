@@ -676,10 +676,13 @@ export default function SuperAdminChatViewer({ initialRoomId = null }) {
       const lawyerProfile = Array.isArray(profiles) ? profiles[0] : null
       if (!lawyerProfile?.email) throw new Error('Abogado sin email')
 
-      const res = await fetch('/api/send-contact-card', {
+      // Consolidado en /api/notify (type: 'contact_card') para no superar el
+      // límite de 12 Serverless Functions del plan Hobby de Vercel.
+      const res = await fetch('/api/notify', {
         method: 'POST',
         headers,
         body: JSON.stringify({
+          type: 'contact_card',
           // profiles.telefono se mapea a celular del contrato API
           lawyerData: {
             nombre:   lawyerProfile.nombre,
