@@ -248,6 +248,28 @@ async function handleAbogado(req, res) {
     return;
   }
 
+  // ── Acción TRAMO (map orquestado por el cliente): procesa UN fragmento de un
+  //    documento largo con Haiku. Cada tramo es su propia petición corta, así
+  //    ninguna función se pasa del límite de tiempo de Vercel. ──
+  if (accion === 'tramo') {
+    const solicitud = mensajes?.find?.((m) => m.role === 'user')?.content || '';
+    const tramo = typeof req.body?.tramo === 'string' ? req.body.tramo : '';
+    if (!tramo.trim()) { res.status(400).json({ error: 'Falta el fragmento' }); return; }
+    try {
+      const out = await completarConReintento({
+        model: MODELOS.cliente, // Haiku (barato)
+        systemText: SYSTEM_TRAMO,
+        messages: [{ role: 'user', content: `Solicitud del profesional: "${String(solicitud).slice(0, 2000)}"\n\n--- FRAGMENTO DEL DOCUMENTO ---\n${tramo.slice(0, 220000)}` }],
+        maxTokens: 1400,
+      });
+      res.status(200).json({ extracto: out && !/^\s*NADA_RELEVANTE\s*$/i.test(out) ? out.trim() : '' });
+    } catch (e) {
+      console.error('[api/ai] tramo error:', e?.status, e?.message);
+      res.status(502).json({ error: 'fallback', mensaje: 'No pude procesar un fragmento del documento.' });
+    }
+    return;
+  }
+
   const ultimo = mensajes[mensajes.length - 1];
   if (!ultimo?.content || typeof ultimo.content !== 'string' || ultimo.content.length > MAX_LEN_MENSAJE_ABOGADO) {
     res.status(400).json({ error: 'Mensaje inválido o demasiado largo' }); return;

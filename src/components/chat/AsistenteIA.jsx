@@ -33,6 +33,28 @@ const MAX_DOC_MB = 25;            // por documento (se lee localmente; solo viaj
 const MAX_DOC_CHARS = 1_800_000;  // tope de texto extraído por documento
 const MAX_FILES = 5;
 
+// Documentos largos: el cliente orquesta el map-reduce (cada tramo es UNA
+// petición corta), así ninguna función serverless se pasa del límite de tiempo.
+const DOC_LARGO_CHARS = 280_000;  // por encima de esto → se procesa por tramos
+const DOC_CHUNK_CHARS = 150_000;  // tamaño de cada tramo
+const MAP_LOTE = 3;               // tramos en paralelo
+
+// Trocea texto largo cortando en saltos de línea (≈ misma lógica del backend).
+function trocearTexto(texto, tam) {
+  const out = [];
+  let i = 0;
+  while (i < texto.length) {
+    let fin = Math.min(i + tam, texto.length);
+    if (fin < texto.length) {
+      const corte = texto.lastIndexOf('\n', fin);
+      if (corte > i + tam * 0.6) fin = corte;
+    }
+    out.push(texto.slice(i, fin));
+    i = fin;
+  }
+  return out;
+}
+
 const esImagen = (f) => TIPOS_IMG.includes(f.type);
 // PDF, Word (.docx / .doc) o TXT, por MIME o por extensión (algunos navegadores
 // no reportan el tipo). El .doc viejo se enruta para dar un mensaje claro.
@@ -143,6 +165,7 @@ export default function AsistenteIA() {
   const [error, setError] = useState('');
   const [leyendo, setLeyendo] = useState(null); // nombre del PDF que se está extrayendo
   const [memoria, setMemoria] = useState('');   // ficha durable del profesional (memoria entre chats)
+  const [progreso, setProgreso] = useState(null); // progreso al analizar documentos largos
   const abortRef = useRef(null);                 // para detener la respuesta en curso
   const [glossOpen, setGlossOpen] = useState(false);
   const [copiedIdx, setCopiedIdx] = useState(null);
@@ -292,7 +315,45 @@ export default function AsistenteIA() {
   function detener() {
     abortRef.current?.abort();
     abortRef.current = null;
+    setProgreso(null);
     setBusy(false);
+  }
+
+  // Map-reduce orquestado desde el cliente para documentos largos: cada tramo es
+  // su propia petición (corta), y al final una petición de combinación. Así
+  // ninguna función serverless se pasa del límite de tiempo. Devuelve el mismo
+  // shape que pedirIA ({ ok, aborted, data }).
+  async function analizarLargo({ texto, docText, thread, authHeader, signal, onProgress }) {
+    const chunks = trocearTexto(docText, DOC_CHUNK_CHARS);
+    const total = chunks.length;
+    const extractos = [];
+    onProgress?.(`Analizando documento… 0/${total}`);
+    for (let i = 0; i < chunks.length; i += MAP_LOTE) {
+      if (signal?.aborted) return { aborted: true };
+      const grupo = chunks.slice(i, i + MAP_LOTE);
+      const res = await Promise.all(grupo.map((c) =>
+        pedirIA(
+          { modo: 'abogado', accion: 'tramo', tramo: c, mensajes: [{ role: 'user', content: texto || 'Resume el documento.' }] },
+          { authHeader, signal }
+        )
+      ));
+      for (const r of res) {
+        if (r.aborted) return { aborted: true };
+        if (r.ok && r.data?.extracto) extractos.push(r.data.extracto);
+      }
+      onProgress?.(`Analizando documento… ${Math.min(i + grupo.length, total)}/${total}`);
+    }
+    if (signal?.aborted) return { aborted: true };
+    onProgress?.('Redactando la respuesta…');
+    const sintesis = extractos.length
+      ? extractos.map((e, i) => `[Parte ${i + 1}]\n${e}`).join('\n\n')
+      : '(El documento no contiene información relevante para la solicitud.)';
+    const mensajesCombine = thread.map((m, i) =>
+      i === thread.length - 1
+        ? { role: m.role, content: `${m.content}\n\n[Extractos del documento adjunto, en orden de aparición]\n${sintesis}` }
+        : { role: m.role, content: m.content }
+    );
+    return pedirIA({ modo: 'abogado', memoria, mensajes: mensajesCombine }, { authHeader, signal });
   }
 
   async function enviar() {
@@ -308,13 +369,21 @@ export default function AsistenteIA() {
 
     const controller = new AbortController();
     abortRef.current = controller;
-
     const { Authorization } = await getAuthHeaders();
-    const { ok, aborted, data } = await pedirIA(
-      { modo: 'abogado', memoria, mensajes: nuevoThread.map((m) => ({ role: m.role, content: m.content })), adjuntos: adjEnviar },
-      { authHeader: Authorization, signal: controller.signal }
-    );
+
+    // ¿Documento(s) largo(s)? → el cliente orquesta el map-reduce por tramos.
+    const docsAdj = adjEnviar.filter((a) => a.kind === 'doc');
+    const docText = docsAdj.map((d) => `===== ${d.name} =====\n${d.text}`).join('\n\n');
+
+    const resp = docText.length > DOC_LARGO_CHARS
+      ? await analizarLargo({ texto, docText, thread: nuevoThread, authHeader: Authorization, signal: controller.signal, onProgress: setProgreso })
+      : await pedirIA(
+          { modo: 'abogado', memoria, mensajes: nuevoThread.map((m) => ({ role: m.role, content: m.content })), adjuntos: adjEnviar },
+          { authHeader: Authorization, signal: controller.signal }
+        );
     abortRef.current = null;
+    setProgreso(null);
+    const { ok, aborted, data } = resp || {};
 
     if (aborted) { setBusy(false); return; } // el profesional detuvo: deja su mensaje, sin respuesta
 
@@ -628,6 +697,9 @@ export default function AsistenteIA() {
             )
           )}
           {busy && (<div className={styles.thinking} aria-label="Generando respuesta"><span /><span /><span /></div>)}
+          {busy && progreso && (
+            <div style={{ fontSize: '0.78rem', color: '#6b7fa3', marginTop: 6, fontFamily: 'Raleway, sans-serif' }}>{progreso}</div>
+          )}
         </div>
       </div>
 
