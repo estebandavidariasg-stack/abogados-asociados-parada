@@ -1,4 +1,7 @@
 {
+  "functions": {
+    "api/ai.js": { "maxDuration": 60 }
+  },
   "crons": [
     { "path": "/api/cron/gen-inactividad", "schedule": "0 13 * * *" }
   ],

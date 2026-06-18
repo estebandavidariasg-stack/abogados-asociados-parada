@@ -270,6 +270,34 @@ async function handleAbogado(req, res) {
     return;
   }
 
+  // ── Acción COMBINAR (reduce orquestado por el cliente): une los extractos de
+  //    los tramos en la respuesta final con Sonnet. Los extractos llegan en
+  //    `sintesis` (campo aparte), NO en el mensaje del usuario, para no chocar
+  //    con el tope de longitud del mensaje. ──
+  if (accion === 'combinar') {
+    const sintesis = typeof req.body?.sintesis === 'string' ? req.body.sintesis : '';
+    const ult = mensajes[mensajes.length - 1];
+    if (!ult?.content || typeof ult.content !== 'string' || ult.content.length > MAX_LEN_MENSAJE_ABOGADO) {
+      res.status(400).json({ error: 'Mensaje inválido o demasiado largo' }); return;
+    }
+    const memoriaCtxC = (typeof memoria === 'string' && memoria.trim())
+      ? `[Memoria del profesional, de conversaciones anteriores. Úsala como contexto; no la menciones salvo que sea relevante.]\n${memoria.trim().slice(0, 1500)}`
+      : null;
+    const messagesC = mensajes.map((m, i) =>
+      i === mensajes.length - 1
+        ? { role: m.role, content: `${m.content}\n\n[Extractos del documento adjunto, en orden de aparición]\n${sintesis}` }
+        : { role: m.role, content: m.content }
+    );
+    try {
+      const reply = await completar({ modo: 'abogado', systemText: SYSTEM_ABOGADO, systemExtra: memoriaCtxC, messages: messagesC, maxTokens: 2200 });
+      res.status(200).json({ reply });
+    } catch (e) {
+      console.error('[api/ai] combinar error:', e?.status, e?.message);
+      res.status(502).json({ error: 'fallback', mensaje: 'El asistente no está disponible ahora. Intenta de nuevo en un momento.' });
+    }
+    return;
+  }
+
   const ultimo = mensajes[mensajes.length - 1];
   if (!ultimo?.content || typeof ultimo.content !== 'string' || ultimo.content.length > MAX_LEN_MENSAJE_ABOGADO) {
     res.status(400).json({ error: 'Mensaje inválido o demasiado largo' }); return;

@@ -348,12 +348,10 @@ export default function AsistenteIA() {
     const sintesis = extractos.length
       ? extractos.map((e, i) => `[Parte ${i + 1}]\n${e}`).join('\n\n')
       : '(El documento no contiene información relevante para la solicitud.)';
-    const mensajesCombine = thread.map((m, i) =>
-      i === thread.length - 1
-        ? { role: m.role, content: `${m.content}\n\n[Extractos del documento adjunto, en orden de aparición]\n${sintesis}` }
-        : { role: m.role, content: m.content }
-    );
-    return pedirIA({ modo: 'abogado', memoria, mensajes: mensajesCombine }, { authHeader, signal });
+    // Los extractos van en `sintesis` (campo aparte), NO dentro del mensaje, para
+    // no chocar con el tope de longitud del mensaje en el servidor.
+    const mensajesCombine = thread.map((m) => ({ role: m.role, content: m.content }));
+    return pedirIA({ modo: 'abogado', accion: 'combinar', sintesis, memoria, mensajes: mensajesCombine }, { authHeader, signal });
   }
 
   async function enviar() {
