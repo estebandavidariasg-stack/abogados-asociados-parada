@@ -147,13 +147,25 @@ export default function AuthModal({ initialTab = 'login', onClose }) {
 
   async function resolveEmail(identifier) {
     if (identifier.includes('@')) return identifier
+    // Resolución usuario -> correo vía RPC SECURITY DEFINER. La lectura directa
+    // de `profiles` con la anon está restringida por RLS a perfiles APROBADOS,
+    // así que un profesional recién registrado (pendiente) no podía iniciar
+    // sesión por usuario. El RPC devuelve solo el correo de UN usuario.
     const res = await fetch(
-      `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/profiles?username=eq.${identifier}&select=email`,
-      { headers: { 'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY, 'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` } }
+      `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/rpc/get_login_email`,
+      {
+        method: 'POST',
+        headers: {
+          'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ p_username: identifier }),
+      }
     )
-    const data = await res.json()
-    if (!data || data.length === 0) throw new Error('Usuario no encontrado')
-    return data[0].email
+    const email = res.ok ? await res.json() : null
+    if (!email || typeof email !== 'string') throw new Error('Usuario no encontrado')
+    return email
   }
 
   async function handleLogin() {

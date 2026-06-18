@@ -118,13 +118,22 @@ export default function RegisterContadorModal({ onClose }) {
   // Resolver de identifier — acepta correo o @username (idéntico al de AuthModal)
   async function resolveEmail(identifier) {
     if (identifier.includes('@')) return identifier
-    const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/profiles?username=eq.${identifier}&select=email`,
-      { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } }
-    )
-    const data = await res.json()
-    if (!data || data.length === 0) throw new Error('Usuario no encontrado')
-    return data[0].email
+    // Resolución usuario -> correo vía RPC SECURITY DEFINER. La lectura directa
+    // de `profiles` con la anon está restringida por RLS a perfiles APROBADOS,
+    // así que un profesional recién registrado (pendiente) no podía iniciar
+    // sesión por usuario. El RPC devuelve solo el correo de UN usuario.
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/get_login_email`, {
+      method: 'POST',
+      headers: {
+        apikey: SUPABASE_KEY,
+        Authorization: `Bearer ${SUPABASE_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ p_username: identifier }),
+    })
+    const email = res.ok ? await res.json() : null
+    if (!email || typeof email !== 'string') throw new Error('Usuario no encontrado')
+    return email
   }
 
   async function handleLogin() {
