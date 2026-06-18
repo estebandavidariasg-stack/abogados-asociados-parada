@@ -23,14 +23,22 @@ const PLACEHOLDERS = [
   'Redacta una tutela por demora en la EPS…',
 ];
 
-const TIPOS_OK = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf'];
-// Imágenes → visión (base64, acotadas en MB). PDF → se extrae el texto en el
-// navegador y solo viaja el texto, así que el PDF puede pesar más (no hay
-// inflado base64 ni tope de 100 páginas); el límite real es el texto extraído.
+// Imágenes → visión (base64, acotadas en MB). Documentos (PDF, Word .docx, TXT)
+// → se extrae el texto en el navegador y solo viaja el texto, así que pueden
+// pesar más (sin inflado base64 ni tope de 100 páginas); el límite real es el
+// texto extraído.
+const TIPOS_IMG = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 const MAX_IMG_MB = 3;             // por imagen
-const MAX_PDF_MB = 25;            // por PDF (se lee localmente; solo viaja el texto)
+const MAX_DOC_MB = 25;            // por documento (se lee localmente; solo viaja el texto)
 const MAX_DOC_CHARS = 1_800_000;  // tope de texto extraído por documento
 const MAX_FILES = 5;
+
+const esImagen = (f) => TIPOS_IMG.includes(f.type);
+// PDF, Word (.docx / .doc) o TXT, por MIME o por extensión (algunos navegadores
+// no reportan el tipo). El .doc viejo se enruta para dar un mensaje claro.
+const esDoc = (f) =>
+  /pdf|text\/plain|officedocument\.wordprocessingml|msword/.test(f.type || '') ||
+  /\.(pdf|docx?|txt)$/i.test(f.name || '');
 
 const fileToBase64 = (file) => new Promise((resolve, reject) => {
   const r = new FileReader();
@@ -219,23 +227,25 @@ export default function AsistenteIA() {
     let count = adjuntos.length; // el estado no se actualiza dentro del bucle async
     for (const f of files) {
       if (count >= MAX_FILES) { setError(`Máximo ${MAX_FILES} archivos por mensaje.`); break; }
-      if (!TIPOS_OK.includes(f.type)) { setError('Solo se admiten PDF o imágenes (JPG, PNG, WEBP).'); continue; }
+      const img = esImagen(f);
+      const doc = !img && esDoc(f);
+      if (!img && !doc) { setError('Solo se admiten PDF, Word (.docx), TXT o imágenes (JPG, PNG, WEBP).'); continue; }
 
-      if (f.type === 'application/pdf') {
-        // PDF → extraer el TEXTO en el navegador (sin tope de 100 páginas).
-        if (f.size / 1048576 > MAX_PDF_MB) { setError(`"${f.name}" supera ${MAX_PDF_MB} MB.`); continue; }
+      if (doc) {
+        // Documento → extraer el TEXTO en el navegador (sin tope de 100 páginas).
+        if (f.size / 1048576 > MAX_DOC_MB) { setError(`"${f.name}" supera ${MAX_DOC_MB} MB.`); continue; }
         setLeyendo(f.name);
         try {
-          const { extractPdfText } = await import('../../utils/extractPdfText');
-          const { text, pages, truncated } = await extractPdfText(f, { maxChars: MAX_DOC_CHARS });
+          const { extractDocText } = await import('../../utils/extractDocText');
+          const { text, pages, truncated } = await extractDocText(f, { maxChars: MAX_DOC_CHARS });
           if (!text || text.length < 20) {
-            setError(`"${f.name}" no tiene texto legible (¿es un PDF escaneado como imagen?). Adjunta un PDF con texto seleccionable o pega el contenido.`);
+            setError(`"${f.name}" no tiene texto legible (¿es un escaneo o está vacío?). Adjunta un archivo con texto seleccionable o pégalo en el chat.`);
           } else {
             count += 1;
             setAdjuntos((a) => [...a, { name: f.name, kind: 'doc', text, pages, truncated }]);
           }
-        } catch {
-          setError(`No pude leer "${f.name}". Intenta con otro archivo o pega el texto en el chat.`);
+        } catch (err) {
+          setError(err?.message || `No pude leer "${f.name}". Intenta con otro archivo o pega el texto en el chat.`);
         } finally {
           setLeyendo(null);
         }
@@ -343,7 +353,7 @@ export default function AsistenteIA() {
       )}
 
       <div className={styles.pill} data-active={focused || !!input || undefined}>
-        <button type="button" className={styles.attach} onClick={() => fileRef.current?.click()} aria-label="Adjuntar PDF o imagen" title="Adjuntar PDF o imagen">
+        <button type="button" className={styles.attach} onClick={() => fileRef.current?.click()} aria-label="Adjuntar documento o imagen" title="Adjuntar PDF, Word, TXT o imagen">
           <IconClip />
         </button>
         <div className={styles.inputZone}>
@@ -382,7 +392,7 @@ export default function AsistenteIA() {
         >
           {busy ? <span className={styles.spin} /> : <IconEnviar />}
         </motion.button>
-        <input ref={fileRef} type="file" accept="application/pdf,image/png,image/jpeg,image/webp,image/gif" multiple style={{ display: 'none' }} onChange={onFiles} />
+        <input ref={fileRef} type="file" accept=".pdf,.docx,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,image/png,image/jpeg,image/webp,image/gif" multiple style={{ display: 'none' }} onChange={onFiles} />
       </div>
 
       <div className={styles.composerFoot}>
@@ -406,7 +416,7 @@ export default function AsistenteIA() {
               <IconBombilla className={styles.glossIcon} />
               <span>
                 Sé específico: indica <b>tipo de documento</b>, <b>destinatario</b>, <b>hechos</b> y <b>qué buscas</b>.
-                Puedes adjuntar PDF (leo el texto, incluso documentos largos) o imágenes (máx. {MAX_IMG_MB} MB c/u). Los borradores <b>requieren tu revisión</b>.
+                Puedes adjuntar PDF, Word (.docx) o TXT (leo el texto, incluso documentos largos) e imágenes (máx. {MAX_IMG_MB} MB c/u). Los borradores <b>requieren tu revisión</b>.
               </span>
             </div>
           </motion.div>
