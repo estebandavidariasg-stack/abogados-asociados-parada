@@ -24,7 +24,13 @@ const PLACEHOLDERS = [
 ];
 
 const TIPOS_OK = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf'];
-const MAX_FILE_MB = 4;
+// Imágenes → visión (base64, acotadas en MB). PDF → se extrae el texto en el
+// navegador y solo viaja el texto, así que el PDF puede pesar más (no hay
+// inflado base64 ni tope de 100 páginas); el límite real es el texto extraído.
+const MAX_IMG_MB = 3;             // por imagen
+const MAX_PDF_MB = 25;            // por PDF (se lee localmente; solo viaja el texto)
+const MAX_DOC_CHARS = 1_800_000;  // tope de texto extraído por documento
+const MAX_FILES = 5;
 
 const fileToBase64 = (file) => new Promise((resolve, reject) => {
   const r = new FileReader();
@@ -127,6 +133,7 @@ export default function AsistenteIA() {
   const [adjuntos, setAdjuntos] = useState([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [leyendo, setLeyendo] = useState(null); // nombre del PDF que se está extrayendo
   const [glossOpen, setGlossOpen] = useState(false);
   const [copiedIdx, setCopiedIdx] = useState(null);
   const [focused, setFocused] = useState(false);
@@ -209,11 +216,36 @@ export default function AsistenteIA() {
     const files = Array.from(e.target.files || []);
     e.target.value = '';
     setError('');
+    let count = adjuntos.length; // el estado no se actualiza dentro del bucle async
     for (const f of files) {
+      if (count >= MAX_FILES) { setError(`Máximo ${MAX_FILES} archivos por mensaje.`); break; }
       if (!TIPOS_OK.includes(f.type)) { setError('Solo se admiten PDF o imágenes (JPG, PNG, WEBP).'); continue; }
-      if (f.size / 1048576 > MAX_FILE_MB) { setError(`"${f.name}" supera ${MAX_FILE_MB} MB.`); continue; }
-      const data = await fileToBase64(f);
-      setAdjuntos((a) => [...a, { name: f.name, media_type: f.type, data }]);
+
+      if (f.type === 'application/pdf') {
+        // PDF → extraer el TEXTO en el navegador (sin tope de 100 páginas).
+        if (f.size / 1048576 > MAX_PDF_MB) { setError(`"${f.name}" supera ${MAX_PDF_MB} MB.`); continue; }
+        setLeyendo(f.name);
+        try {
+          const { extractPdfText } = await import('../../utils/extractPdfText');
+          const { text, pages, truncated } = await extractPdfText(f, { maxChars: MAX_DOC_CHARS });
+          if (!text || text.length < 20) {
+            setError(`"${f.name}" no tiene texto legible (¿es un PDF escaneado como imagen?). Adjunta un PDF con texto seleccionable o pega el contenido.`);
+          } else {
+            count += 1;
+            setAdjuntos((a) => [...a, { name: f.name, kind: 'doc', text, pages, truncated }]);
+          }
+        } catch {
+          setError(`No pude leer "${f.name}". Intenta con otro archivo o pega el texto en el chat.`);
+        } finally {
+          setLeyendo(null);
+        }
+      } else {
+        // Imagen → base64 (visión).
+        if (f.size / 1048576 > MAX_IMG_MB) { setError(`"${f.name}" supera ${MAX_IMG_MB} MB.`); continue; }
+        const data = await fileToBase64(f);
+        count += 1;
+        setAdjuntos((a) => [...a, { name: f.name, kind: 'image', media_type: f.type, data }]);
+      }
     }
   }
 
@@ -283,22 +315,30 @@ export default function AsistenteIA() {
     setTimeout(() => inputRef.current?.focus(), 0);
   }
 
-  const puedeEnviar = (!!input.trim() || adjuntos.length > 0) && !busy;
+  const puedeEnviar = (!!input.trim() || adjuntos.length > 0) && !busy && !leyendo;
   const phVacio = !focused && !input;
   const saludo = saludoDelMomento(profile?.nombre);
 
   // ── Composer (pill) reutilizado en hero y en conversación ──
   const composer = (
     <div className={styles.composer}>
-      {adjuntos.length > 0 && (
+      {(adjuntos.length > 0 || leyendo) && (
         <div className={styles.adjFila}>
           {adjuntos.map((a, i) => (
             <span key={i} className={styles.adjChip}>
               <IconDoc />
-              <span className={styles.adjName}>{a.name}</span>
+              <span className={styles.adjName}>
+                {a.name}{a.kind === 'doc' && a.pages ? ` · ${a.pages} pág${a.truncated ? '+' : ''}` : ''}
+              </span>
               <button type="button" onClick={() => setAdjuntos((arr) => arr.filter((_, j) => j !== i))} aria-label={`Quitar ${a.name}`}>✕</button>
             </span>
           ))}
+          {leyendo && (
+            <span className={styles.adjChip}>
+              <span className={styles.spin} />
+              <span className={styles.adjName}>Leyendo {leyendo}…</span>
+            </span>
+          )}
         </div>
       )}
 
@@ -366,7 +406,7 @@ export default function AsistenteIA() {
               <IconBombilla className={styles.glossIcon} />
               <span>
                 Sé específico: indica <b>tipo de documento</b>, <b>destinatario</b>, <b>hechos</b> y <b>qué buscas</b>.
-                Puedes adjuntar PDF o imágenes (máx. {MAX_FILE_MB} MB c/u). Los borradores <b>requieren tu revisión</b>.
+                Puedes adjuntar PDF (leo el texto, incluso documentos largos) o imágenes (máx. {MAX_IMG_MB} MB c/u). Los borradores <b>requieren tu revisión</b>.
               </span>
             </div>
           </motion.div>

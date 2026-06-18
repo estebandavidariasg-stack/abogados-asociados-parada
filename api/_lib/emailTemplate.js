@@ -80,7 +80,8 @@ export function renderShell({ subjectLine, preheader, innerHtml }) {
   <title>${subjectLine}</title>
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Raleway:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
-    body { margin:0; padding:0; width:100% !important; -webkit-text-size-adjust:100%; }
+    :root { color-scheme: light only; supported-color-schemes: light only; }
+    body { margin:0; padding:0; width:100% !important; -webkit-text-size-adjust:100%; background-color:#ffffff !important; }
     a { text-decoration:none; }
     @media (max-width:620px) {
       .aap-container { width:100% !important; border-radius:0 !important; }
@@ -88,9 +89,9 @@ export function renderShell({ subjectLine, preheader, innerHtml }) {
     }
   </style>
 </head>
-<body style="margin:0;padding:0;background-color:#eef4fb;">
+<body style="margin:0;padding:0;background-color:#ffffff;">
   <div style="display:none;max-height:0;overflow:hidden;opacity:0;mso-hide:all;">${pre}</div>
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#eef4fb;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#ffffff;">
     <tr>
       <td align="center" style="padding:32px 16px;">
         <!--[if mso]><table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0"><tr><td><![endif]-->
@@ -98,7 +99,7 @@ export function renderShell({ subjectLine, preheader, innerHtml }) {
 
           <!-- Encabezado: degradado azul claro -> blanco -->
           <tr>
-            <td align="center" bgcolor="#d8e6f7" style="background-color:#d8e6f7;background:linear-gradient(180deg,#d4e4f7 0%,#e9f1fc 58%,#ffffff 100%);padding:38px 32px 30px;">
+            <td align="center" bgcolor="#e9f1fc" style="background-color:#e9f1fc;background:linear-gradient(180deg,#d4e4f7 0%,#e9f1fc 58%,#ffffff 100%);padding:38px 32px 30px;">
               <div style="font-family:${FONT_SERIF};font-size:21px;font-weight:700;letter-spacing:0.16em;text-transform:uppercase;color:${C.navy};line-height:1.35;">
                 Abogados y Asociados <span style="color:${C.goldText};">Parada</span>
               </div>

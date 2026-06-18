@@ -3,7 +3,7 @@
 import { SUPABASE_URL, serviceHeaders, getCallerProfile } from './_lib/adminAuth.js';
 import { SYSTEM_CLIENTE, SYSTEM_ABOGADO } from './_lib/aiPrompts.js';
 import { hashIp, parseTriageReply, buildProfesionalesBlock, limiteAlcanzado } from './_lib/aiLogic.js';
-import { completar } from './_lib/anthropic.js';
+import { completar, MODELOS } from './_lib/anthropic.js';
 
 const MAX_MSGS = Number(process.env.AI_CLIENTE_MAX_MSGS || 6);
 const MAX_SESIONES_IP_HORA = Number(process.env.AI_MAX_SESIONES_IP_HORA || 10);
@@ -61,7 +61,96 @@ async function fetchProfesionales(req, rol) {
 const MAX_LEN_MENSAJE_ABOGADO = 12000; // permite pegar transcripciones largas
 const MAX_USOS_SALA_DIA = Number(process.env.AI_MAX_USOS_SALA_DIA || 2);
 const MEDIA_IMG = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
-const MEDIA_DOC = ['application/pdf'];
+
+// ── Límites prudentes de adjuntos ──────────────────────────────────────────
+// Las imágenes van en base64 (visión); los PDF llegan como TEXTO ya extraído en
+// el cliente (sin tope de 100 páginas ni inflado base64). Las imágenes se acotan
+// en MB; el texto, en caracteres (que el backend trocea si hace falta).
+const MAX_ADJUNTOS = 5;
+const MAX_IMG_BYTES = 3 * 1024 * 1024;   // 3 MB por imagen
+const MAX_DOC_CHARS_TOTAL = 1_800_000;   // ~500-600 págs de texto denso (tope duro)
+const SINGLE_CALL_CHARS = 480_000;       // hasta aquí cabe en UNA llamada Sonnet
+const CHUNK_CHARS = 90_000;              // tamaño de cada tramo (paso MAP → Haiku)
+const MAX_CHUNKS = 24;                    // tope de tramos: acota el costo
+const MAP_CONCURRENCY = 5;                // tramos en paralelo por lote
+
+function bytesBase64(b64) {
+  if (typeof b64 !== 'string' || !b64) return 0;
+  const pad = b64.endsWith('==') ? 2 : b64.endsWith('=') ? 1 : 0;
+  return Math.floor((b64.length * 3) / 4) - pad;
+}
+
+// Separa adjuntos en imágenes (base64) y documentos de texto (PDF extraído).
+function separarAdjuntos(adjuntos) {
+  const imagenes = [], docs = [];
+  if (!Array.isArray(adjuntos)) return { imagenes, docs };
+  for (const a of adjuntos.slice(0, MAX_ADJUNTOS)) {
+    if (a?.kind === 'image' && a?.data && MEDIA_IMG.includes(a.media_type)) imagenes.push(a);
+    else if (a?.kind === 'doc' && typeof a?.text === 'string' && a.text.trim()) docs.push(a);
+  }
+  return { imagenes, docs };
+}
+
+// Valida tamaños y da un mensaje claro (no el genérico "no disponible").
+function validarAdjuntos(imagenes, docs) {
+  for (const a of imagenes) {
+    if (bytesBase64(a.data) > MAX_IMG_BYTES) {
+      return { ok: false, mensaje: `"${a?.name || 'La imagen'}" supera ${Math.round(MAX_IMG_BYTES / 1048576)} MB.` };
+    }
+  }
+  const totalChars = docs.reduce((s, d) => s + d.text.length, 0);
+  if (totalChars > MAX_DOC_CHARS_TOTAL) {
+    return { ok: false, mensaje: 'El documento es demasiado extenso. Adjunta menos páginas o divídelo en partes.' };
+  }
+  return { ok: true };
+}
+
+// Bloques de imagen para Claude (visión).
+function bloquesImagenes(imagenes) {
+  return imagenes.map((a) => ({ type: 'image', source: { type: 'base64', media_type: a.media_type, data: a.data } }));
+}
+
+// Une el texto de los documentos con un encabezado por archivo.
+function unirDocs(docs) {
+  return docs.map((d) =>
+    `===== DOCUMENTO: ${d.name || 'archivo'} (${d.pages || '?'} págs${d.truncated ? ', truncado' : ''}) =====\n${d.text}`
+  ).join('\n\n');
+}
+
+// Trocea texto largo en pedazos de ~CHUNK_CHARS, cortando en saltos de línea.
+function trocear(texto) {
+  const chunks = [];
+  let i = 0;
+  while (i < texto.length && chunks.length < MAX_CHUNKS) {
+    let fin = Math.min(i + CHUNK_CHARS, texto.length);
+    if (fin < texto.length) {
+      const corte = texto.lastIndexOf('\n', fin);
+      if (corte > i + CHUNK_CHARS * 0.6) fin = corte;
+    }
+    chunks.push(texto.slice(i, fin));
+    i = fin;
+  }
+  return chunks;
+}
+
+// Ejecuta promesas en lotes (no saturar el rate limit de Anthropic).
+async function enLotes(items, size, fn) {
+  const out = [];
+  for (let i = 0; i < items.length; i += size) {
+    out.push(...await Promise.all(items.slice(i, i + size).map(fn)));
+  }
+  return out;
+}
+
+// System del paso MAP: extracción fiel y barata (Haiku) de lo relevante.
+const SYSTEM_TRAMO =
+  'Eres un asistente jurídico y contable. Recibes UN fragmento de un documento ' +
+  'más grande y la solicitud del profesional. Extrae del fragmento, de forma fiel ' +
+  'y concisa, TODO lo relevante para esa solicitud: hechos, fechas, partes, ' +
+  'normas/artículos citados, montos, pretensiones, decisiones o conclusiones. ' +
+  'Cita textual cuando el detalle importe. NO inventes ni completes lo que no esté ' +
+  'en el fragmento. Si el fragmento no aporta nada relevante, responde únicamente: ' +
+  'NADA_RELEVANTE.';
 
 // Usos de IA de hoy para una sala. Devuelve null si la tabla no existe
 // (en ese caso NO se aplica el tope, para no romper nada).
@@ -93,17 +182,6 @@ async function registrarUsoSala(roomId, profesionalId) {
   } catch { /* no bloquear el flujo si falla el conteo */ }
 }
 
-// Convierte adjuntos en bloques de contenido para Claude (imagen / PDF).
-function bloquesAdjuntos(adjuntos) {
-  if (!Array.isArray(adjuntos)) return [];
-  return adjuntos.slice(0, 5).map((a) => {
-    const kind = MEDIA_DOC.includes(a?.media_type) ? 'document'
-      : MEDIA_IMG.includes(a?.media_type) ? 'image' : null;
-    if (!kind || !a?.data) return null;
-    return { type: kind, source: { type: 'base64', media_type: a.media_type, data: a.data } };
-  }).filter(Boolean);
-}
-
 async function handleAbogado(req, res) {
   const { mensajes, adjuntos, roomId, accion } = req.body || {};
 
@@ -128,22 +206,52 @@ async function handleAbogado(req, res) {
     }
   }
 
-  // Si hay adjuntos, el último mensaje del usuario lleva texto + imágenes/PDF.
-  const bloques = bloquesAdjuntos(adjuntos);
-  let messages = mensajes;
-  if (bloques.length) {
-    messages = mensajes.map((m, i) =>
-      i === mensajes.length - 1
-        ? { role: m.role, content: [{ type: 'text', text: m.content }, ...bloques] }
-        : m
-    );
-  }
+  // Adjuntos: imágenes (visión) + documentos PDF como TEXTO ya extraído.
+  const { imagenes, docs } = separarAdjuntos(adjuntos);
+  const valAdj = validarAdjuntos(imagenes, docs);
+  if (!valAdj.ok) { res.status(413).json({ error: 'adjunto', mensaje: valAdj.mensaje }); return; }
+
+  const imgBloques = bloquesImagenes(imagenes);
+  const textoDocs = unirDocs(docs);
+  const last = mensajes.length - 1;
+
+  // Construye el contenido del último mensaje (texto del usuario + extra) con o
+  // sin imágenes inline. `extra` es el texto del documento o sus extractos.
+  const armarMensajes = (extra) => mensajes.map((m, i) => {
+    if (i !== last) return m;
+    const txt = extra ? `${m.content}\n\n${extra}` : m.content;
+    return { role: m.role, content: imgBloques.length ? [{ type: 'text', text: txt }, ...imgBloques] : txt };
+  });
 
   let reply = '';
   try {
-    reply = await completar({ modo: 'abogado', systemText: SYSTEM_ABOGADO, messages, maxTokens: 2600 });
+    if (textoDocs && textoDocs.length > SINGLE_CALL_CHARS) {
+      // ── Documento extenso → MAP (Haiku por tramos) + REDUCE (Sonnet) ──
+      // Lee todo el documento barato (Haiku) y deja a Sonnet el razonamiento
+      // final con la misma calidad de siempre. Mantiene el costo prudente.
+      const tramos = trocear(textoDocs);
+      const extractos = await enLotes(tramos, MAP_CONCURRENCY, async (tramo) => {
+        const out = await completar({
+          model: MODELOS.cliente, // Haiku
+          systemText: SYSTEM_TRAMO,
+          messages: [{ role: 'user', content: `Solicitud del profesional: "${ultimo.content}"\n\n--- FRAGMENTO DEL DOCUMENTO ---\n${tramo}` }],
+          maxTokens: 1400,
+        });
+        return out && !/^\s*NADA_RELEVANTE\s*$/i.test(out) ? out.trim() : '';
+      });
+      const relevantes = extractos.filter(Boolean);
+      const sintesis = relevantes.length
+        ? relevantes.map((e, i) => `[Parte ${i + 1}]\n${e}`).join('\n\n')
+        : '(El documento no contiene información relevante para la solicitud.)';
+      const reduceMsgs = armarMensajes(`[Extractos del documento adjunto, en orden de aparición]\n${sintesis}`);
+      reply = await completar({ modo: 'abogado', systemText: SYSTEM_ABOGADO, messages: reduceMsgs, maxTokens: 2600 });
+    } else {
+      // ── Cabe en una sola llamada → Sonnet con el texto + imágenes inline ──
+      const messages = (textoDocs || imgBloques.length) ? armarMensajes(textoDocs) : mensajes;
+      reply = await completar({ modo: 'abogado', systemText: SYSTEM_ABOGADO, messages, maxTokens: 2600 });
+    }
   } catch (e) {
-    console.error('[api/ai] Anthropic error (abogado):', e?.message);
+    console.error('[api/ai] Anthropic error (abogado):', e?.status, e?.message);
     res.status(502).json({ error: 'fallback', mensaje: 'El asistente no está disponible ahora. Intenta de nuevo en un momento.' });
     return;
   }
