@@ -142,6 +142,8 @@ export default function AsistenteIA() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [leyendo, setLeyendo] = useState(null); // nombre del PDF que se está extrayendo
+  const [memoria, setMemoria] = useState('');   // ficha durable del profesional (memoria entre chats)
+  const abortRef = useRef(null);                 // para detener la respuesta en curso
   const [glossOpen, setGlossOpen] = useState(false);
   const [copiedIdx, setCopiedIdx] = useState(null);
   const [focused, setFocused] = useState(false);
@@ -259,6 +261,40 @@ export default function AsistenteIA() {
     }
   }
 
+  // ── Memoria entre chats (persistente por profesional) ──
+  useEffect(() => {
+    if (!uid) return;
+    try { setMemoria(localStorage.getItem(`ia_memoria_${uid}`) || ''); } catch { /* */ }
+  }, [uid]);
+
+  function guardarMemoria(m) {
+    const v = m || '';
+    setMemoria(v);
+    try { if (uid) localStorage.setItem(`ia_memoria_${uid}`, v); } catch { /* best-effort */ }
+  }
+
+  // Fusiona el último intercambio en la ficha durable (en segundo plano, no bloquea).
+  async function actualizarMemoria(userMsg, reply) {
+    if (!userMsg || userMsg.trim().length < 25) return; // no gastar en saludos triviales
+    try {
+      const { Authorization } = await getAuthHeaders();
+      const { ok, data } = await pedirIA(
+        { modo: 'abogado', accion: 'memoria', memoria, mensajes: [
+          { role: 'user', content: userMsg.slice(0, 4000) },
+          { role: 'assistant', content: (reply || '').slice(0, 6000) },
+        ] },
+        { authHeader: Authorization }
+      );
+      if (ok && typeof data?.memoria === 'string') guardarMemoria(data.memoria);
+    } catch { /* la memoria es best-effort */ }
+  }
+
+  function detener() {
+    abortRef.current?.abort();
+    abortRef.current = null;
+    setBusy(false);
+  }
+
   async function enviar() {
     const texto = input.trim();
     if ((!texto && adjuntos.length === 0) || busy) return;
@@ -270,11 +306,17 @@ export default function AsistenteIA() {
     setThread(nuevoThread); setInput(''); setAdjuntos([]); setBusy(true); setError('');
     persistir(id, nuevoThread);
 
+    const controller = new AbortController();
+    abortRef.current = controller;
+
     const { Authorization } = await getAuthHeaders();
-    const { ok, data } = await pedirIA(
-      { modo: 'abogado', mensajes: nuevoThread.map((m) => ({ role: m.role, content: m.content })), adjuntos: adjEnviar },
-      { authHeader: Authorization }
+    const { ok, aborted, data } = await pedirIA(
+      { modo: 'abogado', memoria, mensajes: nuevoThread.map((m) => ({ role: m.role, content: m.content })), adjuntos: adjEnviar },
+      { authHeader: Authorization, signal: controller.signal }
     );
+    abortRef.current = null;
+
+    if (aborted) { setBusy(false); return; } // el profesional detuvo: deja su mensaje, sin respuesta
 
     if (!ok || !data?.reply) {
       setError(data?.mensaje || 'El asistente no está disponible. Intenta de nuevo.');
@@ -286,6 +328,7 @@ export default function AsistenteIA() {
     persistir(id, finalThread);
     setBusy(false);
     if (!reduce) setStream({ idx: finalThread.length - 1, n: 0 }); // arranca la animación de escritura
+    actualizarMemoria(texto, data.reply); // memoria entre chats, en segundo plano
   }
 
   const copiar = (i, texto) => {
@@ -380,18 +423,33 @@ export default function AsistenteIA() {
             </AnimatePresence>
           </div>
         </div>
-        <motion.button
-          type="button"
-          className={styles.send}
-          onClick={enviar}
-          disabled={!puedeEnviar}
-          aria-label="Enviar"
-          whileTap={puedeEnviar ? { scale: 0.9 } : undefined}
-          animate={{ scale: puedeEnviar ? 1 : 0.94, opacity: puedeEnviar ? 1 : 0.55 }}
-          transition={{ type: 'spring', stiffness: 400, damping: 22 }}
-        >
-          {busy ? <span className={styles.spin} /> : <IconEnviar />}
-        </motion.button>
+        {busy ? (
+          <motion.button
+            type="button"
+            className={styles.send}
+            onClick={detener}
+            aria-label="Detener respuesta"
+            title="Detener"
+            whileTap={{ scale: 0.9 }}
+          >
+            <svg width="15" height="15" viewBox="0 0 15 15" aria-hidden="true">
+              <rect x="2" y="2" width="11" height="11" rx="2.5" fill="currentColor" />
+            </svg>
+          </motion.button>
+        ) : (
+          <motion.button
+            type="button"
+            className={styles.send}
+            onClick={enviar}
+            disabled={!puedeEnviar}
+            aria-label="Enviar"
+            whileTap={puedeEnviar ? { scale: 0.9 } : undefined}
+            animate={{ scale: puedeEnviar ? 1 : 0.94, opacity: puedeEnviar ? 1 : 0.55 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 22 }}
+          >
+            <IconEnviar />
+          </motion.button>
+        )}
         <input ref={fileRef} type="file" accept=".pdf,.docx,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,image/png,image/jpeg,image/webp,image/gif" multiple style={{ display: 'none' }} onChange={onFiles} />
       </div>
 

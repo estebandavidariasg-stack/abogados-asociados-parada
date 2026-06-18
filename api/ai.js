@@ -5,6 +5,11 @@ import { SYSTEM_CLIENTE, SYSTEM_ABOGADO } from './_lib/aiPrompts.js';
 import { hashIp, parseTriageReply, buildProfesionalesBlock, limiteAlcanzado } from './_lib/aiLogic.js';
 import { completar, MODELOS } from './_lib/anthropic.js';
 
+// Resumir documentos largos (map-reduce) toma decenas de segundos: subimos el
+// límite de ejecución de la función. Vercel lo recorta al máximo del plan
+// (Hobby ~60s, Pro hasta 300s); para documentos muy extensos conviene Pro.
+export const config = { maxDuration: 60 };
+
 const MAX_MSGS = Number(process.env.AI_CLIENTE_MAX_MSGS || 6);
 const MAX_SESIONES_IP_HORA = Number(process.env.AI_MAX_SESIONES_IP_HORA || 10);
 const MAX_LEN_MENSAJE = 2000;
@@ -70,9 +75,25 @@ const MAX_ADJUNTOS = 5;
 const MAX_IMG_BYTES = 3 * 1024 * 1024;   // 3 MB por imagen
 const MAX_DOC_CHARS_TOTAL = 1_800_000;   // ~500-600 págs de texto denso (tope duro)
 const SINGLE_CALL_CHARS = 480_000;       // hasta aquí cabe en UNA llamada Sonnet
-const CHUNK_CHARS = 90_000;              // tamaño de cada tramo (paso MAP → Haiku)
-const MAX_CHUNKS = 24;                    // tope de tramos: acota el costo
-const MAP_CONCURRENCY = 5;                // tramos en paralelo por lote
+const CHUNK_CHARS = 150_000;             // tramo grande → menos llamadas (entra en el tope de tiempo)
+const MAX_CHUNKS = 12;                    // tope de tramos: acota costo y tiempo
+const MAP_CONCURRENCY = 4;                // tramos en paralelo por lote
+
+// Reintenta solo ante saturación/rate-limit (no ante errores reales), para que
+// un pico transitorio no tumbe todo el map-reduce.
+async function completarConReintento(args, intentos = 2) {
+  let ultimo;
+  for (let k = 0; k <= intentos; k++) {
+    try { return await completar(args); }
+    catch (e) {
+      ultimo = e;
+      const st = e?.status || e?.statusCode;
+      if (st !== 429 && st !== 529 && st !== 503) throw e;
+      await new Promise((r) => setTimeout(r, 700 * (k + 1)));
+    }
+  }
+  throw ultimo;
+}
 
 function bytesBase64(b64) {
   if (typeof b64 !== 'string' || !b64) return 0;
@@ -142,6 +163,19 @@ async function enLotes(items, size, fn) {
   return out;
 }
 
+// Módulo de MEMORIA entre chats: mantiene una ficha durable del profesional que
+// se inyecta como contexto en cada conversación (corre en Haiku, barato).
+const SYSTEM_MEMORIA =
+  'Eres el módulo de memoria de un asistente para un profesional (abogado o ' +
+  'contador). Mantienes una ficha BREVE y útil para futuras conversaciones, con ' +
+  'datos DURABLES: especialidad y áreas del profesional, clientes o casos ' +
+  'recurrentes, preferencias de redacción y formato, datos suyos o de su firma ' +
+  'que repite, y temas en curso. NO guardes detalles efímeros, ni el contenido ' +
+  'completo de documentos, ni datos sensibles innecesarios. Recibes la ficha ' +
+  'actual y el último intercambio; devuelve SOLO la ficha ACTUALIZADA en viñetas ' +
+  'concisas, sin comentarios, máximo ~1200 caracteres. Si no hay nada nuevo que ' +
+  'valga la pena, devuelve la ficha tal cual.';
+
 // System del paso MAP: extracción fiel y barata (Haiku) de lo relevante.
 const SYSTEM_TRAMO =
   'Eres un asistente jurídico y contable. Recibes UN fragmento de un documento ' +
@@ -183,13 +217,35 @@ async function registrarUsoSala(roomId, profesionalId) {
 }
 
 async function handleAbogado(req, res) {
-  const { mensajes, adjuntos, roomId, accion } = req.body || {};
+  const { mensajes, adjuntos, roomId, accion, memoria } = req.body || {};
 
   // Solo profesionales autenticados (abogado/contador).
   const perfil = await getCallerProfile(req);
   if (!perfil) { res.status(401).json({ error: 'No autenticado' }); return; }
   if (perfil.rol !== 'abogado' && perfil.rol !== 'contador') {
     res.status(403).json({ error: 'No autorizado' }); return;
+  }
+
+  // ── Acción de memoria (segundo plano): fusiona el último intercambio en la
+  //    ficha durable del profesional. Best-effort: nunca rompe la UI. ──
+  if (accion === 'memoria') {
+    const u = mensajes?.find?.((m) => m.role === 'user')?.content || '';
+    const a = mensajes?.find?.((m) => m.role === 'assistant')?.content || '';
+    const fichaActual = typeof memoria === 'string' ? memoria : '';
+    if (!u) { res.status(200).json({ memoria: fichaActual }); return; }
+    try {
+      const nueva = await completar({
+        model: MODELOS.cliente, // Haiku (barato)
+        systemText: SYSTEM_MEMORIA,
+        messages: [{ role: 'user', content: `FICHA ACTUAL:\n${fichaActual || '(vacía)'}\n\nÚLTIMO INTERCAMBIO:\nProfesional: ${String(u).slice(0, 4000)}\nAsistente: ${String(a).slice(0, 6000)}` }],
+        maxTokens: 700,
+      });
+      res.status(200).json({ memoria: (nueva || fichaActual || '').slice(0, 1500) });
+    } catch (e) {
+      console.error('[api/ai] memoria error:', e?.message);
+      res.status(200).json({ memoria: fichaActual });
+    }
+    return;
   }
 
   const ultimo = mensajes[mensajes.length - 1];
@@ -215,6 +271,12 @@ async function handleAbogado(req, res) {
   const textoDocs = unirDocs(docs);
   const last = mensajes.length - 1;
 
+  // Memoria entre chats: contexto durable del profesional (va como bloque de
+  // sistema aparte para no romper el prompt-cache del system base).
+  const memoriaCtx = (typeof memoria === 'string' && memoria.trim())
+    ? `[Memoria del profesional, de conversaciones anteriores. Úsala como contexto; no la menciones salvo que sea relevante.]\n${memoria.trim().slice(0, 1500)}`
+    : null;
+
   // Construye el contenido del último mensaje (texto del usuario + extra) con o
   // sin imágenes inline. `extra` es el texto del documento o sus extractos.
   const armarMensajes = (extra) => mensajes.map((m, i) => {
@@ -231,7 +293,7 @@ async function handleAbogado(req, res) {
       // final con la misma calidad de siempre. Mantiene el costo prudente.
       const tramos = trocear(textoDocs);
       const extractos = await enLotes(tramos, MAP_CONCURRENCY, async (tramo) => {
-        const out = await completar({
+        const out = await completarConReintento({
           model: MODELOS.cliente, // Haiku
           systemText: SYSTEM_TRAMO,
           messages: [{ role: 'user', content: `Solicitud del profesional: "${ultimo.content}"\n\n--- FRAGMENTO DEL DOCUMENTO ---\n${tramo}` }],
@@ -244,11 +306,11 @@ async function handleAbogado(req, res) {
         ? relevantes.map((e, i) => `[Parte ${i + 1}]\n${e}`).join('\n\n')
         : '(El documento no contiene información relevante para la solicitud.)';
       const reduceMsgs = armarMensajes(`[Extractos del documento adjunto, en orden de aparición]\n${sintesis}`);
-      reply = await completar({ modo: 'abogado', systemText: SYSTEM_ABOGADO, messages: reduceMsgs, maxTokens: 2600 });
+      reply = await completar({ modo: 'abogado', systemText: SYSTEM_ABOGADO, systemExtra: memoriaCtx, messages: reduceMsgs, maxTokens: 2600 });
     } else {
       // ── Cabe en una sola llamada → Sonnet con el texto + imágenes inline ──
       const messages = (textoDocs || imgBloques.length) ? armarMensajes(textoDocs) : mensajes;
-      reply = await completar({ modo: 'abogado', systemText: SYSTEM_ABOGADO, messages, maxTokens: 2600 });
+      reply = await completar({ modo: 'abogado', systemText: SYSTEM_ABOGADO, systemExtra: memoriaCtx, messages, maxTokens: 2600 });
     }
   } catch (e) {
     console.error('[api/ai] Anthropic error (abogado):', e?.status, e?.message);

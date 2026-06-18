@@ -22,15 +22,18 @@ function getClient() {
 //   tenga turnos en prosa (clave para modelos pequeños como Haiku). El texto
 //   devuelto incluye el prefill al inicio.
 // Devuelve el texto plano de la respuesta del modelo.
-export async function completar({ modo, model, systemText, messages, maxTokens = 1024, prefill = null }) {
+export async function completar({ modo, model, systemText, systemExtra, messages, maxTokens = 1024, prefill = null }) {
   const msgs = prefill != null
     ? [...messages, { role: 'assistant', content: prefill }]
     : messages;
   const resp = await getClient().messages.create({
     model: model || MODELOS[modo] || MODELOS.cliente,
     max_tokens: maxTokens,
+    // El system base se cachea (cache_control); `systemExtra` (p. ej. la memoria
+    // del profesional, que varía) va aparte para no romper el prompt-cache.
     system: [
       { type: 'text', text: systemText, cache_control: { type: 'ephemeral' } },
+      ...(systemExtra ? [{ type: 'text', text: systemExtra }] : []),
     ],
     messages: msgs,
   });
