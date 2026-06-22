@@ -517,7 +517,12 @@ export default function AsistenteIA() {
             <IconEnviar />
           </motion.button>
         )}
-        <input ref={fileRef} type="file" accept=".pdf,.docx,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,image/png,image/jpeg,image/webp,image/gif" multiple style={{ display: 'none' }} onChange={onFiles} />
+        {/* Sin `accept`: en celular, listar tipos de imagen hacía que el selector
+            mostrara SOLO "Galería / Cámara" y ocultara el explorador de archivos.
+            Sin restricción, el sistema abre su selector completo (Archivos + Fotos
+            + Cámara) y `onFiles` valida el tipo (PDF, Word, TXT o imagen) con un
+            mensaje claro si no es compatible. */}
+        <input ref={fileRef} type="file" multiple style={{ display: 'none' }} onChange={onFiles} />
       </div>
 
       <div className={styles.composerFoot}>

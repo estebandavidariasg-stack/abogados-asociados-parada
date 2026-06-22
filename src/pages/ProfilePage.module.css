@@ -864,10 +864,40 @@ select.input option {
   }
 }
 
-/* Solo iconos en pantallas muy estrechas */
+/* ── Riel móvil (igual que el panel de administración): las secciones se
+   reparten en una grilla pareja (sin scroll horizontal) e "Ir al inicio" +
+   "Cerrar sesión" bajan a su propia fila, separados por una línea sutil. ── */
 @media (max-width: 480px) {
-  .navItem span { display: none; }
-  .navItem { padding: 0.55rem 0.7rem; }
+  .sidebar,
+  .sidebar:hover { overflow-x: visible; }
+  .sidebarInner,
+  .sidebar:hover .sidebarInner { flex-wrap: wrap; justify-content: center; row-gap: 0.45rem; }
+  /* 5 secciones → una fila pareja de 5 columnas, icono solo (con tooltip) */
+  .sideNav,
+  .sidebar:hover .sideNav {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    justify-items: center;
+    flex: 1 1 100%;
+    gap: 0.5rem 0.2rem;
+  }
+  .navLabel,
+  .sidebar:hover .navLabel { display: none; }
+  /* width:auto + flex:0 0 auto → cada icono ocupa su ancho dentro de su celda */
+  .navItem,
+  .sidebar:hover .navItem { width: auto; flex: 0 0 auto; padding: 0.55rem 0.7rem; justify-content: center; }
+  /* Pie (inicio / salir) en su propia fila, centrado y con separador */
+  .sideFoot,
+  .sidebar:hover .sideFoot {
+    display: flex;
+    flex: 1 1 100%;
+    flex-direction: row;
+    justify-content: center;
+    gap: 0.6rem;
+    margin: 0.15rem 0 0;
+    padding: 0.55rem 0 0;
+    border-top: 1px solid rgba(13, 45, 94, 0.09);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
