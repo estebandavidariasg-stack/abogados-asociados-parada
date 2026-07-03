@@ -197,6 +197,66 @@
 }
 
 /* ══════════════════════════════════════════
+   CINTA DE PROFESIONALES (auto-desplazamiento)
+   ══════════════════════════════════════════ */
+.cinta {
+  position: relative;
+  max-width: 1200px;
+  margin: 0 auto;
+  /* padding vertical: deja aire para el "lift" y la sombra de la tarjeta en hover */
+  padding: 1.25rem 0 1.75rem;
+  overflow: hidden;
+  /* desvanece los bordes izq/der para que las tarjetas entren y salgan suave */
+  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 5%, #000 95%, transparent 100%);
+          mask-image: linear-gradient(90deg, transparent 0, #000 5%, #000 95%, transparent 100%);
+}
+.track {
+  display: flex;
+  width: max-content;
+  animation: cintaScroll linear infinite;
+  will-change: transform;
+}
+/* Se PAUSA solo al pasar el mouse SOBRE UNA TARJETA (no sobre el relleno ni los
+   huecos entre tarjetas), al enfocar con teclado, o mientras se toca en móvil →
+   así se puede clicar sin que la franja entera detenga la cinta. */
+.track:has(.slide:hover),
+.cinta:focus-within .track,
+.cintaPaused .track { animation-play-state: paused; }
+@keyframes cintaScroll {
+  from { transform: translate3d(0, 0, 0); }
+  to   { transform: translate3d(-50%, 0, 0); } /* dos copias → media pista = un ciclo exacto */
+}
+.slide {
+  flex: 0 0 clamp(240px, 25vw, 280px);
+  width: clamp(240px, 25vw, 280px);
+  /* margen (no gap) para que las dos copias encajen perfecto en el bucle */
+  margin-right: 1.5rem;
+  display: flex;
+  align-items: stretch;
+}
+.slide > * { width: 100%; height: 100%; }
+
+/* Fila estática: cuando el usuario reduce el movimiento, hay filtros activos, o
+   hay pocas tarjetas para llenar la fila. Se desplaza con el dedo/mouse y se
+   centra si caben todas. */
+.cintaStatic {
+  display: flex;
+  justify-content: safe center;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 1rem 0.5rem 1.25rem;
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+.cintaStatic .slide { scroll-snap-align: center; }
+
+@media (prefers-reduced-motion: reduce) {
+  .track { animation: none; }
+}
+
+/* ══════════════════════════════════════════
    RESPONSIVE
    ══════════════════════════════════════════ */
 
@@ -234,6 +294,9 @@
     grid-template-columns: 1fr 1fr;
     gap: 1rem;
   }
+
+  /* En celular las tarjetas van más angostas → asoma la siguiente */
+  .slide { flex-basis: 66vw; width: 66vw; margin-right: 1rem; }
 }
 
 /* Móvil pequeño */

@@ -139,18 +139,23 @@
 .estrellaFill svg { display: block; width: 15px; height: 14px; }
 
 .texto {
-  flex: 1;
+  /* Sin `flex: 1`: al crecer como ítem flex se anulaba el line-clamp y el texto
+     largo se cortaba a media línea. Como bloque normal, `-webkit-line-clamp`
+     recorta a 4 líneas con puntos suspensivos. El pie se ancla al fondo aparte
+     (margin-top: auto) para conservar tarjetas de igual alto. */
   font-size: 0.9rem;
   line-height: 1.6;
   color: #3f4a5e;          /* oscuro y legible sobre blanco (~7:1) */
   margin: 0 0 1.1rem;
   display: -webkit-box;
-  -webkit-line-clamp: 4;
+  -webkit-line-clamp: 5;   /* 5 líneas: aprovecha el alto de la tarjeta sin dejar la línea vacía */
+  line-clamp: 5;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
 
 .pie {
+  margin-top: auto;        /* ancla el autor al fondo → tarjetas parejas */
   display: flex;
   align-items: center;
   gap: 0.8rem;
@@ -184,7 +189,7 @@
 /* ── RESPONSIVE ───────────────────────────────────────── */
 @media (max-width: 640px) {
   .section { padding: 5rem 0; }
-  .tarjeta { width: 290px; height: 320px; margin-right: 1.1rem; }
+  .tarjeta { width: 250px; height: 320px; margin-right: 1rem; }
   .filas { gap: 1.1rem; }
 }
 

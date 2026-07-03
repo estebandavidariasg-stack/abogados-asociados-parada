@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { supabase } from '../../lib/supabase'
 import SocialLinks from '../profile/SocialLinks'
 import styles from './LawyerCard.module.css'
@@ -24,7 +25,7 @@ function StarDisplay({ rating, total, dark = false }) {
   )
 }
 
-export default function LawyerCard({ lawyer, delay = 0, isSuperAdmin = false }) {
+export default function LawyerCard({ lawyer, delay = 0, isSuperAdmin = false, reveal = true, ghost = false }) {
   const [open, setOpen] = useState(false)
   // El endpoint /api/professionals ya agrega la calificación (rating_promedio
   // + rating_total). La usamos directo y evitamos una query por tarjeta.
@@ -78,11 +79,12 @@ export default function LawyerCard({ lawyer, delay = 0, isSuperAdmin = false }) 
     <>
       {/* ── Tarjeta en el grid ── */}
       <div
-        className={`${styles.card} fade-up`}
-        style={{ transitionDelay: `${delay}s` }}
+        className={`${styles.card}${reveal ? ' fade-up' : ''}`}
+        style={reveal ? { transitionDelay: `${delay}s` } : undefined}
         onClick={() => setOpen(true)}
         role="button"
-        tabIndex={0}
+        tabIndex={ghost ? -1 : 0}
+        aria-hidden={ghost || undefined}
         onKeyDown={(e) => e.key === 'Enter' && setOpen(true)}
       >
         <div className={styles.photoWrap}>
@@ -145,7 +147,12 @@ export default function LawyerCard({ lawyer, delay = 0, isSuperAdmin = false }) 
       </div>
 
       {/* ── Modal ── */}
-      {open && (
+      {/* Portal a <body>: el carrusel de LawyersSection anima un ancestro con
+          `transform`, y un ancestro transformado se vuelve el bloque contenedor
+          de los `position: fixed`. Sin el portal, el overlay se posicionaría
+          respecto al track (desplazado) y lo recortaría su `overflow: hidden`.
+          Portado a body, vuelve a cubrir el viewport y queda centrado. */}
+      {open && createPortal(
         <div className={styles.overlay} onClick={() => setOpen(false)}>
           <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
 
@@ -246,7 +253,8 @@ export default function LawyerCard({ lawyer, delay = 0, isSuperAdmin = false }) 
               INICIAR CONSULTA
             </button>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   )

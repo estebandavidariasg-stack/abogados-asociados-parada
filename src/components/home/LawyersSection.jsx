@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { motion } from 'framer-motion'
+import { motion, useReducedMotion } from 'framer-motion'
 import { headerStagger, eyebrowReveal, fadeUp, VIEWPORT } from '../../lib/motionVariants'
 import LawyerCard from './LawyerCard'
 import styles from './LawyersSection.module.css'
@@ -229,12 +229,56 @@ export default function LawyersSection() {
           )}
         </div>
       ) : (
-        <div className={styles.grid}>
-          {filtered.map((lawyer, i) => (
-            <LawyerCard key={lawyer.id} lawyer={lawyer} delay={i * 0.1} isSuperAdmin={isSuperAdmin} />
-          ))}
-        </div>
+        <ProfesionalesCinta items={filtered} isSuperAdmin={isSuperAdmin} calm={!!hasFilters} />
       )}
     </section>
+  )
+}
+
+/* ── Cinta de profesionales ────────────────────────────────────────────────
+   Auto-desplazamiento continuo (una fila) para que los perfiles pasen frente
+   al usuario sin que tenga que buscar ni filtrar. Se distingue de la cinta de
+   testimonios: es UNA fila de tarjetas de perfil (accionables), y se PAUSA al
+   pasar el mouse / enfocar con teclado / tocar, para poder abrir cada tarjeta.
+   Si el usuario reduce el movimiento, aplica filtros, o hay pocas tarjetas para
+   llenar la fila, cae a una fila estática que se desplaza con el dedo/mouse. */
+function ProfesionalesCinta({ items, isSuperAdmin, calm }) {
+  const reduce = useReducedMotion()
+  const [touching, setTouching] = useState(false)
+
+  const animar = !reduce && !calm && items.length >= 4
+
+  if (!animar) {
+    return (
+      <div className={styles.cintaStatic}>
+        {items.map((l) => (
+          <div className={styles.slide} key={l.id}>
+            <LawyerCard lawyer={l} isSuperAdmin={isSuperAdmin} reveal={false} />
+          </div>
+        ))}
+      </div>
+    )
+  }
+
+  // Duración proporcional al número de tarjetas → velocidad ~constante.
+  const dur = Math.max(20, items.length * 4.5)
+
+  return (
+    <div
+      className={`${styles.cinta} ${touching ? styles.cintaPaused : ''}`}
+      onTouchStart={() => setTouching(true)}
+      onTouchEnd={() => setTouching(false)}
+      onTouchCancel={() => setTouching(false)}
+    >
+      <div className={styles.track} style={{ animationDuration: `${dur}s` }}>
+        {[0, 1].flatMap((copia) =>
+          items.map((l) => (
+            <div className={styles.slide} key={`${copia}-${l.id}`}>
+              <LawyerCard lawyer={l} isSuperAdmin={isSuperAdmin} reveal={false} ghost={copia === 1} />
+            </div>
+          ))
+        )}
+      </div>
+    </div>
   )
 }
