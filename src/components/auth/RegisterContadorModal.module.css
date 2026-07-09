@@ -77,7 +77,7 @@
   font-weight: 600;
   letter-spacing: 0.35em;
   text-transform: uppercase;
-  color: var(--gold-dk);
+  color: var(--reg-accent-dk, var(--gold-dk));
   margin-bottom: 0.4rem;
 }
 
@@ -175,9 +175,9 @@
   box-sizing: border-box;
 }
 .input:focus {
-  border-color: var(--navy-md);
+  border-color: var(--reg-accent, var(--navy-md));
   background: #ffffff;
-  box-shadow: 0 0 0 3px rgba(13, 45, 94, 0.07);
+  box-shadow: 0 0 0 3px var(--reg-focus, rgba(13, 45, 94, 0.07));
 }
 .input::placeholder { color: rgba(74, 96, 128, 0.45); }
 
@@ -234,7 +234,7 @@
   font-family: 'Raleway', sans-serif;
   margin-top: 0.5rem;
   margin-bottom: 1rem;
-  background: var(--navy) !important;
+  background: var(--reg-accent, var(--navy)) !important;
   color: #ffffff !important;
   border: none !important;
   border-radius: 10px !important;
@@ -243,7 +243,7 @@
   min-height: 44px;
 }
 .submit:hover:not(:disabled) {
-  background: var(--navy-md) !important;
+  background: var(--reg-accent-dk, var(--navy-md)) !important;
   transform: translateY(-1px);
 }
 .submit:disabled { opacity: 0.4; cursor: not-allowed; }
@@ -279,7 +279,7 @@
   line-height: 1.5;
 }
 
-.req { color: var(--gold, #c9a84c); }
+.req { color: var(--reg-accent, #c9a84c); }
 
 /* ── PASSWORD ────────────────────────────────────────────── */
 .pwWrap { position: relative; display: flex; align-items: center; }
@@ -293,7 +293,7 @@
   background: none;
   border: none;
   cursor: pointer;
-  color: #c9a84c;
+  color: var(--reg-accent, #c9a84c);
   opacity: 0.7;
   padding: 0;
   line-height: 0;
@@ -355,7 +355,7 @@
 .terminosCheck {
   width: 15px;
   height: 15px;
-  accent-color: var(--gold, #C9A84C);
+  accent-color: var(--reg-accent, #C9A84C);
   cursor: pointer;
   flex-shrink: 0;
   margin-top: 2px;
@@ -367,13 +367,57 @@
 }
 
 .terminosLink {
-  color: #c9a84c;
+  color: var(--reg-accent-dk, #c9a84c);
   text-decoration: underline;
   text-underline-offset: 2px;
   font-weight: 600;
   transition: opacity 0.2s;
 }
 .terminosLink:hover { opacity: 0.75; }
+
+/* ── Sección de experiencia del gestor ─────────────────────── */
+.gestorSection {
+  margin: 6px 0 2px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(13, 45, 94, 0.10);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.gestorSectionTitle {
+  font-family: 'Raleway', sans-serif;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--reg-accent-dk, var(--gold-dk));
+  margin: 0;
+}
+/* Fila tipo interruptor: se resalta con el acento cuando está activa. */
+.toggleRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  background: #f8f9fc;
+  border: 1.5px solid rgba(13, 45, 94, 0.12);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: border-color 0.2s ease, background 0.2s ease;
+  user-select: none;
+}
+.toggleRow:hover { border-color: var(--reg-accent, rgba(13, 45, 94, 0.3)); }
+.toggleRow[data-on="true"] {
+  border-color: var(--reg-accent, #c9a84c);
+  background: var(--reg-tint, rgba(201, 168, 76, 0.07));
+}
+.toggleRow input {
+  width: 16px; height: 16px;
+  accent-color: var(--reg-accent, #c9a84c);
+  flex-shrink: 0; cursor: pointer;
+}
+.toggleRow span { font-size: 0.82rem; color: var(--navy); font-weight: 500; }
+.subField { margin: 8px 0 0; }
 
 /* ── RESPONSIVE ──────────────────────────────────────────── */
 @media (max-width: 768px) {

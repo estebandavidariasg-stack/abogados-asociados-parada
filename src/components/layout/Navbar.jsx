@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from 'react'
 import { useAuth } from '../../context/AuthContext'
 import styles from './Navbar.module.css'
 
-export default function Navbar({ onLogin, onRegister, onRegisterContador }) {
+export default function Navbar({ onLogin, onRegister, onRegisterContador, onRegisterGestor }) {
   const [scrolled, setScrolled]   = useState(false)
   const [menuOpen, setMenuOpen]   = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
@@ -163,6 +163,13 @@ export default function Navbar({ onLogin, onRegister, onRegisterContador }) {
                   >
                     Registrarse como contador
                   </button>
+                  <button
+                    type="button"
+                    className={`${styles.btnRegister} ${styles.btnRegisterGestor}`}
+                    onClick={() => { onRegisterGestor?.(); setRegisterOpen(false) }}
+                  >
+                    Registrarse como gestor
+                  </button>
                 </div>
               )}
             </div>
@@ -232,6 +239,9 @@ export default function Navbar({ onLogin, onRegister, onRegisterContador }) {
               </button>
               <button className={styles.mobileItemGold} onClick={() => { onRegisterContador?.(); setMobileOpen(false) }}>
                 Registrarse como Contador
+              </button>
+              <button className={`${styles.mobileItemGold} ${styles.mobileItemTeal}`} onClick={() => { onRegisterGestor?.(); setMobileOpen(false) }}>
+                Registrarse como Gestor
               </button>
             </>
           )}

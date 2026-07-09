@@ -16,6 +16,7 @@ import SubNav from '../components/layout/SubNav'
 // visitante público no descargue ~1.200 líneas de formularios + recaptcha.
 const AuthModal = lazy(() => import('../components/auth/AuthModal'))
 const RegisterContadorModal = lazy(() => import('../components/auth/RegisterContadorModal'))
+const RegisterGestorModal = lazy(() => import('../components/auth/RegisterGestorModal'))
 
 function ScrollProgress() {
   const { scrollYProgress } = useScroll()
@@ -79,6 +80,7 @@ function DeferredMap() {
 export default function HomePage() {
   const [modal, setModal] = useState(null)
   const [contadorOpen, setContadorOpen] = useState(false)
+  const [gestorOpen, setGestorOpen] = useState(false)
   const [editMode, setEditMode] = useState(false)
   const { profile } = useAuth()
 
@@ -91,6 +93,7 @@ export default function HomePage() {
         onLogin={() => setModal('login')}
         onRegister={() => setModal('register')}
         onRegisterContador={() => setContadorOpen(true)}
+        onRegisterGestor={() => setGestorOpen(true)}
       />
       <SubNav onUnirse={() => setModal('register')} />
       <IntroSection onUnirse={() => setModal('register')} />
@@ -111,6 +114,7 @@ export default function HomePage() {
       <Suspense fallback={null}>
         {modal && <AuthModal initialTab={modal} onClose={() => setModal(null)} />}
         {contadorOpen && <RegisterContadorModal onClose={() => setContadorOpen(false)} />}
+        {gestorOpen && <RegisterGestorModal onClose={() => setGestorOpen(false)} />}
       </Suspense>
     </>
   )

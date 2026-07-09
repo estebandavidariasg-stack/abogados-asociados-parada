@@ -43,7 +43,7 @@ const RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000
 const RATE_LIMIT_MAX        = 3
 const CODE_TTL_MS           = 10 * 60 * 1000
 
-const TIPOS_VALIDOS = new Set(['abogado', 'contador'])
+const TIPOS_VALIDOS = new Set(['abogado', 'contador', 'gestor'])
 
 /* ── Verificación de reCAPTCHA contra Google ──────────────────────────────
    Antes el token sólo se recolectaba en el cliente y nunca se validaba.
@@ -153,7 +153,9 @@ async function insertCode({ email, code, tipoRegistro, expiresAt }) {
 
 // ── Plantilla del correo (tema claro compartido) ───────────────────────
 function renderVerificationEmailHtml({ code, tipoRegistro }) {
-  const rolLabel = tipoRegistro === 'contador' ? 'Contador' : 'Abogado'
+  const rolLabel = tipoRegistro === 'contador' ? 'Contador'
+    : tipoRegistro === 'gestor' ? 'Gestor'
+    : 'Abogado'
   const inner =
     `<p style="margin:0;font-size:16px;line-height:1.6;color:${C.navy};text-align:center;">
        Para completar tu registro como ${em(rolLabel)}, ingresa este código:

@@ -157,6 +157,10 @@
   cursor: pointer;
   border-radius: 4px;
   transition: background 0.3s, opacity 0.3s;
+  /* Los tres botones (disparador + ítems del dropdown) comparten este ancho,
+     así quedan idénticos y alineados (el más largo es "…CONTADOR"). */
+  min-width: 17rem;
+  text-align: center;
 }
 
 .btnRegister:hover {
@@ -174,6 +178,19 @@
 .btnRegisterDark:hover {
   background: var(--navy-md);
   border-color: var(--navy-md);
+}
+
+/* Variante GESTOR — teal/petróleo: análogo al navy (frío), lo distingue de
+   abogado/contador sin chocar con el azul oscuro de la marca. */
+.btnRegisterGestor {
+  background: #2a6f75;
+  border-color: #2a6f75;
+  color: #fff;
+}
+.btnRegisterGestor:hover {
+  background: #235c61;
+  border-color: #235c61;
+  opacity: 1;
 }
 
 /* ── USER MENU ────────────────────────────────────────────────── */
@@ -430,6 +447,10 @@
   transform: translateY(-1px);
 }
 
+/* Variante teal para el ítem de gestor en el menú móvil. */
+.mobileItemTeal { background: #2a6f75; }
+.mobileItemTeal:hover { background: #235c61; }
+
 /* ── DESKTOP ──────────────────────────────────────────────────── */
 @media (min-width: 769px) {
   .firmTitle {
@@ -566,15 +587,23 @@
 .registerDropdownWrap {
   position: absolute;
   top: 100%;
-  right: -5px;            /* desplazado un poco a la derecha del botón */
   padding-top: 6px;
   z-index: 1000;
   animation: registerSlide 180ms ease-out;
+  /* Se estira EXACTAMENTE al ancho del botón disparador (left:0 + right:0), y
+     los ítems lo llenan → los tres botones quedan idénticos y alineados. */
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
-/* El botón del dropdown debe expandirse a su ancho natural sin envolver */
+/* Ítems del dropdown al mismo ancho, sin envolver el texto */
 .registerDropdownWrap > button {
+  width: 100%;
   white-space: nowrap;
+  box-shadow: 0 6px 16px rgba(13, 45, 94, 0.18);
 }
 
 @keyframes registerSlide {
