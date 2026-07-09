@@ -118,6 +118,8 @@ export default function ModelosContractualesSection() {
   // ── Preview ──────────────────────────────────────────────────────────
   const [previewModelo, setPreviewModelo]   = useState(null)
   const [previewLoading, setPreviewLoading] = useState(true)
+  const [previewError, setPreviewError]     = useState('')
+  const previewDocxRef                      = useRef(null)
 
   // Fetch paginado vía REST (offset/limit) — 12 en 12
   const fetchPage = useCallback(async (cat, pageIdx, append) => {
@@ -190,8 +192,52 @@ export default function ModelosContractualesSection() {
     if (modelo.formato === 'pdf') return publicUrl
     return `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(publicUrl)}`
   }
-  function openPreview(modelo)  { setPreviewLoading(true); setPreviewModelo(modelo) }
+  // URL pública directa del archivo (sin el visor de Office).
+  function getRawUrl(modelo) {
+    if (!modelo) return ''
+    const { data } = supabase.storage.from('contract-templates').getPublicUrl(modelo.storage_path)
+    return data?.publicUrl || ''
+  }
+
+  function openPreview(modelo)  { setPreviewLoading(true); setPreviewError(''); setPreviewModelo(modelo) }
   function closePreview()       { setPreviewModelo(null) }
+
+  // Vista previa de Word (.docx) renderizada en el navegador con docx-preview:
+  // no depende de Office Online (que era lento y quedaba en blanco con archivos
+  // recién subidos). Se descarga el archivo del bucket público y se pinta el
+  // documento en un contenedor propio. La librería se carga bajo demanda.
+  useEffect(() => {
+    if (!previewModelo || previewModelo.formato !== 'docx') return
+    let cancelled = false
+    const cont = previewDocxRef.current
+    if (!cont) return
+    setPreviewLoading(true)
+    setPreviewError('')
+    ;(async () => {
+      try {
+        const resp = await fetch(getRawUrl(previewModelo))
+        if (!resp.ok) throw new Error('descarga')
+        const blob = await resp.blob()
+        const { renderAsync } = await import('docx-preview')
+        if (cancelled) return
+        cont.innerHTML = ''
+        await renderAsync(blob, cont, undefined, {
+          className: 'docxrender',
+          inWrapper: true,
+          ignoreWidth: false,
+          ignoreHeight: false,
+          breakPages: true,
+        })
+        if (!cancelled) setPreviewLoading(false)
+      } catch {
+        if (!cancelled) {
+          setPreviewError('No se pudo mostrar la vista previa. Puedes descargar el documento.')
+          setPreviewLoading(false)
+        }
+      }
+    })()
+    return () => { cancelled = true }
+  }, [previewModelo])
 
   // ─────────────────────── ADMIN: alta de modelo ─────────────────────────
   function openAddModal() {
@@ -595,18 +641,34 @@ export default function ModelosContractualesSection() {
             </div>
 
             <div className={styles.previewFrameWrap}>
-              <iframe
-                key={previewModelo.id}
-                src={getPreviewUrl(previewModelo)}
-                title={previewModelo.nombre}
-                className={styles.previewIframe}
-                sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
-                onLoad={() => setPreviewLoading(false)}
-              />
-              {previewLoading && (
+              {previewModelo.formato === 'docx' ? (
+                <div ref={previewDocxRef} className={styles.previewDocx} />
+              ) : (
+                <iframe
+                  key={previewModelo.id}
+                  src={getPreviewUrl(previewModelo)}
+                  title={previewModelo.nombre}
+                  className={styles.previewIframe}
+                  sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
+                  onLoad={() => setPreviewLoading(false)}
+                />
+              )}
+              {previewLoading && !previewError && (
                 <div className={styles.previewLoading} aria-hidden="true">
                   <span className={styles.spinner} />
                   <span>Cargando vista previa…</span>
+                </div>
+              )}
+              {previewError && (
+                <div className={styles.previewErrorBox}>
+                  <p>{previewError}</p>
+                  <button
+                    type="button"
+                    className={styles.previewDownload}
+                    onClick={() => handleDownload(previewModelo)}
+                  >
+                    ⬇ Descargar {FORMAT_LABEL[previewModelo.formato] || previewModelo.formato.toUpperCase()}
+                  </button>
                 </div>
               )}
             </div>
@@ -615,7 +677,9 @@ export default function ModelosContractualesSection() {
               <p className={styles.previewNote}>
                 {previewModelo.formato === 'pdf'
                   ? 'Vista previa nativa del navegador.'
-                  : 'La vista previa la genera Office Online y puede tardar. Si no se ve, usa “Descargar”.'}
+                  : previewModelo.formato === 'docx'
+                    ? 'Vista previa del documento de Word.'
+                    : 'La vista previa la genera Office Online y puede tardar. Si no se ve, usa “Descargar”.'}
               </p>
               <button
                 type="button"
