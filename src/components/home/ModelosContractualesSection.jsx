@@ -64,48 +64,20 @@ function FormatIcon({ formato }) {
   return null
 }
 
-// ── Miniatura "primera página" ────────────────────────────────────────────
-// Usa iframe del visor (Office Online para .docx/.xlsx, nativo para .pdf).
-// IntersectionObserver evita levantar 12 iframes a la vez: sólo carga cuando
-// la card entra al viewport (rootMargin 300px, una sola vez).
-function CardThumb({ url, formato }) {
-  const ref = useRef(null)
-  const [inView, setInView] = useState(false)
-  const [loaded, setLoaded] = useState(false)
-
-  useEffect(() => {
-    if (!ref.current) return
-    const obs = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) { setInView(true); obs.disconnect() }
-      },
-      { rootMargin: '300px 0px', threshold: 0.05 }
-    )
-    obs.observe(ref.current)
-    return () => obs.disconnect()
-  }, [])
-
+// ── Miniatura tipo "documento" (ligera, instantánea) ──────────────────────
+// SIN iframe de Office Online: antes cada tarjeta montaba el visor de Office,
+// que es lento y a veces queda en blanco, así que el grid tardaba muchísimo en
+// cargar para los visitantes. La vista previa REAL del contenido queda solo en
+// el modal (al hacer clic). Aquí mostramos una hoja con el ícono de formato.
+function CardThumb({ formato }) {
   return (
-    <div ref={ref} className={styles.cardThumb}>
+    <div className={styles.cardThumb}>
       <div className={styles.cardThumbPage}>
-        {inView && url && (
-          <iframe
-            src={url}
-            title=""
-            className={styles.cardThumbIframe}
-            onLoad={() => setLoaded(true)}
-            aria-hidden="true"
-            tabIndex={-1}
-          />
-        )}
-        {!loaded && (
-          <div className={styles.cardThumbFallback}>
-            <FormatIcon formato={formato} />
-            {inView && (
-              <span className={styles.cardThumbHint}>Cargando vista previa…</span>
-            )}
-          </div>
-        )}
+        <span className={styles.thumbIcon}><FormatIcon formato={formato} /></span>
+        <span className={styles.thumbLines} aria-hidden="true">
+          <i /><i /><i /><i /><i /><i />
+        </span>
+        <span className={styles.thumbFormato}>{FORMAT_LABEL[formato] || (formato || '').toUpperCase()}</span>
       </div>
     </div>
   )
@@ -144,7 +116,8 @@ export default function ModelosContractualesSection() {
   const fileInputRef                      = useRef(null)
 
   // ── Preview ──────────────────────────────────────────────────────────
-  const [previewModelo, setPreviewModelo] = useState(null)
+  const [previewModelo, setPreviewModelo]   = useState(null)
+  const [previewLoading, setPreviewLoading] = useState(true)
 
   // Fetch paginado vía REST (offset/limit) — 12 en 12
   const fetchPage = useCallback(async (cat, pageIdx, append) => {
@@ -217,7 +190,7 @@ export default function ModelosContractualesSection() {
     if (modelo.formato === 'pdf') return publicUrl
     return `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(publicUrl)}`
   }
-  function openPreview(modelo)  { setPreviewModelo(modelo) }
+  function openPreview(modelo)  { setPreviewLoading(true); setPreviewModelo(modelo) }
   function closePreview()       { setPreviewModelo(null) }
 
   // ─────────────────────── ADMIN: alta de modelo ─────────────────────────
@@ -445,8 +418,8 @@ export default function ModelosContractualesSection() {
                   </button>
                 )}
 
-                {/* Miniatura real de la primera página (lazy iframe) */}
-                <CardThumb url={getPreviewUrl(m)} formato={m.formato} />
+                {/* Miniatura ligera tipo documento (la vista previa real va en el modal) */}
+                <CardThumb formato={m.formato} />
 
                 <div className={styles.cardBody}>
                   <span className={styles.cardCategoria}>{m.categoria}</span>
@@ -621,19 +594,28 @@ export default function ModelosContractualesSection() {
               </button>
             </div>
 
-            <iframe
-              key={previewModelo.id}
-              src={getPreviewUrl(previewModelo)}
-              title={previewModelo.nombre}
-              className={styles.previewIframe}
-              sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
-            />
+            <div className={styles.previewFrameWrap}>
+              <iframe
+                key={previewModelo.id}
+                src={getPreviewUrl(previewModelo)}
+                title={previewModelo.nombre}
+                className={styles.previewIframe}
+                sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
+                onLoad={() => setPreviewLoading(false)}
+              />
+              {previewLoading && (
+                <div className={styles.previewLoading} aria-hidden="true">
+                  <span className={styles.spinner} />
+                  <span>Cargando vista previa…</span>
+                </div>
+              )}
+            </div>
 
             <div className={styles.previewFooter}>
               <p className={styles.previewNote}>
                 {previewModelo.formato === 'pdf'
                   ? 'Vista previa nativa del navegador.'
-                  : 'Vista previa vía Office Online (puede tardar unos segundos).'}
+                  : 'La vista previa la genera Office Online y puede tardar. Si no se ve, usa “Descargar”.'}
               </p>
               <button
                 type="button"

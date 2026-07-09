@@ -186,6 +186,8 @@
   overflow: hidden;
   margin: -4px 0 4px;
 }
+/* Hoja tipo documento: ícono de formato + líneas simuladas. Instantánea,
+   sin iframes ni red — la vista previa real del contenido va en el modal. */
 .cardThumbPage {
   position: relative;
   width: 65%;
@@ -195,58 +197,41 @@
   border-radius: 4px;
   box-shadow: 0 4px 14px rgba(13, 45, 94, 0.1);
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 18px 16px 26px;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 .card:hover .cardThumbPage {
   transform: translateY(-2px);
   box-shadow: 0 8px 20px rgba(201, 168, 76, 0.25);
 }
-
-/* Iframe del visor — Office Online no renderiza nada en viewports muy
-   pequeños, así que rendereamos a 660×880 (donde sí muestra contenido)
-   y escalamos con CSS al tamaño visible de la "página".
-   transform-origin: top left ⇒ el ancho efectivo = 660 * 0.33 ≈ 218px,
-   que cubre la cardThumbPage típica.
-   top: -13px (= 38 * 0.33) recorta la toolbar del visor que aparece arriba
-   del documento, sin tapar la primera línea del texto. */
-.cardThumbIframe {
-  position: absolute;
-  top: -13px;
-  left: 0;
-  width: 660px;
-  height: 880px;
-  border: 0;
-  background: #fff;
-  transform: scale(0.33);
-  transform-origin: top left;
-  pointer-events: none;
-  user-select: none;
-}
-
-/* Fallback mientras el iframe carga (o antes de entrar al viewport) */
-.cardThumbFallback {
-  position: absolute;
-  inset: 0;
+.thumbIcon { display: flex; }
+.thumbIcon svg { width: 40px; height: 40px; }
+.thumbLines {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  padding: 12px;
-  background: #ffffff;
-  z-index: 1;
-  pointer-events: none;
+  gap: 7px;
+  width: 78%;
 }
-.cardThumbFallback svg { width: 48px; height: 48px; }
-
-.cardThumbHint {
-  font-size: 9px;
-  letter-spacing: 0.06em;
-  color: var(--muted);
-  font-family: 'Cinzel', serif;
-  text-transform: uppercase;
-  opacity: 0.7;
-  text-align: center;
+.thumbLines i {
+  display: block;
+  height: 5px;
+  border-radius: 3px;
+  background: rgba(13, 45, 94, 0.10);
+}
+.thumbLines i:nth-child(3n) { width: 68%; }
+.thumbLines i:last-child { width: 45%; }
+.thumbFormato {
+  position: absolute;
+  bottom: 8px;
+  font-size: 0.58rem;
+  letter-spacing: 0.14em;
+  font-weight: 700;
+  color: var(--gold-dk, #8a6a28);
 }
 
 .cardBody {
@@ -470,17 +455,22 @@
 /* ══════════════════════════════════════════
    ADMIN — botón ✕ eliminar en card
    ══════════════════════════════════════════ */
+/* Control de eliminar (solo superadmin). Va DENTRO de la tarjeta, arriba a la
+   derecha, con estilo sutil (blanco + marca roja) para que se lea como una
+   acción y no como una alerta. Antes colgaba fuera de la esquina (left:-10px)
+   y parecía un error. */
 .cardDeleteBtn {
   position: absolute;
-  top: 12px;
-  left: -10px;
-  width: 26px;
-  height: 26px;
+  top: 10px;
+  right: 10px;
+  left: auto;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
-  background: #dc3545;
-  color: #fff;
-  border: 2px solid #fff;
-  font-size: 13px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #c0392b;
+  border: 1px solid rgba(192, 57, 43, 0.35);
+  font-size: 14px;
   font-weight: 700;
   cursor: pointer;
   display: flex;
@@ -488,12 +478,22 @@
   justify-content: center;
   line-height: 1;
   padding: 0;
-  box-shadow: 0 2px 6px rgba(220, 53, 69, 0.4);
-  transition: background 0.2s, transform 0.15s;
-  z-index: 1;
+  box-shadow: 0 2px 8px rgba(13, 45, 94, 0.15);
+  transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.15s ease, box-shadow 0.2s ease;
+  z-index: 3;
 }
-.cardDeleteBtn:hover  { background: #c92a36; transform: scale(1.12); }
+.cardDeleteBtn:hover {
+  background: #dc3545;
+  color: #fff;
+  border-color: #dc3545;
+  transform: scale(1.08);
+  box-shadow: 0 4px 12px rgba(220, 53, 69, 0.35);
+}
 .cardDeleteBtn:active { transform: scale(1); }
+@media (prefers-reduced-motion: reduce) {
+  .cardDeleteBtn { transition: background 0.2s ease, color 0.2s ease; }
+  .cardDeleteBtn:hover { transform: none; }
+}
 
 /* ══════════════════════════════════════════
    ADMIN — modales (alta + confirmación)
@@ -808,6 +808,13 @@
   border-color: var(--navy);
 }
 
+.previewFrameWrap {
+  flex: 1;
+  position: relative;
+  display: flex;
+  min-height: 300px;
+  background: #f5f5f5;
+}
 .previewIframe {
   flex: 1;
   width: 100%;
@@ -815,6 +822,21 @@
   background: #f5f5f5;
   min-height: 300px;
 }
+.previewLoading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background: #f5f5f5;
+  color: var(--navy);
+  font-family: 'Raleway', sans-serif;
+  font-size: 0.85rem;
+  pointer-events: none;
+}
+.previewLoading .spinner { width: 22px; height: 22px; border-width: 3px; }
 
 .previewFooter {
   display: flex;
