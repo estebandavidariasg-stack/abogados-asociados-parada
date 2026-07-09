@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { motion } from 'framer-motion'
-import { headerStagger, eyebrowReveal, fadeUp, gridStagger, cardReveal, VIEWPORT } from '../../lib/motionVariants'
+import { headerStagger, eyebrowReveal, fadeUp, VIEWPORT } from '../../lib/motionVariants'
 import { useAuth } from '../../context/AuthContext'
 import { supabase } from '../../lib/supabase'
 import styles from './ModelosContractualesSection.module.css'
@@ -434,14 +434,8 @@ export default function ModelosContractualesSection() {
         </div>
       ) : (
         <>
-          <motion.div
-            className={styles.grid}
-            variants={gridStagger}
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true, amount: 0.1 }}
-          >
-            {modelos.map(m => (
+          <div className={styles.grid}>
+            {modelos.map((m, i) => (
               <motion.article
                 key={m.id}
                 className={styles.card}
@@ -449,7 +443,13 @@ export default function ModelosContractualesSection() {
                 role="button"
                 tabIndex={0}
                 onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openPreview(m) } }}
-                variants={cardReveal}
+                // Cada tarjeta se anima al MONTARSE, de forma independiente. Así,
+                // un modelo recién subido (insertado al inicio) aparece siempre,
+                // sin depender de la orquestación del contenedor (que antes lo
+                // dejaba invisible ocupando la primera celda).
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1], delay: Math.min(i, 8) * 0.04 }}
               >
 
                 {isSuperAdmin && (
@@ -486,7 +486,7 @@ export default function ModelosContractualesSection() {
                 </button>
               </motion.article>
             ))}
-          </motion.div>
+          </div>
 
           {hasMore && (
             <div className={styles.loadMoreWrap}>
