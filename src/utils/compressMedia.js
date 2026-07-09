@@ -41,9 +41,14 @@ function bestCanvasFormat() {
  * @param {File|Blob} file        Archivo de imagen a comprimir.
  * @param {number}    maxWidthPx  Ancho máximo en px (mantiene aspect ratio). Default 1200.
  * @param {number}    quality     Calidad 0..1 para WebP/JPEG. Default 0.82.
+ * @param {string?}   mimeOverride Fuerza el formato de salida (p. ej. 'image/jpeg').
+ *                    Úsalo cuando el destino no admite AVIF/WebP (buckets con lista
+ *                    de MIME restringida): JPEG lo codifican TODOS los navegadores
+ *                    y lo acepta cualquier bucket, así el resultado es idéntico en
+ *                    Chrome, Opera, etc. Si es null, elige el más eficiente (AVIF>WebP>JPEG).
  * @returns {Promise<File>} Archivo nuevo (o el original si < 300KB / formato no compatible / re-encode resultaría mayor).
  */
-export async function compressImage(file, maxWidthPx = 1200, quality = 0.82) {
+export async function compressImage(file, maxWidthPx = 1200, quality = 0.82, mimeOverride = null) {
   if (!file || (!(file instanceof File) && !(file instanceof Blob))) {
     throw new Error('compressImage: se esperaba un File o Blob')
   }
@@ -83,7 +88,9 @@ export async function compressImage(file, maxWidthPx = 1200, quality = 0.82) {
   ctx.drawImage(bitmap, 0, 0, targetWidth, targetHeight)
   if (typeof bitmap.close === 'function') bitmap.close()
 
-  const { mime, ext } = bestCanvasFormat()
+  const { mime, ext } = mimeOverride
+    ? { mime: mimeOverride, ext: (mimeOverride.split('/')[1] || 'jpg').replace('jpeg', 'jpg') }
+    : bestCanvasFormat()
 
   // AVIF rinde mejor a calidad menor: ajustamos al vuelo para mantener tamaños
   // razonables sin sobre-comprimir (q=0.55 AVIF ≈ q=0.82 JPEG visualmente).

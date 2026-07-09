@@ -18,6 +18,27 @@ const IconBombilla = (p) => (<svg viewBox="0 0 24 24" width="14" height="14" fil
 const IconChevron = (p) => (<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...p}><path d="m6 9 6 6 6-6" /></svg>);
 const IconLapiz = (p) => (<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...p}><path d="M12 20h9" /><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z" /></svg>);
 
+// Callout del costo sugerido — el dato que el cliente más necesita ver, así que
+// se muestra en grande y con jerarquía propia (etiqueta / valor / nota).
+function PrecioSugerido({ valor }) {
+  // La IA suele anexar "orientativo, no vinculante" al valor; lo quitamos del
+  // número grande porque ya lo decimos en la nota (evita repetir el disclaimer).
+  const limpio = String(valor || '').replace(/[,;.\s]*orientativ[oa][\s\S]*$/i, '').trim() || String(valor || '');
+  return (
+    <div className={styles.precio}>
+      <span className={styles.precioTag}>
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0l-7-7A2 2 0 0 1 3 12.2V5a2 2 0 0 1 2-2h7.2a2 2 0 0 1 1.4.6l7 7a2 2 0 0 1 0 2.8z" />
+          <circle cx="7.5" cy="7.5" r="1.15" fill="currentColor" stroke="none" />
+        </svg>
+        Costo sugerido
+      </span>
+      <span className={styles.precioValor}>{limpio}</span>
+      <span className={styles.precioNota}>Valor orientativo. El profesional lo confirma antes de empezar.</span>
+    </div>
+  );
+}
+
 // Props:
 //  tipoProfesional: 'abogado' | 'contador'
 //  onIniciarChat({ profesionalId, area, resumen, costo }): salta al form pre-llenado
@@ -85,11 +106,30 @@ export default function TriagePanel({ tipoProfesional = 'abogado', onIniciarChat
     setBusy(false);
   }
 
-  const recomendados = (reco?.recomendados || [])
-    .map((id) => profs.find((p) => String(p.id) === String(id)))
-    .filter(Boolean);
+  // Profesionales a recomendar: primero por los ids que devolvió la IA; si esos
+  // ids no resuelven (o llegan vacíos) pero la IA SÍ detectó un área, caemos a
+  // los profesionales cuya área coincide con la detectada. Así, si existe un
+  // profesional del área (p. ej. Derecho de Familia para una custodia), SIEMPRE
+  // aparece, aunque la IA no acierte el id o haya sugerido publicar por error.
+  const recomendados = (() => {
+    const porId = (reco?.recomendados || [])
+      .map((id) => profs.find((p) => String(p.id) === String(id)))
+      .filter(Boolean);
+    if (porId.length || !reco?.area) return porId;
+    // Empate por palabra clave: normalizamos (sin tildes) y descartamos palabras
+    // genéricas ("derecho", "contabilidad"...) que aparecen en todas las áreas,
+    // para que "Derecho de Familia o Sucesiones" empate con un abogado cuya área
+    // incluye "Familia" o "Civil", aunque el texto completo no sea idéntico.
+    const STOP = new Set(['derecho', 'contable', 'contabilidad', 'asesoria', 'caso', 'para', 'con', 'los', 'las', 'del', 'general']);
+    const norm = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+    const claves = norm(reco.area).split(/[^a-z]+/).filter((t) => t.length >= 4 && !STOP.has(t));
+    if (!claves.length) return [];
+    return profs.filter((p) => {
+      const a = norm(p.area_derecho);
+      return a && claves.some((t) => a.includes(t));
+    }).slice(0, 3);
+  })();
   const puedeEnviar = !!input.trim() && !busy;
-  const iniciales = (p) => `${(p.nombre || '?')[0] || ''}${(p.apellido || '')[0] || ''}`.toUpperCase();
 
   return (
     <div className={styles.wrap}>
@@ -126,31 +166,34 @@ export default function TriagePanel({ tipoProfesional = 'abogado', onIniciarChat
           </div>
 
       {recomendados.length > 0 && (
-        <div className={styles.recos}>
-          {reco.costo && <div className={styles.costo}>Rango orientativo: {reco.costo}</div>}
-          {recomendados.map((p) => (
-            <motion.div key={p.id} className={styles.reco} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }}>
-              <span className={styles.recoAvatar}>
-                {p.foto_url ? <img src={p.foto_url} alt="" /> : iniciales(p)}
-              </span>
-              <div className={styles.recoInfo}>
-                <strong>{p.nombre} {p.apellido}</strong>
-                <span>{p.area_derecho}{p.ciudad ? ` · ${p.ciudad}` : ''}</span>
-              </div>
-              <button
-                className={styles.recoBtn}
-                onClick={() => onIniciarChat({ profesionalId: p.id, area: reco.area || p.area_derecho, resumen: reco.resumen, costo: reco.costo })}
-              >
-                Iniciar chat
-              </button>
-            </motion.div>
-          ))}
-        </div>
+        <motion.div className={styles.listo} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.28 }}>
+          {reco.costo
+            ? <PrecioSugerido valor={reco.costo} />
+            : <p className={styles.listoNota}>El profesional confirmará el valor de la consulta.</p>}
+          <p className={styles.listoText}>
+            Ya tengo tu caso y el profesional indicado para ti. Completa tus datos y entras directo a la consulta.
+          </p>
+          <button
+            type="button"
+            className={styles.listoBtn}
+            onClick={() => onIniciarChat({
+              profesionalId: recomendados[0].id,
+              area: reco.area || recomendados[0].area_derecho,
+              resumen: reco.resumen,
+              costo: reco.costo,
+              profesional: recomendados[0],
+            })}
+          >
+            Completar mis datos y continuar
+            <IconEnviar className={styles.listoBtnIcon} />
+          </button>
+        </motion.div>
       )}
 
-      {reco?.sugerirPublicar && (
+      {reco?.sugerirPublicar && recomendados.length === 0 && (
         <motion.div className={styles.openCta} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }}>
           <span className={styles.openCtaBadge}>Sin profesional del área</span>
+          {reco.costo && <PrecioSugerido valor={reco.costo} />}
           <p className={styles.openCtaText}>
             Ahora mismo no hay un {tipoProfesional === 'contador' ? 'contador' : 'abogado'} de esta área disponible.
             Publica tu consulta y el <b>primer profesional disponible</b> la tomará.

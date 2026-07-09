@@ -169,10 +169,27 @@ export default function ModelosContractualesSection() {
     }
   }, [])
 
+  // Diferir la primera carga hasta que la sección se acerque al viewport:
+  // es de las últimas secciones y su query directa a Postgres corría en
+  // CADA visita a la home aunque el visitante nunca llegara hasta aquí.
+  const [visible, setVisible] = useState(false)
+  const sectionRef = useRef(null)
   useEffect(() => {
+    const el = sectionRef.current
+    if (!el || !('IntersectionObserver' in window)) { setVisible(true); return }
+    const io = new IntersectionObserver(
+      (entries) => { if (entries.some(e => e.isIntersecting)) { setVisible(true); io.disconnect() } },
+      { rootMargin: '600px' }
+    )
+    io.observe(el)
+    return () => io.disconnect()
+  }, [])
+
+  useEffect(() => {
+    if (!visible) return
     setPage(0)
     fetchPage(categoria, 0, false)
-  }, [categoria, fetchPage])
+  }, [visible, categoria, fetchPage])
 
   function handleCategoria(cat) {
     if (cat !== categoria) setCategoria(cat)
@@ -324,7 +341,7 @@ export default function ModelosContractualesSection() {
   }
 
   return (
-    <section className={styles.section} id="modelos">
+    <section ref={sectionRef} className={styles.section} id="modelos">
 
       {/* ── Header ── */}
       <motion.div

@@ -11,6 +11,8 @@ import AsistenteIA from '../components/chat/AsistenteIA'
 import UbicacionSelector from '../components/profile/UbicacionSelector'
 import TarjetaPreview from '../components/profile/TarjetaPreview'
 import { getAuthHeaders } from '../lib/supabase'
+import { AREAS_DERECHO } from '../lib/areasDerecho'
+import { compressImage } from '../utils/compressMedia'
 
 const UNIVERSIDADES = [
   'Universidad Nacional de Colombia',
@@ -49,16 +51,6 @@ const UNIVERSIDADES = [
   'Universidad de San Buenaventura',
   'Universidad Piloto de Colombia',
   'Otra',
-]
-
-const AREAS_DERECHO = [
-  'Derecho Penal', 'Derecho Civil', 'Derecho de Familia', 'Derecho Laboral',
-  'Derecho Comercial', 'Derecho Corporativo', 'Derecho Administrativo',
-  'Derecho Constitucional', 'Derecho Tributario', 'Derecho Ambiental',
-  'Derecho Internacional', 'Derecho Migratorio', 'Derecho Inmobiliario',
-  'Derecho de Seguros', 'Derecho de Tránsito', 'Derecho Disciplinario',
-  'Derecho Minero y Energético', 'Derecho de Propiedad Intelectual',
-  'Derecho Informático', 'Derecho Médico', 'Otro',
 ]
 
 const EXPERIENCIA_OPTIONS = [
@@ -195,13 +187,25 @@ export default function ProfilePage() {
   }, [tarjetaArchivoUrl])
 
   async function handleFotoChange(e) {
-    const file = e.target.files[0]
-    if (!file) return
-    setFotoPreview(URL.createObjectURL(file))
+    const rawFile = e.target.files[0]
+    if (!rawFile) return
+    if (!rawFile.type.startsWith('image/')) {
+      setError('El archivo debe ser una imagen (JPG, PNG o WebP).')
+      return
+    }
     setUploadingFoto(true)
+    setError('')
     try {
+      // Comprime/redimensiona (≤1200px) y fuerza JPEG antes de subir. JPEG lo
+      // codifican TODOS los navegadores y lo acepta cualquier bucket, así el
+      // resultado es idéntico en Chrome y Opera (con AVIF/WebP, Chrome producía
+      // un MIME que el bucket podía rechazar y en Opera no). También evita
+      // fallos por tamaño contra el límite del bucket.
+      const file = await compressImage(rawFile, 1200, 0.85, 'image/jpeg')
+      setFotoPreview(URL.createObjectURL(file))
+
       const headers = await getAuthHeaders()
-      const ext  = file.name.split('.').pop()
+      const ext  = (file.type.split('/')[1] || 'jpg').replace('jpeg', 'jpg').replace(/[^a-z0-9]/gi, '') || 'jpg'
       const path = `avatars/${user.id}.${ext}`
       const res  = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/profile-photos/${path}`,
@@ -215,10 +219,21 @@ export default function ProfilePage() {
           body: file,
         }
       )
-      if (!res.ok) throw new Error('Error subiendo foto')
-      setFotoUrl(`${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/profile-photos/${path}`)
+      if (!res.ok) {
+        const detalle = await res.text().catch(() => '')
+        // Motivo claro según el código, para no dejar al usuario a ciegas.
+        const motivo = (res.status === 403 || res.status === 401)
+          ? 'sin permiso para subir al bucket. Revisa las políticas de Storage de "profile-photos" (INSERT/UPDATE para usuarios autenticados).'
+          : res.status === 413
+          ? 'la imagen pesa más de lo permitido por el bucket.'
+          : `${res.status} ${detalle.slice(0, 200)}`
+        throw new Error(motivo)
+      }
+      // Cache-buster: el path se reutiliza (upsert), así que sin esto el CDN
+      // seguiría mostrando la foto anterior.
+      setFotoUrl(`${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/profile-photos/${path}?t=${Date.now()}`)
     } catch (err) {
-      setError('Error subiendo la foto: ' + err.message)
+      setError('No se pudo subir la foto: ' + err.message)
     } finally {
       setUploadingFoto(false)
     }

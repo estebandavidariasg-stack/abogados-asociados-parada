@@ -208,7 +208,7 @@ export default async function handler(req, res) {
     }
 
     await transporter.sendMail({
-      from:    `"Abogados y Asociados Parada" <${process.env.GMAIL_USER}>`,
+      from:    `"Parada Bridge" <${process.env.GMAIL_USER}>`,
       to:      normalizedEmail,
       subject: 'Restablece tu contraseña',
       html:    renderResetEmailHtml({ actionLink }),

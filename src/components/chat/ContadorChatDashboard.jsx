@@ -138,6 +138,18 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
     return () => clearTimeout(t)
   }, [toast])
 
+  // Al desmontar con una grabación activa: libera el micrófono y el timer.
+  // Sin esto el indicador de mic del navegador quedaba encendido y el interval
+  // seguía corriendo si el profesional navegaba a mitad de grabación.
+  useEffect(() => () => {
+    clearInterval(recordingTimerRef.current)
+    const r = mediaRecorderRef.current
+    if (r && r.state !== 'inactive') {
+      r.onstop = null   // evita disparar la subida de un audio parcial
+      try { r.stream.getTracks().forEach(t => t.stop()); r.stop() } catch (_) { /* noop */ }
+    }
+  }, [])
+
   // Polling del permiso de descarga — se actualiza sin recargar si el admin lo cambia
   useEffect(() => {
     if (!contadorId) return
@@ -188,6 +200,7 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
   /* ── Cargar salas asignadas a este contador ── */
   const fetchRooms = useCallback(async () => {
     if (!contadorId) return
+    try {
     const headers = await getAuthHeaders()
 
     // 1. IDs de salas asignadas (lawyer_id = contadorId; la columna se reutiliza)
@@ -196,25 +209,42 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
       { headers }
     )
     const assignments = await aRes.json()
-    if (!Array.isArray(assignments) || assignments.length === 0) {
+    // Respuesta de error (401 en el borde del refresh, 5xx): conservar el
+    // sidebar actual en vez de vaciarlo — solo un [] legítimo lo limpia.
+    if (!Array.isArray(assignments)) { setLoadingRooms(false); return }
+    if (assignments.length === 0) {
       setRooms([])
       setLoadingRooms(false)
       return
     }
 
-    const roomIds = assignments.map(a => a.room_id).join(',')
-
     // 2. Datos de las salas — filtro extra tipo_profesional=eq.contador
     //    como guardrail. Si el dato existe, evita que un contador vea
     //    salas legacy de abogado por error de asignación.
-    const rRes = await fetch(
-      `${SUPABASE_URL}/rest/v1/chat_rooms` +
-      `?id=in.(${roomIds})&tipo_profesional=eq.contador&select=*&order=created_at.desc`,
-      { headers }
-    )
-    const roomData = await rRes.json()
-
-    if (!Array.isArray(roomData)) { setLoadingRooms(false); return }
+    //    Las asignaciones nunca se podan, así que el in.() se trocea en lotes
+    //    de 150 ids (una URL con cientos de UUIDs supera el límite del gateway
+    //    y el fetch falla entero) y el sidebar se acota a las 200 salas más
+    //    recientes — las más antiguas siguen en el Historial del admin.
+    const allIds = assignments.map(a => a.room_id)
+    const idLotes = []
+    for (let i = 0; i < allIds.length; i += 150) idLotes.push(allIds.slice(i, i + 150))
+    const chunkResults = await Promise.all(idLotes.map(async ids => {
+      const r = await fetch(
+        `${SUPABASE_URL}/rest/v1/chat_rooms` +
+        `?id=in.(${ids.join(',')})&tipo_profesional=eq.contador&select=*&order=created_at.desc&limit=200`,
+        { headers }
+      )
+      return r.json()
+    }))
+    if (chunkResults.some(c => !Array.isArray(c))) { setLoadingRooms(false); return }
+    // El cap de 200 NUNCA debe ocultar una sala abierta: se conservan TODAS
+    // las waiting/active (el trabajo abierto de un profesional está acotado
+    // por naturaleza) y se completa con las cerradas más recientes.
+    const flat = chunkResults.flat()
+    const abiertas = flat.filter(r => r.status !== 'closed')
+    const cerradas = flat.filter(r => r.status === 'closed')
+      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+    const roomData = [...abiertas, ...cerradas].slice(0, Math.max(200, abiertas.length))
 
     // 3. Últimos 50 mensajes por sala — uno solo bastaba para la preview,
     //    pero también contamos los del cliente sin responder (recorrer desc
@@ -228,9 +258,10 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
     // aplicamos el mismo algoritmo de no-leídos por sala. El tope global de
     // 1000 cubre de sobra la actividad reciente; una sala muy vieja sin
     // mensajes dentro de ese tope queda sin preview pero igual se lista.
+    const recentIds = roomData.map(r => r.id).join(',')
     const mRes = await fetch(
       `${SUPABASE_URL}/rest/v1/chat_messages` +
-      `?room_id=in.(${roomIds})&order=created_at.desc&limit=1000` +
+      `?room_id=in.(${recentIds})&order=created_at.desc&limit=1000` +
       `&select=room_id,content,created_at,sender_type`,
       { headers }
     )
@@ -280,6 +311,11 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
 
     setRooms(enriched)
     setLoadingRooms(false)
+    } catch (_) {
+      // Red caída a mitad del poll: conserva el sidebar visible; el próximo
+      // tick (20s) o el visibilitychange reintentan.
+      setLoadingRooms(false)
+    }
   }, [contadorId])
 
   useEffect(() => {
@@ -297,29 +333,51 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
   }, [fetchRooms])
 
   /* ── Mensajes de la sala activa ── */
+  const activeRoomIdRef = useRef(null)
   const fetchMessages = useCallback(async () => {
-    if (!activeRoom) return
-    const headers = await getAuthHeaders()
-    const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/chat_messages?room_id=eq.${activeRoom.id}&order=created_at.asc&select=*`,
-      { headers }
-    )
-    const data = await res.json()
-    setMessages(Array.isArray(data) ? data : [])
-  }, [activeRoom])
+    const rid = activeRoomIdRef.current
+    if (!rid) return
+    try {
+      const headers = await getAuthHeaders()
+      // Últimos 300 en vez del historial completo: en salas largas/reabiertas
+      // el historial entero se re-transfería tras cada envío. El índice
+      // (room_id, created_at) sirve el desc+limit directo.
+      const res = await fetch(
+        `${SUPABASE_URL}/rest/v1/chat_messages?room_id=eq.${rid}&order=created_at.desc&limit=300&select=*`,
+        { headers }
+      )
+      const data = await res.json()
+      // Respuesta tardía de una sala que ya no está abierta (cambio rápido de
+      // sala): descartar para no pintar mensajes bajo el encabezado equivocado.
+      if (activeRoomIdRef.current !== rid) return
+      if (Array.isArray(data)) setMessages(data.reverse())
+    } catch (_) { /* red caída: conserva lo visible; realtime/visibilitychange resincronizan */ }
+  }, [])
 
   useEffect(() => {
-    if (!activeRoom) return
+    const rid = activeRoom?.id
+    activeRoomIdRef.current = rid || null
+    if (!rid) return
     fetchMessages()   // historial al abrir la sala
     // Realtime: mensajes nuevos de ESTA sala (reemplaza el poll de 3s). Una
     // sola suscripción y solo mientras hay un chat abierto → barata en cupo
     // de Realtime. El status de la sala (cierre) también llega al instante.
-    const ch = supabase.channel(`ccd:${activeRoom.id}`)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages', filter: `room_id=eq.${activeRoom.id}` },
+    // Deps por ID (no por objeto): los UPDATE de chat_rooms mutan el objeto
+    // activeRoom pero no deben destruir/recrear el WebSocket.
+    let first = true
+    const ch = supabase.channel(`ccd:${rid}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages', filter: `room_id=eq.${rid}` },
         p => setMessages(prev => prev.find(m => m.id === p.new.id) ? prev : [...prev, p.new]))
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'chat_rooms', filter: `id=eq.${activeRoom.id}` },
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'chat_rooms', filter: `id=eq.${rid}` },
         p => setActiveRoom(prev => (prev && prev.id === p.new.id) ? { ...prev, ...p.new } : prev))
-      .subscribe()
+      .subscribe(st => {
+        // Tras una reconexión automática del WS, re-sincroniza lo perdido
+        // durante el corte (fetchMessages deduplica por id).
+        if (st === 'SUBSCRIBED') {
+          if (first) { first = false; return }
+          fetchMessages()
+        }
+      })
     // Red de seguridad ante hipos del WS: re-sincroniza al volver a la pestaña.
     const onVisible = () => { if (!document.hidden) fetchMessages() }
     document.addEventListener('visibilitychange', onVisible)
@@ -327,7 +385,7 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
       supabase.removeChannel(ch)
       document.removeEventListener('visibilitychange', onVisible)
     }
-  }, [activeRoom, fetchMessages])
+  }, [activeRoom?.id, fetchMessages])
 
   useEffect(() => {
     if (messages.length === lastCountRef.current) return
@@ -393,20 +451,29 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
     // ── Bloqueo de datos de contacto (teléfono / correo) ──
     if (contieneContacto(input.trim())) { setContactoBlocked(true); return }
     setSending(true)
-    const headers = await getAuthHeaders()
-    await fetch(`${SUPABASE_URL}/rest/v1/chat_messages`, {
-      method: 'POST',
-      headers: { ...headers, 'Content-Type': 'application/json', Prefer: 'return=representation' },
-      body: JSON.stringify({
-        room_id:      activeRoom.id,
-        sender_type:  'lawyer',
-        content:      input.trim(),
-        message_type: 'text',
-      }),
-    })
-    setInput('')
-    setSending(false)
-    fetchMessages()
+    try {
+      const headers = await getAuthHeaders()
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/chat_messages`, {
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': 'application/json', Prefer: 'return=representation' },
+        body: JSON.stringify({
+          room_id:      activeRoom.id,
+          sender_type:  'lawyer',
+          content:      input.trim(),
+          message_type: 'text',
+        }),
+      })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      // Solo limpiar tras confirmar el insert — si falló, el texto se conserva
+      // para reintentar (antes se perdía en silencio).
+      setInput('')
+      fetchMessages()
+    } catch (_) {
+      setToast('No se pudo enviar el mensaje. Revisa tu conexión e intenta de nuevo.')
+    } finally {
+      // Sin esto, un fallo de red dejaba el botón Enviar bloqueado para siempre.
+      setSending(false)
+    }
   }
 
   async function handleFile(e) {
@@ -630,29 +697,39 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
   async function closeRoom() {
     if (!activeRoom || closing) return
     setClosing(true)
-    const headers = await getAuthHeaders()
-    await fetch(`${SUPABASE_URL}/rest/v1/chat_rooms?id=eq.${activeRoom.id}`, {
-      method: 'PATCH',
-      headers: { ...headers, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: 'closed' }),
-    })
-
-    if (rating > 0) {
-      await fetch(`${SUPABASE_URL}/rest/v1/chat_ratings`, {
-        method: 'POST',
-        headers: { ...headers, 'Content-Type': 'application/json', Prefer: 'return=representation' },
-        body: JSON.stringify({
-          room_id:   activeRoom.id,
-          lawyer_id: contadorId,
-          rating,
-        }),
+    try {
+      const headers = await getAuthHeaders()
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/chat_rooms?id=eq.${activeRoom.id}`, {
+        method: 'PATCH',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'closed' }),
       })
-    }
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
 
-    setClosing(false)
-    setShowRating(false)
-    setActiveRoom(null)
-    fetchRooms()
+      // Calificación best-effort: su fallo no debe bloquear el cierre ya confirmado.
+      if (rating > 0) {
+        try {
+          await fetch(`${SUPABASE_URL}/rest/v1/chat_ratings`, {
+            method: 'POST',
+            headers: { ...headers, 'Content-Type': 'application/json', Prefer: 'return=representation' },
+            body: JSON.stringify({
+              room_id:   activeRoom.id,
+              lawyer_id: contadorId,
+              rating,
+            }),
+          })
+        } catch (_) { /* noop */ }
+      }
+
+      setShowRating(false)
+      setActiveRoom(null)
+      fetchRooms()
+    } catch (_) {
+      setToast('No se pudo cerrar la consulta. Revisa tu conexión e intenta de nuevo.')
+    } finally {
+      // Sin esto, un fallo de red dejaba el botón atascado en "Cerrando…".
+      setClosing(false)
+    }
   }
 
   return (

@@ -68,7 +68,7 @@ export function codeBox(code) {
 /* ── Shell: tarjeta blanca con header (degradado azul claro + título navy/oro),
    slot de cuerpo y pie. `innerHtml` controla la alineación de su contenido. */
 export function renderShell({ subjectLine, preheader, innerHtml }) {
-  const pre = preheader || subjectLine || 'Abogados y Asociados Parada'
+  const pre = preheader || subjectLine || 'Parada Bridge'
   return `<!DOCTYPE html>
 <html lang="es" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
 <head>
@@ -101,7 +101,7 @@ export function renderShell({ subjectLine, preheader, innerHtml }) {
           <tr>
             <td align="center" bgcolor="#e9f1fc" style="background-color:#e9f1fc;background:linear-gradient(180deg,#d4e4f7 0%,#e9f1fc 58%,#ffffff 100%);padding:38px 32px 30px;">
               <div style="font-family:${FONT_SERIF};font-size:21px;font-weight:700;letter-spacing:0.16em;text-transform:uppercase;color:${C.navy};line-height:1.35;">
-                Abogados y Asociados <span style="color:${C.goldText};">Parada</span>
+                Parada <span style="color:${C.goldText};">Bridge</span>
               </div>
               <div style="width:54px;height:3px;margin:14px auto 0;background-color:${C.gold};background:linear-gradient(90deg,rgba(201,168,76,0),#c9a84c,rgba(201,168,76,0));line-height:3px;font-size:0;">&nbsp;</div>
               <div style="font-family:${FONT_SANS};font-size:13px;color:${C.body};margin-top:14px;letter-spacing:0.02em;">
@@ -124,7 +124,7 @@ export function renderShell({ subjectLine, preheader, innerHtml }) {
           <tr>
             <td align="center" class="aap-pad" style="padding:22px 40px 30px;font-family:${FONT_SANS};">
               <div style="font-size:11.5px;line-height:1.7;color:${C.muted};">
-                Mensaje automático de Abogados y Asociados Parada. Por favor, no respondas a este correo.
+                Mensaje automático de Parada Bridge. Por favor, no respondas a este correo.
               </div>
               <div style="font-size:11.5px;line-height:1.7;margin-top:6px;">
                 <a href="https://abogadosparada.com" target="_blank" style="color:${C.goldText};font-weight:600;">abogadosparada.com</a>

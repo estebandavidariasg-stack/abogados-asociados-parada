@@ -4,23 +4,16 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-    <!-- Preload LCP hero — dispara durante el parse del HTML, antes de que ejecute JS -->
-    <link
-      rel="preload"
-      as="image"
-      href="/hero-1-1200.avif"
-      type="image/avif"
-      imagesrcset="/hero-1-480.avif 480w, /hero-1-800.avif 800w, /hero-1-1200.avif 1200w"
-      imagesizes="(max-width: 600px) 480px, (max-width: 1024px) 800px, 1200px"
-      fetchpriority="high"
-    />
+    <!-- (Se eliminó el preload del hero: Hero ya no abre la página — es de las
+         últimas secciones — y ese AVIF a máxima prioridad competía en la
+         ventana crítica con el JS y las fuentes del LCP real, el h1 de Intro.) -->
 
     <!-- ── SEO primario ── -->
-    <title>Abogados y Asociados Parada — Bufete Jurídico y Contable en Bogotá</title>
+    <title>Parada Bridge — Bufete Jurídico y Contable en Bogotá</title>
     <meta name="description" content="Bufete jurídico y contable en Bogotá, Colombia. Asesoría en derecho penal, civil, corporativo, de familia, laboral y administrativo, con consultas en línea con abogados y contadores verificados." />
     <link rel="canonical" href="https://abogadosyasociadosparada.com/" />
     <meta name="robots" content="index, follow, max-image-preview:large" />
-    <meta name="author" content="Abogados y Asociados Parada" />
+    <meta name="author" content="Parada Bridge" />
     <meta name="theme-color" content="#0d2d5e" />
 
     <link rel="icon" type="image/png" href="/favicon.png" />
@@ -28,8 +21,8 @@
 
     <!-- ── Open Graph (Facebook / WhatsApp / LinkedIn) ── -->
     <meta property="og:type" content="website" />
-    <meta property="og:site_name" content="Abogados y Asociados Parada" />
-    <meta property="og:title" content="Abogados y Asociados Parada — Bufete Jurídico y Contable en Bogotá" />
+    <meta property="og:site_name" content="Parada Bridge" />
+    <meta property="og:title" content="Parada Bridge — Bufete Jurídico y Contable en Bogotá" />
     <meta property="og:description" content="Asesoría jurídica y contable en Bogotá, Colombia. Consultas en línea con abogados y contadores verificados en derecho penal, civil, laboral, de familia y más." />
     <meta property="og:url" content="https://abogadosyasociadosparada.com/" />
     <meta property="og:image" content="https://abogadosyasociadosparada.com/hero-1-1200.jpg" />
@@ -38,7 +31,7 @@
 
     <!-- ── Twitter Card ── -->
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="Abogados y Asociados Parada — Bufete Jurídico y Contable en Bogotá" />
+    <meta name="twitter:title" content="Parada Bridge — Bufete Jurídico y Contable en Bogotá" />
     <meta name="twitter:description" content="Asesoría jurídica y contable en Bogotá, Colombia. Consultas en línea con abogados y contadores verificados." />
     <meta name="twitter:image" content="https://abogadosyasociadosparada.com/hero-1-1200.jpg" />
 
@@ -51,14 +44,14 @@
           "@type": "WebSite",
           "@id": "https://abogadosyasociadosparada.com/#website",
           "url": "https://abogadosyasociadosparada.com/",
-          "name": "Abogados y Asociados Parada",
+          "name": "Parada Bridge",
           "inLanguage": "es-CO",
           "publisher": { "@id": "https://abogadosyasociadosparada.com/#organization" }
         },
         {
           "@type": "Organization",
           "@id": "https://abogadosyasociadosparada.com/#organization",
-          "name": "Abogados y Asociados Parada",
+          "name": "Parada Bridge",
           "url": "https://abogadosyasociadosparada.com/",
           "logo": {
             "@type": "ImageObject",
@@ -70,7 +63,7 @@
         {
           "@type": ["LegalService", "AccountingService"],
           "@id": "https://abogadosyasociadosparada.com/#firma",
-          "name": "Abogados y Asociados Parada",
+          "name": "Parada Bridge",
           "description": "Bufete jurídico y de servicios contables en Bogotá, Colombia. Asesoría en derecho penal, civil, corporativo, de familia, laboral y administrativo, con consultas en línea con abogados y contadores verificados.",
           "url": "https://abogadosyasociadosparada.com/",
           "image": "https://abogadosyasociadosparada.com/hero-1-1200.jpg",
@@ -120,7 +113,7 @@
         {
           "@type": "SoftwareApplication",
           "@id": "https://abogadosyasociadosparada.com/#app",
-          "name": "Plataforma de consultas — Abogados y Asociados Parada",
+          "name": "Plataforma de consultas — Parada Bridge",
           "applicationCategory": "BusinessApplication",
           "operatingSystem": "Windows, macOS, Linux, Android, iOS",
           "url": "https://abogadosyasociadosparada.com/",
@@ -156,7 +149,7 @@
     <!-- Contenido estático para crawlers sin JavaScript. React lo reemplaza en el montaje. -->
     <noscript>
       <main style="font-family:sans-serif;max-width:860px;margin:0 auto;padding:2rem;color:#111">
-        <h1>Abogados y Asociados Parada — Bufete Jurídico y Contable en Bogotá</h1>
+        <h1>Parada Bridge — Bufete Jurídico y Contable en Bogotá</h1>
         <p>Somos un bufete jurídico y de servicios contables con sede en Bogotá, Colombia, comprometidos con la excelencia y la defensa de los derechos de nuestros clientes. Ofrecemos asesoría jurídica integral en las principales ramas del derecho colombiano, con acceso directo a consultas en línea con abogados y contadores verificados, sin necesidad de desplazamiento.</p>
 
         <h2>Áreas de práctica</h2>

@@ -168,8 +168,9 @@ export default function AdminPage() {
       const headers = await getAuthHeaders()
       // chat_rooms.status: 'waiting' | 'active' | 'closed' (NO existe `cerrado`).
       // Las alertas son chats abiertos (no closed) sin actividad +24h.
+      // Limit explícito: sin él PostgREST trunca en max-rows en silencio.
       const roomsRes = await fetch(
-        `${SUPABASE_URL}/rest/v1/chat_rooms?status=in.(waiting,active)&select=*&order=created_at.desc`,
+        `${SUPABASE_URL}/rest/v1/chat_rooms?status=in.(waiting,active)&select=*&order=created_at.desc&limit=1000`,
         { headers }
       )
       const rooms = await roomsRes.json()
@@ -181,27 +182,34 @@ export default function AdminPage() {
       //   1) Una query para TODOS los mensajes recientes de TODAS las salas
       //   2) Filtramos en memoria las salas SIN actividad
       //   3) Una query para los abogados asignados a esas salas inactivas
-      // Total: 3 queries en lugar de 1 + 2N.
-      const roomIds = rooms.map(r => r.id).join(',')
-      const msgsRes = await fetch(
-        `${SUPABASE_URL}/rest/v1/chat_messages?room_id=in.(${roomIds})&created_at=gte.${hace24h}&select=room_id`,
-        { headers }
-      )
-      const msgsAll = await msgsRes.json()
-      const conActividad = new Set(
-        (Array.isArray(msgsAll) ? msgsAll : []).map(m => m.room_id)
-      )
+      // Total: 3 queries en lugar de 1 + 2N. Los in.() van troceados en lotes
+      // de 150 ids: con cientos de salas abiertas la URL supera el límite del
+      // gateway y la request entera falla.
+      const enLotes = async (tabla, ids, resto, tam = 150) => {
+        const out = []
+        for (let i = 0; i < ids.length; i += tam) {
+          const lote = ids.slice(i, i + tam)
+          const r = await fetch(
+            `${SUPABASE_URL}/rest/v1/${tabla}?room_id=in.(${lote.join(',')})${resto}&limit=1000`,
+            { headers }
+          )
+          const rows = await r.json().catch(() => null)
+          if (Array.isArray(rows)) out.push(...rows)
+        }
+        return out
+      }
+
+      // Mensajes en lotes de 50 salas: con el limit=1000 por lote, 50 salas
+      // dejan margen holgado (≥20 msgs/sala/24h) y evitan que una sala CON
+      // actividad quede fuera del corte y aparezca como falsa alerta.
+      const msgsAll = await enLotes('chat_messages', rooms.map(r => r.id), `&created_at=gte.${hace24h}&select=room_id`, 50)
+      const conActividad = new Set(msgsAll.map(m => m.room_id))
       const inactiveRooms = rooms.filter(r => !conActividad.has(r.id))
       if (inactiveRooms.length === 0) { setAlertas([]); return }
 
-      const inactiveIds = inactiveRooms.map(r => r.id).join(',')
-      const lawyersRes = await fetch(
-        `${SUPABASE_URL}/rest/v1/chat_room_lawyers?room_id=in.(${inactiveIds})&select=room_id,lawyer_id`,
-        { headers }
-      )
-      const lawyersAll = await lawyersRes.json()
+      const lawyersAll = await enLotes('chat_room_lawyers', inactiveRooms.map(r => r.id), '&select=room_id,lawyer_id')
       const lawyersByRoom = {}
-      for (const l of (Array.isArray(lawyersAll) ? lawyersAll : [])) {
+      for (const l of lawyersAll) {
         if (!lawyersByRoom[l.room_id]) lawyersByRoom[l.room_id] = []
         lawyersByRoom[l.room_id].push(l.lawyer_id)
       }
@@ -407,7 +415,7 @@ export default function AdminPage() {
               <div className={styles.headerText}>
                 <span className={styles.eyebrow}>Panel de administración</span>
                 <h1 className={styles.title}>
-                  Abogados y Asociados <em>Parada</em>
+                  Parada <em>Bridge</em>
                 </h1>
               </div>
               <div className={styles.headerActions}>

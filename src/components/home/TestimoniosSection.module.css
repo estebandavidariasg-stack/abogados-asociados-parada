@@ -71,19 +71,29 @@
 
 .fila {
   display: flex;
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: hidden;
+  cursor: grab;
+  /* el gesto horizontal lo maneja el puntero (JS); el vertical hace scroll de página */
+  touch-action: pan-y;
+  scroll-behavior: auto;          /* el "smooth" de las flechas lo controla el rAF */
+  scrollbar-width: none;           /* Firefox */
+  -ms-overflow-style: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
+.fila::-webkit-scrollbar { display: none; }
+.fila:active { cursor: grabbing; }
 
 .track {
   display: flex;
   width: max-content;
   /* Espacio vertical para que la sombra de las tarjetas NO se recorte
-     con el overflow:hidden de la fila (incluida la sombra del hover). */
+     con el overflow del contenedor (incluida la sombra del hover). */
   padding: 1rem 0 3rem;
-  will-change: transform;
 }
-/* El desplazamiento y el frenado en hover se manejan con requestAnimationFrame
-   en el componente (cambiar la velocidad en JS no produce saltos). */
+/* El desplazamiento (auto-avance, arrastre y pausa en hover) lo maneja
+   useCarrusel sobre el contenedor con scroll. */
 
 /* ── TARJETA (reseña blanca: comillas + estrellas + autor) ─ */
 .tarjeta {
@@ -193,9 +203,9 @@
   .filas { gap: 1.1rem; }
 }
 
-/* ── Reduce-motion: sin animación, scroll manual ──────── */
+/* ── Reduce-motion: sin auto-avance; arrastre sigue disponible ─────────── */
 @media (prefers-reduced-motion: reduce) {
-  /* Sin desplazamiento (el rAF se omite en el componente); scroll manual. */
-  .fila { overflow-x: auto; }
+  /* El hook omite el auto-avance; el desvanecido de bordes molesta al arrastrar
+     manualmente, así que lo quitamos. */
   .filas { mask-image: none; -webkit-mask-image: none; }
 }

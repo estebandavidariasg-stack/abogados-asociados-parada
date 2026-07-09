@@ -1,6 +1,7 @@
-import React, { useRef, useEffect } from 'react'
-import { motion, useReducedMotion } from 'framer-motion'
+import React from 'react'
+import { motion } from 'framer-motion'
 import styles from './TestimoniosSection.module.css'
+import { useCarrusel } from '../../lib/useCarrusel'
 
 const testimonios = [
   {
@@ -143,57 +144,17 @@ function Tarjeta({ texto, imagen, nombre, rol, rating = 5, oculto, onMouseEnter,
   )
 }
 
-// Una fila marquee: renderiza los items dos veces para un bucle continuo.
-// La velocidad baja al pasar el mouse (regla .fila:hover .track en el CSS).
-// Desplazamiento continuo manejado con requestAnimationFrame: al pasar el
-// cursor baja la VELOCIDAD (no se detiene). Cambiar la velocidad aquí no
-// produce saltos, a diferencia de animar la duración en CSS.
-function Fila({ items, reverse, velocidad = 40 }) {
-  const trackRef = useRef(null)
-  const lento = useRef(false)
-  const prefersReduced = useReducedMotion()
-
-  useEffect(() => {
-    if (prefersReduced) return
-    const el = trackRef.current
-    if (!el) return
-
-    const mitad = el.scrollWidth / 2 // ancho de una copia (hay dos)
-    let offset = reverse ? -mitad : 0
-    let raf
-    let last = null
-
-    const tick = (t) => {
-      if (last == null) last = t
-      const dt = Math.min((t - last) / 1000, 0.05) // limita saltos al volver de pestaña oculta
-      last = t
-      const v = velocidad * (lento.current ? 0.18 : 1)
-      offset += (reverse ? v : -v) * dt
-      if (!reverse && offset <= -mitad) offset += mitad
-      if (reverse && offset >= 0) offset -= mitad
-      el.style.transform = `translate3d(${offset.toFixed(2)}px, 0, 0)`
-      raf = requestAnimationFrame(tick)
-    }
-    raf = requestAnimationFrame(tick)
-    return () => cancelAnimationFrame(raf)
-  }, [reverse, velocidad, prefersReduced])
-
-  const frenar = () => { lento.current = true }
-  const acelerar = () => { lento.current = false }
-
+// Una fila: renderiza los items dos veces para un bucle continuo. El
+// desplazamiento (auto-avance, arrastre y pausa en hover) lo maneja el hook
+// useCarrusel sobre el contenedor con scroll; aquí solo pintamos las tarjetas.
+function Fila({ items, carrusel }) {
   return (
-    <div className={styles.fila}>
-      <div className={styles.track} ref={trackRef}>
+    <div className={styles.fila} ref={carrusel.scrollerRef} {...carrusel.handlers}>
+      <div className={styles.track}>
         {[0, 1].map((copia) => (
           <React.Fragment key={copia}>
             {items.map((t, i) => (
-              <Tarjeta
-                key={`${copia}-${i}`}
-                {...t}
-                oculto={copia === 1}
-                onMouseEnter={frenar}
-                onMouseLeave={acelerar}
-              />
+              <Tarjeta key={`${copia}-${i}`} {...t} oculto={copia === 1} />
             ))}
           </React.Fragment>
         ))}
@@ -203,6 +164,12 @@ function Fila({ items, reverse, velocidad = 40 }) {
 }
 
 export default function TestimoniosSection() {
+  // Dos filas en sentidos opuestos, en desplazamiento continuo. Se pueden
+  // arrastrar con el dedo/mouse, pero siguen moviéndose solas (no se pausan al
+  // pasar el cursor) para que la sección nunca quede estática al hacer scroll.
+  const fila1Carrusel = useCarrusel({ speed: 40, direction: 1, loop: true })
+  const fila2Carrusel = useCarrusel({ speed: 32, direction: -1, loop: true })
+
   return (
     <section className={styles.section} aria-labelledby="testimonios-heading">
       <motion.header
@@ -218,7 +185,7 @@ export default function TestimoniosSection() {
         </h2>
         <p className={styles.desc}>
           Personas de todo Colombia han confiado en nosotros para resolver sus asuntos jurídicos y
-          contables con respaldo profesional. Pasa el cursor sobre una tarjeta para leerla con calma.
+          contables con respaldo profesional. Arrastra las reseñas o usa las flechas para recorrerlas.
         </p>
       </motion.header>
 
@@ -227,8 +194,8 @@ export default function TestimoniosSection() {
         role="region"
         aria-label="Testimonios de clientes en desplazamiento continuo"
       >
-        <Fila items={fila1} velocidad={42} />
-        <Fila items={fila2} reverse velocidad={34} />
+        <Fila items={fila1} carrusel={fila1Carrusel} />
+        <Fila items={fila2} carrusel={fila2Carrusel} />
       </div>
     </section>
   )

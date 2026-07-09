@@ -30,12 +30,20 @@ export function extractChatFilesPath(url) {
   return null
 }
 
+/* Caché de firmas por path: abrir una sala con 25 adjuntos disparaba 25 POST
+   de firma, y alternar entre dos salas re-firmaba todo una y otra vez aunque
+   las URLs duran 1 hora. Margen de 5 min para no entregar URLs por expirar.
+   No se cachean los fallos. */
+const signedCache = new Map()
+
 /* Devuelve una URL firmada fresca para `src` (path o URL firmada antigua).
    `null` si no se pudo resolver (y el original no era una URL utilizable). */
 export async function resolveSignedUrl(src, expiresIn = 3600) {
   if (!src) return null
   const path = /^https?:\/\//.test(src) ? extractChatFilesPath(src) : src
   if (!path) return src // formato no reconocido — último intento con el original
+  const hit = signedCache.get(path)
+  if (hit && hit.expiresAt - Date.now() > 5 * 60_000) return hit.url
   const { data, error } = await supabase.storage
     .from('chat-files')
     .createSignedUrl(path, expiresIn)
@@ -45,6 +53,7 @@ export async function resolveSignedUrl(src, expiresIn = 3600) {
     // un path puro, no hay nada que abrir → null.
     return /^https?:\/\//.test(src) ? src : null
   }
+  signedCache.set(path, { url: data.signedUrl, expiresAt: Date.now() + expiresIn * 1000 })
   return data.signedUrl
 }
 

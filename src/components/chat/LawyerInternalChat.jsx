@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { getAuthHeaders } from '../../lib/supabase'
+import { getAuthHeaders, timeoutSignal } from '../../lib/supabase'
 import { openChatFile, ChatImage, ChatLightbox } from '../../lib/chatFiles'
 import styles from './LawyerInternalChat.module.css'
 import AudioPlayer from './AudioPlayer'
@@ -43,7 +43,7 @@ async function fetchAdminId() {
   const headers = await getAuthHeaders()
   const res = await fetch(
     `${SUPABASE_URL}/rest/v1/profiles?rol=eq.superadmin&select=id&limit=1`,
-    { headers }
+    { headers, signal: timeoutSignal(15000) }
   )
   const data = await res.json()
   return Array.isArray(data) && data.length ? data[0].id : null
@@ -68,6 +68,17 @@ export default function LawyerInternalChat({ miId }) {
   const audioChunksRef    = useRef([])
   const recordingTimerRef = useRef(null)
 
+  // Al desmontar con una grabación activa: libera el micrófono y el timer
+  // (sin esto el indicador de mic del navegador quedaba encendido).
+  useEffect(() => () => {
+    clearInterval(recordingTimerRef.current)
+    const r = mediaRecorderRef.current
+    if (r && r.state !== 'inactive') {
+      r.onstop = null   // evita disparar la subida de un audio parcial
+      try { r.stream.getTracks().forEach(t => t.stop()); r.stop() } catch (_) { /* noop */ }
+    }
+  }, [])
+
   // ── Adjuntos ─────────────────────────────────────────────────────────────
   const [uploadingFile, setUploadingFile] = useState(false)
   const fileInputRef = useRef(null)
@@ -78,10 +89,21 @@ export default function LawyerInternalChat({ miId }) {
   /* ── Obtener id del admin al montar ── */
   useEffect(() => {
     if (!miId) return
-    fetchAdminId().then(id => {
-      setAdminId(id)
-    })
-    return () => clearInterval(pollRef.current)
+    // Con un blip de red en este único fetch, el chat quedaba clavado en
+    // "Cargando mensajes…" sin recuperación. Ahora reintenta cada 5s.
+    let cancelled = false
+    let retryT = null
+    const intentar = () => {
+      fetchAdminId()
+        .then(id => {
+          if (cancelled) return
+          if (id) setAdminId(id)
+          else retryT = setTimeout(intentar, 5000)
+        })
+        .catch(() => { if (!cancelled) retryT = setTimeout(intentar, 5000) })
+    }
+    intentar()
+    return () => { cancelled = true; clearTimeout(retryT); clearInterval(pollRef.current) }
   }, [miId])
 
   /* ── Arrancar polling cuando ya tenemos adminId ── */
@@ -126,51 +148,77 @@ export default function LawyerInternalChat({ miId }) {
     }
   }, [messages])
 
+  const inFlightRef = useRef(false)
   const fetchMessages = useCallback(async () => {
     if (!adminId || !miId) return
-    const headers = await getAuthHeaders()
-    const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/mensajes_internos` +
-      `?or=(and(from_id.eq.${miId},to_id.eq.${adminId}),and(from_id.eq.${adminId},to_id.eq.${miId}))` +
-      `&order=created_at.asc&select=*`,
-      { headers }
-    )
-    const data = await res.json()
-    setMessages(Array.isArray(data) ? data : [])
-    setLoading(false)
-
-    /* Marcar como leídos los mensajes del admin hacia el abogado */
-    const sinLeer = (Array.isArray(data) ? data : []).filter(
-      m => m.to_id === miId && !m.leido
-    )
-    setNoLeidos(sinLeer.length)
-    if (sinLeer.length > 0) {
-      const h2 = await getAuthHeaders()
-      await fetch(
+    if (inFlightRef.current) return   // no solapar polls si la red va lenta
+    inFlightRef.current = true
+    try {
+      const headers = await getAuthHeaders()
+      // Solo el tramo reciente (200): el hilo interno crece durante meses y el
+      // poll de 3s re-descargaba la conversación COMPLETA en cada tick. El
+      // marcado de leídos de abajo es por filtro server-side, no por filas.
+      // Timeout obligatorio: el guard in-flight solo se libera cuando el fetch
+      // se asienta — un fetch colgado (half-open) sin señal congelaría el poll
+      // para siempre, incluso con la red ya recuperada.
+      const res = await fetch(
         `${SUPABASE_URL}/rest/v1/mensajes_internos` +
-        `?to_id=eq.${miId}&from_id=eq.${adminId}&leido=eq.false`,
-        {
-          method: 'PATCH',
-          headers: { ...h2, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ leido: true }),
-        }
+        `?or=(and(from_id.eq.${miId},to_id.eq.${adminId}),and(from_id.eq.${adminId},to_id.eq.${miId}))` +
+        `&order=created_at.desc&limit=200&select=*`,
+        { headers, signal: timeoutSignal(15000) }
       )
-      setNoLeidos(0)
+      const data = await res.json()
+      // Respuesta de error (401 transitorio, 5xx): conserva la conversación
+      // visible — antes se borraba y mostraba "No hay mensajes aún".
+      if (!Array.isArray(data)) return
+      const asc = data.reverse()
+      setMessages(asc)
+
+      /* Marcar como leídos los mensajes del admin hacia el abogado */
+      const sinLeer = asc.filter(m => m.to_id === miId && !m.leido)
+      setNoLeidos(sinLeer.length)
+      if (sinLeer.length > 0) {
+        const h2 = await getAuthHeaders()
+        await fetch(
+          `${SUPABASE_URL}/rest/v1/mensajes_internos` +
+          `?to_id=eq.${miId}&from_id=eq.${adminId}&leido=eq.false`,
+          {
+            method: 'PATCH',
+            headers: { ...h2, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ leido: true }),
+            signal: timeoutSignal(15000),
+          }
+        )
+        setNoLeidos(0)
+      }
+    } catch (_) {
+      // Red caída: conserva el estado visible; el próximo tick reintenta.
+    } finally {
+      inFlightRef.current = false
+      setLoading(false)
     }
   }, [adminId, miId])
 
   async function enviar() {
     if (!texto.trim() || !adminId || sending) return
     setSending(true)
-    const headers = await getAuthHeaders()
-    await fetch(`${SUPABASE_URL}/rest/v1/mensajes_internos`, {
-      method: 'POST',
-      headers: { ...headers, 'Content-Type': 'application/json', Prefer: 'return=representation' },
-      body: JSON.stringify({ from_id: miId, to_id: adminId, mensaje: texto.trim() }),
-    })
-    setTexto('')
-    setSending(false)
-    await fetchMessages()
+    try {
+      const headers = await getAuthHeaders()
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/mensajes_internos`, {
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': 'application/json', Prefer: 'return=representation' },
+        body: JSON.stringify({ from_id: miId, to_id: adminId, mensaje: texto.trim() }),
+      })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      // Solo limpiar tras confirmar el insert — si falló, el texto se conserva.
+      setTexto('')
+      await fetchMessages()
+    } catch (_) {
+      // El texto queda en el campo para reintentar.
+    } finally {
+      // Sin esto, un fallo de red dejaba el botón ➤ bloqueado para siempre.
+      setSending(false)
+    }
   }
 
   /* ── Grabación de voz (click toggle, igual que ClientChat) ─────────────── */

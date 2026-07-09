@@ -5,8 +5,6 @@ import styles from './CTASection.module.css'
 export default function CTASection() {
   return (
     <section className={styles.section} id="contacto">
-      <div className={styles.topFade} aria-hidden="true" />
-
       <motion.div
         variants={headerStagger}
         initial="hidden"

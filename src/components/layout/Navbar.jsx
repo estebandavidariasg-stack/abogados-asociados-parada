@@ -53,7 +53,7 @@ export default function Navbar({ onLogin, onRegister, onRegisterContador }) {
           <source srcSet="/logo-nav.webp" type="image/webp" />
           <img
             src="/logo-nav.png"
-            alt="Abogados y Asociados Parada"
+            alt="Parada Bridge"
             className={styles.logoImg}
             width="96"
             height="96"
@@ -65,10 +65,10 @@ export default function Navbar({ onLogin, onRegister, onRegisterContador }) {
       {/* Firm name — centered on desktop */}
       <div className={`${styles.firmTitle} ${scrolled ? styles.firmTitleScrolled : ''}`}>
         <span className={`${styles.firmName} ${scrolled ? styles.firmNameDark : ''}`}>
-          Abogados y Asociados
+          Parada
         </span>
         <span className={`${styles.firmHighlight} ${scrolled ? styles.firmHighlightDark : ''}`}>
-          Parada
+          Bridge
         </span>
       </div>
 

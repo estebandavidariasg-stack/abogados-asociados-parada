@@ -182,7 +182,10 @@ export default function AudioPlayer({ src, mine, theme = 'dark' }) {
 
   return (
     <div className={`${styles.player} ${skin}`}>
-      <audio ref={audioRef} src={resolvedSrc || undefined} preload="auto" crossOrigin="anonymous" />
+      {/* preload="metadata": antes con "auto" abrir una sala con N notas de voz
+          descargaba TODOS los audios completos aunque no se reprodujera ninguno.
+          El botón de play se habilita con loadedmetadata, que sí se dispara. */}
+      <audio ref={audioRef} src={resolvedSrc || undefined} preload="metadata" crossOrigin="anonymous" />
 
       <button className={styles.playBtn} onClick={togglePlay} disabled={!loaded}>
         {playing

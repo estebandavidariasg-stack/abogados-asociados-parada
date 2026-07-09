@@ -12,20 +12,44 @@ function getHeaders() {
   }
 }
 
-async function refreshSession() {
-  const refreshToken = localStorage.getItem('sb_refresh_token')
-  if (!refreshToken) return false
-  const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY },
-    body: JSON.stringify({ refresh_token: refreshToken }),
-  })
-  if (!res.ok) return false
-  const data = await res.json()
-  localStorage.setItem('sb_token', data.access_token)
-  localStorage.setItem('sb_refresh_token', data.refresh_token)
-  localStorage.setItem('sb_token_exp', data.expires_at || (Math.floor(Date.now() / 1000) + 3600))
-  return true
+// Señal de timeout para fetch; devuelve undefined si el navegador no la soporta
+// (fetch ignora signal undefined, así que es seguro en Safari viejos).
+// Exportada para los fetch crudos de los pollers (chat interno).
+export function timeoutSignal(ms) {
+  try {
+    if (typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function') {
+      return AbortSignal.timeout(ms)
+    }
+  } catch (_) { /* noop */ }
+  return undefined
+}
+
+// Single-flight: GoTrue ROTA el refresh_token en cada uso. Si varios pollers
+// (chat interno 3s, sidebar 20s, notificaciones 30s) entran a la ventana de
+// refresh a la vez, dos POST paralelos con el mismo refresh_token pueden dejar
+// en localStorage un token ya rotado → 400 en el siguiente refresh → sesión
+// muerta. Una sola promesa compartida por pestaña evita la carrera, y el
+// catch evita que un fallo de red reviente a todos los llamadores.
+let _refreshing = null
+function refreshSession() {
+  if (_refreshing) return _refreshing
+  _refreshing = (async () => {
+    const refreshToken = localStorage.getItem('sb_refresh_token')
+    if (!refreshToken) return false
+    const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY },
+      body: JSON.stringify({ refresh_token: refreshToken }),
+      signal: timeoutSignal(10000),
+    })
+    if (!res.ok) return false
+    const data = await res.json()
+    localStorage.setItem('sb_token', data.access_token)
+    localStorage.setItem('sb_refresh_token', data.refresh_token)
+    localStorage.setItem('sb_token_exp', data.expires_at || (Math.floor(Date.now() / 1000) + 3600))
+    return true
+  })().catch(() => false).finally(() => { _refreshing = null })
+  return _refreshing
 }
 
 export async function getAuthHeaders() {
@@ -60,7 +84,7 @@ function buildQuery(table, cols = '*') {
         if (filters.length) url += '&' + filters.join('&')
         if (_order) url += `&order=${_order}`
         if (_limit) url += `&limit=${_limit}`
-        const res  = await fetch(url, { headers: getHeaders() })
+        const res  = await fetch(url, { headers: getHeaders(), signal: timeoutSignal(15000) })
         const data = await res.json()
         resolve({ data: res.ok ? data : null, error: res.ok ? null : data })
       } catch (err) { resolve({ data: null, error: err }) }
@@ -74,7 +98,7 @@ function buildQuery(table, cols = '*') {
       if (_order) url += `&order=${_order}`
       if (_limit) url += `&limit=1`
       const headers = { ...getHeaders(), 'Accept': 'application/vnd.pgrst.object+json' }
-      const res  = await fetch(url, { headers })
+      const res  = await fetch(url, { headers, signal: timeoutSignal(15000) })
       if (res.status === 406 || res.status === 404) return { data: null, error: null }
       const data = await res.json()
       return { data: res.ok ? data : null, error: res.ok ? null : data }
@@ -97,6 +121,17 @@ class RealtimeChannel {
     this._queue     = []   // sends queued before WS opens
     this.ws         = null
     this.ref        = 1
+    // Reconexión / heartbeat: sin esto, cualquier corte de red (WiFi móvil,
+    // suspensión del equipo, expiración del JWT) dejaba el canal muerto en
+    // silencio hasta recargar la página.
+    this._closedByUser   = false
+    this._retry          = 0      // intentos de reconexión (backoff exponencial)
+    this._statusCb       = null   // callback de estado, reutilizado al reconectar
+    this._hbTimer        = null   // interval único de heartbeat
+    this._hbPending      = false  // true = el reply del último heartbeat no llegó (zombi)
+    this._reconnectTimer = null
+    this._joinToken      = null   // JWT con el que se unieron los topics
+    this._topics         = []     // topics unidos (para re-autenticar al renovar token)
   }
 
   on(event, opts, cb) {
@@ -127,21 +162,34 @@ class RealtimeChannel {
   }
 
   subscribe(statusCb) {
+    if (statusCb) this._statusCb = statusCb
+    const notify = (st) => { if (this._statusCb) this._statusCb(st) }
     if (!WS_URL) {
-      if (statusCb) statusCb('CHANNEL_ERROR')
+      notify('CHANNEL_ERROR')
       return this
     }
+    this._closedByUser = false
+    // Si quedó un socket anterior (re-subscribe manual), cerrarlo sin disparar
+    // su reconexión automática.
+    if (this.ws) {
+      try { this.ws.onclose = null; this.ws.close() } catch (_) { /* noop */ }
+      this.ws = null
+    }
     const token = localStorage.getItem('sb_token') || SUPABASE_KEY
+    this._joinToken = token
     this.ws = new WebSocket(`${WS_URL}/realtime/v1/websocket?apikey=${SUPABASE_KEY}&vsn=1.0.0`)
     const hasBroadcast = Object.keys(this.bcHandlers).length > 0
 
     this.ws.onopen = () => {
+      this._topics = []
       this._send({ topic: 'phoenix', event: 'phx_join', payload: {}, ref: this._ref() })
 
       // Subscribe to broadcast channel if needed
       if (hasBroadcast) {
+        const bcTopic = `realtime:${this.name}`
+        this._topics.push(bcTopic)
         this._send({
-          topic:   `realtime:${this.name}`,
+          topic:   bcTopic,
           event:   'phx_join',
           payload: {
             config: {
@@ -161,6 +209,7 @@ class RealtimeChannel {
         const pgEvent = event === 'INSERT' ? 'INSERT' : event === 'UPDATE' ? 'UPDATE' : event === 'DELETE' ? 'DELETE' : '*'
         let topicName = `realtime:${schema || 'public'}:${table || '*'}`
         if (filter) topicName += `:${filter}`
+        if (!this._topics.includes(topicName)) this._topics.push(topicName)
 
         this._send({
           topic:   topicName,
@@ -186,7 +235,8 @@ class RealtimeChannel {
       this._queue.forEach(m => this.ws.send(JSON.stringify(m)))
       this._queue = []
 
-      if (statusCb) statusCb('SUBSCRIBED')
+      this._startHeartbeat()
+      notify('SUBSCRIBED')
     }
 
     this.ws.onmessage = (e) => {
@@ -214,14 +264,80 @@ class RealtimeChannel {
         }
 
         if (msg.event === 'phx_reply' && msg.payload?.status === 'ok') {
-          setTimeout(() => this._send({ topic: 'phoenix', event: 'heartbeat', payload: {}, ref: this._ref() }), 25000)
+          if (msg.topic === 'phoenix') {
+            // Reply del socket (join/heartbeat): marca vivo el heartbeat.
+            this._hbPending = false
+          } else if (this._topics.includes(msg.topic)) {
+            // Join de DATOS aceptado: la suscripción funciona de verdad. Solo
+            // aquí se resetea el backoff — si lo reseteara el heartbeat, un
+            // join rechazado en bucle reconectaría cada 2s para siempre.
+            this._retry = 0
+          }
         }
-      } catch (_) {}
+        if (msg.event === 'phx_reply' && msg.payload?.status === 'error' && this._topics.includes(msg.topic)) {
+          // Join de datos RECHAZADO (típico: JWT expirado tras suspender el
+          // equipo). Sin esto el socket quedaba "sano" (heartbeats ok) pero
+          // sordo para siempre. Cerrar reentra al ciclo de reconexión, que
+          // refresca el token antes de reintentar (backoff creciente).
+          try { this.ws.close() } catch (_) { /* noop */ }
+        }
+      } catch (_) { /* noop */ }
     }
 
-    this.ws.onerror = () => { if (statusCb) statusCb('CHANNEL_ERROR') }
-    this.ws.onclose = () => {}
+    this.ws.onerror = () => { notify('CHANNEL_ERROR') }
+    this.ws.onclose = () => {
+      this._stopHeartbeat()
+      if (this._closedByUser) return
+      // Reconexión automática con backoff exponencial + jitter (2s → 30s máx).
+      // subscribe() relee el token fresco de localStorage y re-hace todos los
+      // phx_join a partir de pgHandlers/bcHandlers, y notifica 'SUBSCRIBED'
+      // para que los consumidores puedan re-sincronizar datos perdidos.
+      const delay = Math.min(30000, 2000 * Math.pow(2, this._retry++)) + Math.floor(Math.random() * 1000)
+      this._reconnectTimer = setTimeout(() => {
+        if (this._closedByUser) return
+        // Tras una suspensión larga el JWT de localStorage suele estar
+        // expirado y el join sería rechazado: refrescarlo primero si hace
+        // falta (single-flight, jamás lanza) y reconectar con token fresco.
+        const exp = parseInt(localStorage.getItem('sb_token_exp') || '0')
+        const now = Math.floor(Date.now() / 1000)
+        if (localStorage.getItem('sb_refresh_token') && exp && now >= exp - 300) {
+          refreshSession().then(() => { if (!this._closedByUser) this.subscribe() })
+        } else {
+          this.subscribe()
+        }
+      }, delay)
+    }
     return this
+  }
+
+  _startHeartbeat() {
+    this._stopHeartbeat()
+    this._hbPending = false
+    this._hbTimer = setInterval(() => {
+      if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return
+      if (this._hbPending) {
+        // El reply del heartbeat anterior nunca llegó: conexión zombi
+        // (half-open, típica en WiFi/red móvil). Cerrar dispara la
+        // reconexión automática de onclose.
+        try { this.ws.close() } catch (_) { /* noop */ }
+        return
+      }
+      // Si AuthContext renovó el JWT, re-autenticar los topics unidos para que
+      // Supabase Realtime no expulse las suscripciones al expirar el token
+      // (~1h). Mismo mecanismo que usa el SDK oficial.
+      const cur = localStorage.getItem('sb_token') || SUPABASE_KEY
+      if (cur !== this._joinToken) {
+        this._joinToken = cur
+        this._topics.forEach(t => this._send({ topic: t, event: 'access_token', payload: { access_token: cur }, ref: this._ref() }))
+      }
+      this._hbPending = true
+      this._send({ topic: 'phoenix', event: 'heartbeat', payload: {}, ref: this._ref() })
+    }, 25000)
+  }
+
+  _stopHeartbeat() {
+    if (this._hbTimer) { clearInterval(this._hbTimer); this._hbTimer = null }
+    this._hbPending = false
   }
 
   _send(msg) {
@@ -233,6 +349,9 @@ class RealtimeChannel {
   _ref() { return String(this.ref++) }
 
   unsubscribe() {
+    this._closedByUser = true
+    if (this._reconnectTimer) { clearTimeout(this._reconnectTimer); this._reconnectTimer = null }
+    this._stopHeartbeat()
     if (this.ws) { this.ws.close(); this.ws = null }
   }
 }
@@ -354,6 +473,7 @@ export const supabase = {
               if (_select && _cols !== '*') url += `?select=${encodeURIComponent(_cols)}`
               const res = await fetch(url, {
                 method: 'POST', headers, body: JSON.stringify(body),
+                signal: timeoutSignal(15000),
               })
               if (_select) {
                 const data = await res.json()
@@ -379,6 +499,7 @@ export const supabase = {
                 method: 'PATCH',
                 headers: { ...getHeaders(), 'Prefer': 'return=minimal' },
                 body: JSON.stringify(body),
+                signal: timeoutSignal(15000),
               })
               resolve({ data: null, error: res.ok ? null : await res.json() })
             } catch (err) { resolve({ data: null, error: err }) }
@@ -395,7 +516,7 @@ export const supabase = {
             try {
               let url = `${SUPABASE_URL}/rest/v1/${table}`
               if (filters.length) url += '?' + filters.join('&')
-              const res = await fetch(url, { method: 'DELETE', headers: getHeaders() })
+              const res = await fetch(url, { method: 'DELETE', headers: getHeaders(), signal: timeoutSignal(15000) })
               resolve({ data: null, error: res.ok ? null : await res.json() })
             } catch (err) { resolve({ data: null, error: err }) }
           }
@@ -410,16 +531,23 @@ export const supabase = {
     from(bucket) {
       return {
         async upload(path, file, opts = {}) {
-          const headers = {
-            'apikey': SUPABASE_KEY,
-            'Authorization': `Bearer ${localStorage.getItem('sb_token') || SUPABASE_KEY}`,
-          }
-          if (opts.contentType) headers['Content-Type'] = opts.contentType
-          const res = await fetch(`${SUPABASE_URL}/storage/v1/object/${bucket}/${path}`, {
-            method: 'POST', headers, body: file,
-          })
-          const data = await res.json()
-          return { data: res.ok ? data : null, error: res.ok ? null : data }
+          // Sin timeout: las subidas de archivos grandes en redes lentas tardan
+          // legítimamente minutos. Sí capturamos fallos de red para mantener el
+          // contrato { data, error } — antes un throw dejaba UIs colgadas en
+          // "Subiendo…" (ChatSection.handleFile, ModelosContractualesSection).
+          try {
+            const headers = {
+              'apikey': SUPABASE_KEY,
+              'Authorization': `Bearer ${localStorage.getItem('sb_token') || SUPABASE_KEY}`,
+            }
+            if (opts.contentType) headers['Content-Type'] = opts.contentType
+            const res = await fetch(`${SUPABASE_URL}/storage/v1/object/${bucket}/${path}`, {
+              method: 'POST', headers, body: file,
+            })
+            const data = await res.json().catch(() => ({}))
+            if (!res.ok) return { data: null, error: data.message ? data : { message: `HTTP ${res.status}`, ...data } }
+            return { data, error: null }
+          } catch (err) { return { data: null, error: err } }
         },
 
         async createSignedUrl(path, expiresIn = 3600) {
@@ -448,17 +576,19 @@ export const supabase = {
         },
 
         async remove(paths) {
-          const list = Array.isArray(paths) ? paths : [paths]
-          const headers = {
-            apikey: SUPABASE_KEY,
-            Authorization: `Bearer ${localStorage.getItem('sb_token') || SUPABASE_KEY}`,
-          }
-          const results = await Promise.all(list.map(p =>
-            fetch(`${SUPABASE_URL}/storage/v1/object/${bucket}/${p}`, { method: 'DELETE', headers })
-          ))
-          const failed = results.filter(r => !r.ok)
-          if (failed.length) return { data: null, error: { message: 'Failed to remove some files' } }
-          return { data: list.map(name => ({ name })), error: null }
+          try {
+            const list = Array.isArray(paths) ? paths : [paths]
+            const headers = {
+              apikey: SUPABASE_KEY,
+              Authorization: `Bearer ${localStorage.getItem('sb_token') || SUPABASE_KEY}`,
+            }
+            const results = await Promise.all(list.map(p =>
+              fetch(`${SUPABASE_URL}/storage/v1/object/${bucket}/${p}`, { method: 'DELETE', headers, signal: timeoutSignal(20000) })
+            ))
+            const failed = results.filter(r => !r.ok)
+            if (failed.length) return { data: null, error: { message: 'Failed to remove some files' } }
+            return { data: list.map(name => ({ name })), error: null }
+          } catch (err) { return { data: null, error: err } }
         },
 
         getPublicUrl(path) {

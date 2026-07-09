@@ -81,6 +81,53 @@
   gap: 18px;
 }
 
+/* ── Flujo guiado por IA: recordatorio del caso + costo sugerido ────────── */
+.iaBanner {
+  padding: 16px 18px 18px;
+  border-radius: 14px;
+  background:
+    radial-gradient(130% 150% at 0% 0%, rgba(201, 168, 76, 0.16) 0%, transparent 58%),
+    linear-gradient(180deg, #fffdf6 0%, #fbf3df 100%);
+  border: 1px solid rgba(201, 168, 76, 0.5);
+  box-shadow: 0 4px 16px rgba(201, 168, 76, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.85);
+}
+.iaBannerText {
+  margin: 0;
+  font-family: 'Raleway', sans-serif;
+  font-size: 0.92rem;
+  line-height: 1.5;
+  color: #33404f;
+}
+.iaPrecio {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(201, 168, 76, 0.35);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.iaPrecioTag {
+  font-family: 'Raleway', sans-serif;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--gold-dk, #8a6a28);
+}
+.iaPrecioValor {
+  font-family: 'Cormorant Garamond', 'Georgia', serif;
+  font-size: clamp(1.7rem, 5vw, 2.15rem);
+  font-weight: 700;
+  line-height: 1.08;
+  color: var(--navy, #0d2d5e);
+}
+.iaPrecioNota {
+  font-family: 'Raleway', sans-serif;
+  font-size: 0.72rem;
+  line-height: 1.45;
+  color: #6b6250;
+}
+
 .field {
   display: flex;
   flex-direction: column;

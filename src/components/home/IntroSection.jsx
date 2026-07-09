@@ -22,7 +22,9 @@ export default function IntroSection({ onUnirse }) {
   return (
     <section id="intro" className={styles.section} aria-labelledby="intro-heading">
       <div className={styles.content}>
-        <span className={styles.eyebrow}>Abogados y Asociados Parada</span>
+        <span className={styles.eyebrow}>
+          <span style={{ color: 'var(--navy)' }}>Parada</span> Bridge
+        </span>
 
         <h1 id="intro-heading" className={styles.heading}>
           <em>Defendemos sus derechos,</em><br />

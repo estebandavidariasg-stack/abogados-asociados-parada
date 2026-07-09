@@ -7,12 +7,15 @@ import CTASection from '../components/home/CTASection'
 import ChatSection from '../components/chat/ChatSection'
 import Footer from '../components/layout/Footer'
 import WhatsAppButton from '../components/home/WhatsAppButton'
-import AuthModal from '../components/auth/AuthModal'
-import RegisterContadorModal from '../components/auth/RegisterContadorModal'
-import { useState, lazy, Suspense } from 'react'
+import { useState, useRef, useEffect, lazy, Suspense } from 'react'
 import { useScroll, useSpring, motion } from 'framer-motion'
 import { useAuth } from '../context/AuthContext'
 import SubNav from '../components/layout/SubNav'
+
+// Modales de registro/login: solo se montan al hacer clic — lazy para que el
+// visitante público no descargue ~1.200 líneas de formularios + recaptcha.
+const AuthModal = lazy(() => import('../components/auth/AuthModal'))
+const RegisterContadorModal = lazy(() => import('../components/auth/RegisterContadorModal'))
 
 function ScrollProgress() {
   const { scrollYProgress } = useScroll()
@@ -41,6 +44,36 @@ import ModelosContractualesSection from '../components/home/ModelosContractuales
 // MapSection arrastra d3 + topojson (pesados) y está abajo del fold → se carga
 // bajo demanda para no bloquear el render inicial del home.
 const MapSection = lazy(() => import('../components/home/MapSection'))
+
+// El lazy() solo saca el chunk del entry; al renderizarse incondicionalmente,
+// los 453 kB del mapa se descargaban igual en CADA visita aunque casi nadie
+// scrollea hasta la penúltima sección. Montamos el import solo cuando la
+// sección se acerca al viewport (mismo patrón que LawyersSection).
+function DeferredMap() {
+  const [show, setShow] = useState(false)
+  const ref = useRef(null)
+  useEffect(() => {
+    if (show) return
+    const el = ref.current
+    if (!el) return
+    if (!('IntersectionObserver' in window)) { setShow(true); return }
+    const io = new IntersectionObserver(
+      (entries) => { if (entries.some(e => e.isIntersecting)) { setShow(true); io.disconnect() } },
+      { rootMargin: '450px' }
+    )
+    io.observe(el)
+    return () => io.disconnect()
+  }, [show])
+  return (
+    <div ref={ref} style={show ? undefined : { minHeight: 420 }} aria-hidden={show ? undefined : 'true'}>
+      {show && (
+        <Suspense fallback={<div style={{ minHeight: 420 }} aria-hidden="true" />}>
+          <MapSection />
+        </Suspense>
+      )}
+    </div>
+  )
+}
 
 
 export default function HomePage() {
@@ -72,13 +105,13 @@ export default function HomePage() {
         onToggleEdit={() => setEditMode((v) => !v)}
         isSuperAdmin={isSuperAdmin}
       />
-      <Suspense fallback={<div style={{ minHeight: 420 }} aria-hidden="true" />}>
-        <MapSection />
-      </Suspense>
+      <DeferredMap />
       <Footer />
       <WhatsAppButton phone="573124086734" />
-      {modal && <AuthModal initialTab={modal} onClose={() => setModal(null)} />}
-      {contadorOpen && <RegisterContadorModal onClose={() => setContadorOpen(false)} />}
+      <Suspense fallback={null}>
+        {modal && <AuthModal initialTab={modal} onClose={() => setModal(null)} />}
+        {contadorOpen && <RegisterContadorModal onClose={() => setContadorOpen(false)} />}
+      </Suspense>
     </>
   )
 }

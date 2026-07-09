@@ -1,10 +1,10 @@
-# Abogados y Asociados Parada
+# Parada Bridge
 
 > Bufete jurídico y de servicios contables en Bogotá, Colombia. Plataforma de consultas en línea con abogados y contadores verificados. Asesoría en derecho penal, civil, corporativo, de familia, laboral y administrativo.
 
 ## Información general
 
-- **Nombre:** Abogados y Asociados Parada
+- **Nombre:** Parada Bridge
 - **Tipo:** Bufete jurídico y contable
 - **Sede:** Calle 93 # 15-23, Of. 804, Bogotá D.C., Colombia
 - **Teléfono:** +57 312 408 6734

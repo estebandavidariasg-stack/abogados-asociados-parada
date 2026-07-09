@@ -4,6 +4,22 @@ import { headerStagger, eyebrowReveal, fadeUp, VIEWPORT } from '../../lib/motion
 import LawyerCard from './LawyerCard'
 import styles from './LawyersSection.module.css'
 import { useAuth } from '../../context/AuthContext'
+import { useCarrusel } from '../../lib/useCarrusel'
+
+/* Flechas de navegación centradas bajo la cinta de profesionales. Nudgean la
+   cinta ~un ancho visible; el auto-desplazamiento continúa por su cuenta. */
+function CintaFlechas({ onPrev, onNext }) {
+  return (
+    <div className={styles.cintaNav}>
+      <button type="button" className={styles.cintaArrow} onClick={onPrev} aria-label="Ver profesionales anteriores">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6" /></svg>
+      </button>
+      <button type="button" className={styles.cintaArrow} onClick={onNext} aria-label="Ver más profesionales">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6" /></svg>
+      </button>
+    </div>
+  )
+}
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || ''
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || ''
@@ -236,49 +252,39 @@ export default function LawyersSection() {
 }
 
 /* ── Cinta de profesionales ────────────────────────────────────────────────
-   Auto-desplazamiento continuo (una fila) para que los perfiles pasen frente
-   al usuario sin que tenga que buscar ni filtrar. Se distingue de la cinta de
-   testimonios: es UNA fila de tarjetas de perfil (accionables), y se PAUSA al
-   pasar el mouse / enfocar con teclado / tocar, para poder abrir cada tarjeta.
-   Si el usuario reduce el movimiento, aplica filtros, o hay pocas tarjetas para
-   llenar la fila, cae a una fila estática que se desplaza con el dedo/mouse. */
+   Una sola fila de tarjetas de perfil (accionables) con tres formas de navegar:
+   auto-desplazamiento continuo, arrastre con el dedo/mouse (como un scroll), y
+   flechas centradas debajo. El auto-avance se PAUSA al pasar el mouse, enfocar
+   con teclado o arrastrar, para poder abrir cada tarjeta. Cuando hay filtros
+   activos, se reduce el movimiento, o hay pocas tarjetas para llenar la fila,
+   se desactiva el bucle: la fila queda quieta pero el arrastre y las flechas
+   siguen desplazándola. */
 function ProfesionalesCinta({ items, isSuperAdmin, calm }) {
   const reduce = useReducedMotion()
-  const [touching, setTouching] = useState(false)
-
-  const animar = !reduce && !calm && items.length >= 4
-
-  if (!animar) {
-    return (
-      <div className={styles.cintaStatic}>
-        {items.map((l) => (
-          <div className={styles.slide} key={l.id}>
-            <LawyerCard lawyer={l} isSuperAdmin={isSuperAdmin} reveal={false} />
-          </div>
-        ))}
-      </div>
-    )
-  }
-
-  // Duración proporcional al número de tarjetas → velocidad ~constante.
-  const dur = Math.max(20, items.length * 4.5)
+  const loop = !reduce && !calm && items.length >= 4
+  const { scrollerRef, step, handlers } = useCarrusel({ speed: 34, loop })
+  const copias = loop ? [0, 1] : [0]
 
   return (
-    <div
-      className={`${styles.cinta} ${touching ? styles.cintaPaused : ''}`}
-      onTouchStart={() => setTouching(true)}
-      onTouchEnd={() => setTouching(false)}
-      onTouchCancel={() => setTouching(false)}
-    >
-      <div className={styles.track} style={{ animationDuration: `${dur}s` }}>
-        {[0, 1].flatMap((copia) =>
-          items.map((l) => (
-            <div className={styles.slide} key={`${copia}-${l.id}`}>
-              <LawyerCard lawyer={l} isSuperAdmin={isSuperAdmin} reveal={false} ghost={copia === 1} />
-            </div>
-          ))
-        )}
+    <div className={styles.cintaWrap}>
+      <div className={styles.cinta} ref={scrollerRef} {...handlers}>
+        <div className={styles.track}>
+          {copias.flatMap((copia) =>
+            items.map((l) => (
+              <div className={styles.slide} key={`${copia}-${l.id}`}>
+                <LawyerCard
+                  lawyer={l}
+                  isSuperAdmin={isSuperAdmin}
+                  reveal={false}
+                  ghost={copia === 1}
+                />
+              </div>
+            ))
+          )}
+        </div>
       </div>
+
+      <CintaFlechas onPrev={() => step(-1)} onNext={() => step(1)} />
     </div>
   )
 }

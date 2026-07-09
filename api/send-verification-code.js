@@ -251,7 +251,7 @@ export default async function handler(req, res) {
 
     // 7. Correo
     await transporter.sendMail({
-      from:    `"Abogados y Asociados Parada" <${process.env.GMAIL_USER}>`,
+      from:    `"Parada Bridge" <${process.env.GMAIL_USER}>`,
       to:      email,
       subject: 'Tu código de verificación',
       html:    renderVerificationEmailHtml({ code, tipoRegistro }),

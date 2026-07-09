@@ -41,18 +41,23 @@ export async function getCaller(req) {
   } catch { return null }
 }
 
-// Perfil { id, rol, email } del que llama, o null.
+// Perfil { id, rol, aprobado, nombre, apellido, email } del que llama, o null.
+// Trae aprobado/nombre/apellido de una vez: antes solicitudes.js y
+// verify-request.js releían la MISMA fila de profiles en el request más
+// polleado del sistema (GET /api/solicitudes cada 30s por dashboard).
 export async function getCallerProfile(req) {
   const user = await getCaller(req)
   if (!user?.id) return null
   try {
     const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/profiles?id=eq.${user.id}&select=id,rol`,
+      `${SUPABASE_URL}/rest/v1/profiles?id=eq.${user.id}&select=id,rol,aprobado,nombre,apellido`,
       { headers: serviceHeaders() }
     )
     const rows = await res.json()
     const row = Array.isArray(rows) ? rows[0] : null
-    return row ? { id: row.id, rol: row.rol, email: user.email } : null
+    return row
+      ? { id: row.id, rol: row.rol, aprobado: !!row.aprobado, nombre: row.nombre, apellido: row.apellido, email: user.email }
+      : null
   } catch { return null }
 }
 

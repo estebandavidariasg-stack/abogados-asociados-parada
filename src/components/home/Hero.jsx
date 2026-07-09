@@ -86,7 +86,29 @@ export default function Hero() {
   const imgInputRef      = useRef(null)
   const uploadTargetRef  = useRef(null)
 
-  useEffect(() => { fetchSlides() }, [])
+  // Hero es de las ÚLTIMAS secciones de la página: ni su fetch a Supabase ni
+  // sus imágenes deben competir con el arranque. El fetch de la tabla
+  // `carrusel` se difiere hasta que la sección se acerque al viewport
+  // (mismo patrón que LawyersSection) — el LQIP + DEFAULT_SLIDES cubren el
+  // paint si el usuario llega antes que la red. El <link rel="preload"> de
+  // alta prioridad que se inyectaba aquí se eliminó por la misma razón.
+  const fetchedRef = useRef(false)
+  const sectionRef = useRef(null)
+  useEffect(() => {
+    const el = sectionRef.current
+    const arrancar = () => {
+      if (fetchedRef.current) return
+      fetchedRef.current = true
+      fetchSlides()
+    }
+    if (!el || !('IntersectionObserver' in window)) { arrancar(); return }
+    const io = new IntersectionObserver(
+      (entries) => { if (entries.some(e => e.isIntersecting)) { arrancar(); io.disconnect() } },
+      { rootMargin: '600px' }
+    )
+    io.observe(el)
+    return () => io.disconnect()
+  }, [])
 
   async function fetchSlides() {
     if (!SUPABASE_URL || !SUPABASE_KEY) return
@@ -99,25 +121,6 @@ export default function Hero() {
       if (Array.isArray(data) && data.length > 0) setSlides(data)
     } catch { /* usa defaults */ }
   }
-
-  // Performance: el hero ya pinta DEFAULT_SLIDES sin esperar Supabase. Este
-  // preload acelera la primera imagen real sin bloquear el render inicial.
-  // Para defaults usamos imagesrcset/imagesizes para que el browser preload
-  // SOLO el ancho que va a renderizar (480/800/1200 según viewport).
-  useEffect(() => {
-    if (!slides[0]?.imagen_url) return
-    const s = deriveImgSources(slides[0].imagen_url)
-    const link = document.createElement('link')
-    link.rel  = 'preload'
-    link.as   = 'image'
-    link.href = s.preloadHref
-    if (s.preloadType) link.type = s.preloadType
-    if (s.preloadSrcSet) link.setAttribute('imagesrcset', s.preloadSrcSet)
-    if (s.preloadSizes)  link.setAttribute('imagesizes',  s.preloadSizes)
-    link.fetchPriority = 'high'
-    document.head.appendChild(link)
-    return () => { try { document.head.removeChild(link) } catch {} }
-  }, [slides])
 
   /* ── Navegación ───────────────────────────────────── */
   const activeSlides = editing ? editSlides : slides
@@ -259,7 +262,7 @@ export default function Hero() {
 
   /* ── Render ──────────────────────────────────────── */
   return (
-    <section className={`${styles.hero} ${editing ? styles.heroEditing : ''}`}>
+    <section ref={sectionRef} className={`${styles.hero} ${editing ? styles.heroEditing : ''}`}>
       <div className={styles.heroBg} />
 
 
@@ -336,8 +339,8 @@ export default function Hero() {
                       width="580"
                       height="740"
                       decoding="async"
-                      loading={isActive ? 'eager' : 'lazy'}
-                      fetchpriority={isActive ? 'high' : 'auto'}
+                      loading="lazy"
+                      fetchpriority="auto"
                       onLoad={() => setImgLoaded(prev => prev[i] ? prev : { ...prev, [i]: true })}
                       style={{
                         opacity:    isLoaded ? 1 : 0,

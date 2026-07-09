@@ -74,23 +74,9 @@ function emailAbogado({ nombreAbogado, nombreCliente, area, ctaUrl }) {
     subject: subjectLine,
     html: renderEmailHtml({
       subjectLine,
-      greetingHtml: `Estimado/a <strong style="color:#0d2d5e;font-weight:700;">${nombreAbogado}</strong>,`,
-      bodyHtml: `Tienes una nueva consulta pendiente por parte de <strong style="color:#0d2d5e;font-weight:700;">${nombreCliente}</strong> en el área de <strong style="color:#0d2d5e;font-weight:700;">${area}</strong>. Ingresa a la plataforma para atenderla a la brevedad posible.`,
+      greetingHtml: `Estimado/a <strong style="color:#0d2d5e;font-weight:700;">${esc(nombreAbogado)}</strong>,`,
+      bodyHtml: `Tienes una nueva consulta pendiente por parte de <strong style="color:#0d2d5e;font-weight:700;">${esc(nombreCliente)}</strong> en el área de <strong style="color:#0d2d5e;font-weight:700;">${esc(area)}</strong>. Ingresa a la plataforma para atenderla a la brevedad posible.`,
       ctaLabel: 'Ver consulta',
-      ctaUrl,
-    }),
-  }
-}
-
-function emailCliente({ nombreCliente, nombreAbogado, area, ctaUrl }) {
-  const subjectLine = `Tu consulta fue recibida: ${area}`
-  return {
-    subject: subjectLine,
-    html: renderEmailHtml({
-      subjectLine,
-      greetingHtml: `Estimado/a <strong style="color:#0d2d5e;font-weight:700;">${nombreCliente}</strong>,`,
-      bodyHtml: `Tu consulta en el área de <strong style="color:#0d2d5e;font-weight:700;">${area}</strong> ha sido recibida. El abogado/a <strong style="color:#0d2d5e;font-weight:700;">${nombreAbogado}</strong> se ha unido y está listo para atenderte. Ingresa a la plataforma para continuar con tu consulta.`,
-      ctaLabel: 'Ir al chat',
       ctaUrl,
     }),
   }
@@ -107,10 +93,10 @@ function emailInactividad({ nombreAbogado, nombreCliente, area, createdAt, ctaUr
     subject: subjectLine,
     html: renderEmailHtml({
       subjectLine,
-      greetingHtml: `Estimado/a <strong style="color:#0d2d5e;font-weight:700;">${nombreAbogado}</strong>,`,
+      greetingHtml: `Estimado/a <strong style="color:#0d2d5e;font-weight:700;">${esc(nombreAbogado)}</strong>,`,
       bodyHtml:
-        `Tienes una consulta de <strong style="color:#0d2d5e;font-weight:700;">${nombreCliente}</strong>` +
-        (area ? ` en el área de <strong style="color:#0d2d5e;font-weight:700;">${area}</strong>` : '') +
+        `Tienes una consulta de <strong style="color:#0d2d5e;font-weight:700;">${esc(nombreCliente)}</strong>` +
+        (area ? ` en el área de <strong style="color:#0d2d5e;font-weight:700;">${esc(area)}</strong>` : '') +
         (fechaCreacion ? ` (abierta el ${fechaCreacion})` : '') +
         ` sin actividad por más de 24 horas. ` +
         `El equipo administrativo te solicita ingresar a la plataforma y dar respuesta lo antes posible. ` +
@@ -129,9 +115,9 @@ function emailAprobado({ nombreAbogado, rol, ctaUrl }) {
     html: renderEmailHtml({
       subjectLine,
       preheader: 'Ya apareces en la plataforma. Ingresa para empezar.',
-      greetingHtml: `Estimado/a <strong style="color:#0d2d5e;font-weight:700;">${nombreAbogado}</strong>,`,
+      greetingHtml: `Estimado/a <strong style="color:#0d2d5e;font-weight:700;">${esc(nombreAbogado)}</strong>,`,
       bodyHtml:
-        `Tu cuenta como <strong style="color:#0d2d5e;font-weight:700;">${rolLabel}</strong> en Abogados y Asociados Parada ya fue aprobada. ` +
+        `Tu cuenta como <strong style="color:#0d2d5e;font-weight:700;">${rolLabel}</strong> en Parada Bridge ya fue aprobada. ` +
         `Desde ahora apareces en la plataforma y los clientes pueden encontrarte y escribirte. ` +
         `Ingresa para completar tu perfil y empezar a atender consultas.`,
       ctaLabel: 'Ingresar a mi cuenta',
@@ -150,7 +136,7 @@ function emailRechazado({ nombreAbogado, rol, ctaUrl }) {
       preheader: 'Información sobre tu solicitud de registro.',
       greetingHtml: `Estimado/a <strong style="color:#0d2d5e;font-weight:700;">${esc(nombreAbogado)}</strong>,`,
       bodyHtml:
-        `Revisamos tu solicitud de registro como <strong style="color:#0d2d5e;font-weight:700;">${rolLabel}</strong> en Abogados y Asociados Parada y, por ahora, no fue aprobada. ` +
+        `Revisamos tu solicitud de registro como <strong style="color:#0d2d5e;font-weight:700;">${rolLabel}</strong> en Parada Bridge y, por ahora, no fue aprobada. ` +
         `Si consideras que se trata de un error o deseas enviar información adicional, puedes escribirnos por los canales oficiales que encuentras en nuestro sitio.`,
       ctaLabel: 'Visitar el sitio',
       ctaUrl,
@@ -267,7 +253,7 @@ export default async function handler(req, res) {
         ctaUrl: `${SITE_BASE}/?loginModal=true`,
       })
       await transporter.sendMail({
-        from: `"Abogados y Asociados Parada" <${process.env.GMAIL_USER}>`,
+        from: `"Parada Bridge" <${process.env.GMAIL_USER}>`,
         to: pro.email,
         subject,
         html,
@@ -296,7 +282,7 @@ export default async function handler(req, res) {
         ctaUrl: SITE_BASE,
       })
       await transporter.sendMail({
-        from: `"Abogados y Asociados Parada" <${process.env.GMAIL_USER}>`,
+        from: `"Parada Bridge" <${process.env.GMAIL_USER}>`,
         to: pro.email,
         subject,
         html,
@@ -322,7 +308,7 @@ export default async function handler(req, res) {
         ctaUrl: `${SITE_BASE}/admin`,
       })
       await transporter.sendMail({
-        from: `"Abogados y Asociados Parada" <${process.env.GMAIL_USER}>`,
+        from: `"Parada Bridge" <${process.env.GMAIL_USER}>`,
         to: ADMIN_NOTIFY_EMAIL,
         subject,
         html,
@@ -341,7 +327,7 @@ export default async function handler(req, res) {
       if (!lawyerData?.email || !clientData?.email) {
         return res.status(400).json({ error: 'Faltan correos de destino.' })
       }
-      const from = `"Abogados y Asociados Parada" <${process.env.GMAIL_USER}>`
+      const from = `"Parada Bridge" <${process.env.GMAIL_USER}>`
       try {
         await Promise.all([
           // El cliente recibe la ficha del ABOGADO.
@@ -367,21 +353,22 @@ export default async function handler(req, res) {
     }
 
     // ── Notificación al abogado cuando llega consulta nueva ──
-    // Acepta `lawyerId` (preferido) o `lawyerEmail` (legacy, compat hacia
-    // atrás). Con lawyerId resolvemos el correo con service role en lugar
-    // de confiar en datos que vengan del cliente — el frontend ya no expone
-    // emails de profesionales por motivos de privacidad.
+    // Solo `lawyerId`: el correo se resuelve server-side con service role.
+    // (El fallback legacy `lawyerEmail` se eliminó — permitía usar este
+    // endpoint sin auth como relay de correo hacia direcciones arbitrarias,
+    // arriesgando la suspensión de la cuenta Gmail de la firma.)
     if (type === 'new_consultation') {
-      const { lawyerId, lawyerEmail: legacyEmail, nombreAbogado, nombreCliente, area } = data
+      const { lawyerId, nombreAbogado, nombreCliente, area } = data
 
-      let toEmail   = legacyEmail || null
-      let toNombre  = nombreAbogado || null
-      if (lawyerId) {
-        const pro = await resolveProfessionalEmail(lawyerId)
-        if (pro?.email) {
-          toEmail  = pro.email
-          if (!toNombre && pro.nombre) toNombre = `${pro.nombre} ${pro.apellido || ''}`.trim()
-        }
+      if (!lawyerId) {
+        return res.status(400).json({ error: 'Falta lawyerId.' })
+      }
+      let toEmail  = null
+      let toNombre = nombreAbogado || null
+      const pro = await resolveProfessionalEmail(lawyerId)
+      if (pro?.email) {
+        toEmail = pro.email
+        if (!toNombre && pro.nombre) toNombre = `${pro.nombre} ${pro.apellido || ''}`.trim()
       }
       if (!toEmail) {
         return res.status(400).json({ error: 'No se pudo resolver el correo del profesional.' })
@@ -395,7 +382,7 @@ export default async function handler(req, res) {
       })
 
       await transporter.sendMail({
-        from: `"Abogados y Asociados Parada" <${process.env.GMAIL_USER}>`,
+        from: `"Parada Bridge" <${process.env.GMAIL_USER}>`,
         to: toEmail,
         subject,
         html,
@@ -428,7 +415,7 @@ export default async function handler(req, res) {
       })
 
       await transporter.sendMail({
-        from: `"Abogados y Asociados Parada" <${process.env.GMAIL_USER}>`,
+        from: `"Parada Bridge" <${process.env.GMAIL_USER}>`,
         to: pro.email,
         subject,
         html,
@@ -437,26 +424,15 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true, sent: 'lawyer_inactivity' })
     }
 
-    // ── Notificación al cliente cuando el abogado se une ──
-    if (type === 'lawyer_joined') {
-      const { clientEmail, nombreCliente, nombreAbogado, area } = data
-
-      const { subject, html } = emailCliente({ nombreCliente, nombreAbogado, area, ctaUrl })
-
-      await transporter.sendMail({
-        from: `"Abogados y Asociados Parada" <${process.env.GMAIL_USER}>`,
-        to: clientEmail,
-        subject,
-        html,
-      })
-
-      return res.status(200).json({ ok: true, sent: 'client' })
-    }
+    // (La rama 'lawyer_joined' se eliminó: era código muerto — ningún flujo
+    // del frontend la llamaba — y aceptaba un correo de destino arbitrario
+    // del body sin auth, es decir, un relay de spam con la marca de la firma.)
 
     return res.status(400).json({ error: 'Tipo de notificación no reconocido' })
 
   } catch (err) {
     console.error('Error enviando email:', err)
-    return res.status(500).json({ error: err.message })
+    // Sin filtrar detalles internos (SMTP/credenciales) al cliente.
+    return res.status(500).json({ error: 'No se pudo enviar la notificación.' })
   }
 }

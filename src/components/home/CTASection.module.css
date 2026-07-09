@@ -1,39 +1,22 @@
+/* El navy se funde a blanco dentro de la propia tarjeta, arriba y abajo, para
+   enlazar de forma continua con las secciones blancas anterior (ChatSection) y
+   posterior (Footer) — sin franjas superpuestas. */
 .section {
-  background: linear-gradient(135deg, #040e28 0%, #0a2050 55%, #0d2d5e 100%);
+  background: linear-gradient(
+    to bottom,
+    #ffffff 0%,
+    #0d2d5e 14%,
+    #0d2d5e 86%,
+    #ffffff 100%
+  );
   padding: 7rem 4rem;
   text-align: center;
   position: relative;
   overflow: hidden;
 }
 
-.section::after {
-  content: '';
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 80px;
-  background: linear-gradient(to bottom, transparent, #ffffff);
-  pointer-events: none;
-  z-index: 0;
-}
-
-
-/* Degrada blanco→transparente en el borde superior para fundir con
-   la ChatSection (blanco) que viene encima. */
-.topFade {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 120px;
-  background: linear-gradient(to bottom, #ffffff, transparent);
-  pointer-events: none;
-  z-index: 1;
-}
-
 .section::before {
-  content: 'AAP';
+  content: 'PB';
   position: absolute;
   font-family: 'Cinzel', serif;
   font-size: 28vw;

@@ -126,10 +126,14 @@ export default function SolicitudesAbiertas({ tipoProfesional = 'abogado', onTom
 
   useEffect(() => {
     fetchOpen()
+    // UNA sola suscripción con event:'*'. Antes eran 3 .on() sin filtro, que
+    // generaban 3 phx_join al MISMO topic — Phoenix conserva solo el último
+    // (quedaba solo DELETE y los INSERT/UPDATE de solicitudes nuevas jamás
+    // llegaban por realtime; la feature vivía del poll de 30s). El filtro por
+    // tipo_profesional además evita que cada cambio de cualquier sala dispare
+    // un GET /api/solicitudes por cada profesional conectado del otro tipo.
     const ch = supabase.channel(`open:${tipoProfesional}`)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_rooms' }, scheduleRefetch)
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'chat_rooms' }, scheduleRefetch)
-      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'chat_rooms' }, scheduleRefetch)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_rooms', filter: `tipo_profesional=eq.${tipoProfesional}` }, scheduleRefetch)
       .subscribe()
     const poll = setInterval(() => { if (!document.hidden) fetchOpen() }, 30000)
     return () => {

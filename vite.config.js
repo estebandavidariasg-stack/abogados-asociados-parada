@@ -4,6 +4,21 @@ import react from '@vitejs/plugin-react'
 export default defineConfig(({ mode }) => ({
   plugins: [react()],
 
+  // Separar vendors estables del código de la app: el entry era un monolito
+  // de ~565 kB cuyo hash cambiaba entero con cada deploy. Con estos chunks,
+  // react/router/framer-motion se descargan en paralelo y quedan cacheados
+  // entre deploys (solo cambia el chunk de app).
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vendor: ['react', 'react-dom', 'react-router-dom'],
+          motion: ['framer-motion'],
+        },
+      },
+    },
+  },
+
   // En producción, eliminar console.log/debug/info/trace del bundle.
   // Mantener console.error y console.warn para que errores reales sigan
   // siendo observables en el browser (útil si se integra Sentry/LogRocket).

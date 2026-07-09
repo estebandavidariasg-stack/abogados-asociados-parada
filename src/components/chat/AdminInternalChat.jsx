@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { getAuthHeaders } from '../../lib/supabase'
+import { getAuthHeaders, timeoutSignal } from '../../lib/supabase'
 import { openChatFile, ChatImage, ChatLightbox } from '../../lib/chatFiles'
 import styles from './AdminInternalChat.module.css'
 import AudioPlayer from './AudioPlayer'
@@ -70,6 +70,9 @@ export default function AdminInternalChat({ miId }) {
 
   useEffect(() => {
     clearInterval(pollRef.current)
+    // Ref de la conversación vigente: descarta respuestas tardías de la
+    // conversación anterior (evita pintar mensajes de A bajo el header de B).
+    selectedIdRef.current = selected?.id || null
     if (selected) {
       fetchMessages()
       pollRef.current = setInterval(() => { if (!document.hidden) fetchMessages() }, 3000)
@@ -81,6 +84,17 @@ export default function AdminInternalChat({ miId }) {
       document.removeEventListener('visibilitychange', onVisible)
     }
   }, [selected])
+
+  // Al desmontar con una grabación activa: libera el micrófono y el timer
+  // (sin esto el indicador de mic del navegador quedaba encendido).
+  useEffect(() => () => {
+    clearInterval(recordingTimerRef.current)
+    const r = mediaRecorderRef.current
+    if (r && r.state !== 'inactive') {
+      r.onstop = null   // evita disparar la subida de un audio parcial
+      try { r.stream.getTracks().forEach(t => t.stop()); r.stop() } catch (_) { /* noop */ }
+    }
+  }, [])
 
   /* ── Scroll: solo auto-baja si el user YA estaba al fondo ──────────────
      Antes hacía scrollIntoView en cada cambio de messages, lo que yankeaba
@@ -112,68 +126,102 @@ export default function AdminInternalChat({ miId }) {
 
   async function fetchAbogados() {
     setLoadingUsers(true)
-    const headers = await getAuthHeaders()
-    // Trae abogados Y contadores aprobados (ambos pueden chatear con admin)
-    const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/profiles?aprobado=eq.true&rol=in.(abogado,contador)&select=id,nombre,apellido,foto_url,ciudad,rol&order=nombre.asc`,
-      { headers }
-    )
-    const data = await res.json()
-    setAbogados(Array.isArray(data) ? data : [])
-    setLoadingUsers(false)
-
-    // Contar no leídos por abogado
-    if (Array.isArray(data) && data.length && miId) {
-      const h2 = await getAuthHeaders()
-      const nRes = await fetch(
-        `${SUPABASE_URL}/rest/v1/mensajes_internos?to_id=eq.${miId}&leido=eq.false&select=from_id`,
-        { headers: h2 }
+    try {
+      const headers = await getAuthHeaders()
+      // Trae abogados Y contadores aprobados (ambos pueden chatear con admin)
+      const res = await fetch(
+        `${SUPABASE_URL}/rest/v1/profiles?aprobado=eq.true&rol=in.(abogado,contador)&select=id,nombre,apellido,foto_url,ciudad,rol&order=nombre.asc`,
+        { headers }
       )
-      const nData = await nRes.json()
-      if (Array.isArray(nData)) {
-        const counts = {}
-        nData.forEach(m => { counts[m.from_id] = (counts[m.from_id] || 0) + 1 })
-        setNoLeidos(counts)
+      const data = await res.json()
+      // En error transitorio conserva la lista visible (no vaciarla).
+      if (Array.isArray(data)) setAbogados(data)
+
+      // Contar no leídos por abogado
+      if (Array.isArray(data) && data.length && miId) {
+        const h2 = await getAuthHeaders()
+        const nRes = await fetch(
+          `${SUPABASE_URL}/rest/v1/mensajes_internos?to_id=eq.${miId}&leido=eq.false&select=from_id`,
+          { headers: h2 }
+        )
+        const nData = await nRes.json()
+        if (Array.isArray(nData)) {
+          const counts = {}
+          nData.forEach(m => { counts[m.from_id] = (counts[m.from_id] || 0) + 1 })
+          setNoLeidos(counts)
+        }
       }
+    } catch (_) {
+      // Red caída: conserva el estado visible.
+    } finally {
+      setLoadingUsers(false)
     }
   }
 
+  const inFlightRef = useRef(false)
+  const selectedIdRef = useRef(null)
   async function fetchMessages() {
     if (!selected || !miId) return
-    const headers = await getAuthHeaders()
-    const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/mensajes_internos?or=(and(from_id.eq.${miId},to_id.eq.${selected.id}),and(from_id.eq.${selected.id},to_id.eq.${miId}))&order=created_at.asc&select=*`,
-      { headers }
-    )
-    const data = await res.json()
-    setMessages(Array.isArray(data) ? data : [])
-
-    // Marcar como leídos los mensajes hacia mí
-    const sinLeer = (Array.isArray(data) ? data : []).filter(
-      m => m.to_id === miId && !m.leido
-    )
-    if (sinLeer.length > 0) {
-      const h2 = await getAuthHeaders()
-      await fetch(
-        `${SUPABASE_URL}/rest/v1/mensajes_internos?to_id=eq.${miId}&from_id=eq.${selected.id}&leido=eq.false`,
-        { method: 'PATCH', headers: h2, body: JSON.stringify({ leido: true }) }
+    if (inFlightRef.current) return   // no solapar polls si la red va lenta
+    inFlightRef.current = true
+    const convId = selected.id
+    try {
+      const headers = await getAuthHeaders()
+      // Solo el tramo reciente (200): el hilo interno crece durante meses y el
+      // poll de 3s re-descargaba la conversación COMPLETA en cada tick. El
+      // marcado de leídos es por filtro server-side, no por filas traídas.
+      // Timeout obligatorio: el guard in-flight solo se libera cuando el fetch
+      // se asienta — un fetch colgado (half-open) sin señal congelaría el poll
+      // para siempre, incluso con la red ya recuperada.
+      const res = await fetch(
+        `${SUPABASE_URL}/rest/v1/mensajes_internos?or=(and(from_id.eq.${miId},to_id.eq.${convId}),and(from_id.eq.${convId},to_id.eq.${miId}))&order=created_at.desc&limit=200&select=*`,
+        { headers, signal: timeoutSignal(15000) }
       )
-      setNoLeidos(prev => ({ ...prev, [selected.id]: 0 }))
+      const data = await res.json()
+      // Error transitorio → conserva la conversación visible; respuesta tardía
+      // de otra conversación → descartar (carrera al cambiar de profesional).
+      if (!Array.isArray(data)) return
+      if (selectedIdRef.current !== convId) return
+      const asc = data.reverse()
+      setMessages(asc)
+
+      // Marcar como leídos los mensajes hacia mí
+      const sinLeer = asc.filter(m => m.to_id === miId && !m.leido)
+      if (sinLeer.length > 0) {
+        const h2 = await getAuthHeaders()
+        await fetch(
+          `${SUPABASE_URL}/rest/v1/mensajes_internos?to_id=eq.${miId}&from_id=eq.${convId}&leido=eq.false`,
+          { method: 'PATCH', headers: h2, body: JSON.stringify({ leido: true }), signal: timeoutSignal(15000) }
+        )
+        setNoLeidos(prev => ({ ...prev, [convId]: 0 }))
+      }
+    } catch (_) {
+      // Red caída: conserva el estado; el próximo tick reintenta.
+    } finally {
+      inFlightRef.current = false
     }
   }
 
   async function enviar() {
     if (!texto.trim() || !selected || sending) return
     setSending(true)
-    const headers = await getAuthHeaders()
-    await fetch(`${SUPABASE_URL}/rest/v1/mensajes_internos`, {
-      method: 'POST',
-      headers: { ...headers, Prefer: 'return=representation' },
-      body: JSON.stringify({ from_id: miId, to_id: selected.id, mensaje: texto.trim() }),
-    })
-    setTexto('')
-    setSending(false)
-    await fetchMessages()
+    try {
+      const headers = await getAuthHeaders()
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/mensajes_internos`, {
+        method: 'POST',
+        headers: { ...headers, Prefer: 'return=representation' },
+        body: JSON.stringify({ from_id: miId, to_id: selected.id, mensaje: texto.trim() }),
+      })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      // Solo limpiar tras confirmar el insert — si falló, el texto se conserva.
+      setTexto('')
+      await fetchMessages()
+    } catch (_) {
+      // El texto queda en el campo para reintentar.
+    } finally {
+      // Sin esto, un fallo de red dejaba el botón ➤ bloqueado para siempre.
+      setSending(false)
+    }
   }
 
   /* ── Grabación de voz (click toggle, igual que ClientChat) ─────────────── */

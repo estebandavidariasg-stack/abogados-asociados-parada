@@ -8,7 +8,7 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(160deg, #06102a 0%, #0d2d5e 55%, #1a4d8a 100%);
+  background: #0d2d5e;   /* navy plano (sin degradado) — se funde a las secciones claras vía ::before/::after */
   --slide-gap: 480px;
 }
 
@@ -51,9 +51,7 @@
 .heroBg {
   position: absolute;
   inset: 0;
-  background:
-    radial-gradient(ellipse at 15% 50%, rgba(26, 100, 180, 0.18) 0%, transparent 55%),
-    radial-gradient(ellipse at 85% 25%, rgba(255, 255, 255, 0.04) 0%, transparent 50%);
+  /* Sin degradados: el fondo del Hero es navy plano. */
   pointer-events: none;
   z-index: 1;
 }

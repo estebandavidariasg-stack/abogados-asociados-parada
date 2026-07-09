@@ -118,7 +118,7 @@ function tituloDe(messages) {
 function construirDocumento(innerHTML) {
   let fecha = '';
   try { fecha = new Date().toLocaleDateString('es-CO', { year: 'numeric', month: 'long', day: 'numeric' }); } catch { /* */ }
-  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Documento — Abogados & Asociados Parada</title>
+  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Documento — Parada Bridge</title>
 <style>
   @page { margin: 2.5cm; }
   body { font-family: 'Calibri','Segoe UI',Arial,sans-serif; color:#1f2d44; line-height:1.6; font-size:12pt; margin:0; }
@@ -136,7 +136,7 @@ function construirDocumento(innerHTML) {
 </style></head>
 <body>
   <div class="doc-head">
-    <p class="doc-firm">Abogados &amp; Asociados Parada</p>
+    <p class="doc-firm">Parada <span style="color:#c9a84c">Bridge</span></p>
     <p class="doc-meta">Documento generado${fecha ? ' el ' + fecha : ''} con IA Parada Precise</p>
   </div>
   ${innerHTML}
@@ -350,8 +350,17 @@ export default function AsistenteIA() {
       : '(El documento no contiene información relevante para la solicitud.)';
     // Los extractos van en `sintesis` (campo aparte), NO dentro del mensaje, para
     // no chocar con el tope de longitud del mensaje en el servidor.
-    const mensajesCombine = thread.map((m) => ({ role: m.role, content: m.content }));
+    const mensajesCombine = colaThread(thread);
     return pedirIA({ modo: 'abogado', accion: 'combinar', sintesis, memoria, mensajes: mensajesCombine }, { authHeader, signal });
+  }
+
+  // Contexto acotado: los threads persisten en localStorage sin tope de
+  // mensajes y el servidor limita el historial a 80 — se envía solo la cola
+  // reciente, empezando en un mensaje 'user' (requisito de la API).
+  function colaThread(msgs, n = 40) {
+    let cola = msgs.length > n ? msgs.slice(-n) : msgs;
+    while (cola.length && cola[0].role !== 'user') cola = cola.slice(1);
+    return cola.map((m) => ({ role: m.role, content: m.content }));
   }
 
   async function enviar() {
@@ -376,7 +385,7 @@ export default function AsistenteIA() {
     const resp = docText.length > DOC_LARGO_CHARS
       ? await analizarLargo({ texto, docText, thread: nuevoThread, authHeader: Authorization, signal: controller.signal, onProgress: setProgreso })
       : await pedirIA(
-          { modo: 'abogado', memoria, mensajes: nuevoThread.map((m) => ({ role: m.role, content: m.content })), adjuntos: adjEnviar },
+          { modo: 'abogado', memoria, mensajes: colaThread(nuevoThread), adjuntos: adjEnviar },
           { authHeader: Authorization, signal: controller.signal }
         );
     abortRef.current = null;

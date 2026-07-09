@@ -8,14 +8,6 @@ import { SUPABASE_URL, serviceHeaders, getCallerProfile } from './_lib/adminAuth
 
 const cap = (s, n) => String(s || '').slice(0, n);
 
-async function perfilAprobado(id) {
-  try {
-    const r = await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${id}&select=aprobado&limit=1`, { headers: serviceHeaders() });
-    const rows = await r.json();
-    return Array.isArray(rows) ? rows[0] : null;
-  } catch { return null; }
-}
-
 // Extrae la "Descripción del caso" del mensaje de intro y la recorta.
 function resumenDeMensaje(content) {
   if (!content) return '';
@@ -33,8 +25,9 @@ async function listar(req, res) {
   const perfil = await getCallerProfile(req);
   if (!perfil) { res.status(401).json({ error: 'No autenticado' }); return; }
   if (perfil.rol !== 'abogado' && perfil.rol !== 'contador') { res.status(403).json({ error: 'No autorizado' }); return; }
-  const datos = await perfilAprobado(perfil.id);
-  if (!datos?.aprobado) { res.status(403).json({ error: 'Perfil no aprobado' }); return; }
+  // `aprobado` ya viene en getCallerProfile — antes se releía la misma fila
+  // de profiles en cada GET (el request más polleado del sistema).
+  if (!perfil.aprobado) { res.status(403).json({ error: 'Perfil no aprobado' }); return; }
 
   const r = await fetch(
     `${SUPABASE_URL}/rest/v1/chat_rooms` +
@@ -115,7 +108,9 @@ async function publicar(req, res) {
   if (!creada.ok || !creada.row?.id) { res.status(502).json({ error: 'No se pudo crear la consulta.' }); return; }
   const roomId = creada.row.id;
 
-  const resumenBloque = resumen ? `\n\n📋 Resumen del asistente IA:\n${resumen}` : '';
+  // La descripción en el flujo guiado por IA ya es el resumen del asistente;
+  // solo adjuntamos el bloque cuando difiere (evita repetir el mismo texto).
+  const resumenBloque = (resumen && resumen !== descripcion) ? `\n\n📋 Resumen del asistente IA:\n${resumen}` : '';
   const content =
     `Hola, mi nombre es ${nombre} ${apellido}.\n\n` +
     `Ubicación: ${ubicacion}\nÁrea(s): ${areas.join(', ')}\n\n` +
@@ -132,18 +127,18 @@ async function publicar(req, res) {
 
 // ── POST tomar: el profesional toma una solicitud (claim atómico) ──
 async function tomar(req, res) {
-  const { roomId } = req.body || {};
+  const roomId = cap((req.body || {}).roomId, 64);
   if (!roomId) { res.status(400).json({ error: 'Falta roomId' }); return; }
+  const rid = encodeURIComponent(roomId);
 
   const perfil = await getCallerProfile(req);
   if (!perfil) { res.status(401).json({ error: 'No autenticado' }); return; }
   if (perfil.rol !== 'abogado' && perfil.rol !== 'contador') { res.status(403).json({ error: 'No autorizado' }); return; }
-  const datos = await perfilAprobado(perfil.id);
-  if (!datos?.aprobado) { res.status(403).json({ error: 'Tu perfil aún no está aprobado.' }); return; }
+  if (!perfil.aprobado) { res.status(403).json({ error: 'Tu perfil aún no está aprobado.' }); return; }
 
   // Claim atómico: solo tiene éxito si la sala sigue 'open' y es del mismo tipo.
   const patch = await fetch(
-    `${SUPABASE_URL}/rest/v1/chat_rooms?id=eq.${roomId}&status=eq.open&tipo_profesional=eq.${perfil.rol}`,
+    `${SUPABASE_URL}/rest/v1/chat_rooms?id=eq.${rid}&status=eq.open&tipo_profesional=eq.${perfil.rol}`,
     { method: 'PATCH', headers: serviceHeaders({ Prefer: 'return=representation' }), body: JSON.stringify({ status: 'active' }) }
   );
   const rows = await patch.json().catch(() => null);
@@ -152,15 +147,33 @@ async function tomar(req, res) {
     return;
   }
 
-  await fetch(`${SUPABASE_URL}/rest/v1/chat_room_lawyers`, {
-    method: 'POST', headers: serviceHeaders(),
-    body: JSON.stringify({ room_id: roomId, lawyer_id: perfil.id, status: 'active' }),
-  });
+  // Si la asignación falla, la sala quedaría 'active' sin profesional: no
+  // aparecería en ningún dashboard ni en la lista de abiertas (huérfana para
+  // siempre). Verificamos el INSERT y revertimos el claim si no se pudo.
+  let asignada = false;
+  try {
+    const ins = await fetch(`${SUPABASE_URL}/rest/v1/chat_room_lawyers`, {
+      method: 'POST', headers: serviceHeaders(),
+      body: JSON.stringify({ room_id: roomId, lawyer_id: perfil.id, status: 'active' }),
+    });
+    // 409 = la asignación YA existe (reintento tras respuesta perdida) →
+    // tratarla como éxito para que el retry se auto-repare en vez de
+    // revertir una sala correctamente asignada.
+    asignada = ins.ok || ins.status === 409;
+  } catch { asignada = false; }
+  if (!asignada) {
+    await fetch(`${SUPABASE_URL}/rest/v1/chat_rooms?id=eq.${rid}&status=eq.active`, {
+      method: 'PATCH', headers: serviceHeaders(), body: JSON.stringify({ status: 'open' }),
+    }).catch(() => {});
+    res.status(502).json({ error: 'reintenta', mensaje: 'No se pudo completar la asignación. Intenta de nuevo.' });
+    return;
+  }
+
   await fetch(`${SUPABASE_URL}/rest/v1/chat_messages`, {
     method: 'POST', headers: serviceHeaders(),
     body: JSON.stringify({ room_id: roomId, sender_type: 'system', lawyer_id: null, content: 'Un profesional tomó tu consulta y se unió al chat.' }),
-  });
-  await fetch(`${SUPABASE_URL}/rest/v1/notificaciones?room_id=eq.${roomId}&tipo=eq.solicitud_abierta`, {
+  }).catch(() => {});
+  await fetch(`${SUPABASE_URL}/rest/v1/notificaciones?room_id=eq.${rid}&tipo=eq.solicitud_abierta`, {
     method: 'PATCH', headers: serviceHeaders(), body: JSON.stringify({ atendida: true, leido: true }),
   }).catch(() => {});
 

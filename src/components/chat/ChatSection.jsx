@@ -1,14 +1,19 @@
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, lazy, Suspense } from 'react'
 import { motion, useInView, useReducedMotion } from 'framer-motion'
 import { supabase } from '../../lib/supabase'
 import styles from './ChatSection.module.css'
 import AudioPlayer from './AudioPlayer'
 import TriagePanel from './TriagePanel'
 import { ChatImage, ChatLightbox, openChatFile } from '../../lib/chatFiles'
-import UbicacionSelector from '../profile/UbicacionSelector'
+// Lazy: arrastra ~30 kB de datos geográficos (32 departamentos + ~1.100
+// municipios) que solo se usan en el paso del formulario, nunca en el
+// primer render de la home.
+const UbicacionSelector = lazy(() => import('../profile/UbicacionSelector'))
 import { IconPaperclip, IconMic } from '../shared/Icons'
 import { validarCelular, validarCorreo, normalizarCelular, contieneContacto } from '../../lib/validaciones'
+import { AREAS_DERECHO } from '../../lib/areasDerecho'
+import { AREAS_CONTADURIA } from '../../lib/areasContaduria'
 
 // Detecta si el archivo es imagen para renderizar preview inline (WhatsApp style).
 function isImage(name) {
@@ -435,24 +440,6 @@ const AAP_CARD_STYLES = `
   }
 `
 
-const AREAS_DERECHO = [
-  'Derecho Civil', 'Derecho Penal', 'Derecho Laboral', 'Derecho Comercial',
-  'Derecho de Familia', 'Derecho Administrativo', 'Derecho Tributario',
-  'Derecho Migratorio', 'Derecho Corporativo', 'Derecho Constitucional',
-  'Derecho Ambiental', 'Derecho Internacional', 'Derecho Inmobiliario',
-  'Derecho de Tránsito', 'Derecho Disciplinario',
-]
-
-const AREAS_CONTADURIA = [
-  'Contabilidad General', 'Auditoría', 'Tributaria y Fiscal',
-  'Contabilidad Forense', 'Costos y Presupuestos', 'Revisoría Fiscal',
-  'Finanzas Corporativas', 'Contabilidad Internacional (NIIF)',
-  'Nómina y Seguridad Social',
-  'Contabilidad Pública y Gubernamental',
-  'Contabilidad Digital y Analítica de Datos',
-  'Contabilidad de Sostenibilidad (ESG) y Sector Solidario',
-  'Otro',
-]
 
 // La IA devuelve un área detallada (ej. "Derecho Laboral - Despido sin causa").
 // La mapeamos a los chips canónicos para que el formulario muestre la selección
@@ -523,6 +510,12 @@ function formatSize(bytes) {
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1048576) return `${(bytes/1024).toFixed(1)} KB`
   return `${(bytes/1048576).toFixed(1)} MB`
+}
+
+// Quita el "orientativo, no vinculante" que la IA suele anexar al costo — la
+// nota debajo ya lo aclara, así el número se muestra limpio.
+function limpiarCosto(v) {
+  return String(v || '').replace(/[,;.\s]*orientativ[oa][\s\S]*$/i, '').trim() || String(v || '')
 }
 
 async function notificarAbogado({ lawyerId, nombreAbogado, nombreCliente, area }) {
@@ -840,6 +833,9 @@ export default function ChatSection() {
   const [triageResumen, setTriageResumen] = useState('')   // resumen de la IA → primer mensaje de la sala
   const [solicitudAbierta, setSolicitudAbierta] = useState(false) // flujo "publicar" (no hay profesional del área)
   const [areasBloqueadas, setAreasBloqueadas] = useState(false)   // área pre-detectada por la IA → no editable
+  const [desdeIA, setDesdeIA] = useState(false)            // flujo guiado por IA → form reducido + directo al chat
+  const [profesionalIA, setProfesionalIA] = useState(null) // profesional recomendado por la IA (para notificar)
+  const [costoIA, setCostoIA] = useState('')               // costo sugerido por la IA (recordatorio en el form)
   const prefersReducedMotion = useReducedMotion()
   const [form, setForm]         = useState({
     nombre:'', apellido:'', ciudad:'', departamento:'', barrio:'',
@@ -868,6 +864,26 @@ export default function ChatSection() {
 
   // ── Contacto bloqueado (modal) ────────────────────────────────────────────
   const [contactoWarning, setContactoWarning] = useState(false)
+
+  // Aviso ligero de fallo de envío/adjunto (se autolimpia) — antes esos
+  // errores eran silenciosos y el cliente perdía el mensaje sin enterarse.
+  const [sendError, setSendError] = useState('')
+  useEffect(() => {
+    if (!sendError) return
+    const t = setTimeout(() => setSendError(''), 4000)
+    return () => clearTimeout(t)
+  }, [sendError])
+
+  // Al desmontar con una grabación activa: libera el micrófono y el timer
+  // (sin esto el indicador de mic del navegador quedaba encendido).
+  useEffect(() => () => {
+    clearInterval(recordingTimerRef.current)
+    const r = mediaRecorderRef.current
+    if (r && r.state !== 'inactive') {
+      r.onstop = null   // evita disparar la subida de un audio parcial
+      try { r.stream.getTracks().forEach(t => t.stop()); r.stop() } catch (_) { /* noop */ }
+    }
+  }, [])
   useEffect(() => {
     if (!contactoWarning) return
     const onKey = (e) => { if (e.key === 'Escape') setContactoWarning(false) }
@@ -993,6 +1009,7 @@ export default function ChatSection() {
   useEffect(() => {
     if (!roomId) return
     loadMessages(roomId)
+    let firstSub = true
     const ch = supabase.channel(`rc:${roomId}`)
       .on('postgres_changes', { event:'INSERT', schema:'public', table:'chat_messages', filter:`room_id=eq.${roomId}` },
         p => {
@@ -1028,7 +1045,21 @@ export default function ChatSection() {
             setStep('rating')
           }
         })
-      .subscribe()
+      .subscribe(st => {
+        // Tras una reconexión automática del WS (corte de red del cliente):
+        // recuperar los mensajes perdidos y re-chequear el estado de la sala —
+        // sin esto, un cliente en "esperando" nunca se enteraba de que un
+        // profesional tomó su caso durante el corte.
+        if (st !== 'SUBSCRIBED') return
+        if (firstSub) { firstSub = false; return }
+        loadMessages(roomId)
+        supabase.from('chat_rooms').select('status').eq('id', roomId).maybeSingle().then(({ data }) => {
+          if (data?.status) {
+            setRoomStatus(data.status)
+            if (data.status === 'active') setStep(s => s === 'esperando' ? 'chat' : s)
+          }
+        })
+      })
     return () => supabase.removeChannel(ch)
   }, [roomId])
 
@@ -1047,6 +1078,7 @@ export default function ChatSection() {
     setExcludedLawyerIds([]); setClosedRoomId(null)
     setPqrTipo(''); setPqrMensaje(''); setPqrSent(false); setPqrError(''); setPqrYaExiste(false)
     setTriageResumen(''); setSolicitudAbierta(false); setAreasBloqueadas(false)
+    setDesdeIA(false); setProfesionalIA(null); setCostoIA('')
     localStorage.removeItem('chat_cedula_hash'); localStorage.removeItem('chat_nombre'); localStorage.removeItem('chat_codigo_ref')
   }
 
@@ -1056,9 +1088,14 @@ export default function ChatSection() {
     if (!apellido.trim())                  { setFormError('Ingresa tu apellido.'); return }
     if (!departamento)                     { setFormError('Selecciona tu departamento.'); return }
     if (!ciudad)                           { setFormError('Selecciona tu ciudad.'); return }
-    if (areas.length < 1)                  { setFormError('Selecciona al menos un área.'); return }
     if (!correo.trim() && !celular.trim()) { setFormError('Ingresa al menos un correo o celular.'); return }
-    if (!descripcion.trim())               { setFormError('Describe brevemente tu caso.'); return }
+    // En el flujo guiado por IA el área y la descripción ya vienen del asistente,
+    // así que no se piden de nuevo (el form es reducido). Solo se validan en el
+    // flujo manual.
+    if (!desdeIA) {
+      if (areas.length < 1)      { setFormError('Selecciona al menos un área.'); return }
+      if (!descripcion.trim())   { setFormError('Describe brevemente tu caso.'); return }
+    }
     setSubmitting(true); setFormError('')
     localStorage.setItem('chat_nombre', `${nombre.trim()} ${apellido.trim()}`)
 
@@ -1067,6 +1104,14 @@ export default function ChatSection() {
     if (solicitudAbierta) {
       setSubmitting(false)
       await publicarSolicitud()
+      return
+    }
+
+    // Guiado por IA con profesional ya recomendado → entra directo al chat,
+    // sin repetir el paso de elegir profesional.
+    if (desdeIA && picked.length) {
+      setSubmitting(false)
+      await startChat()
       return
     }
 
@@ -1154,14 +1199,22 @@ export default function ChatSection() {
     }
 
     await supabase.from('chat_room_lawyers').insert(picked.map(lid => ({ room_id: room.id, lawyer_id: lid, status:'invited' })))
-    const resumenBloque = triageResumen
+    // En el flujo guiado por IA la descripción YA es el resumen del asistente,
+    // así que solo adjuntamos el bloque de resumen cuando aporta algo distinto
+    // (evita que el primer mensaje repita el mismo texto dos veces).
+    const resumenBloque = (triageResumen && triageResumen.trim() && triageResumen.trim() !== descripcion.trim())
       ? `\n\n📋 Resumen del asistente IA:\n${triageResumen}`
       : ''
     await supabase.from('chat_messages').insert({
       room_id: room.id, sender_type:'client', lawyer_id: null,
       content: `Hola, mi nombre es ${nombre} ${apellido}.\n\nUbicación: ${ubicacionTxt}\nÁrea(s): ${areas.join(', ')}\n\nDescripción del caso:\n${descripcion}${resumenBloque}`,
     })
+    // En el flujo guiado por IA no pasamos por la lista (`lawyers` queda vacío),
+    // así que sumamos el profesional recomendado por la IA para poder notificarlo.
     const todosAbogados = [...lawyers.cercanos, ...lawyers.porArea]
+    if (profesionalIA && !todosAbogados.some(l => l.id === profesionalIA.id)) {
+      todosAbogados.push(profesionalIA)
+    }
     for (const abogado of todosAbogados.filter(l => picked.includes(l.id))) {
       // El email lo resuelve /api/notify server-side a partir del lawyerId,
       // así el browser nunca descarga correos de profesionales.
@@ -1223,8 +1276,10 @@ export default function ChatSection() {
   }
 
   async function loadMessages(rid) {
-    const { data } = await supabase.from('chat_messages').select('*').eq('room_id', rid).order('created_at', { ascending: true })
-    setMessages(data || [])
+    // Últimos 300 en vez del historial completo (salas largas/reabiertas); si
+    // la respuesta es un error, conserva lo visible en pantalla.
+    const { data } = await supabase.from('chat_messages').select('*').eq('room_id', rid).order('created_at', { ascending: false }).limit(300)
+    if (Array.isArray(data)) setMessages(data.reverse())
   }
 
   async function sendMessage() {
@@ -1236,7 +1291,13 @@ export default function ChatSection() {
       return
     }
     setInput('')
-    await supabase.from('chat_messages').insert({ room_id: roomId, sender_type:'client', lawyer_id: null, content })
+    const { error } = await supabase.from('chat_messages').insert({ room_id: roomId, sender_type:'client', lawyer_id: null, content })
+    if (error) {
+      // Antes el texto desaparecía en silencio si el insert fallaba (red móvil,
+      // sala recién cerrada). Se restaura (si no escribió otra cosa) y se avisa.
+      setInput(prev => prev ? prev : content)
+      setSendError('No se pudo enviar el mensaje. Revisa tu conexión e intenta de nuevo.')
+    }
   }
 
   async function handleFile(e) {
@@ -1247,11 +1308,14 @@ export default function ChatSection() {
     const { error } = await supabase.storage.from('chat-files').upload(path, file, { contentType: file.type })
     if (!error) {
       const { data: signed } = await supabase.storage.from('chat-files').createSignedUrl(path, 604800)
-      await supabase.from('chat_messages').insert({
+      const { error: insErr } = await supabase.from('chat_messages').insert({
         room_id: roomId, sender_type:'client', lawyer_id: null,
         content: file.name, file_url: signed?.signedUrl, file_name: file.name, file_size: file.size,
         message_type: 'file',
       })
+      if (insErr) setSendError('No se pudo adjuntar el archivo. Intenta de nuevo.')
+    } else {
+      setSendError('No se pudo adjuntar el archivo. Revisa tu conexión e intenta de nuevo.')
     }
     setUploading(false)
     if (fileRef.current) fileRef.current.value = ''
@@ -1554,6 +1618,13 @@ export default function ChatSection() {
                   <button className={styles.sendBtn} onClick={sendMessage} disabled={!input.trim()}>Enviar</button>
                 </div>
 
+                {sendError && (
+                  <div role="alert" onClick={() => setSendError('')}
+                    style={{ margin:'6px 0 0', padding:'8px 12px', borderRadius:8, background:'#fee2e2', color:'#991b1b', fontSize:13, cursor:'pointer' }}>
+                    {sendError}
+                  </div>
+                )}
+
                 {/* ── Modal: datos de contacto bloqueados ── */}
                 {contactoWarning && (
                   <div
@@ -1598,10 +1669,20 @@ export default function ChatSection() {
           <div className={styles.centerContent}>
           <TriagePanel
             tipoProfesional={form.tipo_profesional}
-            onManual={() => { setSolicitudAbierta(false); setAreasBloqueadas(false); setStep('form') }}
-            onIniciarChat={({ profesionalId, area, resumen }) => {
-              // Pre-llenar el form con lo detectado por la IA y pre-seleccionar el profesional.
+            onManual={() => {
+              // Flujo manual: el cliente elige todo → form completo, sin modo IA.
+              setSolicitudAbierta(false); setAreasBloqueadas(false)
+              setDesdeIA(false); setProfesionalIA(null); setCostoIA('')
+              setStep('form')
+            }}
+            onIniciarChat={({ profesionalId, area, resumen, costo, profesional }) => {
+              // Guiado por IA: el asistente ya tiene el caso, el área y el
+              // profesional. El cliente solo completa sus datos y entra directo
+              // al chat — no volvemos a mostrar profesional/área/descripción.
               setSolicitudAbierta(false)
+              setDesdeIA(true)
+              setProfesionalIA(profesional || null)
+              setCostoIA(costo || '')
               const areasNorm = normalizarAreas(area, form.tipo_profesional)
               setAreasBloqueadas(areasNorm.length > 0)
               setForm(f => ({
@@ -1613,10 +1694,13 @@ export default function ChatSection() {
               setPicked([profesionalId])
               setStep('form')
             }}
-            onPublicar={({ area, resumen }) => {
-              // No hay profesional del área → pre-llena el form y activa el modo
-              // "publicar": al enviar el form se publica directo y pasa a esperar.
+            onPublicar={({ area, resumen, costo }) => {
+              // No hay profesional del área → form reducido (guiado por IA) y
+              // modo "publicar": al enviar se publica directo y pasa a esperar.
               setSolicitudAbierta(true)
+              setDesdeIA(true)
+              setProfesionalIA(null)
+              setCostoIA(costo || '')
               const areasNorm = normalizarAreas(area, form.tipo_profesional)
               setAreasBloqueadas(areasNorm.length > 0)
               setForm(f => ({
@@ -1639,7 +1723,26 @@ export default function ChatSection() {
         <div className={styles.form}>
           <div className={`${styles.formCard} aap-card-form`}>
 
-            {/* ── Selector de tipo de profesional ─────────────────────────── */}
+            {/* ── Guiado por IA: el asistente ya tiene el caso, el área y el
+                profesional; el cliente solo completa sus datos. Recordamos el
+                costo sugerido para que no se pierda al cambiar de pantalla. ── */}
+            {desdeIA && (
+              <div className={styles.iaBanner}>
+                <p className={styles.iaBannerText}>
+                  Ya registramos tu caso. Completa tus datos y {solicitudAbierta ? 'publicamos tu consulta' : 'entras directo a la consulta'}.
+                </p>
+                {costoIA && (
+                  <div className={styles.iaPrecio}>
+                    <span className={styles.iaPrecioTag}>Costo sugerido</span>
+                    <span className={styles.iaPrecioValor}>{limpiarCosto(costoIA)}</span>
+                    <span className={styles.iaPrecioNota}>Valor orientativo. El profesional lo confirma antes de empezar.</span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ── Selector de tipo de profesional (oculto en flujo IA) ─────── */}
+            {!desdeIA && (
             <div className={styles.field}>
               <label className={styles.label}>
                 ¿Qué tipo de profesional necesitas? <span className={styles.required}>*</span>
@@ -1668,6 +1771,7 @@ export default function ChatSection() {
                 })}
               </div>
             </div>
+            )}
 
             <div className={styles.formRow}>
               <div className={styles.field}>
@@ -1708,6 +1812,7 @@ export default function ChatSection() {
               </div>
             </div>
 
+            <Suspense fallback={null}>
             <UbicacionSelector
               departamento={form.departamento}
               municipio={form.ciudad}
@@ -1722,6 +1827,7 @@ export default function ChatSection() {
                 setForm(f => ({ ...f, departamento, ciudad: municipio, barrio }))
               }
             />
+            </Suspense>
             <div className={styles.field}>
               <label className={styles.label}>Correo electrónico</label>
               {(() => {
@@ -1807,6 +1913,7 @@ export default function ChatSection() {
                 )
               })()}
             </div>
+            {!desdeIA && (<>
             <div className={styles.field}>
               <label className={styles.label}>
                 {form.tipo_profesional === 'contador' ? 'Especialidad' : 'Área del caso'} <span className={styles.required}>*</span>
@@ -1848,13 +1955,16 @@ export default function ChatSection() {
                 onChange={e => setForm(f => ({ ...f, descripcion: e.target.value }))}
                 placeholder="Describe la situación. No incluyas datos personales sensibles aún." rows={4} />
             </div>
+            </>)}
             {formError && <p className={styles.formError}>{formError}</p>}
             <button className={styles.btnGold} onClick={handleFormSubmit} disabled={submitting || sending}>
               {solicitudAbierta
                 ? ((submitting || sending) ? 'Publicando…' : 'Publicar mi consulta')
-                : (submitting
-                    ? (form.tipo_profesional === 'contador' ? 'Buscando contadores…' : 'Buscando abogados…')
-                    : (form.tipo_profesional === 'contador' ? 'Buscar contadores disponibles' : 'Buscar abogados disponibles'))}
+                : desdeIA
+                  ? ((submitting || sending) ? 'Entrando a la consulta…' : 'Entrar a la consulta')
+                  : (submitting
+                      ? (form.tipo_profesional === 'contador' ? 'Buscando contadores…' : 'Buscando abogados…')
+                      : (form.tipo_profesional === 'contador' ? 'Buscar contadores disponibles' : 'Buscar abogados disponibles'))}
             </button>
             <button className={styles.btnBack} onClick={() => setStep('cedula')}>← Volver</button>
           </div>

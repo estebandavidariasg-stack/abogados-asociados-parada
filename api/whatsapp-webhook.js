@@ -1,7 +1,7 @@
 // ───────────────────────────────────────────────────────────────────────────
 // /api/whatsapp-webhook.js
 //
-// Webhook de WhatsApp Cloud API (Meta) para AAP (Abogados y Asociados Parada).
+// Webhook de WhatsApp Cloud API (Meta) para AAP (Parada Bridge).
 //
 // Qué hace:
 //   • GET  → handshake de verificación con Meta (hub.challenge).
@@ -30,7 +30,7 @@ const GRAPH_API_VERSION = 'v21.0'
 
 // ── Textos exactos de las respuestas ───────────────────────────────────────
 const MENU_PRINCIPAL =
-`👋 Bienvenido/a a Abogados y Asociados Parada.
+`👋 Bienvenido/a a Parada Bridge.
 Horario de atención: lunes a viernes, 8:00 a.m. a 6:00 p.m.
 
 Responde con el número de la opción que necesitas:
@@ -152,8 +152,25 @@ async function appendCaso(caso_id, textoNuevo) {
       }
     }
 
-    // 2) Concatenar y guardar.
-    const nuevoMensaje = (mensajeActual ? mensajeActual + '\n' : '') + textoNuevo
+    // 2) Concatenar y guardar — con topes: cada mensaje se recorta a 4.000
+    //    chars y el acumulado se congela en ~50.000 (el read-modify-write
+    //    transfería el blob completo dos veces por mensaje, creciendo O(n²)
+    //    y sin límite de tamaño de fila).
+    const recorte = String(textoNuevo || '').slice(0, 4000)
+    if (mensajeActual.length > 50_000) {
+      if (!mensajeActual.endsWith('…[historial truncado]')) {
+        await fetch(`${SUPABASE_URL}/rest/v1/wa_casos?id=eq.${encodeURIComponent(caso_id)}`, {
+          method: 'PATCH',
+          headers: supabaseHeaders({ Prefer: 'return=minimal' }),
+          body: JSON.stringify({
+            mensaje: mensajeActual + '\n…[historial truncado]',
+            updated_at: new Date().toISOString(),
+          }),
+        })
+      }
+      return
+    }
+    const nuevoMensaje = (mensajeActual ? mensajeActual + '\n' : '') + recorte
     const patchUrl =
       `${SUPABASE_URL}/rest/v1/wa_casos?id=eq.${encodeURIComponent(caso_id)}`
     await fetch(patchUrl, {
@@ -231,6 +248,19 @@ export default async function handler(req, res) {
 
   // ── 2) POST: mensajes entrantes ──
   if (req.method === 'POST') {
+    // Verificación de origen opt-in: con WHATSAPP_ENFORCE_TOKEN=1, el POST
+    // exige ?token=<WHATSAPP_VERIFY_TOKEN> en la URL. Sin ella, cualquiera
+    // que descubra la ruta puede insertar casos con service-role y disparar
+    // envíos salientes a números arbitrarios (spam desde el número de la
+    // firma → Meta degrada/bloquea el canal).
+    // ⚠️ Orden de activación: PRIMERO cambiar la URL del webhook en el panel
+    // de Meta a /api/whatsapp-webhook?token=<WHATSAPP_VERIFY_TOKEN> (el GET
+    // del handshake ya la valida), DESPUÉS poner WHATSAPP_ENFORCE_TOKEN=1.
+    if (process.env.WHATSAPP_ENFORCE_TOKEN === '1') {
+      if (!WHATSAPP_VERIFY_TOKEN || req.query?.token !== WHATSAPP_VERIFY_TOKEN) {
+        return res.status(403).end()
+      }
+    }
     try {
       // Extracción defensiva del payload de Meta.
       const value = req.body?.entry?.[0]?.changes?.[0]?.value

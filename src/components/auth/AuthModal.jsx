@@ -318,7 +318,7 @@ export default function AuthModal({ initialTab = 'login', onClose }) {
       <div className={styles.modal}>
         <button className={styles.close} onClick={onClose} aria-label="Cerrar"><IconX /></button>
 
-        <p className={styles.eyebrow}>Abogados y Asociados Parada</p>
+        <p className={styles.eyebrow}><span style={{ color: 'var(--navy)' }}>Parada</span> Bridge</p>
         <h3 className={styles.title}>
           {tab === 'login' ? 'Bienvenido' : 'Crear perfil como Abogado'}
         </h3>

@@ -173,11 +173,18 @@ export default function CodigosReferencia() {
     ctx.font = '600 9px sans-serif'
     ctx.fillText('─── DESPACHO JURÍDICO ───', W / 2, 74)
 
+    // "PARADA" en blanco (el azul de marca no contrastaría sobre el fondo navy
+    // de la tarjeta) + "BRIDGE" en dorado.
+    ctx.font = 'bold 24px serif'
+    ctx.fillStyle = '#ffffff'
+    const wParada = ctx.measureText('PARADA ').width
+    const wBridge = ctx.measureText('BRIDGE').width
+    const startX = W / 2 - (wParada + wBridge) / 2
+    ctx.textAlign = 'left'
+    ctx.fillText('PARADA ', startX, 118)
     ctx.fillStyle = '#C9A84C'
-    ctx.font = 'bold 16px serif'
-    ctx.fillText('ABOGADOS Y ASOCIADOS', W / 2, 100)
-    ctx.font = 'bold 21px serif'
-    ctx.fillText('PARADA', W / 2, 126)
+    ctx.fillText('BRIDGE', startX + wParada, 118)
+    ctx.textAlign = 'center'
 
     // Separador 1
     ctx.strokeStyle = 'rgba(201,168,76,0.2)'
@@ -401,7 +408,7 @@ export default function CodigosReferencia() {
 
                     <div className={styles.qrCardHeader}>
                       <span className={styles.qrCardDespacho}>Despacho Jurídico</span>
-                      <span className={styles.qrCardFirm}>ABOGADOS Y ASOCIADOS PARADA</span>
+                      <span className={styles.qrCardFirm}><span style={{ color: '#ffffff' }}>PARADA</span> BRIDGE</span>
                     </div>
 
                     <div className={styles.qrDivider} />

@@ -81,8 +81,8 @@
 
 .firmName {
   font-family: 'Cinzel', serif;
-  font-size: 0.5rem;
-  font-weight: 400;
+  font-size: 0.62rem;
+  font-weight: 700;
   color: var(--navy);
   text-align: center;
   transition: color 0.4s;

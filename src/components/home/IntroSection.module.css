@@ -17,9 +17,9 @@
     linear-gradient(180deg, #faf7f2 0%, #efe7d4 100%);
 }
 
-/* Watermark "AAP" — refuerza branding sin competir con el contenido. */
+/* Watermark "PB" — refuerza branding sin competir con el contenido. */
 .section::before {
-  content: 'AAP';
+  content: 'PB';
   position: absolute;
   font-family: 'Cinzel', serif;
   font-size: 32vw;
@@ -252,7 +252,7 @@
     padding: calc(72px + 2.5rem) 1.25rem 6rem;
   }
   .section::after { height: 160px; }
-  /* Tracking más cerrado en móvil para que "Abogados y Asociados Parada"
+  /* Tracking más cerrado en móvil para que "Parada Bridge"
      quepa en una sola línea con sus guiones (con 0.42em se partía en dos). */
   .eyebrow { letter-spacing: 0.3em; }
   .eyebrow::before,

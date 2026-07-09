@@ -124,7 +124,7 @@ Vercel serverless functions live under [api/](api/). The email functions share t
 
 | File | Purpose |
 |------|---------|
-| [api/notify.js](api/notify.js) | Transactional emails via Nodemailer (Gmail SMTP). Dispatches by `type`: `new_consultation` (notify lawyer when a client opens a consultation) and `lawyer_joined` (notify client when professional joins). CTA link points to `https://abogadosyasociadosparada.com`. |
+| [api/notify.js](api/notify.js) | Transactional emails via Nodemailer (Gmail SMTP). Dispatches by `type`: `new_consultation` (notify lawyer — requires `lawyerId`, email resolved server-side) and `chat_inactivity` (admin-triggered reminder). The legacy `lawyer_joined` branch and `lawyerEmail` fallback were REMOVED 2026-07 (unauthenticated mail-relay risk). User-provided names/areas are HTML-escaped with `esc()`. CTA link points to `https://abogadosyasociadosparada.com`. |
 | [api/forgot-password.js](api/forgot-password.js) | Custom password-reset flow. Uses `auth/v1/admin/generate_link` (requires `SUPABASE_SERVICE_ROLE_KEY`) to mint the recovery link, then sends a branded email. Always responds 200 to avoid user enumeration. The link points to `/nueva-contrasena`. |
 | [api/send-contact-card.js](api/send-contact-card.js) | Sends a lawyer's contact card to a client by email. |
 | [api/send-verification-code.js](api/send-verification-code.js) | Issues a 6-digit OTP for new lawyer/contador registration. Rate-limited 3/10min per email, 10-min TTL. Previous unused codes are marked `used=true` (NOT deleted) so the rolling rate-limit count remains accurate. Requires `SUPABASE_SERVICE_ROLE_KEY` (admin user lookup + writes to `verification_codes`). |

@@ -32,16 +32,9 @@ export default async function handler(req, res) {
     return res.status(403).json({ error: 'No estás asignado a esta sala.' })
   }
 
-  // Nombre del profesional para los mensajes/correo.
-  let nombreAbogado = 'profesional'
-  try {
-    const r = await fetch(
-      `${SUPABASE_URL}/rest/v1/profiles?id=eq.${caller.id}&select=nombre,apellido`,
-      { headers: serviceHeaders() }
-    )
-    const [p] = await r.json()
-    if (p) nombreAbogado = `${p.nombre || ''} ${p.apellido || ''}`.trim() || 'profesional'
-  } catch { /* nombre por defecto */ }
+  // Nombre del profesional — ya viene en getCallerProfile (antes se releía la
+  // misma fila de profiles en una segunda query).
+  const nombreAbogado = `${caller.nombre || ''} ${caller.apellido || ''}`.trim() || 'profesional'
 
   const cliente = clientNombre || 'Anónimo'
   const areaTxt = area || 'Consulta'

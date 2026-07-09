@@ -438,10 +438,15 @@ export default function SuperAdminChatViewer({ initialRoomId = null }) {
   }, [messages])
 
   async function loadRooms() {
+    // Las 300 salas más recientes (antes: TODA la historia sin límite — el
+    // payload y el in.() de abajo crecían sin cota y a ~450+ salas la URL
+    // rompía el límite del gateway). El histórico completo sigue accesible
+    // por la búsqueda avanzada por cédula/profesional.
     const { data } = await supabase
       .from('chat_rooms')
       .select(FIELDS)
       .order('created_at', { ascending: false })
+      .limit(300)
     if (!data || data.length === 0) { setRooms([]); return }
 
     // Antes hacíamos 1 + N queries (N salas × 1 query cada una para sus
@@ -478,9 +483,10 @@ export default function SuperAdminChatViewer({ initialRoomId = null }) {
   }
 
   async function loadMessages(rid) {
+    // Últimos 300 (antes historial completo); en error conserva lo visible.
     const { data } = await supabase
-      .from('chat_messages').select('*').eq('room_id', rid).order('created_at', { ascending: true })
-    setMessages(data || [])
+      .from('chat_messages').select('*').eq('room_id', rid).order('created_at', { ascending: false }).limit(300)
+    if (Array.isArray(data)) setMessages(data.reverse())
   }
 
   async function loadRoomLawyers(rid) {

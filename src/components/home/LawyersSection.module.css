@@ -197,34 +197,35 @@
 }
 
 /* ══════════════════════════════════════════
-   CINTA DE PROFESIONALES (auto-desplazamiento)
+   CINTA DE PROFESIONALES (scroll + arrastre + flechas)
    ══════════════════════════════════════════ */
-.cinta {
+.cintaWrap {
   position: relative;
   max-width: 1200px;
   margin: 0 auto;
+}
+.cinta {
   /* padding vertical: deja aire para el "lift" y la sombra de la tarjeta en hover */
   padding: 1.25rem 0 1.75rem;
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: hidden;
+  cursor: grab;
+  /* el gesto horizontal lo maneja el puntero (JS); el vertical hace scroll de página */
+  touch-action: pan-y;
+  scroll-behavior: auto;         /* el "smooth" de las flechas lo controla el rAF */
+  scrollbar-width: none;          /* Firefox */
+  -ms-overflow-style: none;
+  -webkit-user-select: none;
+  user-select: none;
   /* desvanece los bordes izq/der para que las tarjetas entren y salgan suave */
   -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 5%, #000 95%, transparent 100%);
           mask-image: linear-gradient(90deg, transparent 0, #000 5%, #000 95%, transparent 100%);
 }
+.cinta::-webkit-scrollbar { display: none; }
+.cinta:active { cursor: grabbing; }
 .track {
   display: flex;
   width: max-content;
-  animation: cintaScroll linear infinite;
-  will-change: transform;
-}
-/* Se PAUSA solo al pasar el mouse SOBRE UNA TARJETA (no sobre el relleno ni los
-   huecos entre tarjetas), al enfocar con teclado, o mientras se toca en móvil →
-   así se puede clicar sin que la franja entera detenga la cinta. */
-.track:has(.slide:hover),
-.cinta:focus-within .track,
-.cintaPaused .track { animation-play-state: paused; }
-@keyframes cintaScroll {
-  from { transform: translate3d(0, 0, 0); }
-  to   { transform: translate3d(-50%, 0, 0); } /* dos copias → media pista = un ciclo exacto */
 }
 .slide {
   flex: 0 0 clamp(240px, 25vw, 280px);
@@ -236,24 +237,53 @@
 }
 .slide > * { width: 100%; height: 100%; }
 
-/* Fila estática: cuando el usuario reduce el movimiento, hay filtros activos, o
-   hay pocas tarjetas para llenar la fila. Se desplaza con el dedo/mouse y se
-   centra si caben todas. */
-.cintaStatic {
+/* ── Flechas de navegación (centradas bajo la cinta) ── */
+.cintaNav {
   display: flex;
-  justify-content: safe center;
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 1rem 0.5rem 1.25rem;
-  overflow-x: auto;
-  scroll-snap-type: x proximity;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: thin;
+  justify-content: center;
+  gap: 16px;
+  margin-top: 0.5rem;
 }
-.cintaStatic .slide { scroll-snap-align: center; }
+.cintaArrow {
+  width: 46px;
+  height: 46px;
+  flex-shrink: 0;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #ffffff;
+  border: 1px solid rgba(13, 45, 94, 0.16);
+  color: var(--navy);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  box-shadow: 0 4px 14px rgba(13, 45, 94, 0.10);
+  transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1),
+              background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, color 0.2s ease;
+}
+.cintaArrow svg {
+  width: 21px;
+  height: 21px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.cintaArrow:hover {
+  background: var(--navy);
+  color: #ffffff;
+  border-color: var(--navy);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 22px rgba(13, 45, 94, 0.20);
+}
+.cintaArrow:active { transform: translateY(0) scale(0.94); }
+.cintaArrow:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
 
 @media (prefers-reduced-motion: reduce) {
-  .track { animation: none; }
+  .cintaArrow { transition: none; }
+  .cintaArrow:hover { transform: none; }
 }
 
 /* ══════════════════════════════════════════

@@ -118,7 +118,7 @@ export default function ResetPasswordPage() {
   return (
     <div className={styles.page}>
       <div className={styles.card}>
-        <div className={styles.brand}>ABOGADOS Y ASOCIADOS PARADA</div>
+        <div className={styles.brand}><span style={{ color: 'var(--navy)' }}>PARADA</span> BRIDGE</div>
         <h1 className={styles.title}>Nueva contraseña</h1>
 
         {/* Enlace inválido / expirado */}

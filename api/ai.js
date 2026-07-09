@@ -55,8 +55,14 @@ async function actualizarSesion(id, patch) {
 }
 
 async function fetchProfesionales(req, rol) {
-  // Reusa la lista pública cacheada en CDN.
-  const base = `https://${req.headers.host}`;
+  // Reusa la lista pública cacheada en CDN. El protocolo se toma de
+  // `x-forwarded-proto` (Vercel lo pone en 'https'); en local (`vercel dev`,
+  // localhost) es http — hardcodear https rompía el fetch ahí y la IA recibía
+  // una lista VACÍA, por lo que siempre sugería publicar aunque hubiera match.
+  const host = req.headers.host || '';
+  const proto = req.headers['x-forwarded-proto']
+    || (host.startsWith('localhost') || host.startsWith('127.0.0.1') ? 'http' : 'https');
+  const base = `${proto}://${host}`;
   try {
     const res = await fetch(`${base}/api/professionals?rol=${rol === 'contador' ? 'contador' : 'abogado'}`);
     return res.ok ? await res.json() : [];
@@ -217,13 +223,26 @@ async function registrarUsoSala(roomId, profesionalId) {
 }
 
 async function handleAbogado(req, res) {
-  const { mensajes, adjuntos, roomId, accion, memoria } = req.body || {};
+  let { mensajes } = req.body || {};
+  const { adjuntos, roomId, accion, memoria } = req.body || {};
 
   // Solo profesionales autenticados (abogado/contador).
   const perfil = await getCallerProfile(req);
   if (!perfil) { res.status(401).json({ error: 'No autenticado' }); return; }
   if (perfil.rol !== 'abogado' && perfil.rol !== 'contador') {
     res.status(403).json({ error: 'No autorizado' }); return;
+  }
+
+  // Historial acotado: los hilos legítimos crecen sin tope en localStorage,
+  // así que se TRUNCA a la cola reciente (empezando en 'user', requisito de
+  // la API) en vez de rechazar — un 400 dejaría ese chat roto para siempre.
+  // Solo se rechaza el abuso real (forma inválida o >400k chars en 80 msgs).
+  if (Array.isArray(mensajes) && mensajes.length > 80) {
+    mensajes = mensajes.slice(-80);
+    while (mensajes.length && mensajes[0].role !== 'user') mensajes = mensajes.slice(1);
+  }
+  if (!validarHistorial(mensajes, { maxMsgs: 80, maxTotalChars: 400_000 })) {
+    res.status(400).json({ error: 'historial', mensaje: 'La conversación es demasiado larga para procesarla. Inicia un chat nuevo para continuar.' }); return;
   }
 
   // ── Acción de memoria (segundo plano): fusiona el último intercambio en la
@@ -373,6 +392,22 @@ async function handleAbogado(req, res) {
   res.status(200).json({ reply });
 }
 
+// Valida la forma y el tamaño del historial COMPLETO. Antes solo se validaba
+// el último mensaje: el resto del historial viajaba tal cual hasta Anthropic,
+// así que una llamada hostil podía inflar el contexto (≈MB de texto o bloques
+// de imagen) con costo directo en dólares por request. Solo strings: los
+// adjuntos legítimos viajan en campos aparte (`adjuntos`, `sintesis`, `tramo`).
+function validarHistorial(mensajes, { maxMsgs, maxTotalChars }) {
+  if (mensajes.length > maxMsgs) return false;
+  let total = 0;
+  for (const m of mensajes) {
+    if (!m || (m.role !== 'user' && m.role !== 'assistant')) return false;
+    if (typeof m.content !== 'string') return false;
+    total += m.content.length;
+  }
+  return total <= maxTotalChars;
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') { res.status(405).json({ error: 'Method not allowed' }); return; }
 
@@ -381,22 +416,43 @@ export default async function handler(req, res) {
   if (modo === 'abogado') { return handleAbogado(req, res); }
   if (modo !== 'cliente') { res.status(400).json({ error: 'Modo no soportado' }); return; }
 
+  // Endpoint público: historial acotado (el flujo legítimo del triage queda
+  // lejísimos de estos topes — MAX_MSGS=6 mensajes de ≤2.000 chars).
+  if (!validarHistorial(mensajes, { maxMsgs: 16, maxTotalChars: 40_000 })) {
+    res.status(400).json({ error: 'Historial inválido o demasiado largo' }); return;
+  }
+
   const ultimo = mensajes[mensajes.length - 1];
   if (!ultimo?.content || typeof ultimo.content !== 'string' || ultimo.content.length > MAX_LEN_MENSAJE) {
     res.status(400).json({ error: 'Mensaje inválido o demasiado largo' }); return;
   }
 
   const ipHash = hashIp(clientIp(req));
+  // Normalizado (antes se insertaba en ai_sesiones tal cual llegara del body).
+  const tipoNorm = tipo_profesional ? (tipo_profesional === 'contador' ? 'contador' : 'abogado') : null;
 
-  // Sesión nueva o existente.
-  let sesion = await getSesion(sessionId);
-  if (!sesion) {
-    if ((await contarSesionesIp(ipHash)) >= MAX_SESIONES_IP_HORA) {
-      res.status(429).json({ error: 'Demasiadas consultas desde tu conexión. Intenta más tarde o elige un profesional manualmente.' });
-      return;
+  // Sesión nueva o existente. Si la tabla `ai_sesiones` no está disponible
+  // (ausente, o la service-role mal configurada), NO deshabilitamos el
+  // asistente: caemos a una sesión EFÍMERA (sin persistencia) y estimamos el
+  // conteo de mensajes a partir del propio hilo. Así un problema de infra del
+  // límite/telemetría nunca deja al cliente sin orientación.
+  let sesion = null;
+  try {
+    sesion = await getSesion(sessionId);
+    if (!sesion) {
+      if ((await contarSesionesIp(ipHash)) >= MAX_SESIONES_IP_HORA) {
+        res.status(429).json({ error: 'Demasiadas consultas desde tu conexión. Intenta más tarde o elige un profesional manualmente.' });
+        return;
+      }
+      sesion = await crearSesion(ipHash, tipoNorm || 'abogado');
     }
-    sesion = await crearSesion(ipHash, tipo_profesional);
-    if (!sesion?.id) { res.status(500).json({ error: 'No se pudo iniciar la sesión de IA' }); return; }
+  } catch (e) {
+    console.error('[api/ai] ai_sesiones inaccesible:', e?.message);
+  }
+  if (!sesion?.id) {
+    console.error('[api/ai] Usando sesión efímera (ai_sesiones no disponible). Aplica docs/sql/ai_sesiones.sql y revisa SUPABASE_SERVICE_ROLE_KEY para restaurar el límite y el guardado de la recomendación.');
+    const usados = mensajes.filter(m => m.role === 'user').length;
+    sesion = { id: null, mensajes_count: Math.max(0, usados - 1), tipo_profesional: tipoNorm || 'abogado' };
   }
 
   // Tope de mensajes del cliente.
@@ -406,7 +462,7 @@ export default async function handler(req, res) {
   }
 
   // Construir contexto y llamar al modelo.
-  const profs = await fetchProfesionales(req, tipo_profesional || sesion.tipo_profesional);
+  const profs = await fetchProfesionales(req, tipoNorm || sesion.tipo_profesional);
   const systemText = SYSTEM_CLIENTE.replace('{profesionales}', buildProfesionalesBlock(profs));
 
   let replyRaw = '';
@@ -429,7 +485,7 @@ export default async function handler(req, res) {
     patch.recomendados = parsed.recomendados;
     patch.costo_rango = parsed.costo_rango;
   }
-  await actualizarSesion(sesion.id, patch);
+  if (sesion.id) await actualizarSesion(sesion.id, patch);
 
   res.status(200).json({
     sessionId: sesion.id,

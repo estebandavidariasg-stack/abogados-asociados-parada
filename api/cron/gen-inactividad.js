@@ -15,6 +15,24 @@ import { SUPABASE_URL, serviceHeaders } from '../_lib/adminAuth.js'
 
 const DIA_MS = 24 * 60 * 60 * 1000
 
+/* Ejecuta una query con `campo=in.(...)` troceada en lotes de ~150 ids y
+   concatena los resultados. Un in.() con cientos de UUIDs supera el límite de
+   longitud de URL del gateway → la request entera falla (o PostgREST trunca
+   en max-rows en silencio) justo cuando la plataforma más salas tiene. */
+async function fetchInBatches(baseUrl, campo, ids, resto, tam = 150) {
+  const out = []
+  for (let i = 0; i < ids.length; i += tam) {
+    const lote = ids.slice(i, i + tam)
+    const r = await fetch(
+      `${baseUrl}?${campo}=in.(${lote.join(',')})${resto}&limit=1000`,
+      { headers: serviceHeaders() }
+    )
+    const rows = await r.json().catch(() => null)
+    if (Array.isArray(rows)) out.push(...rows)
+  }
+  return out
+}
+
 export default async function handler(req, res) {
   // Auth del cron.
   const secret = process.env.CRON_SECRET
@@ -28,24 +46,26 @@ export default async function handler(req, res) {
   try {
     const hace24h = new Date(Date.now() - DIA_MS).toISOString()
 
-    // 1) Salas abiertas (no cerradas).
+    // 1) Salas abiertas (no cerradas). Limit explícito: sin él PostgREST
+    //    trunca en max-rows en silencio; 1000 salas abiertas cubren de sobra
+    //    un ciclo del cron (las más antiguas entran al siguiente).
     const rRes = await fetch(
-      `${SUPABASE_URL}/rest/v1/chat_rooms?status=in.(waiting,active)&select=id,client_nombre,area_derecho,created_at`,
+      `${SUPABASE_URL}/rest/v1/chat_rooms?status=in.(waiting,active)&select=id,client_nombre,area_derecho,created_at&order=created_at.asc&limit=1000`,
       { headers: serviceHeaders() }
     )
     const rooms = await rRes.json()
     if (!Array.isArray(rooms) || rooms.length === 0) {
       return res.status(200).json({ ok: true, creadas: 0 })
     }
-    const roomIds = rooms.map(r => r.id).join(',')
 
-    // 2) Salas con actividad reciente (mensaje en las últimas 24h).
-    const mRes = await fetch(
-      `${SUPABASE_URL}/rest/v1/chat_messages?room_id=in.(${roomIds})&created_at=gte.${hace24h}&select=room_id`,
-      { headers: serviceHeaders() }
+    // 2) Salas con actividad reciente (mensaje en las últimas 24h) — lotes de
+    //    50 salas: con limit=1000 por lote hay margen holgado y una sala CON
+    //    actividad no puede quedar fuera del corte (falsa notificación).
+    const msgs = await fetchInBatches(
+      `${SUPABASE_URL}/rest/v1/chat_messages`, 'room_id', rooms.map(r => r.id),
+      `&created_at=gte.${hace24h}&select=room_id`, 50
     )
-    const msgs = await mRes.json()
-    const conActividad = new Set((Array.isArray(msgs) ? msgs : []).map(m => m.room_id))
+    const conActividad = new Set(msgs.map(m => m.room_id))
 
     // Inactivas = sin actividad en 24h Y creadas hace más de 24h.
     const inactivas = rooms.filter(
@@ -54,30 +74,25 @@ export default async function handler(req, res) {
     if (inactivas.length === 0) {
       return res.status(200).json({ ok: true, creadas: 0 })
     }
-    const inactivasIds = inactivas.map(r => r.id).join(',')
-
-    // 3) Notificaciones de inactividad YA existentes y sin atender (dedup).
-    const eRes = await fetch(
-      `${SUPABASE_URL}/rest/v1/notificaciones?tipo=eq.inactividad&atendida=eq.false&room_id=in.(${inactivasIds})&select=room_id`,
-      { headers: serviceHeaders() }
+    // 3) Notificaciones de inactividad YA existentes y sin atender (dedup) — por lotes.
+    const existentes = await fetchInBatches(
+      `${SUPABASE_URL}/rest/v1/notificaciones`, 'room_id', inactivas.map(r => r.id),
+      `&tipo=eq.inactividad&atendida=eq.false&select=room_id`
     )
-    const existentes = await eRes.json()
-    const yaNotificadas = new Set((Array.isArray(existentes) ? existentes : []).map(n => n.room_id))
+    const yaNotificadas = new Set(existentes.map(n => n.room_id))
 
     const nuevas = inactivas.filter(r => !yaNotificadas.has(r.id))
     if (nuevas.length === 0) {
       return res.status(200).json({ ok: true, creadas: 0 })
     }
 
-    // 4) Abogado asignado a cada sala nueva (para mostrar / reasignar).
-    const nuevasIds = nuevas.map(r => r.id).join(',')
-    const lRes = await fetch(
-      `${SUPABASE_URL}/rest/v1/chat_room_lawyers?room_id=in.(${nuevasIds})&select=room_id,lawyer_id,status`,
-      { headers: serviceHeaders() }
+    // 4) Abogado asignado a cada sala nueva (para mostrar / reasignar) — por lotes.
+    const asignaciones = await fetchInBatches(
+      `${SUPABASE_URL}/rest/v1/chat_room_lawyers`, 'room_id', nuevas.map(r => r.id),
+      `&select=room_id,lawyer_id,status`
     )
-    const asignaciones = await lRes.json()
     const lawyerByRoom = {}
-    for (const a of (Array.isArray(asignaciones) ? asignaciones : [])) {
+    for (const a of asignaciones) {
       // Preferimos el 'active'; si no, el primero.
       if (!lawyerByRoom[a.room_id] || a.status === 'active') lawyerByRoom[a.room_id] = a.lawyer_id
     }

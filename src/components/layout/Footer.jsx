@@ -43,7 +43,7 @@ export default function Footer() {
               <source srcSet="/logo-nav.webp" type="image/webp" />
               <img
                 src="/logo-nav.png"
-                alt="Abogados y Asociados Parada"
+                alt="Parada Bridge"
                 className={styles.logoImg}
                 width="96"
                 height="96"
@@ -118,12 +118,13 @@ export default function Footer() {
       <div className={styles.bigBrand}>
         <span className={styles.bigBrace}>{'{'}</span>
         <span className={styles.bigText}>PARADA</span>
+        <span className={styles.bigTextGold}>BRIDGE</span>
         <span className={styles.bigBrace}>{'}'}</span>
       </div>
 
       {/* ── Bottom bar ── */}
       <div className={styles.bottom}>
-        <span>© 2026 Abogados y Asociados Parada. Todos los derechos reservados.</span>
+        <span>© 2026 Parada Bridge. Todos los derechos reservados.</span>
         <span className={styles.bottomDot}>·</span>
         <span>Bogotá, Colombia</span>
       </div>

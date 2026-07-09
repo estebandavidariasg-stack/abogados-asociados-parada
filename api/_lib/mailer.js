@@ -44,7 +44,7 @@ function renderHtml({ nombreAbogado, nombreCliente, area, ctaUrl }) {
 
 export async function sendVerificationEmail({ nombreAbogado, nombreCliente, area, ctaUrl }) {
   await transporter.sendMail({
-    from: `"Abogados y Asociados Parada" <${process.env.GMAIL_USER}>`,
+    from: `"Parada Bridge" <${process.env.GMAIL_USER}>`,
     to: ADMIN_NOTIFY_EMAIL,
     subject: `Solicitud de revisión: ${nombreCliente}`,
     html: renderHtml({ nombreAbogado, nombreCliente, area, ctaUrl }),
@@ -62,7 +62,7 @@ export async function sendReassignEmail({ email, nombreAbogado, ctaUrl }) {
      </p>
      <div style="text-align:center;">${emailButton('Ver la consulta', ctaUrl)}</div>`
   await transporter.sendMail({
-    from: `"Abogados y Asociados Parada" <${process.env.GMAIL_USER}>`,
+    from: `"Parada Bridge" <${process.env.GMAIL_USER}>`,
     to: email,
     subject: subjectLine,
     html: renderShell({ subjectLine, preheader: 'Una consulta fue asignada a tu cuenta.', innerHtml: inner }),
