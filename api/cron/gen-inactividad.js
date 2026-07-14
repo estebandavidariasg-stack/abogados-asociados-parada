@@ -11,9 +11,106 @@
    (cada hora en Pro; en Hobby Vercel lo corre 1×/día — suficiente para 24h.)
 ──────────────────────────────────────────────────────────────────────── */
 
+import nodemailer from 'nodemailer'
 import { SUPABASE_URL, serviceHeaders } from '../_lib/adminAuth.js'
+import { renderShell, emailButton, C, FONT_SANS, FONT_SERIF } from '../_lib/emailTemplate.js'
 
 const DIA_MS = 24 * 60 * 60 * 1000
+
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: { user: process.env.GMAIL_USER, pass: process.env.GMAIL_PASS },
+})
+const APP_URL = (process.env.VITE_APP_URL || process.env.APP_URL || 'https://abogadosyasociadosparada.com')
+  .replace(/\/$/, '')
+
+// Escapa texto de usuario que se inyecta en el HTML del correo.
+function esc(s) {
+  return String(s || '').replace(/[&<>"']/g, c =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
+}
+
+/* Correo de reseña: sello "Ayudamos a mejorar" + 5 estrellas clicables
+   (enmarcadas) → /opinar?token=..&rating=N, siguiendo el estético AAP. */
+export function renderResenaEmail({ nombre, token }) {
+  const base = `${APP_URL}/opinar`
+  const link = (extra = '') => `${base}?token=${encodeURIComponent(token)}${extra}`
+  const estrellas = [1, 2, 3, 4, 5].map(n =>
+    `<a href="${link(`&rating=${n}`)}" target="_blank" ` +
+    `style="font-size:40px;line-height:1;color:${C.gold};text-decoration:none;margin:0 5px;">&#9733;</a>`
+  ).join('')
+
+  const inner =
+    `<div style="text-align:center;">
+       <div style="font-family:${FONT_SANS};font-size:12px;font-weight:700;letter-spacing:0.2em;text-transform:uppercase;color:${C.goldText};margin:0 0 12px;">
+         Ayudamos a mejorar
+       </div>
+       <h1 style="font-family:${FONT_SERIF};font-size:23px;font-weight:700;color:${C.navy};line-height:1.35;margin:0 0 14px;">
+         ${nombre ? `${esc(nombre)}, ` : ''}tu opinión nos hace mejores
+       </h1>
+       <p style="margin:0 auto 24px;font-size:15px;line-height:1.75;color:${C.body};max-width:420px;">
+         Gracias por confiar en Parada Bridge. Cuéntanos cómo fue tu experiencia con nuestra página:
+         cada reseña nos ayuda a mejorar para ti y para quienes vienen después.
+       </p>
+
+       <!-- Estrellas enmarcadas (mini-tarjeta cálida) -->
+       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 26px;">
+         <tr>
+           <td align="center" style="background-color:#faf6ec;border:1px solid #efe4c4;border-radius:14px;padding:24px 16px;">
+             <div style="margin:0 0 10px;">${estrellas}</div>
+             <div style="font-family:${FONT_SANS};font-size:12.5px;color:${C.muted};letter-spacing:0.02em;">
+               Toca una estrella para calificar
+             </div>
+           </td>
+         </tr>
+       </table>
+
+       <div>${emailButton('Escribir mi opinión', link())}</div>
+       <p style="margin:22px 0 0;font-size:12px;color:${C.muted};">Solo te tomará un minuto.</p>
+     </div>`
+
+  return renderShell({
+    subjectLine: 'Ayúdanos a mejorar',
+    preheader: 'Tu opinión sobre Parada Bridge nos ayuda a mejorar',
+    innerHtml: inner,
+  })
+}
+
+/* Envía los correos de reseña pendientes cuya espera de 5 min ya venció y las
+   marca `enviada`. Devuelve cuántas envió. Reutilizado por pg_cron (cada 5 min)
+   que hace POST a este endpoint. */
+async function procesarResenas() {
+  if (!process.env.GMAIL_USER || !process.env.GMAIL_PASS) return 0
+  const ahora = new Date().toISOString()
+  const r = await fetch(
+    `${SUPABASE_URL}/rest/v1/resenas` +
+    `?estado=eq.pendiente&enviar_despues=lte.${ahora}&select=id,token,nombre,correo&limit=50`,
+    { headers: serviceHeaders() }
+  )
+  const filas = await r.json().catch(() => null)
+  if (!Array.isArray(filas) || filas.length === 0) return 0
+
+  let enviadas = 0
+  for (const f of filas) {
+    try {
+      await transporter.sendMail({
+        from: `"Parada Bridge" <${process.env.GMAIL_USER}>`,
+        to: f.correo,
+        subject: 'Cuéntanos tu opinión sobre nuestra página',
+        html: renderResenaEmail({ nombre: f.nombre, token: f.token }),
+      })
+      await fetch(`${SUPABASE_URL}/rest/v1/resenas?id=eq.${f.id}`, {
+        method: 'PATCH',
+        headers: serviceHeaders({ 'Content-Type': 'application/json', Prefer: 'return=minimal' }),
+        body: JSON.stringify({ estado: 'enviada' }),
+      })
+      enviadas++
+    } catch (e) {
+      console.error('[cron resenas] fallo enviando a', f.id, e?.message || e)
+    }
+  }
+  return enviadas
+}
 
 /* Ejecuta una query con `campo=in.(...)` troceada en lotes de ~150 ids y
    concatena los resultados. Un in.() con cientos de UUIDs supera el límite de
@@ -43,6 +140,12 @@ export default async function handler(req, res) {
     }
   }
 
+  // Cola de reseñas: se procesa en CADA invocación (pg_cron la llama cada 5 min).
+  // Su fallo no debe tumbar el escaneo de inactividad, y viceversa.
+  let enviadas = 0
+  try { enviadas = await procesarResenas() }
+  catch (e) { console.error('[cron resenas] error:', e?.message || e) }
+
   try {
     const hace24h = new Date(Date.now() - DIA_MS).toISOString()
 
@@ -55,7 +158,7 @@ export default async function handler(req, res) {
     )
     const rooms = await rRes.json()
     if (!Array.isArray(rooms) || rooms.length === 0) {
-      return res.status(200).json({ ok: true, creadas: 0 })
+      return res.status(200).json({ ok: true, creadas: 0, resenas: enviadas })
     }
 
     // 2) Salas con actividad reciente (mensaje en las últimas 24h) — lotes de
@@ -72,7 +175,7 @@ export default async function handler(req, res) {
       r => !conActividad.has(r.id) && new Date(r.created_at).getTime() < Date.now() - DIA_MS
     )
     if (inactivas.length === 0) {
-      return res.status(200).json({ ok: true, creadas: 0 })
+      return res.status(200).json({ ok: true, creadas: 0, resenas: enviadas })
     }
     // 3) Notificaciones de inactividad YA existentes y sin atender (dedup) — por lotes.
     const existentes = await fetchInBatches(
@@ -83,7 +186,7 @@ export default async function handler(req, res) {
 
     const nuevas = inactivas.filter(r => !yaNotificadas.has(r.id))
     if (nuevas.length === 0) {
-      return res.status(200).json({ ok: true, creadas: 0 })
+      return res.status(200).json({ ok: true, creadas: 0, resenas: enviadas })
     }
 
     // 4) Abogado asignado a cada sala nueva (para mostrar / reasignar) — por lotes.
@@ -113,7 +216,7 @@ export default async function handler(req, res) {
       body: JSON.stringify(filas),
     })
 
-    return res.status(200).json({ ok: true, creadas: filas.length })
+    return res.status(200).json({ ok: true, creadas: filas.length, resenas: enviadas })
   } catch (e) {
     console.error('[cron gen-inactividad] error:', e?.message || e)
     return res.status(500).json({ error: 'Error generando notificaciones.' })

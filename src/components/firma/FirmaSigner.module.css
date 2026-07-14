@@ -1,0 +1,259 @@
+/* FirmaSigner — modal de firma electrónica. Marca AAP (navy + dorado + ivory). */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10001; /* sobre la barra lateral del perfil (modales del chat usan 10001) */
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgba(8, 24, 51, 0.55);
+  backdrop-filter: blur(4px);
+  animation: fade 0.2s ease-out;
+}
+
+.modal {
+  z-index: 10002; /* modal */
+  width: min(1080px, 96vw);
+  max-height: 94vh;
+  transition: width 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+  display: flex;
+  flex-direction: column;
+  background: var(--ivory, #faf7f2);
+  border: 1px solid var(--border, rgba(13, 45, 94, 0.15));
+  border-radius: 16px;
+  box-shadow: 0 24px 70px -20px rgba(8, 24, 51, 0.55);
+  overflow: hidden;
+  animation: pop 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+}
+/* Pasos con contenido angosto (Verificar, Listo): modal más compacto. */
+.modalNarrow { width: min(560px, 96vw); }
+@media (prefers-reduced-motion: reduce) { .modal { transition: none; } }
+
+/* ── Cabecera ── */
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.1rem 1.4rem;
+  background: linear-gradient(135deg, #0d2d5e, #1a5276);
+  color: #fff;
+}
+.title { font-size: 1.15rem; font-weight: 700; letter-spacing: -0.01em; margin: 0; }
+.sub { font-size: 0.72rem; color: #c9d6ea; margin-top: 2px; text-transform: uppercase; letter-spacing: 0.14em; }
+.close {
+  width: 34px; height: 34px; flex-shrink: 0;
+  border: none; border-radius: 9px; cursor: pointer;
+  background: rgba(255, 255, 255, 0.14); color: #fff; font-size: 0.95rem;
+  transition: background 0.2s;
+}
+.close:hover { background: rgba(255, 255, 255, 0.28); }
+
+/* ── Stepper ── */
+.stepper {
+  display: flex;
+  gap: 0.35rem;
+  list-style: none;
+  padding: 0.9rem 1.4rem 0;
+  margin: 0;
+}
+.step { display: flex; align-items: center; gap: 0.45rem; flex: 1; min-width: 0; color: var(--muted, #4a6080); }
+.stepDot {
+  width: 26px; height: 26px; flex-shrink: 0;
+  display: grid; place-items: center;
+  border-radius: 50%; font-size: 0.78rem; font-weight: 700;
+  background: rgba(13, 45, 94, 0.08); color: var(--muted, #4a6080);
+  border: 1.5px solid transparent;
+  transition: all 0.25s ease;
+}
+.stepLabel { font-size: 0.78rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stepOn .stepDot { background: var(--navy, #0d2d5e); color: #fff; }
+.stepOn { color: var(--navy, #0d2d5e); }
+.stepDone .stepDot { background: var(--gold, #c9a84c); color: #0d2d5e; }
+.stepDone { color: var(--gold-dk, #8a6a28); }
+
+/* ── Cuerpo ── */
+.body {
+  padding: 1.2rem 1.4rem 1.4rem;
+  overflow-y: auto;
+}
+.lead {
+  font-size: 0.92rem;
+  line-height: 1.55;
+  color: #26324a;
+  max-width: 68ch;
+  margin-bottom: 1rem;
+}
+.lead strong { color: var(--navy, #0d2d5e); }
+
+.errBar {
+  margin: 0.8rem 1.4rem 0;
+  padding: 0.6rem 0.85rem;
+  background: #fdecec;
+  border: 1px solid #f3b4b4;
+  border-radius: 9px;
+  color: #9a2b2b;
+  font-size: 0.85rem;
+}
+
+/* ── Visor PDF ── */
+.viewer {
+  height: min(64vh, 680px);
+  border: 1px solid var(--border, rgba(13, 45, 94, 0.15));
+  border-radius: 12px;
+  overflow: hidden;
+  background: #fff;
+}
+.frame { width: 100%; height: 100%; border: none; }
+.viewerLoad { height: 100%; display: grid; place-items: center; gap: 0.6rem; color: var(--muted, #4a6080); }
+
+/* ── Paso Verificar (OTP): contenido centrado ── */
+.otpStep { text-align: center; }
+.otpStep .lead { margin-left: auto; margin-right: auto; }
+.otpStep .otp { justify-content: center; }
+.otpStep .resendRow { text-align: center; }
+.otpStep .actions { justify-content: center; }
+
+/* ── OTP ── */
+.otp { display: flex; gap: 0.5rem; margin: 0.4rem auto 0.2rem; max-width: 420px; }
+.otpCell {
+  width: 100%; max-width: 56px; aspect-ratio: 3 / 4;
+  text-align: center;
+  font-size: 1.5rem; font-weight: 700; color: var(--navy, #0d2d5e);
+  background: #fff;
+  border: 1.5px solid var(--border, rgba(13, 45, 94, 0.25));
+  border-radius: 10px;
+  transition: border-color 0.18s, box-shadow 0.18s;
+}
+.otpCell:focus {
+  outline: none;
+  border-color: var(--gold, #c9a84c);
+  box-shadow: 0 0 0 3px rgba(201, 168, 76, 0.25);
+}
+.resendRow { margin-top: 0.7rem; min-height: 1.4rem; }
+.resendMuted { font-size: 0.82rem; color: var(--muted, #4a6080); display: inline-flex; align-items: center; gap: 0.4rem; }
+.captchaWrap { display: flex; justify-content: center; margin: 0.4rem 0 0.8rem; }
+
+/* ── Firma: lienzo + formulario ── */
+.signGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.3rem;
+}
+@media (max-width: 680px) { .signGrid { grid-template-columns: 1fr; } }
+
+.padWrap { display: flex; flex-direction: column; gap: 0.4rem; }
+.pad {
+  width: 100%;
+  height: 190px;
+  background:
+    repeating-linear-gradient(0deg, transparent 0 32px, rgba(13, 45, 94, 0.05) 32px 33px),
+    #fff;
+  border: 1.5px dashed var(--border, rgba(13, 45, 94, 0.3));
+  border-radius: 12px;
+  touch-action: none;
+  cursor: crosshair;
+}
+.padFoot { display: flex; align-items: center; justify-content: space-between; }
+.padHint { font-size: 0.75rem; color: var(--muted, #4a6080); }
+
+.pieForm { display: flex; flex-direction: column; gap: 0.55rem; }
+.field { display: flex; flex-direction: column; gap: 0.25rem; }
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; }
+.fieldLabel {
+  font-size: 0.72rem; font-weight: 700;
+  letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--navy-md, #1a5276);
+}
+.input {
+  width: 100%;
+  padding: 0.5rem 0.65rem;
+  font-family: inherit; font-size: 0.9rem; color: #1a2338;
+  background: #fff;
+  border: 1.5px solid var(--border, rgba(13, 45, 94, 0.2));
+  border-radius: 9px;
+  transition: border-color 0.18s, box-shadow 0.18s;
+}
+.input:focus { outline: none; border-color: var(--navy-lt, #2a6496); box-shadow: 0 0 0 3px rgba(42, 100, 150, 0.15); }
+.input:disabled { background: #f1f3f7; color: var(--muted, #4a6080); }
+
+/* ── Acciones ── */
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.7rem;
+  margin-top: 1.3rem;
+}
+.btnSolid, .btnGhost {
+  font-family: inherit; font-size: 0.82rem; font-weight: 700;
+  letter-spacing: 0.03em;
+  padding: 0.62rem 1.4rem;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: transform 0.15s ease, background 0.2s, box-shadow 0.2s;
+}
+.btnSolid {
+  color: #fff; border: 1px solid var(--navy, #0d2d5e);
+  background: var(--navy, #0d2d5e);
+  box-shadow: 0 6px 16px -8px rgba(13, 45, 94, 0.7);
+}
+.btnSolid:hover:not(:disabled) { background: var(--navy-md, #1a5276); transform: translateY(-1px); }
+.btnSolid:disabled { opacity: 0.5; cursor: not-allowed; }
+.btnGhost {
+  color: var(--navy, #0d2d5e); background: transparent;
+  border: 1px solid var(--border, rgba(13, 45, 94, 0.3));
+}
+.btnGhost:hover:not(:disabled) { background: rgba(13, 45, 94, 0.06); }
+.btnGhost:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.linkBtn {
+  background: none; border: none; cursor: pointer;
+  font-family: inherit; font-size: 0.82rem; font-weight: 700;
+  color: var(--navy-lt, #2a6496);
+  text-decoration: underline; text-underline-offset: 3px;
+}
+.linkBtn:hover { color: var(--navy, #0d2d5e); }
+.linkBtn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ── Pantalla final ── */
+.done {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 2.2rem 1.4rem;
+}
+.done .lead { margin-left: auto; margin-right: auto; }
+.doneMark {
+  width: 64px; height: 64px; margin: 0 auto 1rem;
+  display: grid; place-items: center;
+  border-radius: 50%;
+  background: radial-gradient(circle at 30% 30%, var(--gold-lt, #e8c96a), var(--gold, #c9a84c));
+  color: #0d2d5e; font-size: 1.9rem; font-weight: 800;
+  box-shadow: 0 10px 26px -10px rgba(201, 168, 76, 0.8);
+  animation: bump 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.doneTitle { font-size: 1.25rem; color: var(--navy, #0d2d5e); margin-bottom: 0.5rem; }
+.done .actions { justify-content: center; }
+
+/* ── Spinner ── */
+.spinner {
+  width: 18px; height: 18px;
+  border: 2px solid rgba(13, 45, 94, 0.2);
+  border-top-color: var(--navy, #0d2d5e);
+  border-radius: 50%;
+  display: inline-block;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes pop { from { opacity: 0; transform: translateY(12px) scale(0.98); } to { opacity: 1; transform: none; } }
+@keyframes bump { from { transform: scale(0.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .overlay, .modal, .doneMark { animation: none; }
+  .btnSolid:hover:not(:disabled) { transform: none; }
+  .spinner { animation-duration: 1.4s; }
+}

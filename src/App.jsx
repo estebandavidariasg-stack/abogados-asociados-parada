@@ -9,6 +9,7 @@ const ProfilePage         = lazy(() => import('./pages/ProfilePage'))
 const ProfileContadorPage = lazy(() => import('./pages/ProfileContadorPage'))
 const AdminPage           = lazy(() => import('./pages/AdminPage'))
 const ResetPasswordPage   = lazy(() => import('./pages/ResetPasswordPage'))
+const OpinarPage          = lazy(() => import('./pages/OpinarPage'))
 
 function RouteFallback() {
   return (
@@ -31,6 +32,7 @@ export default function App() {
         <Route path="/perfil-contador"  element={<ProfileContadorPage />} />
         <Route path="/admin"            element={<AdminPage />} />
         <Route path="/nueva-contrasena" element={<ResetPasswordPage />} />
+        <Route path="/opinar"           element={<OpinarPage />} />
       </Routes>
     </Suspense>
   )

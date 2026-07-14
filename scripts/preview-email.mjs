@@ -4,6 +4,7 @@ import { writeFileSync } from 'node:fs'
 import {
   renderEmailHtml, renderShell, emailButton, infoBox, codeBox, em, C, FONT_SERIF,
 } from '../api/_lib/emailTemplate.js'
+import { renderResenaEmail } from '../api/cron/gen-inactividad.js'
 
 // 1. Notificación a profesional (nueva consulta)
 const abogado = renderEmailHtml({
@@ -118,4 +119,9 @@ writeFileSync('.preview-email-otp.html', otp)
 writeFileSync('.preview-email-reset.html', reset)
 writeFileSync('.preview-email-contacto.html', contacto)
 writeFileSync('.preview-email-admin.html', admin)
-console.log('OK: abogado, otp, reset, contacto, admin')
+
+// Reseña de la web (correo con estrellas clicables + sello "Ayudamos a mejorar")
+const resena = renderResenaEmail({ nombre: 'María Fernanda', token: 'demo-123' })
+writeFileSync('.preview-email-resena.html', resena)
+
+console.log('OK: abogado, otp, reset, contacto, admin, resena')

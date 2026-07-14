@@ -4,10 +4,27 @@ import { contieneContacto } from '../../lib/validaciones'
 import styles from './LawyerChatDashboard.module.css'
 import AudioPlayer from './AudioPlayer'
 import { ChatImage, openChatFile } from '../../lib/chatFiles'
-import { IconPaperclip, IconMic } from '../shared/Icons'
+import { IconPaperclip, IconMic, IconFirma } from '../shared/Icons'
 import { pedirIA } from '../../lib/aiClient'
 import { motion, AnimatePresence } from 'framer-motion'
 import Markdown from '../shared/Markdown'
+import EnviarAFirmar from '../firma/EnviarAFirmar'
+import { urlFirmada } from '../../lib/firmaService'
+
+// Parseo seguro de los payloads JSON de los mensajes de firma.
+function parseFirma(content) {
+  try { const o = JSON.parse(content); return o?.t === 'firma' ? o : null } catch { return null }
+}
+function parseFirmaOk(content) {
+  try { const o = JSON.parse(content); return o?.t === 'firma_ok' ? o : null } catch { return null }
+}
+// Texto de vista previa del último mensaje en el sidebar (evita mostrar el JSON
+// crudo de los mensajes de firma).
+function previewMsg(m) {
+  if (m?.message_type === 'firma') return 'Documento para firmar'
+  if (m?.message_type === 'firma_ok') return 'Documento firmado'
+  return m?.content || ''
+}
 
 // Detecta si el archivo es imagen para renderizar preview inline (WhatsApp style).
 function isImage(name) {
@@ -178,6 +195,46 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
 
   // ── Lightbox para imágenes (click en thumbnail = abrir fullscreen) ──
   const [lightbox, setLightbox] = useState(null)
+  const [firmaOpen, setFirmaOpen] = useState(false)
+  const [adjuntarMenu, setAdjuntarMenu] = useState(false)  // menú del clip
+  const [dragging, setDragging] = useState(false)          // arrastrar-soltar
+
+  // Descarga desde el mensaje firma_ok: 'doc' (Word) o 'cert' (certificado PDF).
+  async function descargarFirmado(content, tipo = 'doc') {
+    const f = parseFirmaOk(content)
+    const path = tipo === 'cert' ? f?.certPath : f?.docPath
+    if (!path) return
+    try {
+      const headers = await getAuthHeaders()
+      const url = await urlFirmada(path, headers)
+      if (url) window.open(url, '_blank', 'noopener,noreferrer')
+    } catch { setToast('No se pudo abrir el documento.') }
+  }
+
+  // Publica en el hilo el mensaje de firma para que el cliente lo firme.
+  async function publicarFirma(sol, filas, docPath) {
+    const cliente = filas.find(f => f.rol_firma === 'cliente') || filas[0]
+    const payload = JSON.stringify({
+      t: 'firma', solicitudId: sol.id, docPath,
+      firmanteId: cliente?.id, correo: cliente?.correo,
+    })
+    try {
+      const headers = await getAuthHeaders()
+      await fetch(`${SUPABASE_URL}/rest/v1/chat_messages`, {
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          room_id: activeRoom.id,
+          sender_type: 'lawyer',
+          content: payload,
+          message_type: 'firma',
+        }),
+      })
+      setToast('Documento enviado al cliente para firmar.')
+    } catch {
+      setToast('No se pudo enviar el documento a firma.')
+    }
+  }
   useEffect(() => {
     if (!lightbox) return
     const onKey = (e) => { if (e.key === 'Escape') setLightbox(null) }
@@ -266,7 +323,7 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
     const mRes = await fetch(
       `${SUPABASE_URL}/rest/v1/chat_messages` +
       `?room_id=in.(${recentIds})&order=created_at.desc&limit=1000` +
-      `&select=room_id,content,created_at,sender_type`,
+      `&select=room_id,content,created_at,sender_type,message_type`,
       { headers }
     )
     const allMsgs = await mRes.json()
@@ -372,7 +429,13 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
     let first = true
     const ch = supabase.channel(`lcd:${rid}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages', filter: `room_id=eq.${rid}` },
-        p => setMessages(prev => prev.find(m => m.id === p.new.id) ? prev : [...prev, p.new]))
+        p => {
+          setMessages(prev => prev.find(m => m.id === p.new.id) ? prev : [...prev, p.new])
+          // Aviso flotante: el cliente terminó de firmar el documento.
+          if (p.new.message_type === 'firma_ok' && p.new.sender_type === 'client') {
+            setToast('✅ El cliente firmó el documento')
+          }
+        })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'chat_rooms', filter: `id=eq.${rid}` },
         p => setActiveRoom(prev => (prev && prev.id === p.new.id) ? { ...prev, ...p.new } : prev))
       .subscribe(st => {
@@ -490,6 +553,12 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
   /* ── Subir archivo ── */
   async function handleFile(e) {
     const file = e.target.files?.[0]
+    if (file) await subirArchivo(file)
+    if (e.target) e.target.value = ''
+  }
+
+  // Sube un archivo al chat (reutilizado por el input y por arrastrar-soltar).
+  async function subirArchivo(file) {
     if (!file || !activeRoom) return
     setUploading(true)
     try {
@@ -539,7 +608,6 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
       alert('Error subiendo archivo: ' + err.message)
     } finally {
       setUploading(false)
-      e.target.value = ''
     }
   }
 
@@ -696,6 +764,25 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
         } catch (_) { /* noop */ }
       }
 
+      // Programar el correo de reseña de la web (~5 min después, vía pg_cron) —
+      // best-effort: si falla, no bloquea el cierre. Requiere el correo del
+      // cliente (capturado en el formulario de la consulta).
+      if (activeRoom.client_email) {
+        try {
+          await fetch(`${SUPABASE_URL}/rest/v1/resenas`, {
+            method: 'POST',
+            headers: { ...headers, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+            body: JSON.stringify({
+              room_id: activeRoom.id,
+              token: (crypto.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`),
+              nombre: activeRoom.client_nombre || null,
+              correo: activeRoom.client_email,
+              rol: 'Cliente',
+            }),
+          })
+        } catch (_) { /* noop */ }
+      }
+
       setShowRating(false)
       setActiveRoom(null)
       fetchRooms()
@@ -805,8 +892,8 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
                     <span className={styles.itemUltimo}>
                       {room.lastMsg
                         ? room.lastMsg.sender_type === 'lawyer'
-                          ? `Tú: ${room.lastMsg.content}`
-                          : room.lastMsg.content
+                          ? `Tú: ${previewMsg(room.lastMsg)}`
+                          : previewMsg(room.lastMsg)
                         : 'Nueva consulta'}
                     </span>
                     <span className={styles.itemRight}>
@@ -946,7 +1033,25 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
             </AnimatePresence>
 
             {/* Mensajes */}
-            <div className={styles.messages} ref={mensajesRef}>
+            <div
+              className={styles.messages}
+              ref={mensajesRef}
+              onDragOver={(e) => { if (activeRoom.status === 'closed') return; e.preventDefault(); if (!dragging) setDragging(true) }}
+              onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setDragging(false) }}
+              onDrop={(e) => {
+                e.preventDefault(); setDragging(false)
+                const f = e.dataTransfer?.files?.[0]
+                if (f && activeRoom.status !== 'closed') subirArchivo(f)
+              }}
+            >
+              {dragging && (
+                <div className={styles.dropOverlay} aria-hidden="true">
+                  <div className={styles.dropInner}>
+                    <IconPaperclip size={26} />
+                    <span>Suelta el archivo para enviarlo</span>
+                  </div>
+                </div>
+              )}
               {messages.length === 0 && (
                 <p className={styles.messagesEmpty}>
                   No hay mensajes aún. Saluda al cliente para iniciar.
@@ -994,6 +1099,31 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
                             {m.file_size && <span className={styles.fileSize}>{formatSize(m.file_size)}</span>}
                           </button>
                         )
+                      ) : m.message_type === 'firma' ? (
+                        <span className={styles.firmaMsg}>
+                          <span className={styles.firmaIcon}><IconFirma size={16} /></span>
+                          <span className={`${styles.msgText} ${styles.firmaBody}`}>
+                            <strong>Documento enviado para firma</strong>
+                            <span className={styles.firmaSub}>El cliente lo firmará desde el chat.</span>
+                          </span>
+                        </span>
+                      ) : m.message_type === 'firma_ok' ? (
+                        <span className={styles.firmaMsg}>
+                          <span className={styles.firmaIcon}><IconFirma size={16} /></span>
+                          <span className={`${styles.msgText} ${styles.firmaBody}`}>
+                            <strong>El cliente firmó el documento</strong>
+                            <span className={styles.firmaDlRow}>
+                              <button className={styles.firmaDlBtn} onClick={() => descargarFirmado(m.content, 'doc')}>
+                                ⬇ Documento (Word)
+                              </button>
+                              {parseFirmaOk(m.content)?.certPath && (
+                                <button className={styles.firmaDlBtnAlt} onClick={() => descargarFirmado(m.content, 'cert')}>
+                                  ⬇ Certificado (PDF)
+                                </button>
+                              )}
+                            </span>
+                          </span>
+                        </span>
                       ) : (
                         <p className={styles.msgText}>{renderMensaje(m.content)}</p>
                       )}
@@ -1009,14 +1139,33 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
             {/* Input — solo si la sala está abierta */}
             {activeRoom.status !== 'closed' && (
               <div className={styles.inputBar}>
-                <button
-                  className={styles.attachBtn}
-                  onClick={() => fileRef.current?.click()}
-                  disabled={uploading}
-                  title="Adjuntar archivo"
-                >
-                  {uploading ? '…' : <IconPaperclip size={15} />}
-                </button>
+                <div className={styles.attachWrap}>
+                  <button
+                    className={styles.attachBtn}
+                    onClick={() => setAdjuntarMenu(v => !v)}
+                    disabled={uploading}
+                    title="Adjuntar"
+                    aria-haspopup="menu"
+                    aria-expanded={adjuntarMenu}
+                  >
+                    {uploading ? '…' : <IconPaperclip size={15} />}
+                  </button>
+                  {adjuntarMenu && (
+                    <>
+                      <div className={styles.attachBackdrop} onClick={() => setAdjuntarMenu(false)} />
+                      <div className={styles.attachMenu} role="menu">
+                        <button role="menuitem" onClick={() => { setAdjuntarMenu(false); fileRef.current?.click() }}>
+                          <IconPaperclip size={15} />
+                          <span><strong>Enviar archivo</strong><small>Solo para ver</small></span>
+                        </button>
+                        <button role="menuitem" onClick={() => { setAdjuntarMenu(false); setFirmaOpen(true) }}>
+                          <IconFirma size={15} />
+                          <span><strong>Enviar para firmar</strong><small>El cliente firma en el chat</small></span>
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
                 <input
                   ref={fileRef}
                   type="file"
@@ -1053,6 +1202,22 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
           </>
         )}
       </div>
+
+      {/* ── Modal: enviar documento a firmar (chat) ── */}
+      {firmaOpen && activeRoom && (
+        <EnviarAFirmar
+          modo="chat"
+          roomId={activeRoom.id}
+          abogadoId={activeRoom.id}
+          cliente={{
+            nombre: activeRoom.client_nombre,
+            correo: activeRoom.client_email,
+            telefono: activeRoom.client_celular,
+          }}
+          onClose={() => setFirmaOpen(false)}
+          afterCreate={publicarFirma}
+        />
+      )}
 
       {/* ── Modal: datos de contacto bloqueados ── */}
       {contactoBlocked && (

@@ -10,7 +10,15 @@ import { ChatImage, ChatLightbox, openChatFile } from '../../lib/chatFiles'
 // municipios) que solo se usan en el paso del formulario, nunca en el
 // primer render de la home.
 const UbicacionSelector = lazy(() => import('../profile/UbicacionSelector'))
-import { IconPaperclip, IconMic } from '../shared/Icons'
+// Firma del cliente: lazy para que pdf-lib/recaptcha NO entren al bundle público.
+const FirmaClienteChat = lazy(() => import('../firma/FirmaClienteChat'))
+function parseFirma(content) {
+  try { const o = JSON.parse(content); return o?.t === 'firma' ? o : null } catch { return null }
+}
+function parseFirmaOk(content) {
+  try { const o = JSON.parse(content); return o?.t === 'firma_ok' ? o : null } catch { return null }
+}
+import { IconPaperclip, IconMic, IconFirma } from '../shared/Icons'
 import { validarCelular, validarCorreo, normalizarCelular, contieneContacto } from '../../lib/validaciones'
 import { AREAS_DERECHO } from '../../lib/areasDerecho'
 import { AREAS_CONTADURIA } from '../../lib/areasContaduria'
@@ -861,6 +869,8 @@ export default function ChatSection() {
 
   // ── Lightbox para ver imágenes en grande — ChatLightbox maneja Escape internamente
   const [lightbox, setLightbox] = useState(null)
+  const [firmaCliente, setFirmaCliente] = useState(null)
+  const [dragging, setDragging] = useState(false)
 
   // ── Contacto bloqueado (modal) ────────────────────────────────────────────
   const [contactoWarning, setContactoWarning] = useState(false)
@@ -1302,6 +1312,12 @@ export default function ChatSection() {
 
   async function handleFile(e) {
     const file = e.target.files?.[0]
+    if (file) await subirArchivo(file)
+    if (fileRef.current) fileRef.current.value = ''
+  }
+
+  // Sube un archivo al chat (reutilizado por el input y por arrastrar-soltar).
+  async function subirArchivo(file) {
     if (!file || !roomId) return
     setUploading(true)
     const path = `${roomId}/${crypto.randomUUID()}.${file.name.split('.').pop()}`
@@ -1318,7 +1334,6 @@ export default function ChatSection() {
       setSendError('No se pudo adjuntar el archivo. Revisa tu conexión e intenta de nuevo.')
     }
     setUploading(false)
-    if (fileRef.current) fileRef.current.value = ''
   }
 
   async function fixAudioDuration(blob) {
@@ -1538,7 +1553,25 @@ export default function ChatSection() {
                   </div>
                 </div>
 
-                <div className={styles.chatMessages} ref={messagesRef}>
+                <div
+                  className={styles.chatMessages}
+                  ref={messagesRef}
+                  onDragOver={(e) => { e.preventDefault(); if (!dragging) setDragging(true) }}
+                  onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setDragging(false) }}
+                  onDrop={(e) => {
+                    e.preventDefault(); setDragging(false)
+                    const f = e.dataTransfer?.files?.[0]
+                    if (f) subirArchivo(f)
+                  }}
+                >
+                  {dragging && (
+                    <div className={styles.dropOverlay} aria-hidden="true">
+                      <div className={styles.dropInner}>
+                        <IconPaperclip size={26} />
+                        <span>Suelta el archivo para enviarlo</span>
+                      </div>
+                    </div>
+                  )}
                   {messages.length === 0 && (
                     <div className={styles.chatEmpty}>
                       <p className={styles.chatEmptyText}>Puedes presentar tu consulta.</p>
@@ -1556,6 +1589,44 @@ export default function ChatSection() {
                           <span className={styles.systemMsgTime}>
                             {new Date(msg.created_at).toLocaleTimeString('es-CO', { hour:'2-digit', minute:'2-digit' })}
                           </span>
+                        </div>
+                      )
+                    }
+                    // Documento para firmar (enviado por el profesional).
+                    const firma = msg.message_type === 'firma' ? parseFirma(msg.content) : null
+                    if (firma) {
+                      return (
+                        <div key={msg.id} className={styles.msgRowOther}>
+                          <div className={styles.msgBubbleOther}>
+                            <p className={styles.msgText} style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                              <span style={{ flexShrink: 0, width: 30, height: 30, display: 'grid', placeItems: 'center', borderRadius: 9, background: 'rgba(201,168,76,0.18)', color: '#8a6a28', marginTop: 1 }}>
+                                <IconFirma size={16} />
+                              </span>
+                              <span style={{ display: 'flex', flexDirection: 'column', gap: 4, lineHeight: 1.35 }}>
+                                <strong>Tienes un documento para firmar</strong>
+                                <span style={{ opacity: 0.9 }}>Es rápido y sin costo. Fírmalo aquí mismo.</span>
+                              </span>
+                            </p>
+                            <button className={styles.fileBtn} onClick={() => setFirmaCliente(firma)}>
+                              Firmar documento
+                            </button>
+                            <p className={styles.msgMetaOther}>
+                              Abogado · {new Date(msg.created_at).toLocaleTimeString('es-CO', { hour:'2-digit', minute:'2-digit' })}
+                            </p>
+                          </div>
+                        </div>
+                      )
+                    }
+                    // Confirmación de firma (el cliente ya firmó).
+                    if (msg.message_type === 'firma_ok' && parseFirmaOk(msg.content)) {
+                      return (
+                        <div key={msg.id} className={styles.msgRowMine}>
+                          <div className={styles.msgBubbleMine}>
+                            <p className={styles.msgText}>✅ <strong>Firmaste el documento</strong></p>
+                            <p className={styles.msgMetaMine}>
+                              {new Date(msg.created_at).toLocaleTimeString('es-CO', { hour:'2-digit', minute:'2-digit' })}
+                            </p>
+                          </div>
                         </div>
                       )
                     }
@@ -1599,6 +1670,17 @@ export default function ChatSection() {
                     )
                   })}
                 </div>
+
+                {firmaCliente && (
+                  <Suspense fallback={null}>
+                    <FirmaClienteChat
+                      firma={firmaCliente}
+                      roomId={roomId}
+                      onClose={() => setFirmaCliente(null)}
+                      onDone={() => setFirmaCliente(null)}
+                    />
+                  </Suspense>
+                )}
 
                 <div className={styles.chatInputBar}>
                   <button className={styles.attachBtn} onClick={() => fileRef.current?.click()}

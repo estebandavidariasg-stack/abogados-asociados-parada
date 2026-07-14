@@ -1,89 +1,10 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import styles from './TestimoniosSection.module.css'
 import { useCarrusel } from '../../lib/useCarrusel'
 
-const testimonios = [
-  {
-    texto:
-      'Contraté sus servicios para un proceso laboral y quedé muy satisfecho. Me explicaron cada paso con claridad y logramos un resultado muy favorable.',
-    imagen:
-      'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=150&h=150',
-    nombre: 'Andrés Morales',
-    rol: 'Cliente — Derecho Laboral',
-  },
-  {
-    texto:
-      'Me asesoraron en mi proceso de custodia con mucha profesionalidad y calidez humana. En un momento tan difícil, sentí el respaldo de un equipo comprometido.',
-    imagen:
-      'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?auto=format&fit=crop&q=80&w=150&h=150',
-    nombre: 'Carolina Ospina',
-    rol: 'Clienta — Derecho de Familia',
-  },
-  {
-    texto:
-      'Los contadores hicieron mi declaración de renta sin ningún contratiempo y me explicaron cómo optimizar mis impuestos de manera legal. Excelente servicio.',
-    imagen:
-      'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&q=80&w=150&h=150',
-    nombre: 'Felipe Restrepo',
-    rol: 'Empresario — Asesoría Contable',
-  },
-  {
-    texto:
-      'Me ayudaron a constituir mi empresa SAS en menos de una semana. El proceso fue transparente, rápido y sin ninguna complicación. Muy agradecida.',
-    imagen:
-      'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=150&h=150',
-    nombre: 'Daniela Vargas',
-    rol: 'Emprendedora — Derecho Corporativo',
-  },
-  {
-    texto:
-      'Tuve un problema con mi arrendador y el abogado me orientó perfectamente desde la primera consulta. Resolvimos el conflicto sin llegar a juicio.',
-    imagen:
-      'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&q=80&w=150&h=150',
-    nombre: 'Juan Pablo Herrera',
-    rol: 'Cliente — Derecho Civil',
-  },
-  {
-    texto:
-      'Su plataforma es muy fácil de usar. Pude consultar con un abogado desde Medellín sin desplazarme. La atención fue rápida y el consejo, muy claro.',
-    imagen:
-      'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=150&h=150',
-    nombre: 'Natalia Gómez',
-    rol: 'Clienta — Consulta en Línea',
-  },
-  {
-    texto:
-      'Me apoyaron en un proceso penal complicado. Sentí en todo momento el respaldo de un equipo preparado y genuinamente comprometido con mi caso.',
-    imagen:
-      'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&q=80&w=150&h=150',
-    nombre: 'Diego Martínez',
-    rol: 'Cliente — Derecho Penal',
-  },
-  {
-    texto:
-      'La asesoría contable fue impecable. Cumplieron todos los plazos tributarios y estuvieron disponibles para resolver mis dudas en cualquier momento.',
-    imagen:
-      'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&q=80&w=150&h=150',
-    nombre: 'Valentina Ríos',
-    rol: 'Empresaria — Asesoría Tributaria',
-  },
-  {
-    texto:
-      'Resolvieron un conflicto laboral que llevaba meses sin solución, en pocas semanas y con resultados excelentes. Profesionales de primera calidad.',
-    imagen:
-      'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=150&h=150',
-    nombre: 'Camilo Suárez',
-    rol: 'Cliente — Derecho Laboral',
-  },
-]
-
-// Calificaciones variadas (no todas 5); admite medias estrellas.
-const RATINGS = [5, 4.5, 5, 4, 4.5, 5, 4, 4.5, 5]
-const testimoniosRated = testimonios.map((t, i) => ({ ...t, rating: RATINGS[i] ?? 5 }))
-
-const fila1 = testimoniosRated
-const fila2 = [...testimoniosRated].reverse()
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
+const ANON = import.meta.env.VITE_SUPABASE_ANON_KEY
 
 const IconComillas = (props) => (
   <svg viewBox="0 0 44 40" width="38" height="34" fill="currentColor" aria-hidden="true" {...props}>
@@ -128,13 +49,19 @@ function Tarjeta({ texto, imagen, nombre, rol, rating = 5, oculto, onMouseEnter,
       <Estrellas rating={rating} />
       <p className={styles.texto}>{texto}</p>
       <div className={styles.pie}>
-        <img
-          src={imagen}
-          alt={oculto ? '' : `Foto de ${nombre}`}
-          className={styles.avatar}
-          loading="lazy"
-          draggable="false"
-        />
+        {imagen ? (
+          <img
+            src={imagen}
+            alt={oculto ? '' : `Foto de ${nombre}`}
+            className={styles.avatar}
+            loading="lazy"
+            draggable="false"
+          />
+        ) : (
+          <span className={styles.avatarIniciales} aria-hidden={oculto ? 'true' : undefined}>
+            {(nombre || '?').trim().charAt(0).toUpperCase()}
+          </span>
+        )}
         <div>
           <p className={styles.nombre}>{nombre}</p>
           <p className={styles.rol}>{rol}</p>
@@ -164,11 +91,42 @@ function Fila({ items, carrusel }) {
 }
 
 export default function TestimoniosSection() {
-  // Dos filas en sentidos opuestos, en desplazamiento continuo. Se pueden
-  // arrastrar con el dedo/mouse, pero siguen moviéndose solas (no se pausan al
-  // pasar el cursor) para que la sección nunca quede estática al hacer scroll.
+  // Reseñas reales aprobadas por el admin (solo aprobadas se muestran en el home).
+  const [items, setItems] = useState(null) // null = cargando; [] = ninguna
+
+  useEffect(() => {
+    let cancel = false
+    ;(async () => {
+      try {
+        const res = await fetch(
+          `${SUPABASE_URL}/rest/v1/resenas?aprobado=eq.true` +
+          `&select=nombre,rol,rating,texto&order=created_at.desc&limit=24`,
+          { headers: { apikey: ANON, Authorization: `Bearer ${ANON}` } }
+        )
+        const data = await res.json().catch(() => [])
+        if (!cancel) {
+          setItems(
+            (Array.isArray(data) ? data : [])
+              .filter((r) => r.texto)
+              .map((r) => ({ texto: r.texto, nombre: r.nombre || 'Cliente', rol: r.rol || 'Cliente', rating: r.rating || 5, imagen: null }))
+          )
+        }
+      } catch {
+        if (!cancel) setItems([])
+      }
+    })()
+    return () => { cancel = true }
+  }, [])
+
+  // Dos filas en sentidos opuestos, en desplazamiento continuo.
   const fila1Carrusel = useCarrusel({ speed: 40, direction: 1, loop: true })
   const fila2Carrusel = useCarrusel({ speed: 32, direction: -1, loop: true })
+
+  // Solo reseñas aprobadas: si aún no hay ninguna, la sección no se muestra.
+  if (!items || items.length === 0) return null
+
+  const fila1 = items
+  const fila2 = [...items].reverse()
 
   return (
     <section className={styles.section} aria-labelledby="testimonios-heading">

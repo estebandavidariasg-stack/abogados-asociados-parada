@@ -180,6 +180,21 @@
   user-select: none;
   -webkit-user-drag: none;
 }
+.avatarIniciales {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  font-family: 'Cinzel', Georgia, serif;
+  font-weight: 700;
+  font-size: 1.25rem;
+  color: #fff;
+  background: linear-gradient(135deg, #0d2d5e, #2a6496);
+  border: 2px solid var(--surface);
+  user-select: none;
+}
 .nombre {
   margin: 0;
   font-family: 'Raleway', sans-serif;

@@ -11,3 +11,7 @@ dist/
 # Visual companion (brainstorming) mockups
 .superpowers/
 .playwright-mcp/
+
+# Previews de correo y PDFs de muestra (artefactos generados)
+.preview-email-*.html
+docs/ejemplo-firmado.pdf

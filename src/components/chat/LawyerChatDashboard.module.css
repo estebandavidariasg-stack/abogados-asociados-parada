@@ -226,7 +226,71 @@
   gap: 10px;
   background: #fafbfd;
   scroll-behavior: smooth;
+  position: relative;
 }
+
+/* ── Menú del clip (adjuntar / enviar a firmar) ── */
+.attachWrap { position: relative; display: inline-flex; }
+.attachBackdrop { position: fixed; inset: 0; z-index: 40; }
+.attachMenu {
+  position: absolute; bottom: calc(100% + 8px); left: 0; z-index: 41;
+  width: 250px; padding: 6px;
+  background: #fff; border: 1px solid rgba(13,45,94,0.14); border-radius: 12px;
+  box-shadow: 0 14px 40px -12px rgba(13,45,94,0.4);
+  animation: attachIn 0.16s ease-out;
+}
+.attachMenu button {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 9px 10px; border: none; background: none; border-radius: 8px;
+  cursor: pointer; text-align: left; color: #0d2d5e; font-family: inherit;
+  transition: background 0.15s;
+}
+.attachMenu button:hover { background: rgba(201,168,76,0.12); }
+.attachMenu button span { display: flex; flex-direction: column; line-height: 1.2; }
+.attachMenu button strong { font-size: 0.82rem; font-weight: 700; }
+.attachMenu button small { font-size: 0.7rem; color: #6b7fa3; }
+.attachMenuIcon { font-size: 1rem; width: 15px; text-align: center; }
+
+/* ── Mensaje de firma (badge de icono + texto en columna) ── */
+.firmaMsg { display: flex; gap: 10px; align-items: flex-start; }
+.firmaIcon {
+  flex-shrink: 0; width: 30px; height: 30px; margin-top: 1px;
+  display: grid; place-items: center; border-radius: 9px;
+  background: rgba(201, 168, 76, 0.22); color: #e8c96a;
+}
+.firmaBody { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; line-height: 1.35; }
+.firmaSub { opacity: 0.85; font-size: 0.92em; }
+
+/* ── Botón de descarga del documento firmado (queda debajo del texto) ── */
+.firmaDlBtn {
+  display: inline-block; margin-top: 2px;
+  padding: 6px 12px; border-radius: 8px; cursor: pointer;
+  font-family: inherit; font-size: 0.76rem; font-weight: 700;
+  color: #0d2d5e; background: #e8c96a; border: none;
+}
+.firmaDlBtn:hover { background: #dbb84e; }
+.firmaDlRow { display: flex; flex-wrap: wrap; gap: 8px; }
+.firmaDlBtnAlt {
+  display: inline-block; padding: 6px 12px; border-radius: 8px; cursor: pointer;
+  font-family: inherit; font-size: 0.76rem; font-weight: 700;
+  color: #0d2d5e; background: rgba(13,45,94,0.08); border: 1px solid rgba(13,45,94,0.25);
+}
+.firmaDlBtnAlt:hover { background: rgba(13,45,94,0.15); }
+
+/* ── Overlay de arrastrar-soltar ── */
+.dropOverlay {
+  position: absolute; inset: 8px; z-index: 30;
+  display: grid; place-items: center;
+  background: rgba(13,45,94,0.08); backdrop-filter: blur(2px);
+  border: 2px dashed rgba(13,45,94,0.4); border-radius: 14px;
+  pointer-events: none;
+}
+.dropInner {
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  color: #0d2d5e; font-weight: 700; font-size: 0.9rem;
+}
+@keyframes attachIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .attachMenu { animation: none; } }
 
 .messagesEmpty {
   text-align: center;

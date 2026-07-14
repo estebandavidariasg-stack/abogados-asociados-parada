@@ -52,6 +52,15 @@ export const IconPencil = ({ size = 14 }) => (
   </svg>
 )
 
+// Firmar: pluma sobre una línea de firma (mismo estilo stroke del set).
+export const IconFirma = ({ size = 15 }) => (
+  <svg width={size} height={size} viewBox="0 0 16 16" fill="none" aria-hidden="true" style={{ display:'inline-block', verticalAlign:'middle', flexShrink:0 }}>
+    <path d="M2.5 13.5H13.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+    <path d="M10 2.8L12.7 5.5L6.2 12H3.5V9.3L10 2.8Z" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+    <path d="M8.6 4.2L11.3 6.9" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+  </svg>
+)
+
 export const IconTrash = ({ size = 13 }) => (
   <svg width={size} height={size} viewBox="0 0 13 14" fill="none" aria-hidden="true" style={{ display:'inline-block', verticalAlign:'middle', flexShrink:0 }}>
     <path d="M1.5 3.5H11.5M5 1.5H8M4.5 3.5V11.5C4.5 11.5 4.5 12.5 6.5 12.5C8.5 12.5 8.5 11.5 8.5 11.5V3.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>

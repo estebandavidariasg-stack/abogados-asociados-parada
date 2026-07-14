@@ -1,5 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { getAuthHeaders } from '../../lib/supabase'
+import { listarEvidencia, urlFirmada } from '../../lib/firmaService'
+import EnviarAFirmar from '../firma/EnviarAFirmar'
+import { IconFirma } from '../shared/Icons'
 import styles from './MisContratos.module.css'
 
 // Papelera clara (estilo Lucide trash-2) — más legible que el icono base
@@ -50,7 +54,28 @@ export default function MisContratos({ abogadoId, isSuperAdmin = false }) {
   const [descripcion, setDescripcion] = useState('')
   const fileRef = useRef()
 
-  useEffect(() => { if (abogadoId) cargar() }, [abogadoId])
+  // ── Firma electrónica ──
+  const [tab, setTab]               = useState('subidos') // subidos | clientes | admin
+  const [evidencia, setEvidencia]   = useState({ clientes: [], administracion: [] })
+  const [enviarFirma, setEnviarFirma] = useState(null)     // contrato a firmar | {} nuevo
+
+  useEffect(() => { if (abogadoId) { cargar(); cargarEvidencia() } }, [abogadoId])
+
+  async function cargarEvidencia() {
+    try {
+      const headers = await getAuthHeaders()
+      setEvidencia(await listarEvidencia(abogadoId, headers))
+    } catch { /* tablas de firma aún no aplicadas: sección vacía */ }
+  }
+
+  async function descargarFirmado(path, nombre) {
+    if (!path) return
+    const headers = await getAuthHeaders()
+    const url = await urlFirmada(path, headers)
+    if (!url) return
+    const a = document.createElement('a')
+    a.href = url; a.download = nombre || 'documento-firmado.pdf'; a.target = '_blank'; a.click()
+  }
 
   async function cargar() {
     setLoading(true)
@@ -150,56 +175,139 @@ export default function MisContratos({ abogadoId, isSuperAdmin = false }) {
               : 'Sube tus contratos. El administrador también puede verlos y descargarlos.'}
           </p>
         </div>
-        <button
-          className={styles.btnSubir}
-          onClick={() => { setShowForm(s => !s); setError(''); setSuccess('') }}
-        >
-          {showForm ? '✕ Cancelar' : '+ Subir contrato'}
-        </button>
+        <div className={styles.topActions}>
+          <button
+            className={styles.btnSubir}
+            onClick={() => { setShowForm(true); setError(''); setSuccess('') }}
+          >
+            + Subir contrato
+          </button>
+        </div>
+      </div>
+
+      {/* Pestañas: subidos / evidencia firmada por contraparte */}
+      <div className={styles.tabs} role="tablist">
+        {[
+          ['subidos', 'Subidos'],
+          ['clientes', `Firmados con clientes${evidencia.clientes.length ? ` (${evidencia.clientes.length})` : ''}`],
+          ['admin', `Firmados con la administración${evidencia.administracion.length ? ` (${evidencia.administracion.length})` : ''}`],
+        ].map(([k, label]) => (
+          <button
+            key={k}
+            role="tab"
+            aria-selected={tab === k}
+            className={`${styles.tab} ${tab === k ? styles.tabOn : ''}`}
+            onClick={() => setTab(k)}
+          >
+            {label}
+          </button>
+        ))}
       </div>
 
       {error   && <div className={styles.msgError}>{error}</div>}
       {success && <div className={styles.msgOk}>{success}</div>}
 
-      {/* Formulario */}
-      {showForm && (
-        <form className={styles.form} onSubmit={handleUpload}>
-          <div className={styles.dropZone} onClick={() => fileRef.current?.click()}>
-            {archivo ? (
-              <div className={styles.archivoSel}>
-                <span style={{ fontSize: '2rem' }}>{iconoTipo(archivo.name)}</span>
-                <div>
-                  <p className={styles.archNombre}>{archivo.name}</p>
-                  <p className={styles.archSize}>{fmtBytes(archivo.size)}</p>
-                </div>
+      {/* Modal: subir contrato */}
+      {showForm && createPortal(
+        <div className={styles.modalOverlay} onMouseDown={() => !uploading && setShowForm(false)}>
+          <div className={styles.modalCard} onMouseDown={e => e.stopPropagation()}>
+            <div className={styles.modalHead}>
+              <h3 className={styles.modalTitle}>Subir contrato</h3>
+              <button
+                className={styles.modalClose}
+                onClick={() => !uploading && setShowForm(false)}
+                aria-label="Cerrar"
+              >✕</button>
+            </div>
+            {error && <div className={styles.msgError}>{error}</div>}
+            <form className={styles.form} onSubmit={handleUpload}>
+              <div className={styles.dropZone} onClick={() => fileRef.current?.click()}>
+                {archivo ? (
+                  <div className={styles.archivoSel}>
+                    <span style={{ fontSize: '2rem' }}>{iconoTipo(archivo.name)}</span>
+                    <div>
+                      <p className={styles.archNombre}>{archivo.name}</p>
+                      <p className={styles.archSize}>{fmtBytes(archivo.size)}</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className={styles.dropPlaceholder}>
+                    <span style={{ fontSize: '2.2rem' }}>📂</span>
+                    <p className={styles.dropTexto}>Haz clic para seleccionar archivo</p>
+                    <p className={styles.dropSub}>PDF, DOC, DOCX — máx. 10 MB</p>
+                  </div>
+                )}
               </div>
-            ) : (
-              <div className={styles.dropPlaceholder}>
-                <span style={{ fontSize: '2.2rem' }}>📂</span>
-                <p className={styles.dropTexto}>Haz clic para seleccionar archivo</p>
-                <p className={styles.dropSub}>PDF, DOC, DOCX — máx. 10 MB</p>
-              </div>
-            )}
+              <input
+                ref={fileRef} type="file" accept=".pdf,.doc,.docx"
+                style={{ display: 'none' }}
+                onChange={e => setArchivo(e.target.files[0] || null)}
+              />
+              <input
+                className={styles.inputDesc}
+                placeholder="Descripción opcional (ej: Contrato honorarios — Juan Pérez)"
+                value={descripcion}
+                onChange={e => setDescripcion(e.target.value)}
+              />
+              <button className={styles.btnConfirmar} type="submit" disabled={uploading}>
+                {uploading ? 'Subiendo…' : '⬆ Confirmar subida'}
+              </button>
+            </form>
           </div>
-          <input
-            ref={fileRef} type="file" accept=".pdf,.doc,.docx"
-            style={{ display: 'none' }}
-            onChange={e => setArchivo(e.target.files[0] || null)}
-          />
-          <input
-            className={styles.inputDesc}
-            placeholder="Descripción opcional (ej: Contrato honorarios — Juan Pérez)"
-            value={descripcion}
-            onChange={e => setDescripcion(e.target.value)}
-          />
-          <button className={styles.btnConfirmar} type="submit" disabled={uploading}>
-            {uploading ? 'Subiendo…' : '⬆ Confirmar subida'}
-          </button>
-        </form>
+        </div>,
+        document.body
       )}
 
-      {/* Lista */}
-      {loading ? (
+      {/* Evidencia firmada — clientes / administración */}
+      {tab !== 'subidos' && (() => {
+        const rows = tab === 'clientes' ? evidencia.clientes : evidencia.administracion
+        if (rows.length === 0) {
+          return (
+            <div className={styles.emptyState}>
+              <span className={styles.emptyFirmaIcon}><IconFirma size={44} /></span>
+              <p className={styles.emptyTxt}>
+                Aún no hay documentos firmados {tab === 'clientes' ? 'con clientes' : 'con la administración'}
+              </p>
+              <p className={styles.emptySub}>Los documentos firmados quedarán aquí como evidencia</p>
+            </div>
+          )
+        }
+        return (
+          <div className={styles.lista}>
+            {rows.map(s => {
+              const nombres = (s.firmas_firmantes || []).map(f => f.nombre).filter(Boolean).join(', ')
+              return (
+                <div key={s.id} className={styles.contratoCard}>
+                  <span className={styles.contratoIcono}>🔏</span>
+                  <div className={styles.contratoInfo}>
+                    <p className={styles.contratoNombre}>Documento firmado</p>
+                    {nombres && <p className={styles.contratoDesc}>Firmantes: {nombres}</p>}
+                    <p className={styles.contratoMeta}>{fmtFecha(s.created_at)}</p>
+                  </div>
+                  <div className={styles.contratoAcciones}>
+                    <button
+                      className={styles.btnDown}
+                      onClick={() => descargarFirmado(s.doc_firmado_path, `documento-firmado${/\.docx$/.test(s.doc_firmado_path || '') ? '.docx' : '.pdf'}`)}
+                      disabled={!s.doc_firmado_path}
+                    >
+                      ⬇ Documento
+                    </button>
+                    <button
+                      className={styles.btnDown}
+                      onClick={() => descargarFirmado(`${s.id}/certificado.pdf`, 'certificado.pdf')}
+                    >
+                      ⬇ Certificado
+                    </button>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )
+      })()}
+
+      {/* Lista de subidos */}
+      {tab === 'subidos' && (loading ? (
         <p className={styles.empty}>Cargando contratos…</p>
       ) : contratos.length === 0 ? (
         <div className={styles.emptyState}>
@@ -220,6 +328,9 @@ export default function MisContratos({ abogadoId, isSuperAdmin = false }) {
                 </p>
               </div>
               <div className={styles.contratoAcciones}>
+                <button className={styles.btnFirmarSm} onClick={() => setEnviarFirma(c)}>
+                  <IconFirma size={14} /> Firmar
+                </button>
                 <button className={styles.btnDown} onClick={() => descargar(c)}>
                   ⬇ Descargar
                 </button>
@@ -237,6 +348,16 @@ export default function MisContratos({ abogadoId, isSuperAdmin = false }) {
             </div>
           ))}
         </div>
+      ))}
+
+      {/* Modal: iniciar solicitud de firma */}
+      {enviarFirma && (
+        <EnviarAFirmar
+          contrato={enviarFirma.id ? enviarFirma : null}
+          abogadoId={abogadoId}
+          onClose={() => setEnviarFirma(null)}
+          onDone={() => { cargarEvidencia(); }}
+        />
       )}
     </div>
   )
