@@ -81,6 +81,30 @@ export default function MisContratos({ abogadoId, isSuperAdmin = false }) {
     document.body.appendChild(a); a.click(); a.remove()
   }
 
+  // Genera el certificado de firma AL VUELO desde la traza de los firmantes y
+  // lo descarga. Funciona para cualquier firma (no depende de un archivo previo).
+  async function descargarCertificado(s) {
+    try {
+      const { generarCertificadoPdf } = await import('../../lib/firmaPdf')
+      const firmantes = (s.firmas_firmantes || []).map((f) => ({
+        nombre: f.nombre, cedula: f.cedula, correo: f.correo, rol: f.rol_firma,
+        firmado_at: f.firmado_at, ip: f.ip, user_agent: f.user_agent,
+      }))
+      const bytes = await generarCertificadoPdf({
+        solicitudId: s.id,
+        docHash: s.firmas_firmantes?.find((f) => f.doc_hash)?.doc_hash || '',
+        firmantes,
+      })
+      const url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }))
+      const a = document.createElement('a')
+      a.href = url; a.download = 'certificado-de-firma.pdf'
+      document.body.appendChild(a); a.click(); a.remove()
+      setTimeout(() => URL.revokeObjectURL(url), 4000)
+    } catch (e) {
+      setError('No se pudo generar el certificado. ' + (e?.message || ''))
+    }
+  }
+
   async function cargar() {
     setLoading(true)
     try {
@@ -298,7 +322,7 @@ export default function MisContratos({ abogadoId, isSuperAdmin = false }) {
                     </button>
                     <button
                       className={styles.btnDown}
-                      onClick={() => descargarFirmado(`${s.id}/certificado.pdf`, 'certificado.pdf')}
+                      onClick={() => descargarCertificado(s)}
                     >
                       ⬇ Certificado
                     </button>
