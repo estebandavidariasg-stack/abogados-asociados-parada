@@ -73,8 +73,12 @@ export default function MisContratos({ abogadoId, isSuperAdmin = false }) {
     const headers = await getAuthHeaders()
     const url = await urlFirmada(path, headers)
     if (!url) return
+    const fn = nombre || path.split('/').pop() || 'documento'
+    // Fuerza la descarga (Content-Disposition attachment) en vez de previsualizar.
     const a = document.createElement('a')
-    a.href = url; a.download = nombre || 'documento-firmado.pdf'; a.target = '_blank'; a.click()
+    a.href = url + (url.includes('?') ? '&' : '?') + 'download=' + encodeURIComponent(fn)
+    a.download = fn
+    document.body.appendChild(a); a.click(); a.remove()
   }
 
   async function cargar() {

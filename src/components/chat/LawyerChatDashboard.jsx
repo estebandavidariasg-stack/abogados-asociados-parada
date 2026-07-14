@@ -200,6 +200,7 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
   const [dragging, setDragging] = useState(false)          // arrastrar-soltar
 
   // Descarga desde el mensaje firma_ok: 'doc' (Word) o 'cert' (certificado PDF).
+  // Fuerza la descarga (Content-Disposition attachment) en vez de abrir un visor.
   async function descargarFirmado(content, tipo = 'doc') {
     const f = parseFirmaOk(content)
     const path = tipo === 'cert' ? f?.certPath : f?.docPath
@@ -207,8 +208,13 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
     try {
       const headers = await getAuthHeaders()
       const url = await urlFirmada(path, headers)
-      if (url) window.open(url, '_blank', 'noopener,noreferrer')
-    } catch { setToast('No se pudo abrir el documento.') }
+      if (!url) return
+      const nombre = path.split('/').pop() || 'documento'
+      const a = document.createElement('a')
+      a.href = url + (url.includes('?') ? '&' : '?') + 'download=' + encodeURIComponent(nombre)
+      a.download = nombre
+      document.body.appendChild(a); a.click(); a.remove()
+    } catch { setToast('No se pudo descargar el documento.') }
   }
 
   // Publica en el hilo el mensaje de firma para que el cliente lo firme.
