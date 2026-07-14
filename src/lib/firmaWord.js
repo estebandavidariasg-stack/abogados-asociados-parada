@@ -1,20 +1,25 @@
 /* ─────────────────────────────────────────────────────────────────────────
-   Genera el documento firmado en Word (.docx) con la FIRMA MOVIBLE:
-     · cada página del documento va como imagen (texto NO editable)
-     · la firma + su pie de firma van juntos como UNA imagen FLOTANTE que se
-       arrastra/reposiciona en Word (movible), pero NO editable
-   NO incluye el certificado (ese va como PDF aparte).
-
-   Nota: no hay texto editable. Lo único que el profesional puede hacer es
-   MOVER el bloque de firma; ni el documento ni el pie se pueden alterar.
+   Documento firmado en Word (.docx) idéntico al PDF, con la FIRMA MOVIBLE:
+     · cada página va como imagen (texto y espaciado exactamente como el PDF)
+     · el bloque de firma (firma + pie) va como UNA imagen FLOTANTE colocada en
+       la MISMA posición y tamaño que tiene en el PDF, y se puede mover en Word.
+   Nada es editable salvo mover ese bloque. No incluye el certificado (va aparte).
    ───────────────────────────────────────────────────────────────────────── */
 import { Document, Packer, Paragraph, ImageRun, TextWrappingType, TextWrappingSide } from 'docx'
 import { ROL_LABEL } from './firmaPdf'
 import { dataUrlABytes } from './pdfARaster'
 
-const EMU_IN = 914400 // EMU por pulgada
-const CONTENT_W = 720 // px de ancho útil (Letter 8.5" - 0.5" márgenes @96dpi)
-const CONTENT_H = 960
+const EMU_IN = 914400            // EMU por pulgada
+const RASTER_SCALE = 2           // debe coincidir con rasterizarPdf(bytes, 2)
+// Página Letter (docx por defecto) con márgenes de 0.5".
+const MARGIN_IN = 0.5
+const CONTENT_W_PX = 720         // 7.5" @ 96dpi
+const CONTENT_H_PX = 960         // 10"  @ 96dpi
+// Geometría del bloque de firma tal como lo dibuja estamparFirma() (en puntos):
+//  firma encima del ancla (y) y pie de firma debajo. Ver dibujarBloqueFirma().
+const SIG_TOP_ABOVE_Y = 66       // borde superior de la firma por encima de `y`
+const BLOCK_H_PT = 168           // alto total del bloque (firma + 6 líneas de pie)
+const BLOCK_W_PT = 240           // ancho del bloque
 
 function fmtCedula(c) {
   const d = String(c || '').replace(/\D/g, '')
@@ -27,37 +32,30 @@ function fmtFecha(iso) {
 function cargarImg(src) {
   return new Promise((resolve, reject) => {
     const img = new Image()
-    img.onload = () => resolve(img)
-    img.onerror = reject
-    img.src = src
+    img.onload = () => resolve(img); img.onerror = reject; img.src = src
   })
 }
 
-/* Dibuja firma + pie de firma en un canvas y devuelve un PNG (dataURL).
-   Todo el bloque queda como imagen: movible pero NO editable. Pie en negro,
-   tipografía serif (Times New Roman). */
+/* Firma + pie de firma en un canvas con la proporción del bloque del PDF
+   (BLOCK_W_PT x BLOCK_H_PT). Todo imagen: movible pero NO editable. */
 async function bloqueFirmaPng(firmaPngDataUrl, pie) {
-  const S = 3 // supersampling para nitidez
-  const W = 300 * S, H = 168 * S
+  const S = 3
+  const W = BLOCK_W_PT * S, H = BLOCK_H_PT * S
   const canvas = document.createElement('canvas')
   canvas.width = W; canvas.height = H
   const ctx = canvas.getContext('2d')
 
-  // Firma manuscrita arriba.
   if (firmaPngDataUrl) {
     try {
       const img = await cargarImg(firmaPngDataUrl)
-      const sw = Math.min(160 * S, img.width * ((58 * S) / img.height))
-      ctx.drawImage(img, 0, 2 * S, sw, 58 * S)
-    } catch { /* sin firma dibujada */ }
+      const sw = Math.min(150 * S, img.width * ((56 * S) / img.height))
+      ctx.drawImage(img, 0, 4 * S, sw, 56 * S)
+    } catch { /* sin firma */ }
   }
-  // Línea de firma.
   ctx.strokeStyle = '#000'; ctx.lineWidth = 1 * S
-  ctx.beginPath(); ctx.moveTo(0, 64 * S); ctx.lineTo(250 * S, 64 * S); ctx.stroke()
+  ctx.beginPath(); ctx.moveTo(0, 62 * S); ctx.lineTo(200 * S, 62 * S); ctx.stroke()
 
-  // Pie de firma (Times New Roman, negro, ~12pt).
-  ctx.fillStyle = '#000'
-  ctx.textBaseline = 'alphabetic'
+  ctx.fillStyle = '#000'; ctx.textBaseline = 'alphabetic'
   const lineas = [
     [pie.nombre || '', true],
     [`C.C. ${fmtCedula(pie.cedula)}`, false],
@@ -66,49 +64,77 @@ async function bloqueFirmaPng(firmaPngDataUrl, pie) {
     [`${pie.ciudad || ''}, ${fmtFecha(pie.fecha)}`, false],
     [`En calidad de: ${ROL_LABEL[pie.rol] || pie.rol || 'Firmante'}`, true],
   ]
-  let y = 80 * S
+  let y = 78 * S
   for (const [t, bold] of lineas) {
-    ctx.font = `${bold ? 'bold ' : ''}${12 * S}px "Times New Roman", Georgia, serif`
+    ctx.font = `${bold ? 'bold ' : ''}${11 * S}px "Times New Roman", Georgia, serif`
     ctx.fillText(t, 0, y)
     y += 14 * S
   }
-  return { dataUrl: canvas.toDataURL('image/png'), w: 300, h: 168 }
+  return canvas.toDataURL('image/png')
 }
 
-export async function generarWordFirma({ paginas, firmaPngDataUrl, pie }) {
-  const bloque = await bloqueFirmaPng(firmaPngDataUrl, pie)
+/* `posicion`: { x, y } donde se estampó la firma en el PDF (puntos, origen
+   abajo-izquierda de la ÚLTIMA página). Por defecto igual que estamparFirma. */
+export async function generarWordFirma({ paginas, firmaPngDataUrl, pie, posicion = {} }) {
+  const bloqueUrl = await bloqueFirmaPng(firmaPngDataUrl, pie)
+  const bloqueBytes = dataUrlABytes(bloqueUrl)
+
+  const x = posicion.x != null ? posicion.x : 56
+  const yAncla = posicion.y != null ? posicion.y : 140
+
   const children = []
+  const ultima = paginas.length - 1
 
   paginas.forEach((pg, i) => {
-    const scale = Math.min(CONTENT_W / pg.width, CONTENT_H / pg.height)
-    const w = Math.round(pg.width * scale)
-    const h = Math.round(pg.height * scale)
+    // Ajuste de la imagen de página al área de contenido (px @96dpi).
+    const dispScale = Math.min(CONTENT_W_PX / pg.width, CONTENT_H_PX / pg.height)
+    const dispW = pg.width * dispScale
+    const dispH = pg.height * dispScale
     const runs = [
-      new ImageRun({ type: 'png', data: dataUrlABytes(pg.dataUrl), transformation: { width: w, height: h } }),
+      new ImageRun({ type: 'png', data: dataUrlABytes(pg.dataUrl), transformation: { width: Math.round(dispW), height: Math.round(dispH) } }),
     ]
-    // El bloque de firma (firma + pie, ya como imagen) va FLOTANTE en la última
-    // página: el profesional lo mueve donde quiera; nada es editable.
-    if (i === paginas.length - 1) {
+
+    if (i === ultima) {
+      // Página del PDF en puntos (pdf.js rasterizó a RASTER_SCALE).
+      const pageW_pt = pg.width / RASTER_SCALE
+      const pageH_pt = pg.height / RASTER_SCALE
+      // Esquina superior-izquierda del bloque en el PDF (y-arriba → desde arriba).
+      const blockLeft_pt = x
+      const blockTopFromTop_pt = pageH_pt - (yAncla + SIG_TOP_ABOVE_Y)
+      // Fracciones dentro de la página → posición sobre la imagen mostrada (in).
+      const fx = blockLeft_pt / pageW_pt
+      const fyTop = blockTopFromTop_pt / pageH_pt
+      const xIn = MARGIN_IN + fx * (dispW / 96)
+      const yIn = MARGIN_IN + fyTop * (dispH / 96)
+      const bwIn = (BLOCK_W_PT / pageW_pt) * (dispW / 96)
+      const bhIn = (BLOCK_H_PT / pageH_pt) * (dispH / 96)
+
       runs.push(new ImageRun({
         type: 'png',
-        data: dataUrlABytes(bloque.dataUrl),
-        transformation: { width: bloque.w, height: bloque.h },
+        data: bloqueBytes,
+        transformation: { width: Math.round(bwIn * 96), height: Math.round(bhIn * 96) },
         floating: {
-          horizontalPosition: { offset: Math.round(EMU_IN * 0.9) },
-          verticalPosition: { offset: Math.round(EMU_IN * 7.8) },
+          horizontalPosition: { offset: Math.round(xIn * EMU_IN) },
+          verticalPosition: { offset: Math.round(yIn * EMU_IN) },
           allowOverlap: true,
           behindDocument: false,
           wrap: { type: TextWrappingType.NONE, side: TextWrappingSide.BOTH_SIDES },
         },
       }))
     }
+
     children.push(new Paragraph({ children: runs }))
-    if (i < paginas.length - 1) children.push(new Paragraph({ children: [] }))
+    if (i < ultima) children.push(new Paragraph({ children: [] }))
   })
 
   const doc = new Document({
     sections: [{
-      properties: { page: { margin: { top: 720, bottom: 720, left: 720, right: 720 } } }, // 0.5"
+      properties: {
+        page: {
+          size: { width: 12240, height: 15840 }, // Letter (twips)
+          margin: { top: 720, bottom: 720, left: 720, right: 720 }, // 0.5"
+        },
+      },
       children,
     }],
   })

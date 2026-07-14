@@ -266,7 +266,7 @@
 
 /* ── Botón de descarga del documento firmado (queda debajo del texto) ── */
 .firmaDlBtn {
-  display: inline-block; margin-top: 2px;
+  display: inline-flex; align-items: center; gap: 6px; margin-top: 2px;
   padding: 6px 12px; border-radius: 8px; cursor: pointer;
   font-family: inherit; font-size: 0.76rem; font-weight: 700;
   color: #0d2d5e; background: #e8c96a; border: none;

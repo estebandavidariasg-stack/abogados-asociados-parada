@@ -313,16 +313,31 @@ function SignaturePad({ onChange }) {
 
   useEffect(() => {
     const canvas = canvasRef.current
-    const ratio = window.devicePixelRatio || 1
-    const rect = canvas.getBoundingClientRect()
-    canvas.width = rect.width * ratio
-    canvas.height = rect.height * ratio
-    const ctx = canvas.getContext('2d')
-    ctx.scale(ratio, ratio)
-    ctx.lineWidth = 2.4
-    ctx.lineCap = 'round'
-    ctx.lineJoin = 'round'
-    ctx.strokeStyle = '#0d2d5e'
+    if (!canvas) return
+
+    // Mide el canvas y fija el trazo. Idempotente: se puede llamar varias veces.
+    // NO re-inicializa si ya hay firma dibujada (borraría el canvas).
+    const setup = () => {
+      if (dirty.current) return
+      const rect = canvas.getBoundingClientRect()
+      if (!rect.width || !rect.height) return
+      const ratio = window.devicePixelRatio || 1
+      canvas.width = Math.round(rect.width * ratio)
+      canvas.height = Math.round(rect.height * ratio)
+      const ctx = canvas.getContext('2d')
+      ctx.setTransform(ratio, 0, 0, ratio, 0, 0)
+      ctx.lineWidth = 2.4
+      ctx.lineCap = 'round'
+      ctx.lineJoin = 'round'
+      ctx.strokeStyle = '#0d2d5e'
+    }
+
+    // Medir DESPUÉS de que el modal termine su animación de ancho/entrada.
+    const raf = requestAnimationFrame(() => requestAnimationFrame(setup))
+    // Re-medir si el modal cambia de tamaño (transición de ancho entre pasos).
+    const ro = new ResizeObserver(setup)
+    ro.observe(canvas)
+    return () => { cancelAnimationFrame(raf); ro.disconnect() }
   }, [])
 
   const pos = (e) => {

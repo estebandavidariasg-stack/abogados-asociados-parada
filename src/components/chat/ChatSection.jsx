@@ -15,6 +15,14 @@ const FirmaClienteChat = lazy(() => import('../firma/FirmaClienteChat'))
 function parseFirma(content) {
   try { const o = JSON.parse(content); return o?.t === 'firma' ? o : null } catch { return null }
 }
+// Renderiza **negrilla** conservando saltos de línea (los maneja el CSS del bubble).
+function renderMensaje(text) {
+  if (text == null) return text
+  return String(text).split(/(\*\*[^*\n]+\*\*)/g).map((parte, i) => {
+    const m = parte.match(/^\*\*([^*\n]+)\*\*$/)
+    return m ? <strong key={i}>{m[1]}</strong> : parte
+  })
+}
 function parseFirmaOk(content) {
   try { const o = JSON.parse(content); return o?.t === 'firma_ok' ? o : null } catch { return null }
 }
@@ -1217,7 +1225,7 @@ export default function ChatSection() {
       : ''
     await supabase.from('chat_messages').insert({
       room_id: room.id, sender_type:'client', lawyer_id: null,
-      content: `Hola, mi nombre es ${nombre} ${apellido}.\n\nUbicación: ${ubicacionTxt}\nÁrea(s): ${areas.join(', ')}\n\nDescripción del caso:\n${descripcion}${resumenBloque}`,
+      content: `Hola, mi nombre es ${nombre} ${apellido}.\n\n**Ubicación:** ${ubicacionTxt}\n**Área(s):** ${areas.join(', ')}\n\n**Descripción del caso:**\n${descripcion}${resumenBloque}`,
     })
     // En el flujo guiado por IA no pasamos por la lista (`lawyers` queda vacío),
     // así que sumamos el profesional recomendado por la IA para poder notificarlo.
@@ -1660,7 +1668,7 @@ export default function ChatSection() {
                               </button>
                             )
                           ) : (
-                            <p className={styles.msgText}>{msg.content}</p>
+                            <p className={styles.msgText}>{renderMensaje(msg.content)}</p>
                           )}
                           <p className={mine ? styles.msgMetaMine : styles.msgMetaOther}>
                             {mine ? (localStorage.getItem('chat_nombre') || 'Tú') : 'Abogado'} · {new Date(msg.created_at).toLocaleTimeString('es-CO', { hour:'2-digit', minute:'2-digit' })}

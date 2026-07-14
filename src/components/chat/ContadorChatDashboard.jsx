@@ -1,5 +1,7 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react'
 import { supabase, getAuthHeaders } from '../../lib/supabase'
+
+const UbicarFirma = lazy(() => import('../firma/UbicarFirma'))
 import { contieneContacto } from '../../lib/validaciones'
 import styles from './ContadorChatDashboard.module.css'
 import AudioPlayer from './AudioPlayer'
@@ -9,7 +11,7 @@ import { pedirIA } from '../../lib/aiClient'
 import { motion, AnimatePresence } from 'framer-motion'
 import Markdown from '../shared/Markdown'
 import EnviarAFirmar from '../firma/EnviarAFirmar'
-import { urlFirmada } from '../../lib/firmaService'
+import { firmantesPendientes } from '../../lib/firmaService'
 
 // Parseo seguro de los payloads JSON de los mensajes de firma.
 function parseFirma(content) {
@@ -191,23 +193,25 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
   const [firmaOpen, setFirmaOpen] = useState(false)
   const [adjuntarMenu, setAdjuntarMenu] = useState(false)
   const [dragging, setDragging] = useState(false)
+  const [ubicarFirma, setUbicarFirma] = useState(null)
 
-  // Descarga desde el mensaje firma_ok: 'doc' (Word) o 'cert' (certificado PDF).
-  // Fuerza la descarga (Content-Disposition attachment) en vez de abrir un visor.
-  async function descargarFirmado(content, tipo = 'doc') {
-    const f = parseFirmaOk(content)
-    const path = tipo === 'cert' ? f?.certPath : f?.docPath
-    if (!path) return
+  // Genera y descarga el certificado de firma (PDF) al vuelo desde la traza.
+  async function descargarCertificado(solicitudId) {
     try {
       const headers = await getAuthHeaders()
-      const url = await urlFirmada(path, headers)
-      if (!url) return
-      const nombre = path.split('/').pop() || 'documento'
+      const filas = await firmantesPendientes(solicitudId, headers)
+      const { generarCertificadoPdf } = await import('../../lib/firmaPdf')
+      const bytes = await generarCertificadoPdf({
+        solicitudId,
+        docHash: filas.find(f => f.doc_hash)?.doc_hash || '',
+        firmantes: filas.map(f => ({ nombre: f.nombre, cedula: f.cedula, correo: f.correo, rol: f.rol_firma, firmado_at: f.firmado_at, ip: f.ip, user_agent: f.user_agent })),
+      })
+      const url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }))
       const a = document.createElement('a')
-      a.href = url + (url.includes('?') ? '&' : '?') + 'download=' + encodeURIComponent(nombre)
-      a.download = nombre
+      a.href = url; a.download = 'certificado-de-firma.pdf'
       document.body.appendChild(a); a.click(); a.remove()
-    } catch { setToast('No se pudo descargar el documento.') }
+      setTimeout(() => URL.revokeObjectURL(url), 4000)
+    } catch { setToast('No se pudo generar el certificado.') }
   }
 
   // Publica en el hilo el mensaje de firma para que el cliente lo firme.
@@ -1123,14 +1127,12 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
                           <span className={`${styles.msgText} ${styles.firmaBody}`}>
                             <strong>El cliente firmó el documento</strong>
                             <span className={styles.firmaDlRow}>
-                              <button className={styles.firmaDlBtn} onClick={() => descargarFirmado(m.content, 'doc')}>
-                                ⬇ Documento (Word)
+                              <button className={styles.firmaDlBtn} onClick={() => setUbicarFirma(parseFirmaOk(m.content))}>
+                                <IconFirma size={13} /> Ubicar firma y descargar PDF
                               </button>
-                              {parseFirmaOk(m.content)?.certPath && (
-                                <button className={styles.firmaDlBtnAlt} onClick={() => descargarFirmado(m.content, 'cert')}>
-                                  ⬇ Certificado (PDF)
-                                </button>
-                              )}
+                              <button className={styles.firmaDlBtnAlt} onClick={() => descargarCertificado(parseFirmaOk(m.content)?.solicitudId)}>
+                                ⬇ Certificado (PDF)
+                              </button>
                             </span>
                           </span>
                         </span>
@@ -1211,6 +1213,19 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
           </>
         )}
       </div>
+
+      {/* ── Modal: ubicar la firma y descargar PDF ── */}
+      {ubicarFirma && (
+        <Suspense fallback={null}>
+          <UbicarFirma
+            origPath={ubicarFirma.origPath}
+            firmaPath={ubicarFirma.firmaPath}
+            pie={ubicarFirma.pie}
+            filename="documento-firmado.pdf"
+            onClose={() => setUbicarFirma(null)}
+          />
+        </Suspense>
+      )}
 
       {/* ── Modal: enviar documento a firmar (chat) ── */}
       {firmaOpen && activeRoom && (

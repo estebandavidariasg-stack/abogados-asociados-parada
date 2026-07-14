@@ -39,44 +39,22 @@ export default function FirmaClienteChat({ firma, roomId, onClose, onDone }) {
       signedBytes, pie, headers: anonHeaders(),
     })
 
-    let docPath = res?.docFirmadoPath || firma.docPath
-    let certPath = null
-
-    // Al completar la firma: generar el DOCUMENTO en Word (firma movible) y el
-    // CERTIFICADO en PDF aparte. Todo el peso (docx, pdf.js) baja aquí, no en
-    // el bundle público. Si algo falla, queda el PDF estampado como respaldo.
-    if (res?.completa && bytes) {
+    // Guardamos el PNG de la firma (para que el profesional la ubique luego y
+    // exporte el PDF) y el certificado aparte. El documento se estampa al momento
+    // de descargar, en la posición que elija el profesional (ver UbicarFirma).
+    const firmaPath = `${firma.solicitudId}/firma.png`
+    if (res?.completa) {
       try {
-        const [{ rasterizarPdf }, { generarWordFirma }, { generarCertificadoPdf, hashDocumento }] = await Promise.all([
-          import('../../lib/pdfARaster'),
-          import('../../lib/firmaWord'),
-          import('../../lib/firmaPdf'),
-        ])
-        const paginas = await rasterizarPdf(bytes)
-        const wordBlob = await generarWordFirma({ paginas, firmaPngDataUrl: firmaPng, pie })
-        const wordBytes = new Uint8Array(await wordBlob.arrayBuffer())
-        const wordPath = `${firma.solicitudId}/documento.docx`
-        await subirDoc(wordPath, wordBytes, anonHeaders(),
-          'application/vnd.openxmlformats-officedocument.wordprocessingml.document')
-
-        const certBytes = await generarCertificadoPdf({
-          solicitudId: firma.solicitudId,
-          docHash: await hashDocumento(wordBytes),
-          firmantes: (res.firmantes || []).map((f) => ({
-            nombre: f.nombre, cedula: f.cedula, correo: f.correo, rol: f.rol_firma,
-            firmado_at: f.firmado_at, ip: f.ip, user_agent: f.user_agent,
-          })),
-        })
-        certPath = `${firma.solicitudId}/certificado.pdf`
-        await subirDoc(certPath, certBytes, anonHeaders(), 'application/pdf')
-
-        await cerrarSolicitud(firma.solicitudId, wordPath, anonHeaders())
-        docPath = wordPath
-      } catch (e) { console.error('[firma word/cert]', e?.message || e) }
+        // firmaPng es un dataURL PNG del lienzo → bytes.
+        const b64 = String(firmaPng || '').split(',')[1] || ''
+        const bin = atob(b64)
+        const arr = new Uint8Array(bin.length)
+        for (let k = 0; k < bin.length; k++) arr[k] = bin.charCodeAt(k)
+        await subirDoc(firmaPath, arr, anonHeaders(), 'image/png')
+      } catch (e) { console.error('[firma png]', e?.message || e) }
     }
 
-    // Avisar en el hilo del chat que el cliente firmó (el profesional recibe el
-    // toast por realtime y puede descargar el documento Word + certificado).
+    // Avisar en el hilo: el profesional podrá ubicar la firma y descargar el PDF.
     if (roomId) {
       try {
         await fetch(`${SUPABASE_URL}/rest/v1/chat_messages`, {
@@ -85,7 +63,10 @@ export default function FirmaClienteChat({ firma, roomId, onClose, onDone }) {
           body: JSON.stringify({
             room_id: roomId,
             sender_type: 'client',
-            content: JSON.stringify({ t: 'firma_ok', solicitudId: firma.solicitudId, docPath, certPath }),
+            content: JSON.stringify({
+              t: 'firma_ok', solicitudId: firma.solicitudId,
+              origPath: firma.docPath, firmaPath, pie,
+            }),
             message_type: 'firma_ok',
           }),
         })

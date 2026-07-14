@@ -44,6 +44,15 @@ export async function docxABytes(blob, onProgress) {
     'z-index:-1;pointer-events:none;'
   document.body.appendChild(host)
 
+  // Estilo global (en <head>, docx-preview NO lo borra) que neutraliza el fondo
+  // gris del "visor", la sombra de página y cualquier banda de encabezado/pie.
+  const estilo = document.createElement('style')
+  estilo.textContent =
+    '.docx-wrapper{background:#fff !important;padding:0 !important;}' +
+    '.docx-wrapper>section.docx{box-shadow:none !important;margin:0 auto !important;background:#fff !important;}' +
+    '.docx-wrapper header,.docx-wrapper footer,.docx-header,.docx-footer{display:none !important;}'
+  document.head.appendChild(estilo)
+
   try {
     await renderAsync(await blob.arrayBuffer(), host, undefined, {
       className: 'docxrender',
@@ -51,8 +60,8 @@ export async function docxABytes(blob, onProgress) {
       ignoreWidth: false,
       ignoreHeight: false,
       breakPages: true,
-      renderHeaders: true,
-      renderFooters: true,
+      renderHeaders: false,
+      renderFooters: false,
     })
 
     // Cada página de docx-preview es un <section> dentro de .docx-wrapper.
@@ -60,11 +69,18 @@ export async function docxABytes(blob, onProgress) {
     if (pages.length === 0) pages = Array.from(host.querySelectorAll('section.docx, .docx'))
     if (pages.length === 0) pages = [host] // fallback: todo el contenedor
 
+    // Elimina encabezados/pies que docx-preview haya dibujado (las franjas grises).
+    host.querySelectorAll('header, footer, .docx-header, .docx-footer').forEach(e => e.remove())
+
     onProgress?.('rasterizar')
     const html2canvas = (await import('html2canvas')).default
     const pdf = await PDFDocument.create()
 
     for (const el of pages) {
+      // Belt-and-suspenders: sin sombra/margen en la sección que capturamos.
+      el.style.boxShadow = 'none'
+      el.style.margin = '0'
+      el.style.background = '#fff'
       const canvas = await html2canvas(el, {
         scale: 2,
         backgroundColor: '#ffffff',
@@ -85,6 +101,7 @@ export async function docxABytes(blob, onProgress) {
     return await pdf.save()
   } finally {
     host.remove()
+    estilo.remove()
   }
 }
 

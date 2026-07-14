@@ -8,9 +8,11 @@ import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl
 
-/* Devuelve [{ dataUrl, width, height }] — una entrada por página. */
+/* Devuelve [{ dataUrl, width, height }] — una entrada por página.
+   Trabaja sobre una COPIA: pdf.js desacopla (detach) el buffer que recibe, y si
+   fuera el original el llamador se quedaría sin bytes (p.ej. para estamparFirma). */
 export async function rasterizarPdf(pdfBytes, scale = 2) {
-  const bytes = pdfBytes instanceof Uint8Array ? pdfBytes : new Uint8Array(pdfBytes)
+  const bytes = pdfBytes instanceof Uint8Array ? pdfBytes.slice() : new Uint8Array(pdfBytes)
   const pdf = await pdfjsLib.getDocument({ data: bytes }).promise
   const paginas = []
   for (let i = 1; i <= pdf.numPages; i++) {

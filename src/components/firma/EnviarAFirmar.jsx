@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useAuth } from '../../context/AuthContext'
 import { getAuthHeaders } from '../../lib/supabase'
-import { archivoAPdfBytes } from '../../lib/docxAPdf'
 import { crearSolicitud, subirDoc, persistirFirma, bytesDeDoc } from '../../lib/firmaService'
 import { ROL_LABEL } from '../../lib/firmaPdf'
 import { IconFirma } from '../shared/Icons'
@@ -12,9 +11,10 @@ import styles from './EnviarAFirmar.module.css'
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
 
 /* ─────────────────────────────────────────────────────────────────────────
-   EnviarAFirmar — inicia una solicitud de firma para el flujo INTERNO de
-   Contratos (profesional ↔ administrador). Pasos:
-     1) Documento: subir/convertir a PDF + previsualizar (fidelidad Word).
+   EnviarAFirmar — inicia una solicitud de firma. El documento debe llegar YA
+   FINAL en PDF: la edición previa (Word) ocurre por fuera, en el intercambio de
+   archivos del chat o en el repositorio de Contratos. Aquí solo se firma. Pasos:
+     1) Documento: subir el PDF final + previsualizar.
      2) Firmantes: el iniciador (prellenado) + la contraparte por correo.
      3) Crear la solicitud y firmar la parte del iniciador (FirmaSigner).
 
@@ -69,10 +69,15 @@ export default function EnviarAFirmar({ contrato, abogadoId, onClose, onDone, mo
     return () => URL.revokeObjectURL(url)
   }, [pdfBytes])
 
-  // Si viene un contrato existente, cargar y convertir su archivo.
+  // Si viene un contrato existente, cargar su archivo (debe ser PDF).
   useEffect(() => {
     if (!contrato) return
     ;(async () => {
+      const esPdf = /\.pdf$/i.test(contrato.nombre_archivo || '')
+      if (!esPdf) {
+        setError('Este contrato no es PDF. Para firmarlo, súbelo en PDF (exporta tu Word a PDF).')
+        return
+      }
       setConvirtiendo(true); setError('')
       try {
         const headers = await getAuthHeaders()
@@ -80,10 +85,8 @@ export default function EnviarAFirmar({ contrato, abogadoId, onClose, onDone, mo
           { method: 'POST', headers, body: JSON.stringify({ expiresIn: 3600 }) })
         const data = await signRes.json()
         const url = `${SUPABASE_URL}/storage/v1${data.signedURL}`
-        const blob = await (await fetch(url)).blob()
-        const file = new File([blob], contrato.nombre_archivo, { type: blob.type })
-        const bytes = await archivoAPdfBytes(file, setStage)
-        setPdfBytes(bytes)
+        const buf = await (await fetch(url)).arrayBuffer()
+        setPdfBytes(new Uint8Array(buf))
       } catch (e) {
         setError('No se pudo cargar el documento. ' + (e?.message || ''))
       } finally { setConvirtiendo(false); setStage('') }
@@ -96,15 +99,19 @@ export default function EnviarAFirmar({ contrato, abogadoId, onClose, onDone, mo
     if (e.target) e.target.value = ''
   }
 
-  // Convierte y carga el archivo (usado por el input y por arrastrar-soltar).
+  // Solo PDF: no convertimos nada (así el documento queda idéntico al original).
   async function procesarArchivo(file) {
     if (!file) return
+    const esPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name || '')
+    if (!esPdf) {
+      setError('Solo se admite PDF. Si tienes un Word, ábrelo y expórtalo a PDF (Archivo → Guardar como → PDF) y sube ese archivo.')
+      return
+    }
     setConvirtiendo(true); setError('')
     try {
-      const bytes = await archivoAPdfBytes(file, setStage)
-      setPdfBytes(bytes)
+      setPdfBytes(new Uint8Array(await file.arrayBuffer()))
     } catch (err) {
-      setError(err?.message || 'No se pudo procesar el archivo.')
+      setError(err?.message || 'No se pudo leer el archivo.')
     } finally { setConvirtiendo(false); setStage('') }
   }
 
@@ -189,10 +196,14 @@ export default function EnviarAFirmar({ contrato, abogadoId, onClose, onDone, mo
         <div className={styles.body}>
           {/* ── Documento ── */}
           <section className={styles.block}>
-            <h3 className={styles.blockTitle}>1 · Documento</h3>
+            <h3 className={styles.blockTitle}>1 · Documento final (PDF)</h3>
             {!contrato && (
               <>
-                <input ref={fileRef} type="file" accept=".pdf,.docx" hidden onChange={onPickFile} />
+                <p className={styles.hint} style={{ marginTop: 0 }}>
+                  Sube el documento <strong>ya listo</strong> para firmar. Si el cliente debía editarlo,
+                  primero intercambien el Word por el chat y luego exporta la versión final a PDF.
+                </p>
+                <input ref={fileRef} type="file" accept=".pdf,application/pdf" hidden onChange={onPickFile} />
                 <button
                   type="button"
                   className={`${styles.dropzone} ${dragOver ? styles.dropzoneOver : ''}`}
@@ -210,19 +221,17 @@ export default function EnviarAFirmar({ contrato, abogadoId, onClose, onDone, mo
                   <span className={styles.dropzoneMain}>
                     {dragOver ? 'Suelta el archivo aquí' : pdfBytes ? 'Cambiar documento' : 'Selecciona o arrastra el documento'}
                   </span>
-                  <span className={styles.dropzoneSub}>PDF o Word (.docx)</span>
+                  <span className={styles.dropzoneSub}>Solo PDF (si tienes Word, expórtalo a PDF)</span>
                 </button>
               </>
             )}
             {convirtiendo && (
-              <p className={styles.muted}><span className={styles.spinner} />
-                {stage === 'render' ? ' Leyendo Word…' : stage === 'rasterizar' ? ' Convirtiendo a PDF…' : ' Procesando…'}
-              </p>
+              <p className={styles.muted}><span className={styles.spinner} /> Cargando documento…</p>
             )}
             {pdfUrl && (
               <>
                 <div className={styles.preview}><iframe title="Vista previa" src={`${pdfUrl}#zoom=page-width`} className={styles.frame} /></div>
-                <p className={styles.hint}>Revisa que la conversión respetó el formato. Si no, exporta a PDF desde Word y súbelo.</p>
+                <p className={styles.hint}>Revisa el documento antes de enviarlo al cliente.</p>
               </>
             )}
           </section>

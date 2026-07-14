@@ -122,11 +122,12 @@ function dibujarBloqueFirma(page, { img, pie, font, fontBold, x, y, anchoFirma =
    `pie`       : { nombre, cedula, telefono, correo, ciudad, fecha, rol }
    `posicion`  : { pagina (1-based, 0 = última), x, y } en puntos. Opcional:
                  por defecto abajo-izquierda de la última página.
+   `soloFirma` : si es true, estampa ÚNICAMENTE el dibujo de la firma (sin línea
+                 ni pie de firma) con ancho `anchoFirma` (puntos). (x, y) es la
+                 esquina inferior-izquierda de la imagen.
    Devuelve Uint8Array del PDF con la firma estampada. */
-export async function estamparFirma(pdfBytes, { firmaPng, pie, posicion = {} }) {
+export async function estamparFirma(pdfBytes, { firmaPng, pie, posicion = {}, soloFirma = false, anchoFirma }) {
   const pdf = await PDFDocument.load(pdfBytes)
-  const font = await pdf.embedFont(StandardFonts.TimesRoman)
-  const fontBold = await pdf.embedFont(StandardFonts.TimesRomanBold)
 
   let img = null
   if (firmaPng) {
@@ -144,6 +145,18 @@ export async function estamparFirma(pdfBytes, { firmaPng, pie, posicion = {} }) 
   const x = posicion.x != null ? posicion.x : 56
   const y = posicion.y != null ? posicion.y : 140
 
+  // Modo "solo firma": nada de pie ni línea, solo el dibujo al tamaño elegido.
+  if (soloFirma) {
+    if (img) {
+      const w = anchoFirma || 150
+      const h = img.height * (w / img.width)
+      page.drawImage(img, { x, y, width: w, height: h })
+    }
+    return pdf.save()
+  }
+
+  const font = await pdf.embedFont(StandardFonts.TimesRoman)
+  const fontBold = await pdf.embedFont(StandardFonts.TimesRomanBold)
   const boxW = Math.min(240, width - x - 40)
   dibujarBloqueFirma(page, { img, pie, font, fontBold, x, y, anchoFirma: boxW })
 
@@ -260,16 +273,22 @@ function wrapText(text, maxChars) {
   return out
 }
 
-/* ── util: normaliza a Uint8Array desde dataURL / ArrayBuffer / Uint8Array ── */
+/* ── util: normaliza a Uint8Array desde dataURL / URL / ArrayBuffer / Uint8Array ── */
 async function toBytes(src) {
   if (src instanceof Uint8Array) return src
   if (src instanceof ArrayBuffer) return new Uint8Array(src)
-  if (typeof src === 'string' && src.startsWith('data:')) {
-    const b64 = src.split(',')[1]
-    const bin = atob(b64)
-    const arr = new Uint8Array(bin.length)
-    for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i)
-    return arr
+  if (typeof src === 'string') {
+    if (src.startsWith('data:')) {
+      const b64 = src.split(',')[1]
+      const bin = atob(b64)
+      const arr = new Uint8Array(bin.length)
+      for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i)
+      return arr
+    }
+    // URL (http/https/blob): descargar los bytes de la imagen.
+    const res = await fetch(src)
+    if (!res.ok) throw new Error('No se pudo descargar la imagen de la firma')
+    return new Uint8Array(await res.arrayBuffer())
   }
   throw new Error('Formato de imagen no soportado')
 }

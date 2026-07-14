@@ -1,10 +1,12 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, lazy, Suspense } from 'react'
 import { createPortal } from 'react-dom'
 import { getAuthHeaders } from '../../lib/supabase'
 import { listarEvidencia, urlFirmada } from '../../lib/firmaService'
 import EnviarAFirmar from '../firma/EnviarAFirmar'
 import { IconFirma } from '../shared/Icons'
 import styles from './MisContratos.module.css'
+
+const UbicarFirma = lazy(() => import('../firma/UbicarFirma'))
 
 // Papelera clara (estilo Lucide trash-2) — más legible que el icono base
 const IconTrash = (p) => (
@@ -58,6 +60,7 @@ export default function MisContratos({ abogadoId, isSuperAdmin = false }) {
   const [tab, setTab]               = useState('subidos') // subidos | clientes | admin
   const [evidencia, setEvidencia]   = useState({ clientes: [], administracion: [] })
   const [enviarFirma, setEnviarFirma] = useState(null)     // contrato a firmar | {} nuevo
+  const [ubicar, setUbicar] = useState(null)               // payload para ubicar la firma
 
   useEffect(() => { if (abogadoId) { cargar(); cargarEvidencia() } }, [abogadoId])
 
@@ -313,13 +316,29 @@ export default function MisContratos({ abogadoId, isSuperAdmin = false }) {
                     <p className={styles.contratoMeta}>{fmtFecha(s.created_at)}</p>
                   </div>
                   <div className={styles.contratoAcciones}>
-                    <button
-                      className={styles.btnDown}
-                      onClick={() => descargarFirmado(s.doc_firmado_path, `documento-firmado${/\.docx$/.test(s.doc_firmado_path || '') ? '.docx' : '.pdf'}`)}
-                      disabled={!s.doc_firmado_path}
-                    >
-                      ⬇ Documento
-                    </button>
+                    {tab === 'clientes' ? (
+                      <button
+                        className={styles.btnFirmarSm}
+                        onClick={() => setUbicar({
+                          origPath: s.doc_original_path,
+                          firmaPath: `${s.id}/firma.png`,
+                          pie: (() => {
+                            const f = (s.firmas_firmantes || []).find(x => x.rol_firma === 'cliente') || s.firmas_firmantes?.[0] || {}
+                            return { nombre: f.nombre, cedula: f.cedula, telefono: f.telefono, correo: f.correo, ciudad: f.ciudad, fecha: f.firmado_at, rol: f.rol_firma }
+                          })(),
+                        })}
+                      >
+                        <IconFirma size={14} /> Ubicar firma y descargar
+                      </button>
+                    ) : (
+                      <button
+                        className={styles.btnDown}
+                        onClick={() => descargarFirmado(s.doc_firmado_path, 'documento-firmado.pdf')}
+                        disabled={!s.doc_firmado_path}
+                      >
+                        ⬇ Documento
+                      </button>
+                    )}
                     <button
                       className={styles.btnDown}
                       onClick={() => descargarCertificado(s)}
@@ -377,6 +396,19 @@ export default function MisContratos({ abogadoId, isSuperAdmin = false }) {
           ))}
         </div>
       ))}
+
+      {/* Modal: ubicar la firma del cliente y descargar el PDF */}
+      {ubicar && (
+        <Suspense fallback={null}>
+          <UbicarFirma
+            origPath={ubicar.origPath}
+            firmaPath={ubicar.firmaPath}
+            pie={ubicar.pie}
+            filename="documento-firmado.pdf"
+            onClose={() => setUbicar(null)}
+          />
+        </Suspense>
+      )}
 
       {/* Modal: iniciar solicitud de firma */}
       {enviarFirma && (
