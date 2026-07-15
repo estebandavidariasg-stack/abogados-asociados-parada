@@ -32,19 +32,23 @@ export default function OpinarPage() {
     if (rating < 1) { setError('Elige una calificación de 1 a 5 estrellas.'); return }
     setEstado('enviando'); setError('')
     try {
-      const res = await fetch(
-        `${SUPABASE_URL}/rest/v1/resenas?token=eq.${encodeURIComponent(token)}&estado=eq.enviada`,
-        {
-          method: 'PATCH',
-          headers: {
-            apikey: ANON, Authorization: `Bearer ${ANON}`,
-            'Content-Type': 'application/json', Prefer: 'return=representation',
-          },
-          body: JSON.stringify({ rating, texto: texto.trim() || null, estado: 'recibida' }),
-        }
-      )
-      const rows = await res.json().catch(() => [])
-      if (!res.ok || !Array.isArray(rows) || rows.length === 0) {
+      // Enviamos vía la función RPC `enviar_resena` (SECURITY DEFINER): anon NO
+      // tiene UPDATE directo sobre la tabla (evita PATCHs masivos). La función
+      // hace la transición enviada→recibida por token y devuelve true/false —
+      // fiable, sin RETURNING filtrado por RLS y sin exponer ninguna fila.
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/enviar_resena`, {
+        method: 'POST',
+        headers: {
+          apikey: ANON, Authorization: `Bearer ${ANON}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ p_token: token, p_rating: rating, p_texto: texto.trim() || null }),
+      })
+      const guardada = await res.json().catch(() => null)
+      if (!res.ok) {
+        throw new Error('No se pudo enviar tu opinión. Intenta de nuevo.')
+      }
+      if (guardada !== true) {
         throw new Error('Este enlace ya fue usado o expiró.')
       }
       setEstado('ok')
