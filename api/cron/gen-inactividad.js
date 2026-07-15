@@ -21,7 +21,7 @@ const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: { user: process.env.GMAIL_USER, pass: process.env.GMAIL_PASS },
 })
-const APP_URL = (process.env.VITE_APP_URL || process.env.APP_URL || 'https://abogadosyasociadosparada.com')
+const APP_URL = (process.env.VITE_APP_URL || process.env.APP_URL || 'https://abogadosparada.com')
   .replace(/\/$/, '')
 
 // Escapa texto de usuario que se inyecta en el HTML del correo.
