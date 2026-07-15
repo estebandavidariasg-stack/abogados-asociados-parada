@@ -14,32 +14,37 @@
 
 .card {
   position: relative;
-  background: #fff;
+  /* Degradado suave: blanco → tenue tinte dorado de marca. */
+  background: linear-gradient(145deg, #ffffff 0%, #ffffff 45%, #faf6ec 100%);
   border: 1px solid rgba(13, 45, 94, 0.1);
   border-radius: 16px;
-  padding: 1.25rem 1.35rem;
+  padding: 1.35rem 1.4rem 1.4rem;
   overflow: hidden;
-  box-shadow: 0 1px 2px rgba(13, 45, 94, 0.04), 0 12px 30px -24px rgba(13, 45, 94, 0.45);
-  transition: transform 0.2s ease-out, box-shadow 0.2s ease-out, border-color 0.2s;
+  box-shadow: 0 1px 2px rgba(13, 45, 94, 0.04), 0 14px 34px -26px rgba(13, 45, 94, 0.5);
+  transition: transform 0.22s ease-out, box-shadow 0.22s ease-out, border-color 0.22s;
 }
 .card:hover {
-  transform: translateY(-2px);
-  border-color: rgba(13, 45, 94, 0.16);
-  box-shadow: 0 1px 2px rgba(13, 45, 94, 0.05), 0 18px 40px -22px rgba(13, 45, 94, 0.5);
+  transform: translateY(-3px);
+  border-color: rgba(201, 168, 76, 0.34);
+  box-shadow: 0 1px 2px rgba(13, 45, 94, 0.05), 0 22px 44px -22px rgba(13, 45, 94, 0.55);
 }
 
 .num {
   display: block;
+  position: relative;
+  z-index: 1;
   font-family: 'Cormorant Garamond', 'Cinzel', serif;
-  font-size: 2.7rem;
+  font-size: 2.85rem;
   font-weight: 700;
   line-height: 1;
   color: #0d2d5e;
-  margin-bottom: 0.65rem;
+  margin: 0.15rem 0 0.6rem;
 }
 
 .label {
   display: block;
+  position: relative;
+  z-index: 1;
   font-family: 'Raleway', sans-serif;
   font-size: 0.72rem;
   font-weight: 600;
@@ -58,11 +63,19 @@
   color: #8a94a8;
 }
 
-/* Tonos semánticos: el número cambia de color (sin línea en el borde). */
-.ok .num    { color: #2f855a; }
-.warn .num  { color: #b7791f; }
-.alert { border-color: rgba(192, 57, 43, 0.22); background: #fdf6f5; }
+/* Tonos semánticos: el número y el degradado toman el color del estado. */
+.ok .num { color: #2f855a; }
+.ok { background: linear-gradient(145deg, #ffffff 0%, #ffffff 45%, #eef8f1 100%); }
+
+.warn .num { color: #b7791f; }
+.warn { background: linear-gradient(145deg, #ffffff 0%, #ffffff 45%, #fdf6e6 100%); }
+
+.alert { border-color: rgba(192, 57, 43, 0.22); background: linear-gradient(145deg, #fffafa 0%, #fdf1f0 100%); }
 .alert .num { color: #c0392b; }
+
+@media (prefers-reduced-motion: reduce) {
+  .card { transition: none; }
+}
 
 /* ── Gráfica histórica ── */
 .chartCard {
@@ -117,6 +130,6 @@
 }
 
 @media (max-width: 600px) {
-  .num { font-size: 2.1rem; }
-  .card { padding: 1rem; }
+  .num { font-size: 2.3rem; }
+  .card { padding: 1.1rem 1.15rem; }
 }

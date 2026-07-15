@@ -31,6 +31,7 @@ function porMes(fechas, n = 6) {
   return buckets
 }
 
+
 export default function AdminStats({
   activeTab, pending = [], approved = [], alertas = [], chatsCerrados = [],
   allRooms = [], extra = {},
@@ -61,67 +62,67 @@ export default function AdminStats({
     switch (activeTab) {
       case 'approved':
         return [
-          { n: approved.length, label: 'Profesionales aprobados', sub: `${aAb} ab · ${aCont} cont` },
-          { n: aAb, label: 'Abogados' },
-          { n: aCont, label: 'Contadores' },
-          { n: conDescarga, label: 'Con descarga habilitada', tone: 'ok' },
+          { n: approved.length, label: 'Profesionales aprobados', sub: `${aAb} ab · ${aCont} cont`, icon: 'users' },
+          { n: aAb, label: 'Abogados', icon: 'scale' },
+          { n: aCont, label: 'Contadores', icon: 'calc' },
+          { n: conDescarga, label: 'Con descarga habilitada', tone: 'ok', icon: 'download' },
         ]
       case 'chats':
         return [
-          { n: rTotal, label: 'Consultas totales' },
-          { n: rWaiting, label: 'En espera', tone: rWaiting ? 'warn' : 'ok' },
-          { n: rActive, label: 'Activas', tone: 'ok' },
-          { n: rClosed, label: 'Cerradas' },
+          { n: rTotal, label: 'Consultas totales', icon: 'chat' },
+          { n: rWaiting, label: 'En espera', tone: rWaiting ? 'warn' : 'ok', icon: 'clock' },
+          { n: rActive, label: 'Activas', tone: 'ok', icon: 'activity' },
+          { n: rClosed, label: 'Cerradas', icon: 'check' },
         ]
       case 'recuperar':
         return [
-          { n: rClosed, label: 'Consultas cerradas' },
-          { n: chatsCerrados.length, label: 'Recientes recuperables' },
-          { n: rActive, label: 'Activas ahora', tone: 'ok' },
-          { n: rTotal, label: 'Consultas totales' },
+          { n: rClosed, label: 'Consultas cerradas', icon: 'check' },
+          { n: chatsCerrados.length, label: 'Recientes recuperables', icon: 'clock' },
+          { n: rActive, label: 'Activas ahora', tone: 'ok', icon: 'activity' },
+          { n: rTotal, label: 'Consultas totales', icon: 'chat' },
         ]
       case 'alertas':
         return [
-          { n: alertas.length, label: 'Alertas +24h', tone: alertas.length ? 'alert' : 'ok' },
-          { n: sinProf, label: 'Sin profesional', tone: sinProf ? 'warn' : 'ok' },
-          { n: conProf, label: 'Con profesional' },
-          { n: rWaiting + rActive, label: 'Consultas abiertas' },
+          { n: alertas.length, label: 'Alertas +24h', tone: alertas.length ? 'alert' : 'ok', icon: 'alert' },
+          { n: sinProf, label: 'Sin profesional', tone: sinProf ? 'warn' : 'ok', icon: 'userx' },
+          { n: conProf, label: 'Con profesional', icon: 'users' },
+          { n: rWaiting + rActive, label: 'Consultas abiertas', icon: 'chat' },
         ]
       case 'chat_interno':
         return [
-          { n: approved.length, label: 'Profesionales', sub: `${aAb} ab · ${aCont} cont` },
-          { n: aAb, label: 'Abogados' },
-          { n: aCont, label: 'Contadores' },
-          { n: rActive, label: 'Consultas activas', tone: 'ok' },
+          { n: approved.length, label: 'Profesionales', sub: `${aAb} ab · ${aCont} cont`, icon: 'users' },
+          { n: aAb, label: 'Abogados', icon: 'scale' },
+          { n: aCont, label: 'Contadores', icon: 'calc' },
+          { n: rActive, label: 'Consultas activas', tone: 'ok', icon: 'activity' },
         ]
       case 'contratos':
         return [
-          { n: contratos, label: 'Contratos subidos' },
-          { n: firmas, label: 'Documentos firmados', tone: 'ok' },
-          { n: approved.length, label: 'Profesionales' },
-          { n: conDescarga, label: 'Con descarga habilitada' },
+          { n: contratos, label: 'Contratos subidos', icon: 'doc' },
+          { n: firmas, label: 'Documentos firmados', tone: 'ok', icon: 'firma' },
+          { n: approved.length, label: 'Profesionales', icon: 'users' },
+          { n: conDescarga, label: 'Con descarga habilitada', icon: 'download' },
         ]
       case 'resenas':
         return [
-          { n: resenasTotal, label: 'Reseñas recibidas' },
-          { n: resenasAprob, label: 'Aprobadas (en el home)', tone: 'ok' },
-          { n: Math.max(0, resenasTotal - resenasAprob), label: 'Por moderar', tone: (resenasTotal - resenasAprob) ? 'warn' : 'ok' },
-          { n: approved.length, label: 'Profesionales' },
+          { n: resenasTotal, label: 'Reseñas recibidas', icon: 'star' },
+          { n: resenasAprob, label: 'Aprobadas (en el home)', tone: 'ok', icon: 'check' },
+          { n: Math.max(0, resenasTotal - resenasAprob), label: 'Por moderar', tone: (resenasTotal - resenasAprob) ? 'warn' : 'ok', icon: 'clock' },
+          { n: approved.length, label: 'Profesionales', icon: 'users' },
         ]
       case 'codigos':
         return [
-          { n: codigos, label: 'Códigos creados' },
-          { n: codigosActivos, label: 'Activos', tone: 'ok' },
-          { n: Math.max(0, codigos - codigosActivos), label: 'Inactivos' },
-          { n: approved.length, label: 'Profesionales' },
+          { n: codigos, label: 'Códigos creados', icon: 'grid' },
+          { n: codigosActivos, label: 'Activos', tone: 'ok', icon: 'check' },
+          { n: Math.max(0, codigos - codigosActivos), label: 'Inactivos', icon: 'grid' },
+          { n: approved.length, label: 'Profesionales', icon: 'users' },
         ]
       case 'pending':
       default:
         return [
-          { n: pending.length, label: 'Solicitudes pendientes', sub: (pAb || pCont) ? `${pAb} ab · ${pCont} cont` : undefined, tone: pending.length ? 'warn' : 'ok' },
-          { n: approved.length, label: 'Profesionales aprobados' },
-          { n: approved.length + pending.length, label: 'Total registrados' },
-          { n: alertas.length, label: 'Alertas inactividad', tone: alertas.length ? 'alert' : 'ok' },
+          { n: pending.length, label: 'Solicitudes pendientes', sub: (pAb || pCont) ? `${pAb} ab · ${pCont} cont` : undefined, tone: pending.length ? 'warn' : 'ok', icon: 'clock' },
+          { n: approved.length, label: 'Profesionales aprobados', icon: 'users' },
+          { n: approved.length + pending.length, label: 'Total registrados', icon: 'layers' },
+          { n: alertas.length, label: 'Alertas inactividad', tone: alertas.length ? 'alert' : 'ok', icon: 'alert' },
         ]
     }
   }, [activeTab, pending, approved, alertas, chatsCerrados, rTotal, rWaiting, rActive, rClosed, aAb, aCont, conDescarga, sinProf, conProf, contratos, firmas, resenasTotal, resenasAprob, codigos, codigosActivos, pAb, pCont])

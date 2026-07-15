@@ -3,9 +3,9 @@ import styles from './SubNav.module.css'
 
 // Mapeo de link → sección observada para el active state
 const LINKS = [
+  { label: 'Iniciar consulta',   anchor: 'chat',    sectionId: null, cta: true },
   { label: 'Conoce a nuestros profesionales', anchor: 'lawyers', sectionId: 'lawyers' },
   { label: 'Para profesionales', anchor: null,       sectionId: null      },
-  { label: 'Iniciar consulta',   anchor: 'chat',    sectionId: null, cta: true },
 ]
 
 function scrollTo(id) {
