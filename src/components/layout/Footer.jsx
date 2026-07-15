@@ -80,18 +80,18 @@ export default function Footer() {
               <span className={styles.contactSub}>Bogotá D.C., Colombia</span>
             </div>
           </a>
-
-          {/* Redes sociales — más grandes y centradas bajo el contacto */}
-          <div className={styles.socials}>
-            {SOCIALS.map(({ label, href, path }) => (
-              <a key={label} href={href} className={styles.socialBtn} aria-label={label} target="_blank" rel="noopener noreferrer">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d={path} />
-                </svg>
-              </a>
-            ))}
-          </div>
         </div>
+      </div>
+
+      {/* ── Redes sociales — centradas en todo el ancho del footer ── */}
+      <div className={styles.socials}>
+        {SOCIALS.map(({ label, href, path }) => (
+          <a key={label} href={href} className={styles.socialBtn} aria-label={label} target="_blank" rel="noopener noreferrer">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d={path} />
+            </svg>
+          </a>
+        ))}
       </div>
 
       {/* ── Marca gigante ── */}

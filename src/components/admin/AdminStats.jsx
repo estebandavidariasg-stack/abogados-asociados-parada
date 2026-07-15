@@ -133,7 +133,9 @@ export default function AdminStats({
     return registros.map((b, i) => ({ mes: b.mes, Registros: b.count, Consultas: consultas[i]?.count || 0 }))
   }, [pending, approved, allRooms])
 
-  const hayHistorico = chartData.some(d => d.Registros || d.Consultas)
+  // La gráfica histórica es GENERAL: se muestra solo en la primera sección
+  // (Solicitudes), no repetida en cada apartado.
+  const mostrarGrafica = activeTab === 'pending' && chartData.some(d => d.Registros || d.Consultas)
 
   return (
     <div className={styles.wrap}>
@@ -149,7 +151,7 @@ export default function AdminStats({
         ))}
       </div>
 
-      {hayHistorico && (
+      {mostrarGrafica && (
         <div className={styles.chartCard}>
           <div className={styles.chartHead}>
             <h4 className={styles.chartTitle}>Actividad de los últimos 6 meses</h4>

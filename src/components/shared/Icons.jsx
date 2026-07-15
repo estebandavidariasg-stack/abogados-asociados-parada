@@ -73,6 +73,30 @@ export const IconPaperclip = ({ size = 15 }) => (
   </svg>
 )
 
+// Documento (hoja con esquina doblada + líneas) — mismo estilo stroke del set.
+export const IconDoc = ({ size = 15 }) => (
+  <svg width={size} height={size} viewBox="0 0 16 16" fill="none" aria-hidden="true" style={{ display:'inline-block', verticalAlign:'middle', flexShrink:0 }}>
+    <path d="M9 1.5H4.5A1.5 1.5 0 003 3v10A1.5 1.5 0 004.5 14.5h7A1.5 1.5 0 0013 13V5.5L9 1.5Z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round"/>
+    <path d="M9 1.5V5.5H13" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round"/>
+    <path d="M5.5 8.5H10.5M5.5 11H9" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+  </svg>
+)
+
+// Carpeta — para estados vacíos.
+export const IconFolder = ({ size = 16 }) => (
+  <svg width={size} height={size} viewBox="0 0 18 16" fill="none" aria-hidden="true" style={{ display:'inline-block', verticalAlign:'middle', flexShrink:0 }}>
+    <path d="M1.5 3.5A1.5 1.5 0 013 2h3.2a1.5 1.5 0 011.06.44L8.5 3.7h6A1.5 1.5 0 0116 5.2v7.3A1.5 1.5 0 0114.5 14H3A1.5 1.5 0 011.5 12.5V3.5Z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round"/>
+  </svg>
+)
+
+// Subir (flecha hacia arriba sobre línea).
+export const IconUpload = ({ size = 14 }) => (
+  <svg width={size} height={size} viewBox="0 0 14 14" fill="none" aria-hidden="true" style={{ display:'inline-block', verticalAlign:'middle', flexShrink:0 }}>
+    <path d="M7 9.5V1.5M3.5 5L7 1.5L10.5 5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+    <path d="M2 12H12" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+  </svg>
+)
+
 export const IconVideoCamera = ({ size = 16 }) => (
   <svg width={size} height={Math.round(size * 0.75)} viewBox="0 0 16 12" fill="none" aria-hidden="true" style={{ display:'inline-block', verticalAlign:'middle', flexShrink:0 }}>
     <rect x="1" y="1" width="10" height="10" rx="1.5" stroke="currentColor" strokeWidth="1.5"/>

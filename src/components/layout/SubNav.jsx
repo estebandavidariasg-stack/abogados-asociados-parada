@@ -3,7 +3,7 @@ import styles from './SubNav.module.css'
 
 // Mapeo de link → sección observada para el active state
 const LINKS = [
-  { label: 'Cómo funciona',      anchor: 'intro',   sectionId: 'intro'   },
+  { label: 'Conoce a nuestros profesionales', anchor: 'lawyers', sectionId: 'lawyers' },
   { label: 'Para profesionales', anchor: null,       sectionId: null      },
   { label: 'Iniciar consulta',   anchor: 'chat',    sectionId: null, cta: true },
 ]
@@ -28,7 +28,7 @@ export default function SubNav({ onUnirse }) {
 
   // IntersectionObserver para resaltar el link activo
   useEffect(() => {
-    const sectionIds = ['intro', 'chat', 'modelos']
+    const sectionIds = ['lawyers', 'chat', 'modelos']
     const observer = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {

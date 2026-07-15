@@ -107,14 +107,15 @@
 
 /* ── TOOLBAR ──────────────────────────────────────────── */
 .toolbar {
-  position: absolute;
-  /* Debajo del navbar fijo (72px) para que no lo tape */
-  top: 6rem;
-  left: 50%;
-  transform: translateX(-50%);
+  /* En flujo, centrada DEBAJO del encabezado (antes era absoluta con top:6rem
+     y se superponía al eyebrow / título de la sección). */
+  position: relative;
   z-index: 50;
   display: flex;
   gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin: 0 auto 2.4rem;
 }
 
 /* En móvil la barra de edición (Agregar/Guardar/Cancelar) pasa a flujo,

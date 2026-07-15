@@ -489,7 +489,7 @@ export default function AdminPage() {
               <RolChips />
               {pendingFiltered.length === 0 ? (
                 <div className={styles.emptyState}>
-                  <span className={styles.emptyIcon}>📋</span>
+                  <span className={styles.emptyIcon} style={{ color: '#c9a84c' }}><IconInbox width={40} height={40} /></span>
                   <p className={styles.emptyTxt}>
                     No hay solicitudes pendientes
                     {rolFilter !== 'todos' ? ` de ${rolFilter}es` : ''}
@@ -561,7 +561,7 @@ export default function AdminPage() {
               <RolChips />
               {approvedFiltered.length === 0 ? (
                 <div className={styles.emptyState}>
-                  <span className={styles.emptyIcon}>👨‍⚖️</span>
+                  <span className={styles.emptyIcon} style={{ color: '#c9a84c' }}><IconUsers width={40} height={40} /></span>
                   <p className={styles.emptyTxt}>
                     No hay {rolFilter === 'contador' ? 'contadores' : rolFilter === 'abogado' ? 'abogados' : 'profesionales'} aprobados aún
                   </p>
@@ -656,12 +656,12 @@ export default function AdminPage() {
               </div>
               {chatsCerrados.length === 0 ? (
                 <div className={styles.emptyState}>
-                  <span className={styles.emptyIcon}>💬</span>
+                  <span className={styles.emptyIcon} style={{ color: '#c9a84c' }}><IconChat width={40} height={40} /></span>
                   <p className={styles.emptyTxt}>No hay chats cerrados registrados</p>
                 </div>
               ) : chatsCerrados.map(r => (
                 <div key={r.id} className={styles.alertaCard}>
-                  <span className={styles.alertaIcono}>💬</span>
+                  <span className={styles.alertaIcono} style={{ color: '#c9a84c' }}><IconChat width={22} height={22} /></span>
                   <div className={styles.alertaInfo}>
                     <p className={styles.alertaNombre}>
                       {r.client_nombre || 'Cliente'}
@@ -704,7 +704,7 @@ export default function AdminPage() {
               </div>
               {alertas.length === 0 ? (
                 <div className={styles.alertaOk}>
-                  <span>✅</span>
+                  <span style={{ color: '#2f855a', display: 'inline-flex' }}><IconCheck size={20} /></span>
                   <p>Todos los chats activos tienen actividad reciente. ¡Todo en orden!</p>
                 </div>
               ) : alertas.map(r => {
@@ -712,7 +712,7 @@ export default function AdminPage() {
                 const sinAbogados = !r.lawyer_ids || r.lawyer_ids.length === 0
                 return (
                   <div key={r.id} className={styles.alertaCard}>
-                    <span className={styles.alertaIcono}>⚠️</span>
+                    <span className={styles.alertaIcono} style={{ color: '#c0392b' }}><IconAlert width={22} height={22} /></span>
                     <div className={styles.alertaInfo}>
                       <p className={styles.alertaNombre}>
                         {r.client_nombre || 'Cliente'}
@@ -803,7 +803,7 @@ export default function AdminPage() {
                 <MisContratos abogadoId={abogadoContrato.id} isSuperAdmin={true} />
               ) : (
                 <div className={styles.emptyState}>
-                  <span className={styles.emptyIcon}>📂</span>
+                  <span className={styles.emptyIcon} style={{ color: '#c9a84c' }}><IconDoc width={40} height={40} /></span>
                   <p className={styles.emptyTxt}>Selecciona un profesional arriba</p>
                   <p className={styles.emptySub}>Sus contratos aparecerán aquí</p>
                 </div>

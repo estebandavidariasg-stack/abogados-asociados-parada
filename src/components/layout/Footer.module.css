@@ -145,12 +145,12 @@
 
 /* ── REDES SOCIALES ───────────────────────────────────────────── */
 .socials {
+  position: relative;
+  z-index: 1;
   display: flex;
-  gap: 0.9rem;
-  margin-top: 1.6rem;
-  padding-top: 1.4rem;
-  border-top: 1px solid rgba(13, 45, 94, 0.08);
+  gap: 1rem;
   justify-content: center;
+  margin: 2.4rem 0 0.5rem;
 }
 
 .socialBtn {

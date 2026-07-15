@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import { getAuthHeaders } from '../../lib/supabase'
 import { listarEvidencia } from '../../lib/firmaService'
 import EnviarAFirmar from '../firma/EnviarAFirmar'
-import { IconFirma } from '../shared/Icons'
+import { IconFirma, IconDoc, IconFolder, IconUpload, IconDownload } from '../shared/Icons'
 import styles from './MisContratos.module.css'
 
 const UbicarFirma = lazy(() => import('../firma/UbicarFirma'))
@@ -37,12 +37,6 @@ function fmtFecha(ts) {
   return new Date(ts).toLocaleDateString('es-CO', {
     day: 'numeric', month: 'short', year: 'numeric',
   })
-}
-function iconoTipo(nombre) {
-  const ext = nombre?.split('.').pop()?.toLowerCase()
-  if (ext === 'pdf') return '📄'
-  if (ext === 'doc' || ext === 'docx') return '📝'
-  return '📎'
 }
 
 export default function MisContratos({ abogadoId, isSuperAdmin = false }) {
@@ -241,7 +235,7 @@ export default function MisContratos({ abogadoId, isSuperAdmin = false }) {
               <div className={styles.dropZone} onClick={() => fileRef.current?.click()}>
                 {archivo ? (
                   <div className={styles.archivoSel}>
-                    <span style={{ fontSize: '2rem' }}>{iconoTipo(archivo.name)}</span>
+                    <span style={{ color: '#0d2d5e' }}><IconDoc size={30} /></span>
                     <div>
                       <p className={styles.archNombre}>{archivo.name}</p>
                       <p className={styles.archSize}>{fmtBytes(archivo.size)}</p>
@@ -249,7 +243,7 @@ export default function MisContratos({ abogadoId, isSuperAdmin = false }) {
                   </div>
                 ) : (
                   <div className={styles.dropPlaceholder}>
-                    <span style={{ fontSize: '2.2rem' }}>📂</span>
+                    <span style={{ color: '#c9a84c' }}><IconUpload size={30} /></span>
                     <p className={styles.dropTexto}>Haz clic para seleccionar archivo</p>
                     <p className={styles.dropSub}>PDF, DOC, DOCX — máx. 10 MB</p>
                   </div>
@@ -266,8 +260,9 @@ export default function MisContratos({ abogadoId, isSuperAdmin = false }) {
                 value={descripcion}
                 onChange={e => setDescripcion(e.target.value)}
               />
-              <button className={styles.btnConfirmar} type="submit" disabled={uploading}>
-                {uploading ? 'Subiendo…' : '⬆ Confirmar subida'}
+              <button className={styles.btnConfirmar} type="submit" disabled={uploading}
+                style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7 }}>
+                {uploading ? 'Subiendo…' : <><IconUpload size={14} /> Confirmar subida</>}
               </button>
             </form>
           </div>
@@ -289,7 +284,7 @@ export default function MisContratos({ abogadoId, isSuperAdmin = false }) {
               const nombres = (s.firmas_firmantes || []).map(f => f.nombre).filter(Boolean).join(', ')
               return (
                 <div key={s.id} className={styles.contratoCard}>
-                  <span className={styles.contratoIcono}>🔏</span>
+                  <span className={styles.contratoIcono} style={{ color: '#c9a84c' }}><IconFirma size={22} /></span>
                   <div className={styles.contratoInfo}>
                     <p className={styles.contratoNombre}>Documento firmado</p>
                     {nombres && <p className={styles.contratoDesc}>Firmantes: {nombres}</p>}
@@ -312,8 +307,9 @@ export default function MisContratos({ abogadoId, isSuperAdmin = false }) {
                     <button
                       className={styles.btnDown}
                       onClick={() => descargarCertificado(s)}
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
                     >
-                      ⬇ Certificado
+                      <IconDownload size={13} /> Certificado
                     </button>
                   </div>
                 </div>
@@ -328,7 +324,7 @@ export default function MisContratos({ abogadoId, isSuperAdmin = false }) {
         <p className={styles.empty}>Cargando contratos…</p>
       ) : contratos.length === 0 ? (
         <div className={styles.emptyState}>
-          <span style={{ fontSize: '2.8rem' }}>📁</span>
+          <span style={{ color: '#c9a84c' }}><IconFolder size={40} /></span>
           <p className={styles.emptyTxt}>No hay contratos subidos aún</p>
           <p className={styles.emptySub}>Los contratos aparecerán aquí una vez subidos</p>
         </div>
@@ -336,7 +332,7 @@ export default function MisContratos({ abogadoId, isSuperAdmin = false }) {
         <div className={styles.lista}>
           {contratos.map(c => (
             <div key={c.id} className={styles.contratoCard}>
-              <span className={styles.contratoIcono}>{iconoTipo(c.nombre_archivo)}</span>
+              <span className={styles.contratoIcono} style={{ color: '#0d2d5e' }}><IconDoc size={20} /></span>
               <div className={styles.contratoInfo}>
                 <p className={styles.contratoNombre}>{c.nombre_archivo}</p>
                 {c.descripcion && <p className={styles.contratoDesc}>{c.descripcion}</p>}
@@ -348,8 +344,9 @@ export default function MisContratos({ abogadoId, isSuperAdmin = false }) {
                 <button className={styles.btnFirmarSm} onClick={() => setEnviarFirma(c)}>
                   <IconFirma size={14} /> Firmar
                 </button>
-                <button className={styles.btnDown} onClick={() => descargar(c)}>
-                  ⬇ Descargar
+                <button className={styles.btnDown} onClick={() => descargar(c)}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  <IconDownload size={13} /> Descargar
                 </button>
                 {isSuperAdmin && (
                   <button

@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { supabase, getAuthHeaders } from '../../lib/supabase'
 import styles from './SuperAdminChatViewer.module.css'
-import { IconTrash, IconPaperclip } from '../shared/Icons'
+import { IconTrash, IconPaperclip, IconFirma } from '../shared/Icons'
 import AudioPlayer from './AudioPlayer'
 import { openChatFile, ChatImage, ChatLightbox } from '../../lib/chatFiles'
 import { urlFirmada } from '../../lib/firmaService'
@@ -1006,10 +1006,11 @@ export default function SuperAdminChatViewer({ initialRoomId = null }) {
                         // Mensaje de firma electrónica: preview de los documentos
                         // (a firmar / firmado / certificado) en vez del JSON crudo.
                         <div className={styles.msgText} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                          <span style={{ fontWeight: 700 }}>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontWeight: 700 }}>
+                            <span style={{ color: '#c9a84c' }}><IconFirma size={15} /></span>
                             {firma.t === 'firma_ok'
-                              ? '✅ Documento firmado por el cliente'
-                              : '📄 Documento enviado para firma'}
+                              ? 'Documento firmado por el cliente'
+                              : 'Documento enviado para firma'}
                           </span>
                           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                             {firma.t === 'firma_ok' ? (

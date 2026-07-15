@@ -189,19 +189,15 @@
   backdrop-filter: blur(6px);
   min-width: 0;
   overflow: hidden;
+  transition: transform 0.25s ease-out, box-shadow 0.25s ease-out, border-color 0.25s;
 }
-/* Acento dorado en el borde superior */
-.card::before {
-  content: '';
-  position: absolute;
-  top: 0; left: 0; right: 0;
-  height: 3px;
-  background: linear-gradient(90deg,
-    rgba(201,168,76,0.9) 0%,
-    rgba(201,168,76,0.4) 60%,
-    transparent 100%
-  );
-  border-radius: 16px 16px 0 0;
+.card:hover {
+  transform: translateY(-3px);
+  border-color: rgba(13,45,94,0.12);
+  box-shadow:
+    0 2px 4px rgba(13,45,94,0.05),
+    0 12px 40px rgba(13,45,94,0.12),
+    0 28px 56px rgba(13,45,94,0.06);
 }
 .cardHead {
   display: flex;

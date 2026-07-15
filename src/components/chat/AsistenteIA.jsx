@@ -756,20 +756,21 @@ export default function AsistenteIA() {
             boxShadow: '0 30px 80px -30px rgba(9,24,48,0.6)', overflow: 'hidden',
             fontFamily: "'Raleway', sans-serif",
           }}>
-            <div style={{ background: 'linear-gradient(160deg, #0d2d5e 0%, #1a3f7a 100%)', color: '#fff', padding: '1.6rem 1.8rem' }}>
+            <div style={{ background: 'linear-gradient(160deg, #0d2d5e 0%, #1a3f7a 100%)', color: '#fff', padding: '1.9rem 1.8rem', textAlign: 'center' }}>
               <div style={{
-                width: 44, height: 44, borderRadius: 12, marginBottom: 12,
+                width: 52, height: 52, borderRadius: 14, margin: '0 auto 14px',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                background: 'rgba(201,168,76,0.18)', border: '1px solid rgba(201,168,76,0.4)', color: '#e8c96a',
+                background: 'rgba(201,168,76,0.16)', border: '1px solid rgba(201,168,76,0.45)', color: '#e8c96a',
               }}>
-                <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /><path d="M12 8v4M12 16h.01" />
                 </svg>
               </div>
-              <h2 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: '1.7rem', fontWeight: 700, margin: 0, lineHeight: 1.2 }}>
-                IA Parada Precise
+              <h2 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: '1.85rem', fontWeight: 700, margin: 0, lineHeight: 1.2 }}>
+                IA Parada <span style={{ color: '#e8c96a' }}>Precise</span>
               </h2>
-              <p style={{ margin: '6px 0 0', fontSize: '0.86rem', color: 'rgba(255,255,255,0.75)' }}>
+              <div style={{ width: 46, height: 2, background: 'linear-gradient(90deg, #c9a84c, #e8c96a)', borderRadius: 2, margin: '11px auto' }} />
+              <p style={{ margin: 0, fontSize: '0.72rem', fontWeight: 600, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#e8c96a' }}>
                 Herramienta de apoyo profesional
               </p>
             </div>
