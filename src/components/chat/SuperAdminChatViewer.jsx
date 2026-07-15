@@ -5,6 +5,30 @@ import styles from './SuperAdminChatViewer.module.css'
 import { IconTrash, IconPaperclip } from '../shared/Icons'
 import AudioPlayer from './AudioPlayer'
 import { openChatFile, ChatImage, ChatLightbox } from '../../lib/chatFiles'
+import { urlFirmada } from '../../lib/firmaService'
+
+// Mensajes de firma electrónica: su `content` es un JSON (t: 'firma' | 'firma_ok').
+// Sin parsearlo se mostraba como texto ilegible ("cifrado") en el visor del admin.
+function parseFirmaMsg(content) {
+  try {
+    const o = JSON.parse(content)
+    if (o && (o.t === 'firma' || o.t === 'firma_ok')) return o
+  } catch { /* no es un mensaje de firma */ }
+  return null
+}
+
+// Abre un documento del bucket privado de firmas en pestaña nueva. Abrimos la
+// ventana de forma síncrona (antes del await) para no dispararla en los popups.
+async function verDocFirma(path) {
+  if (!path) return
+  const win = window.open('', '_blank')
+  try {
+    const headers = await getAuthHeaders()
+    const url = await urlFirmada(path, headers)
+    if (url && win) win.location = url
+    else if (win) win.close()
+  } catch { if (win) win.close() }
+}
 
 function formatSize(bytes) {
   if (!bytes) return ''
@@ -963,6 +987,7 @@ export default function SuperAdminChatViewer({ initialRoomId = null }) {
               {messages.map(msg => {
                 const isLawyer = msg.sender_type === 'lawyer'
                 const isAudio  = msg.message_type === 'audio' && msg.file_url
+                const firma    = parseFirmaMsg(msg.content)
                 return (
                   <div key={msg.id} className={isLawyer ? styles.msgOuterMine : styles.msgOuterOther}>
                     {!isLawyer && (
@@ -977,6 +1002,37 @@ export default function SuperAdminChatViewer({ initialRoomId = null }) {
                         // mine={true} = skin dorado del AudioPlayer (visible
                         // sobre fondos claros y oscuros del viewer del admin)
                         <AudioPlayer src={msg.file_url} mine={true} />
+                      ) : firma ? (
+                        // Mensaje de firma electrónica: preview de los documentos
+                        // (a firmar / firmado / certificado) en vez del JSON crudo.
+                        <div className={styles.msgText} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                          <span style={{ fontWeight: 700 }}>
+                            {firma.t === 'firma_ok'
+                              ? '✅ Documento firmado por el cliente'
+                              : '📄 Documento enviado para firma'}
+                          </span>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                            {firma.t === 'firma_ok' ? (
+                              <>
+                                <button className={styles.fileBtn} onClick={() => verDocFirma(`${firma.solicitudId}/firmado.pdf`)} title="Ver documento firmado">
+                                  <IconPaperclip size={14} /> <span className={styles.fileName}>Documento firmado</span>
+                                </button>
+                                <button className={styles.fileBtn} onClick={() => verDocFirma(`${firma.solicitudId}/certificado.pdf`)} title="Ver certificado de firma">
+                                  <IconPaperclip size={14} /> <span className={styles.fileName}>Certificado</span>
+                                </button>
+                                {(firma.origPath || firma.docPath) && (
+                                  <button className={styles.fileBtn} onClick={() => verDocFirma(firma.origPath || firma.docPath)} title="Ver documento original">
+                                    <IconPaperclip size={14} /> <span className={styles.fileName}>Original</span>
+                                  </button>
+                                )}
+                              </>
+                            ) : (
+                              <button className={styles.fileBtn} onClick={() => verDocFirma(firma.docPath || firma.origPath)} title="Ver documento a firmar">
+                                <IconPaperclip size={14} /> <span className={styles.fileName}>Ver documento a firmar</span>
+                              </button>
+                            )}
+                          </div>
+                        </div>
                       ) : msg.file_url ? (
                         isImage(msg.file_name) ? (
                           <ChatImage

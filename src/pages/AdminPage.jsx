@@ -12,6 +12,7 @@ import ProfileDetailModal from '../components/admin/ProfileDetailModal'
 import TarjetaPreview from '../components/profile/TarjetaPreview'
 import NotificationBell from '../components/admin/NotificationBell'
 import ResenasAdmin from '../components/admin/ResenasAdmin'
+import AdminStats from '../components/admin/AdminStats'
 import { IconCheck, IconX } from '../components/shared/Icons'
 
 // ── Iconos SVG (estilo Lucide, currentColor) — sin emojis como iconos ──
@@ -54,6 +55,8 @@ export default function AdminPage() {
   const [loadingData, setLoadingData]         = useState(true)
   const [alertas, setAlertas]                 = useState([])
   const [chatsCerrados, setChatsCerrados]     = useState([])
+  const [allRooms, setAllRooms]               = useState([])   // para stats/gráfica
+  const [extraCounts, setExtraCounts]         = useState({})   // contratos/firmas/reseñas/códigos
   const [abogadoContrato, setAbogadoContrato] = useState(null)
   // Sub-filtro por rol dentro de Solicitudes/Aprobados/Contratos
   const [rolFilter, setRolFilter]             = useState('todos') // 'todos' | 'abogado' | 'contador'
@@ -68,6 +71,8 @@ export default function AdminPage() {
     fetchAll()
     fetchAlertas()
     fetchChatsCerrados()
+    fetchRooms()
+    fetchExtraCounts()
   }, [user, profile, loading])
 
   // Deep-link: /admin?tab=chats&room=<id> (desde el correo de verificación).
@@ -239,6 +244,42 @@ export default function AdminPage() {
     } catch { setChatsCerrados([]) }
   }
 
+  // Todas las salas (solo created_at/status) para las tarjetas y la gráfica.
+  async function fetchRooms() {
+    try {
+      const headers = await getAuthHeaders()
+      const res = await fetch(
+        `${SUPABASE_URL}/rest/v1/chat_rooms?select=created_at,status,tipo_profesional&order=created_at.desc&limit=2000`,
+        { headers }
+      )
+      const data = await res.json()
+      setAllRooms(Array.isArray(data) ? data : [])
+    } catch { setAllRooms([]) }
+  }
+
+  // Conteos por tabla (count=exact + Range 0-0: no trae filas, solo el total).
+  async function fetchExtraCounts() {
+    const headers = await getAuthHeaders()
+    const contar = async (path) => {
+      try {
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+          headers: { ...headers, Prefer: 'count=exact', Range: '0-0' },
+        })
+        const total = parseInt((res.headers.get('content-range') || '').split('/')[1], 10)
+        return Number.isFinite(total) ? total : 0
+      } catch { return 0 }
+    }
+    const [contratos, firmas, resenasTotal, resenasAprob, codigos, codigosActivos] = await Promise.all([
+      contar('contratos?select=id'),
+      contar('firmas_solicitudes?select=id&estado=eq.firmado'),
+      contar('resenas?select=id'),
+      contar('resenas?select=id&aprobado=eq.true'),
+      contar('codigos_referencia?select=id'),
+      contar('codigos_referencia?select=id&activo=eq.true'),
+    ])
+    setExtraCounts({ contratos, firmas, resenasTotal, resenasAprob, codigos, codigosActivos })
+  }
+
   async function reabrirChat(id) {
     const headers = await getAuthHeaders()
     // Reabrir = volver a 'waiting' para que un profesional pueda retomarla.
@@ -298,12 +339,6 @@ export default function AdminPage() {
 
   const pendingFiltered  = filterByRol(pending)
   const approvedFiltered = filterByRol(approved)
-
-  // Conteos por rol (para los stats)
-  const pendingAbogados   = pending.filter(p => p.rol === 'abogado').length
-  const pendingContadores = pending.filter(p => p.rol === 'contador').length
-  const approvedAbogados   = approved.filter(p => p.rol === 'abogado').length
-  const approvedContadores = approved.filter(p => p.rol === 'contador').length
 
   // Chip-row reutilizable para filtrar Solicitudes/Aprobados/Contratos por rol
   const RolChips = () => (
@@ -426,39 +461,16 @@ export default function AdminPage() {
               </div>
             </div>
 
-        {/* Stats */}
-        <div className={styles.stats}>
-          <div className={styles.stat}>
-            <span className={styles.statNum}>{pending.length}</span>
-            <span className={styles.statLabel}>
-              Solicitudes pendientes
-              {(pendingAbogados > 0 || pendingContadores > 0) && (
-                <span className={styles.statSub}>
-                  {pendingAbogados} ab. · {pendingContadores} cont.
-                </span>
-              )}
-            </span>
-          </div>
-          <div className={styles.stat}>
-            <span className={styles.statNum}>{approved.length}</span>
-            <span className={styles.statLabel}>
-              Profesionales aprobados
-              {(approvedAbogados > 0 || approvedContadores > 0) && (
-                <span className={styles.statSub}>
-                  {approvedAbogados} ab. · {approvedContadores} cont.
-                </span>
-              )}
-            </span>
-          </div>
-          <div className={styles.stat}>
-            <span className={styles.statNum}>{approved.length + pending.length}</span>
-            <span className={styles.statLabel}>Total registrados</span>
-          </div>
-          <div className={`${styles.stat} ${alertas.length > 0 ? styles.statAlert : ''}`}>
-            <span className={styles.statNum}>{alertas.length}</span>
-            <span className={styles.statLabel}>Alertas inactividad</span>
-          </div>
-        </div>
+        {/* Stats contextuales por sección + gráfica histórica */}
+        <AdminStats
+          activeTab={activeTab}
+          pending={pending}
+          approved={approved}
+          alertas={alertas}
+          chatsCerrados={chatsCerrados}
+          allRooms={allRooms}
+          extra={extraCounts}
+        />
 
         {/* Contenido de la sección activa (transición framer-motion) */}
         <div className={styles.tabContent}>

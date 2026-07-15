@@ -1,0 +1,115 @@
+.page {
+  min-height: 100vh;
+  background: #f4f6fb;
+  font-family: 'Raleway', sans-serif;
+}
+
+/* ── Hero navy ── */
+.hero {
+  background: linear-gradient(160deg, #0d2d5e 0%, #1a3f7a 100%);
+  color: #fff;
+  padding: 2.4rem 1.5rem 3rem;
+}
+.heroInner {
+  max-width: 760px;
+  margin: 0 auto;
+}
+.back {
+  display: inline-block;
+  color: rgba(255, 255, 255, 0.72);
+  text-decoration: none;
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin-bottom: 1.8rem;
+  transition: color 0.2s;
+}
+.back:hover { color: #e8c96a; }
+
+.brand {
+  font-family: 'Cinzel', serif;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #fff;
+  margin: 0 0 0.9rem;
+}
+.brand span { color: #c9a84c; }
+
+.title {
+  font-family: 'Cormorant Garamond', 'Cinzel', serif;
+  font-size: clamp(2rem, 5vw, 3rem);
+  font-weight: 700;
+  line-height: 1.15;
+  margin: 0 0 0.7rem;
+  text-wrap: balance;
+}
+.updated {
+  font-size: 0.82rem;
+  color: rgba(255, 255, 255, 0.6);
+  margin: 0;
+}
+
+/* ── Contenido ── */
+.content {
+  max-width: 760px;
+  margin: -1.6rem auto 4rem;
+  background: #fff;
+  border-radius: 16px;
+  padding: clamp(1.5rem, 4vw, 3rem);
+  box-shadow: 0 20px 60px -30px rgba(13, 45, 94, 0.35);
+  position: relative;
+  z-index: 1;
+}
+
+.aviso {
+  font-size: 0.82rem;
+  line-height: 1.6;
+  color: #7a5c12;
+  background: #faf6ec;
+  border: 1px solid #efe4c4;
+  border-radius: 10px;
+  padding: 0.8rem 1rem;
+  margin: 0 0 1.8rem;
+}
+
+.intro {
+  font-size: 1.02rem;
+  line-height: 1.75;
+  color: #33415c;
+  margin: 0 0 2rem;
+  max-width: 68ch;
+}
+
+.seccion { margin-bottom: 1.9rem; }
+
+.h2 {
+  font-family: 'Cinzel', serif;
+  font-size: 1.02rem;
+  font-weight: 700;
+  color: #0d2d5e;
+  margin: 0 0 0.7rem;
+}
+
+.par {
+  font-size: 0.94rem;
+  line-height: 1.78;
+  color: #3d4a63;
+  margin: 0 0 0.8rem;
+  max-width: 70ch;
+  text-wrap: pretty;
+}
+
+.footerNav {
+  margin-top: 2.4rem;
+  padding-top: 1.6rem;
+  border-top: 1px solid rgba(13, 45, 94, 0.1);
+}
+.crossLink {
+  color: #0d2d5e;
+  font-weight: 700;
+  font-size: 0.9rem;
+  text-decoration: none;
+  text-underline-offset: 3px;
+}
+.crossLink:hover { text-decoration: underline; }

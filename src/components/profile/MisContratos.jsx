@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, lazy, Suspense } from 'react'
 import { createPortal } from 'react-dom'
 import { getAuthHeaders } from '../../lib/supabase'
-import { listarEvidencia, urlFirmada } from '../../lib/firmaService'
+import { listarEvidencia } from '../../lib/firmaService'
 import EnviarAFirmar from '../firma/EnviarAFirmar'
 import { IconFirma } from '../shared/Icons'
 import styles from './MisContratos.module.css'
@@ -57,7 +57,7 @@ export default function MisContratos({ abogadoId, isSuperAdmin = false }) {
   const fileRef = useRef()
 
   // ── Firma electrónica ──
-  const [tab, setTab]               = useState('subidos') // subidos | clientes | admin
+  const [tab, setTab]               = useState('subidos') // subidos | clientes
   const [evidencia, setEvidencia]   = useState({ clientes: [], administracion: [] })
   const [enviarFirma, setEnviarFirma] = useState(null)     // contrato a firmar | {} nuevo
   const [ubicar, setUbicar] = useState(null)               // payload para ubicar la firma
@@ -69,19 +69,6 @@ export default function MisContratos({ abogadoId, isSuperAdmin = false }) {
       const headers = await getAuthHeaders()
       setEvidencia(await listarEvidencia(abogadoId, headers))
     } catch { /* tablas de firma aún no aplicadas: sección vacía */ }
-  }
-
-  async function descargarFirmado(path, nombre) {
-    if (!path) return
-    const headers = await getAuthHeaders()
-    const url = await urlFirmada(path, headers)
-    if (!url) return
-    const fn = nombre || path.split('/').pop() || 'documento'
-    // Fuerza la descarga (Content-Disposition attachment) en vez de previsualizar.
-    const a = document.createElement('a')
-    a.href = url + (url.includes('?') ? '&' : '?') + 'download=' + encodeURIComponent(fn)
-    a.download = fn
-    document.body.appendChild(a); a.click(); a.remove()
   }
 
   // Genera el certificado de firma AL VUELO desde la traza de los firmantes y
@@ -221,7 +208,6 @@ export default function MisContratos({ abogadoId, isSuperAdmin = false }) {
         {[
           ['subidos', 'Subidos'],
           ['clientes', `Firmados con clientes${evidencia.clientes.length ? ` (${evidencia.clientes.length})` : ''}`],
-          ['admin', `Firmados con la administración${evidencia.administracion.length ? ` (${evidencia.administracion.length})` : ''}`],
         ].map(([k, label]) => (
           <button
             key={k}
@@ -289,23 +275,17 @@ export default function MisContratos({ abogadoId, isSuperAdmin = false }) {
         document.body
       )}
 
-      {/* Evidencia firmada — clientes / administración */}
-      {tab !== 'subidos' && (() => {
-        const rows = tab === 'clientes' ? evidencia.clientes : evidencia.administracion
-        if (rows.length === 0) {
-          return (
-            <div className={styles.emptyState}>
-              <span className={styles.emptyFirmaIcon}><IconFirma size={44} /></span>
-              <p className={styles.emptyTxt}>
-                Aún no hay documentos firmados {tab === 'clientes' ? 'con clientes' : 'con la administración'}
-              </p>
-              <p className={styles.emptySub}>Los documentos firmados quedarán aquí como evidencia</p>
-            </div>
-          )
-        }
-        return (
+      {/* Evidencia firmada con clientes */}
+      {tab === 'clientes' && (
+        evidencia.clientes.length === 0 ? (
+          <div className={styles.emptyState}>
+            <span className={styles.emptyFirmaIcon}><IconFirma size={44} /></span>
+            <p className={styles.emptyTxt}>Aún no hay documentos firmados con clientes</p>
+            <p className={styles.emptySub}>Los documentos firmados quedarán aquí como evidencia</p>
+          </div>
+        ) : (
           <div className={styles.lista}>
-            {rows.map(s => {
+            {evidencia.clientes.map(s => {
               const nombres = (s.firmas_firmantes || []).map(f => f.nombre).filter(Boolean).join(', ')
               return (
                 <div key={s.id} className={styles.contratoCard}>
@@ -316,29 +296,19 @@ export default function MisContratos({ abogadoId, isSuperAdmin = false }) {
                     <p className={styles.contratoMeta}>{fmtFecha(s.created_at)}</p>
                   </div>
                   <div className={styles.contratoAcciones}>
-                    {tab === 'clientes' ? (
-                      <button
-                        className={styles.btnFirmarSm}
-                        onClick={() => setUbicar({
-                          origPath: s.doc_original_path,
-                          firmaPath: `${s.id}/firma.png`,
-                          pie: (() => {
-                            const f = (s.firmas_firmantes || []).find(x => x.rol_firma === 'cliente') || s.firmas_firmantes?.[0] || {}
-                            return { nombre: f.nombre, cedula: f.cedula, telefono: f.telefono, correo: f.correo, ciudad: f.ciudad, fecha: f.firmado_at, rol: f.rol_firma }
-                          })(),
-                        })}
-                      >
-                        <IconFirma size={14} /> Ubicar firma y descargar
-                      </button>
-                    ) : (
-                      <button
-                        className={styles.btnDown}
-                        onClick={() => descargarFirmado(s.doc_firmado_path, 'documento-firmado.pdf')}
-                        disabled={!s.doc_firmado_path}
-                      >
-                        ⬇ Documento
-                      </button>
-                    )}
+                    <button
+                      className={styles.btnFirmarSm}
+                      onClick={() => setUbicar({
+                        origPath: s.doc_original_path,
+                        firmaPath: `${s.id}/firma.png`,
+                        pie: (() => {
+                          const f = (s.firmas_firmantes || []).find(x => x.rol_firma === 'cliente') || s.firmas_firmantes?.[0] || {}
+                          return { nombre: f.nombre, cedula: f.cedula, telefono: f.telefono, correo: f.correo, ciudad: f.ciudad, fecha: f.firmado_at, rol: f.rol_firma }
+                        })(),
+                      })}
+                    >
+                      <IconFirma size={14} /> Ubicar firma y descargar
+                    </button>
                     <button
                       className={styles.btnDown}
                       onClick={() => descargarCertificado(s)}
@@ -351,7 +321,7 @@ export default function MisContratos({ abogadoId, isSuperAdmin = false }) {
             })}
           </div>
         )
-      })()}
+      )}
 
       {/* Lista de subidos */}
       {tab === 'subidos' && (loading ? (

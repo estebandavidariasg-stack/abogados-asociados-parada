@@ -1,10 +1,7 @@
-import React, { useEffect, useState } from 'react'
+import React, { useState } from 'react'
 import { motion } from 'framer-motion'
 import styles from './TestimoniosSection.module.css'
 import { useCarrusel } from '../../lib/useCarrusel'
-
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
-const ANON = import.meta.env.VITE_SUPABASE_ANON_KEY
 
 const IconComillas = (props) => (
   <svg viewBox="0 0 44 40" width="38" height="34" fill="currentColor" aria-hidden="true" {...props}>
@@ -90,33 +87,21 @@ function Fila({ items, carrusel }) {
   )
 }
 
-export default function TestimoniosSection() {
-  // Reseñas reales aprobadas por el admin (solo aprobadas se muestran en el home).
-  const [items, setItems] = useState(null) // null = cargando; [] = ninguna
+// ── Testimonios mockeados (TEMPORAL) ──────────────────────────────────────
+// Mientras se acumulan reseñas reales aprobadas, mostramos estos ejemplos.
+// Para volver a las reseñas reales de la BD: borrar MOCK_TESTIMONIOS y restaurar
+// el fetch a `/rest/v1/resenas?aprobado=eq.true` dentro de un useEffect (ver git).
+const MOCK_TESTIMONIOS = [
+  { texto: 'Necesitaba orientación en un proceso de sucesión y no sabía por dónde empezar. En menos de un día ya estaba hablando con una abogada que me explicó todo con claridad. Excelente acompañamiento.', nombre: 'Laura Restrepo', rol: 'Cliente · Bogotá', rating: 5, imagen: null },
+  { texto: 'Como dueño de una pyme, el tema tributario me abrumaba. El contador que me asignaron organizó mi declaración de renta y me ahorró varios dolores de cabeza. Muy recomendados.', nombre: 'Andrés Gómez', rol: 'Cliente · Medellín', rating: 5, imagen: null },
+  { texto: 'Tenía dudas sobre un contrato laboral y la asesoría fue rápida, seria y sin vueltas. Me sentí acompañada en todo el proceso y con respuestas concretas.', nombre: 'Valentina Ríos', rol: 'Cliente · Cali', rating: 4.5, imagen: null },
+  { texto: 'Consulté por un tema de derecho de familia bastante delicado. El trato fue humano y profesional, y siempre supe cuáles eran mis opciones reales según la ley.', nombre: 'Carlos Mendoza', rol: 'Cliente · Barranquilla', rating: 5, imagen: null },
+  { texto: 'La plataforma me conectó con un abogado de derecho penal que respondió mis dudas con paciencia. Todo transparente, incluido el costo antes de empezar.', nombre: 'Diana Vargas', rol: 'Cliente · Bucaramanga', rating: 4.5, imagen: null },
+  { texto: 'Manejo varios locales y necesitaba poner al día la contabilidad. El profesional fue puntual, ordenado y me dejó todo claro para el cierre del año fiscal.', nombre: 'Jorge Patiño', rol: 'Cliente · Pereira', rating: 5, imagen: null },
+]
 
-  useEffect(() => {
-    let cancel = false
-    ;(async () => {
-      try {
-        const res = await fetch(
-          `${SUPABASE_URL}/rest/v1/resenas?aprobado=eq.true` +
-          `&select=nombre,rol,rating,texto&order=created_at.desc&limit=24`,
-          { headers: { apikey: ANON, Authorization: `Bearer ${ANON}` } }
-        )
-        const data = await res.json().catch(() => [])
-        if (!cancel) {
-          setItems(
-            (Array.isArray(data) ? data : [])
-              .filter((r) => r.texto)
-              .map((r) => ({ texto: r.texto, nombre: r.nombre || 'Cliente', rol: r.rol || 'Cliente', rating: r.rating || 5, imagen: null }))
-          )
-        }
-      } catch {
-        if (!cancel) setItems([])
-      }
-    })()
-    return () => { cancel = true }
-  }, [])
+export default function TestimoniosSection() {
+  const [items] = useState(MOCK_TESTIMONIOS)
 
   // Dos filas en sentidos opuestos, en desplazamiento continuo.
   const fila1Carrusel = useCarrusel({ speed: 40, direction: 1, loop: true })

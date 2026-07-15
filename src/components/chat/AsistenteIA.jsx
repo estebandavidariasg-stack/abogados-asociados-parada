@@ -1,5 +1,6 @@
 // src/components/chat/AsistenteIA.jsx — "IA Parada Precise"
 import { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { useAuth } from '../../context/AuthContext';
 import { pedirIA } from '../../lib/aiClient';
@@ -172,6 +173,9 @@ export default function AsistenteIA() {
   const [focused, setFocused] = useState(false);
   const [phIndex, setPhIndex] = useState(0);
   const [stream, setStream] = useState(null); // efecto "escritura": { idx, n }
+  // Aviso/aceptación de términos al primer uso de la IA (por profesional).
+  const [aceptoIA, setAceptoIA] = useState(true); // se recalcula al conocer el uid
+  const [aceptaCheck, setAceptaCheck] = useState(false);
   const threadRef = useRef(null);
   const inputRef = useRef(null);
   const fileRef = useRef(null);
@@ -180,6 +184,21 @@ export default function AsistenteIA() {
 
   // Carga el historial al montar / al cambiar de usuario.
   useEffect(() => { setChats(cargarChats(uid)); }, [uid]);
+
+  // Primer uso: si el profesional no ha aceptado los términos de la IA, mostrar
+  // el aviso. La aceptación se guarda por usuario en localStorage.
+  useEffect(() => {
+    if (!uid) return;
+    let ok = true;
+    try { ok = localStorage.getItem(`ia_terms_${uid}`) === '1'; } catch { ok = true; }
+    setAceptoIA(ok);
+  }, [uid]);
+
+  function aceptarTerminosIA() {
+    if (!aceptaCheck) return;
+    try { localStorage.setItem(`ia_terms_${uid}`, '1'); } catch { /* noop */ }
+    setAceptoIA(true);
+  }
 
   // Inserta o actualiza el chat activo en el historial.
   function persistir(id, messages) {
@@ -723,6 +742,85 @@ export default function AsistenteIA() {
     <div className={styles.shell}>
       {historial}
       <div className={styles.main}>{principal}</div>
+
+      {/* Aviso de primer uso: la IA es solo apoyo + aceptación de términos */}
+      {!aceptoIA && uid && createPortal(
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 1000,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          padding: '1.2rem', background: 'rgba(9, 24, 48, 0.62)',
+          backdropFilter: 'blur(3px)',
+        }}>
+          <div style={{
+            width: 'min(520px, 100%)', background: '#fff', borderRadius: 18,
+            boxShadow: '0 30px 80px -30px rgba(9,24,48,0.6)', overflow: 'hidden',
+            fontFamily: "'Raleway', sans-serif",
+          }}>
+            <div style={{ background: 'linear-gradient(160deg, #0d2d5e 0%, #1a3f7a 100%)', color: '#fff', padding: '1.6rem 1.8rem' }}>
+              <div style={{
+                width: 44, height: 44, borderRadius: 12, marginBottom: 12,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                background: 'rgba(201,168,76,0.18)', border: '1px solid rgba(201,168,76,0.4)', color: '#e8c96a',
+              }}>
+                <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /><path d="M12 8v4M12 16h.01" />
+                </svg>
+              </div>
+              <h2 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: '1.7rem', fontWeight: 700, margin: 0, lineHeight: 1.2 }}>
+                IA Parada Precise
+              </h2>
+              <p style={{ margin: '6px 0 0', fontSize: '0.86rem', color: 'rgba(255,255,255,0.75)' }}>
+                Herramienta de apoyo profesional
+              </p>
+            </div>
+
+            <div style={{ padding: '1.6rem 1.8rem' }}>
+              <p style={{ margin: '0 0 1rem', fontSize: '0.92rem', lineHeight: 1.7, color: '#33415c' }}>
+                Esta herramienta es un <strong>apoyo para tu ejercicio profesional</strong>: te ayuda a
+                redactar borradores, resumir y analizar casos. <strong>No sustituye tu criterio.</strong>
+              </p>
+              <ul style={{ margin: '0 0 1.2rem', paddingLeft: '1.1rem', fontSize: '0.87rem', lineHeight: 1.7, color: '#3d4a63' }}>
+                <li>Todo lo que genera es un <strong>borrador que debes revisar</strong> antes de usarlo o presentarlo.</li>
+                <li>La IA puede cometer errores; verifica normas, cifras y jurisprudencia.</li>
+                <li>Eres responsable del contenido final conforme a tus deberes profesionales.</li>
+              </ul>
+
+              <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', fontSize: '0.85rem', lineHeight: 1.55, color: '#33415c', marginBottom: '1.3rem' }}>
+                <input
+                  type="checkbox"
+                  checked={aceptaCheck}
+                  onChange={(e) => setAceptaCheck(e.target.checked)}
+                  style={{ width: 17, height: 17, marginTop: 1, accentColor: '#c9a84c', flexShrink: 0, cursor: 'pointer' }}
+                />
+                <span>
+                  He leído y acepto los{' '}
+                  <a href="/terminos" target="_blank" rel="noopener noreferrer" style={{ color: '#0d2d5e', fontWeight: 700 }}>términos y condiciones</a>
+                  {' '}y la{' '}
+                  <a href="/privacidad" target="_blank" rel="noopener noreferrer" style={{ color: '#0d2d5e', fontWeight: 700 }}>política de privacidad</a>
+                  {' '}del uso de esta herramienta.
+                </span>
+              </label>
+
+              <button
+                type="button"
+                onClick={aceptarTerminosIA}
+                disabled={!aceptaCheck}
+                style={{
+                  width: '100%', padding: '0.85rem 1rem', borderRadius: 12, border: 'none',
+                  fontFamily: "'Raleway', sans-serif", fontSize: '0.92rem', fontWeight: 700,
+                  cursor: aceptaCheck ? 'pointer' : 'not-allowed',
+                  color: aceptaCheck ? '#0d2d5e' : '#8a97ab',
+                  background: aceptaCheck ? 'linear-gradient(135deg, #e8c96a, #c9a84c)' : '#e8ecf3',
+                  transition: 'opacity 0.2s',
+                }}
+              >
+                Aceptar y comenzar
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 }

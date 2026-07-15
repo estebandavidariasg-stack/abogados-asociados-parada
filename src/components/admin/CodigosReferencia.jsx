@@ -25,8 +25,8 @@ export default function CodigosReferencia() {
   const [codigos, setCodigos]   = useState([])
   const [loading, setLoading]   = useState(true)
   const [saving, setSaving]     = useState(false)
-  const [showForm, setShowForm] = useState(false)
-  const [editingId, setEditingId] = useState(null) // null = crear; id = editar (abre modal)
+  const [modalOpen, setModalOpen] = useState(false) // crear y editar usan el mismo modal
+  const [editingId, setEditingId] = useState(null) // null = crear; id = editar
   const [editingCodigo, setEditingCodigo] = useState('')
   const [selectedQR, setSelectedQR] = useState(null)
   const [error, setError]       = useState('')
@@ -81,7 +81,7 @@ export default function CodigosReferencia() {
         setSuccess(`Código ${codigo} creado exitosamente.`)
       }
       setForm(FORM_VACIO)
-      setShowForm(false)
+      setModalOpen(false)
       setEditingId(null)
       setEditingCodigo('')
       await fetchCodigos()
@@ -99,18 +99,21 @@ export default function CodigosReferencia() {
     })
     setEditingId(c.id)
     setEditingCodigo(c.codigo || '')
-    setShowForm(false)   // el inline es solo para crear; editar usa el modal
+    setModalOpen(true)
     setError(''); setSuccess('')
   }
 
-  function closeEdit() {
-    setEditingId(null); setEditingCodigo(''); setForm(FORM_VACIO); setError('')
-  }
-
-  function toggleForm() {
-    setError(''); setSuccess('')
-    setShowForm(s => !s)
+  function openCreate() {
     setForm(FORM_VACIO)
+    setEditingId(null)
+    setEditingCodigo('')
+    setModalOpen(true)
+    setError(''); setSuccess('')
+  }
+
+  function closeModal() {
+    setModalOpen(false)
+    setEditingId(null); setEditingCodigo(''); setForm(FORM_VACIO); setError('')
   }
 
   async function toggleActivo(id, activo) {
@@ -317,29 +320,15 @@ export default function CodigosReferencia() {
         <button
           className={styles.btnNew}
           style={{ display:'inline-flex', alignItems:'center', gap:'7px' }}
-          onClick={toggleForm}
+          onClick={openCreate}
         >
-          {showForm ? <><IconX /> Cancelar</> : <><IconPlus /> Nuevo código</>}
+          <IconPlus /> Nuevo código
         </button>
       </div>
 
       {/* Mensajes */}
-      {error   && <p className={styles.error}>{error}</p>}
+      {error   && !modalOpen && <p className={styles.error}>{error}</p>}
       {success && <p className={styles.successMsg}>{success}</p>}
-
-      {/* Formulario para CREAR (inline). Editar usa el modal de abajo. */}
-      {showForm && (
-        <form className={styles.form} onSubmit={handleSubmit}>
-          <p className={styles.formTitle}>Datos del comisionista</p>
-          {camposForm}
-          <div className={styles.formActions}>
-            <button type="submit" className={styles.btnSave} disabled={saving}
-              style={{ display:'inline-flex', alignItems:'center', gap:'7px' }}>
-              {saving ? 'Generando…' : <><IconCheck /> Generar código</>}
-            </button>
-          </div>
-        </form>
-      )}
 
       {/* Lista de códigos */}
       {loading ? (
@@ -451,29 +440,33 @@ export default function CodigosReferencia() {
         </div>
       )}
 
-      {/* ── Ventana (modal) para editar la información del código ──
+      {/* ── Modal para CREAR o EDITAR la información del código ──
           Portal a <body>: el position:fixed se ancla al viewport (no a un
           ancestro con transform/backdrop-filter) → fijo y centrado. */}
-      {editingId && createPortal(
+      {modalOpen && createPortal(
         <div
           className={styles.modalOverlay}
           role="dialog"
           aria-modal="true"
           aria-labelledby="qrEditTitle"
-          onClick={closeEdit}
+          onClick={closeModal}
         >
           <div className={styles.modalCard} onClick={e => e.stopPropagation()}>
             <div className={styles.modalHead}>
               <div>
-                <h3 id="qrEditTitle" className={styles.modalTitle}>Editar información</h3>
+                <h3 id="qrEditTitle" className={styles.modalTitle}>
+                  {editingId ? 'Editar información' : 'Nuevo código'}
+                </h3>
                 <p className={styles.modalSub}>
-                  Código <strong>{editingCodigo}</strong> · el QR no cambia
+                  {editingId
+                    ? <>Código <strong>{editingCodigo}</strong> · el QR no cambia</>
+                    : 'El código y su QR se generan automáticamente al guardar.'}
                 </p>
               </div>
               <button
                 type="button"
                 className={styles.modalClose}
-                onClick={closeEdit}
+                onClick={closeModal}
                 aria-label="Cerrar"
               >
                 <IconX />
@@ -485,12 +478,14 @@ export default function CodigosReferencia() {
             <form onSubmit={handleSubmit}>
               {camposForm}
               <div className={styles.modalActions}>
-                <button type="button" className={styles.btnCancel} onClick={closeEdit}>
+                <button type="button" className={styles.btnCancel} onClick={closeModal}>
                   Cancelar
                 </button>
                 <button type="submit" className={styles.btnSave} disabled={saving}
                   style={{ display:'inline-flex', alignItems:'center', gap:'7px' }}>
-                  {saving ? 'Guardando…' : <><IconCheck /> Guardar cambios</>}
+                  {saving
+                    ? (editingId ? 'Guardando…' : 'Generando…')
+                    : (editingId ? <><IconCheck /> Guardar cambios</> : <><IconCheck /> Generar código</>)}
                 </button>
               </div>
             </form>

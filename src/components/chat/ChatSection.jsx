@@ -794,12 +794,14 @@ function StepCedula({ onNew, onResume }) {
   const codigoURL = urlParams.get('codigo') || ''
   const [cedula, setCedula] = useState('')
   const [codigo, setCodigo] = useState(codigoURL)
+  const [acepta, setAcepta] = useState(false)
   const [error, setError]   = useState('')
   const [loading, setLoading] = useState(false)
 
   async function handleSubmit() {
     const rawCedula = cedula.trim()
     if (!/^\d{6,12}$/.test(rawCedula)) { setError('Ingresa un número de cédula válido (6–12 dígitos).'); return }
+    if (!acepta) { setError('Debes aceptar los términos y condiciones y la política de privacidad para continuar.'); return }
     setLoading(true); setError('')
     const hash = await hashCedula(rawCedula)
     localStorage.setItem('chat_cedula_hash', hash)
@@ -835,9 +837,29 @@ function StepCedula({ onNew, onResume }) {
           Si un asesor te dio un código, ingrésalo aquí.
         </p>
       </div>
+
+      {/* Aceptación de términos y política de privacidad */}
+      <label style={{
+        display:'flex', alignItems:'flex-start', gap:10, marginTop:20,
+        cursor:'pointer', fontSize:'0.82rem', lineHeight:1.5, color:'#3d4a63',
+      }}>
+        <input
+          type="checkbox"
+          checked={acepta}
+          onChange={e => { setAcepta(e.target.checked); setError('') }}
+          style={{ width:17, height:17, marginTop:1, accentColor:'#c9a84c', flexShrink:0, cursor:'pointer' }}
+        />
+        <span>
+          Acepto los{' '}
+          <a href="/terminos" target="_blank" rel="noopener noreferrer" style={{ color:'#0d2d5e', fontWeight:700 }}>términos y condiciones</a>
+          {' '}y la{' '}
+          <a href="/privacidad" target="_blank" rel="noopener noreferrer" style={{ color:'#0d2d5e', fontWeight:700 }}>política de privacidad</a>.
+        </span>
+      </label>
+
       {error && <p className={styles.formError} style={{ marginTop:8 }}>{error}</p>}
       <button className={styles.btnGold} style={{ marginTop:20, width:'100%' }}
-        onClick={handleSubmit} disabled={loading || !cedula}>
+        onClick={handleSubmit} disabled={loading || !cedula || !acepta}>
         {loading ? 'Verificando…' : 'Continuar'}
       </button>
     </div>
@@ -1561,6 +1583,19 @@ export default function ChatSection() {
                   </div>
                 </div>
 
+                {/* Aviso legal de valores orientativos (debajo del encabezado azul) */}
+                <div style={{
+                  padding:'8px 16px', background:'rgba(13,45,94,0.05)',
+                  borderBottom:'1px solid rgba(13,45,94,0.08)',
+                  fontSize:'0.72rem', lineHeight:1.5, color:'#3d4a63',
+                }}>
+                  <strong style={{ color:'#0d2d5e' }}>Valores orientativos:</strong>{' '}
+                  en Colombia los honorarios profesionales son de libre acuerdo entre las partes
+                  (no existe una tarifa oficial obligatoria). El profesional confirma el valor final
+                  antes de iniciar. Ver{' '}
+                  <a href="/terminos" target="_blank" rel="noopener noreferrer" style={{ color:'#0d2d5e', fontWeight:700 }}>términos</a>.
+                </div>
+
                 <div
                   className={styles.chatMessages}
                   ref={messagesRef}
@@ -1825,7 +1860,7 @@ export default function ChatSection() {
                   <div className={styles.iaPrecio}>
                     <span className={styles.iaPrecioTag}>Costo sugerido</span>
                     <span className={styles.iaPrecioValor}>{limpiarCosto(costoIA)}</span>
-                    <span className={styles.iaPrecioNota}>Valor orientativo. El profesional lo confirma antes de empezar.</span>
+                    <span className={styles.iaPrecioNota}>Valor orientativo. En Colombia los honorarios son de libre acuerdo entre las partes; el profesional confirma el valor final antes de empezar.</span>
                   </div>
                 )}
               </div>

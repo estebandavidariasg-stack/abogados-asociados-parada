@@ -34,7 +34,7 @@ function PrecioSugerido({ valor }) {
         Costo sugerido
       </span>
       <span className={styles.precioValor}>{limpio}</span>
-      <span className={styles.precioNota}>Valor orientativo. El profesional lo confirma antes de empezar.</span>
+      <span className={styles.precioNota}>Valor orientativo. En Colombia los honorarios son de libre acuerdo entre las partes (no hay tarifa oficial); el profesional confirma el valor final antes de empezar.</span>
     </div>
   );
 }

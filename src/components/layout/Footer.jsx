@@ -1,17 +1,10 @@
 import styles from './Footer.module.css'
 
-const AREAS_DERECHO = [
-  'Derecho Penal', 'Derecho Civil', 'Derecho Corporativo',
-  'Derecho de Familia', 'Derecho Laboral', 'Derecho Administrativo',
+const SOCIALS = [
+  { label: 'Instagram', href: '#', path: 'M7.5 2h9A5.5 5.5 0 0 1 22 7.5v9A5.5 5.5 0 0 1 16.5 22h-9A5.5 5.5 0 0 1 2 16.5v-9A5.5 5.5 0 0 1 7.5 2zm0 1.5A4 4 0 0 0 3.5 7.5v9a4 4 0 0 0 4 4h9a4 4 0 0 0 4-4v-9a4 4 0 0 0-4-4h-9zm4.5 3a5 5 0 1 1 0 10 5 5 0 0 1 0-10zm0 1.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7zm5.25-.75a.75.75 0 1 1 0 1.5.75.75 0 0 1 0-1.5z' },
+  { label: 'LinkedIn', href: '#', path: 'M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6zM2 9h4v12H2z M4 6a2 2 0 1 0 0-4 2 2 0 0 0 0 4z' },
+  { label: 'Facebook', href: '#', path: 'M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z' },
 ]
-const AREAS_CONTADURIA = [
-  'Auditoría y Revisoría Fiscal',
-  'Tributaria y Fiscal',
-  'Contabilidad Forense',
-  'Finanzas Corporativas',
-  'Contabilidad Internacional (NIIF)',
-]
-const FIRMA = ['Nuestro equipo', 'Historia', 'Noticias', 'Trabaje con nosotros']
 
 const IconMail = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -36,7 +29,7 @@ export default function Footer() {
       <div className={styles.glow} />
 
       <div className={styles.inner}>
-        {/* ── Columna 1: Logo + dirección ── */}
+        {/* ── Columna 1: Logo + tagline ── */}
         <div className={styles.brand}>
           <a href="/" className={styles.logoWrap}>
             <picture>
@@ -53,13 +46,9 @@ export default function Footer() {
             </picture>
           </a>
           <p className={styles.tagline}>Somos una plataforma web de intermediación que facilita la conexión entre personas que necesitan orientación jurídica y contable.</p>
-          <div className={styles.address}>
-            <IconMapPin />
-            <span>Carrera 66 #19-72<br />Bogotá D.C., Colombia</span>
-          </div>
         </div>
 
-        {/* ── Columna 2: Contacto ── */}
+        {/* ── Columna 2: Contacto (correo, WhatsApp, ubicación) + redes ── */}
         <div className={styles.contact}>
           <h4 className={`${styles.colTitle} ${styles.colTitleContact}`}>Contacto</h4>
           <a href="mailto:gerencia@abogadosparada.com" className={styles.contactItem}>
@@ -78,32 +67,23 @@ export default function Footer() {
               <span className={styles.contactSub}>Escríbenos por WhatsApp</span>
             </div>
           </a>
-        </div>
+          <a
+            href="https://www.google.com/maps/search/?api=1&query=Carrera%2066%20%2319-72%2C%20Bogot%C3%A1"
+            target="_blank"
+            rel="noopener noreferrer"
+            className={styles.contactItem}
+          >
+            <span className={styles.contactIcon}><IconMapPin /></span>
+            <div>
+              <span className={styles.contactLabel}>Nuestra oficina</span>
+              <span className={styles.contactValue}>Carrera 66 #19-72</span>
+              <span className={styles.contactSub}>Bogotá D.C., Colombia</span>
+            </div>
+          </a>
 
-        {/* ── Columna 3: Áreas + Social ── */}
-        <div className={styles.col}>
-          <h4 className={`${styles.colTitle} ${styles.colTitleCenter}`}>Áreas de práctica</h4>
-          <div className={styles.areasGrid}>
-            <div>
-              <p className={styles.areasSub}>Derecho</p>
-              <ul className={styles.linkList}>
-                {AREAS_DERECHO.map(item => <li key={item}><a href="/#lawyers">{item}</a></li>)}
-              </ul>
-            </div>
-            <div>
-              <p className={styles.areasSub}>Contaduría</p>
-              <ul className={styles.linkList}>
-                {AREAS_CONTADURIA.map(item => <li key={item}><a href="/#lawyers">{item}</a></li>)}
-              </ul>
-            </div>
-          </div>
-          {/* Redes sociales */}
+          {/* Redes sociales — más grandes y centradas bajo el contacto */}
           <div className={styles.socials}>
-            {[
-              { label: 'Instagram', href: '#', path: 'M7.5 2h9A5.5 5.5 0 0 1 22 7.5v9A5.5 5.5 0 0 1 16.5 22h-9A5.5 5.5 0 0 1 2 16.5v-9A5.5 5.5 0 0 1 7.5 2zm0 1.5A4 4 0 0 0 3.5 7.5v9a4 4 0 0 0 4 4h9a4 4 0 0 0 4-4v-9a4 4 0 0 0-4-4h-9zm4.5 3a5 5 0 1 1 0 10 5 5 0 0 1 0-10zm0 1.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7zm5.25-.75a.75.75 0 1 1 0 1.5.75.75 0 0 1 0-1.5z' },
-              { label: 'LinkedIn', href: '#', path: 'M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6zM2 9h4v12H2z M4 6a2 2 0 1 0 0-4 2 2 0 0 0 0 4z' },
-              { label: 'Facebook', href: '#', path: 'M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z' },
-            ].map(({ label, href, path }) => (
+            {SOCIALS.map(({ label, href, path }) => (
               <a key={label} href={href} className={styles.socialBtn} aria-label={label} target="_blank" rel="noopener noreferrer">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                   <path d={path} />

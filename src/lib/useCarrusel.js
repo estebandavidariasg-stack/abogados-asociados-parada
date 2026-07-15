@@ -31,7 +31,7 @@ export function useCarrusel({ speed = 42, direction = 1, loop = true } = {}) {
   const ref = useRef(null)
   const S = useRef({
     pos: 0, half: 0, loopable: false,
-    paused: false, dragging: false, dragged: false,
+    paused: false, dragging: false, dragged: false, captured: false,
     startX: 0, startLeft: 0,
     tween: null, raf: null, last: 0, visible: true,
     reduce: false,
@@ -140,10 +140,12 @@ export function useCarrusel({ speed = 42, direction = 1, loop = true } = {}) {
     if (!el) return
     s.dragging = true
     s.dragged = false
+    s.captured = false
     s.startX = e.clientX
     s.startLeft = el.scrollLeft
     s.tween = null
-    try { el.setPointerCapture(e.pointerId) } catch { /* noop */ }
+    // NO capturamos el puntero aquí: hacerlo redirige el `click` al contenedor
+    // y la tarjeta hija nunca abre. Capturamos en onPointerMove, ya con arrastre.
   }, [])
 
   const onPointerMove = useCallback((e) => {
@@ -151,7 +153,15 @@ export function useCarrusel({ speed = 42, direction = 1, loop = true } = {}) {
     const s = S.current
     if (!el || !s.dragging) return
     const dx = e.clientX - s.startX
-    if (Math.abs(dx) > 4) s.dragged = true
+    if (Math.abs(dx) > 4) {
+      s.dragged = true
+      // Capturamos el puntero SOLO cuando ya es un arrastre real, para que el
+      // gesto siga suave aunque el cursor salga del contenedor. Un click simple
+      // (sin arrastre) nunca captura → su `click` sí llega a la tarjeta.
+      if (!s.captured) {
+        try { el.setPointerCapture(e.pointerId); s.captured = true } catch { /* noop */ }
+      }
+    }
     let left = s.startLeft - dx
     if (s.loopable) left = wrap(left, s.half)
     else left = Math.max(0, Math.min(left, s.half))
@@ -164,7 +174,10 @@ export function useCarrusel({ speed = 42, direction = 1, loop = true } = {}) {
     const s = S.current
     s.dragging = false
     if (el) {
-      try { el.releasePointerCapture(e.pointerId) } catch { /* noop */ }
+      if (s.captured) {
+        try { el.releasePointerCapture(e.pointerId) } catch { /* noop */ }
+        s.captured = false
+      }
       s.pos = el.scrollLeft
     }
   }, [])
@@ -182,7 +195,14 @@ export function useCarrusel({ speed = 42, direction = 1, loop = true } = {}) {
   // El auto-avance NO se pausa al pasar el mouse: debe seguir moviéndose aunque
   // el cursor quede encima mientras se hace scroll de la página. Solo se pausa
   // al enfocar con teclado (para poder activar una tarjeta) y durante el arrastre.
-  const onFocusCapture = useCallback(() => { S.current.paused = true }, [])
+  const onFocusCapture = useCallback((e) => {
+    // Pausar SOLO cuando el foco viene del teclado (:focus-visible). Antes se
+    // pausaba con CUALQUIER foco, así que al hacer click/arrastre la tarjeta se
+    // enfocaba y el carrusel quedaba congelado hasta hacer blur en otra parte.
+    let porTeclado = true
+    try { porTeclado = !!e.target?.matches?.(':focus-visible') } catch { /* noop */ }
+    if (porTeclado) S.current.paused = true
+  }, [])
   const onBlurCapture = useCallback(() => { S.current.paused = false }, [])
 
   /* ── Flechas ──────────────────────────────────────────────────────────── */
