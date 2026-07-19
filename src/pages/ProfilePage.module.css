@@ -259,10 +259,20 @@
 }
 
 .charCount {
+  align-self: flex-end;
+  margin-top: 0.3rem;
+  font-size: 0.72rem;
   font-weight: 400;
   letter-spacing: 0.04em;
   text-transform: none;
+  color: #9aaac0;
+  transition: color 0.2s;
+}
+
+/* Aviso al acercarse/llegar al límite de caracteres (>=480). */
+.charCountWarn {
   color: var(--gold-dk);
+  font-weight: 600;
 }
 
 /* ── Inputs ── */

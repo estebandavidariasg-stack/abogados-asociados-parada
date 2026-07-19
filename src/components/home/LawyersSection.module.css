@@ -338,6 +338,19 @@
 /* ══════════════════════════════════════════
    SWITCH PROFESIÓN — chips Abogados / Contadores
    ══════════════════════════════════════════ */
+.profesionLabel {
+  display: block;
+  text-align: center;
+  font-family: 'Raleway', sans-serif;
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.35em;
+  text-transform: uppercase;
+  color: var(--gold);
+  margin: 0 auto 0.9rem;
+  padding: 0 1rem;
+}
+
 .profesionRow {
   display: flex;
   justify-content: center;

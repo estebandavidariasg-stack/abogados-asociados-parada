@@ -30,11 +30,12 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: 'No autorizado.' })
   }
 
-  // 2) Validar el nuevo abogado: existe y está aprobado.
+  // 2) Validar el nuevo abogado: existe, está aprobado y trae su rol (para el
+  //    guard de profesión más abajo).
   let nuevo = null
   try {
     const r = await fetch(
-      `${SUPABASE_URL}/rest/v1/profiles?id=eq.${newLawyerId}&select=id,nombre,apellido,aprobado,email&limit=1`,
+      `${SUPABASE_URL}/rest/v1/profiles?id=eq.${newLawyerId}&select=id,nombre,apellido,aprobado,email,rol&limit=1`,
       { headers: serviceHeaders() }
     )
     const [p] = await r.json()
@@ -42,6 +43,28 @@ export default async function handler(req, res) {
   } catch { /* nuevo queda null */ }
   if (!nuevo || !nuevo.aprobado) {
     return res.status(400).json({ error: 'El abogado elegido no es válido.' })
+  }
+
+  // 2b) Guard de profesión: el rol del nuevo profesional debe coincidir con el
+  //     tipo_profesional de la sala (una sala de abogado solo puede reasignarse
+  //     a un abogado; una de contador, a un contador). El filtrado de la lista
+  //     de candidatos vive en el frontend; acá se refuerza en el servidor.
+  let roomTipo = null
+  try {
+    const rr = await fetch(
+      `${SUPABASE_URL}/rest/v1/chat_rooms?id=eq.${roomId}&select=tipo_profesional&limit=1`,
+      { headers: serviceHeaders() }
+    )
+    const [rw] = await rr.json()
+    roomTipo = rw?.tipo_profesional || null
+  } catch { /* roomTipo queda null */ }
+  // Solo bloqueamos cuando ambos valores existen y difieren. Si la sala no
+  // declara tipo_profesional (dato legacy nulo), no inventamos un rechazo.
+  if (roomTipo && nuevo.rol && roomTipo !== nuevo.rol) {
+    const etiqueta = roomTipo === 'contador' ? 'contador' : 'abogado'
+    return res.status(400).json({
+      error: `Esta consulta es de ${etiqueta}. Debes reasignarla a un ${etiqueta}.`,
+    })
   }
 
   try {
@@ -62,11 +85,17 @@ export default async function handler(req, res) {
       headers: serviceHeaders({ Prefer: 'return=minimal' }),
       body: JSON.stringify({ room_id: roomId, lawyer_id: newLawyerId, status: 'invited' }),
     })
-    // 5) Sala → waiting (se reusa el flujo de aceptación).
+    // 5) Sala → waiting (se reusa el flujo de aceptación). Además se registra
+    //    la resolución de la barrera: `reasignado_at=now()` y se limpia
+    //    `reasignacion_forzada` (la escalada de 4h queda resuelta).
     await fetch(`${SUPABASE_URL}/rest/v1/chat_rooms?id=eq.${roomId}`, {
       method: 'PATCH',
       headers: serviceHeaders({ Prefer: 'return=minimal' }),
-      body: JSON.stringify({ status: 'waiting' }),
+      body: JSON.stringify({
+        status: 'waiting',
+        reasignado_at: new Date().toISOString(),
+        reasignacion_forzada: false,
+      }),
     })
     // 6) Mensaje de sistema en la sala (no hay sender_type 'system' en el
     //    esquema → usamos 'lawyer' con prefijo claro; el cliente lo ve al
@@ -98,7 +127,7 @@ export default async function handler(req, res) {
     }
   }
 
-  // 8) Marcar la notificación como atendida (best-effort).
+  // 8) Marcar la notificación puntual como atendida (best-effort).
   if (notifId) {
     try {
       await fetch(`${SUPABASE_URL}/rest/v1/notificaciones?id=eq.${notifId}`, {
@@ -108,6 +137,21 @@ export default async function handler(req, res) {
       })
     } catch { /* no bloquea */ }
   }
+
+  // 9) Resolver TODAS las notificaciones de la barrera para esta sala:
+  //    inactividad + reasignacion_obligatoria (sin atender) → atendida (la
+  //    reasignación resuelve la escalada). Best-effort.
+  try {
+    await fetch(
+      `${SUPABASE_URL}/rest/v1/notificaciones` +
+      `?room_id=eq.${roomId}&atendida=eq.false&tipo=in.(inactividad,reasignacion_obligatoria)`,
+      {
+        method: 'PATCH',
+        headers: serviceHeaders({ Prefer: 'return=minimal' }),
+        body: JSON.stringify({ atendida: true, leido: true }),
+      }
+    )
+  } catch { /* no bloquea */ }
 
   return res.status(200).json({
     ok: true,

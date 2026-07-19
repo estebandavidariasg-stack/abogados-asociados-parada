@@ -396,7 +396,7 @@ export default async function handler(req, res) {
     // cuando un chat lleva +24h sin actividad. Resuelve el correo del
     // profesional con service role (no se expone en el cliente).
     if (type === 'chat_inactivity') {
-      const { lawyerId, clientNombre, area, createdAt } = data || {}
+      const { lawyerId, roomId, clientNombre, area, createdAt } = data || {}
       if (!lawyerId) {
         return res.status(400).json({ error: 'Falta lawyerId.' })
       }
@@ -421,7 +421,37 @@ export default async function handler(req, res) {
         html,
       })
 
-      return res.status(200).json({ ok: true, sent: 'lawyer_inactivity' })
+      // Ancla la barrera de 4h: sella `notificado_at` en la(s) notificación(es)
+      // de inactividad sin atender de esta sala, SOLO si aún no tienen sello
+      // (`notificado_at=is.null`) — así un reenvío no reinicia el reloj de la
+      // barrera. Best-effort: si el PATCH falla no rompemos el correo (que ya
+      // se envió). Requiere `data.roomId`; con solo `lawyerId` se omite.
+      let stamped = false
+      if (roomId && SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY) {
+        try {
+          const nowIso = new Date().toISOString()
+          const patchRes = await fetch(
+            `${SUPABASE_URL}/rest/v1/notificaciones` +
+            `?room_id=eq.${encodeURIComponent(roomId)}` +
+            `&tipo=eq.inactividad&atendida=eq.false&notificado_at=is.null`,
+            {
+              method: 'PATCH',
+              headers: {
+                apikey:          SUPABASE_SERVICE_ROLE_KEY,
+                Authorization:   `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+                'Content-Type':  'application/json',
+                Prefer:          'return=minimal',
+              },
+              body: JSON.stringify({ notificado_at: nowIso }),
+            }
+          )
+          stamped = patchRes.ok
+        } catch (err) {
+          console.error('[notify] stamp notificado_at failed:', err?.message || err)
+        }
+      }
+
+      return res.status(200).json({ ok: true, sent: 'lawyer_inactivity', stamped })
     }
 
     // (La rama 'lawyer_joined' se eliminó: era código muerto — ningún flujo

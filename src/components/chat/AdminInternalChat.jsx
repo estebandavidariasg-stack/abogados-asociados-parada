@@ -33,6 +33,10 @@ export default function AdminInternalChat({ miId }) {
   const [loadingUsers, setLoadingUsers] = useState(true)
   const [noLeidos, setNoLeidos]         = useState({})
 
+  // ── Filtro sidebar (instantáneo, sin botón) ──────────────────────────────
+  const [rolFilter, setRolFilter] = useState('todos')   // todos | abogado | contador | gestor
+  const [busqueda, setBusqueda]   = useState('')
+
   // ── Voz ──────────────────────────────────────────────────────────────────
   const [recording, setRecording]         = useState(false)
   const [recordingTime, setRecordingTime] = useState(0)
@@ -128,9 +132,11 @@ export default function AdminInternalChat({ miId }) {
     setLoadingUsers(true)
     try {
       const headers = await getAuthHeaders()
-      // Trae abogados Y contadores aprobados (ambos pueden chatear con admin)
+      // Trae abogados, contadores Y gestores aprobados (todos pueden chatear con
+      // el admin). Se piden username/email/cedula para la búsqueda del sidebar;
+      // los gestores traen menos campos, por eso se accede con guardas más abajo.
       const res = await fetch(
-        `${SUPABASE_URL}/rest/v1/profiles?aprobado=eq.true&rol=in.(abogado,contador)&select=id,nombre,apellido,foto_url,ciudad,rol&order=nombre.asc`,
+        `${SUPABASE_URL}/rest/v1/profiles?aprobado=eq.true&rol=in.(abogado,contador,gestor)&select=id,nombre,apellido,foto_url,ciudad,rol,username,email,cedula&order=nombre.asc`,
         { headers }
       )
       const data = await res.json()
@@ -436,6 +442,30 @@ export default function AdminInternalChat({ miId }) {
     }
   }
 
+  // ── Filtrado instantáneo del sidebar (rol + texto) ───────────────────────
+  // Normaliza cédulas quitando puntos/espacios para comparar "1.234" == "1234".
+  const soloDigitos = s => (s || '').toString().replace(/[.\s]/g, '')
+  const coincide = (a) => {
+    const q = busqueda.trim().toLowerCase()
+    if (!q) return true
+    const qDigits = soloDigitos(q)
+    const campos = [a.nombre, a.apellido, a.username, a.email]
+      .filter(Boolean).map(x => x.toLowerCase())
+    if (campos.some(c => c.includes(q))) return true
+    if (qDigits && soloDigitos(a.cedula).includes(qDigits)) return true
+    return false
+  }
+  const abogadosFiltrados = abogados.filter(a => {
+    if (rolFilter !== 'todos' && a.rol !== rolFilter) return false
+    return coincide(a)
+  })
+
+  // Chips de rol disponibles: solo se muestran los que existen en la lista para
+  // no ofrecer un filtro que devuelve 0 resultados.
+  const rolesPresentes = new Set(abogados.map(a => a.rol))
+
+  const nombreRol = rol => rol === 'contador' ? 'Contador' : rol === 'gestor' ? 'Gestor' : 'Abogado'
+
   return (
     <div ref={wrapRef} className={`${styles.wrap} ${selected ? styles.wrapOpen : ''}`}>
 
@@ -445,9 +475,79 @@ export default function AdminInternalChat({ miId }) {
           <p className={styles.sidebarTitulo}>Profesionales aprobados</p>
           <p className={styles.sidebarSub}>Selecciona para chatear</p>
         </div>
+
+        {/* ── Filtro instantáneo (chips de rol + búsqueda) ── */}
+        <div className={styles.filterBar}>
+          <div className={styles.rolChipsRow}>
+            <button
+              type="button"
+              className={`${styles.rolChip} ${rolFilter === 'todos' ? styles.rolChipActive : ''}`}
+              onClick={() => setRolFilter('todos')}
+            >
+              Todos
+            </button>
+            {rolesPresentes.has('abogado') && (
+              <button
+                type="button"
+                className={`${styles.rolChip} ${rolFilter === 'abogado' ? styles.rolChipActive : ''}`}
+                onClick={() => setRolFilter('abogado')}
+              >
+                Abogados
+              </button>
+            )}
+            {rolesPresentes.has('contador') && (
+              <button
+                type="button"
+                className={`${styles.rolChip} ${rolFilter === 'contador' ? styles.rolChipActive : ''}`}
+                onClick={() => setRolFilter('contador')}
+              >
+                Contadores
+              </button>
+            )}
+            {rolesPresentes.has('gestor') && (
+              <button
+                type="button"
+                className={`${styles.rolChip} ${rolFilter === 'gestor' ? styles.rolChipActive : ''}`}
+                onClick={() => setRolFilter('gestor')}
+              >
+                Gestores
+              </button>
+            )}
+          </div>
+          <div className={styles.searchWrap}>
+            <svg className={styles.searchIcon} viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" />
+            </svg>
+            <input
+              type="search"
+              className={styles.searchInput}
+              value={busqueda}
+              onChange={e => setBusqueda(e.target.value)}
+              placeholder="Buscar por nombre o cédula…"
+              aria-label="Buscar por nombre o cédula"
+            />
+            {busqueda && (
+              <button
+                type="button"
+                className={styles.searchClear}
+                onClick={() => setBusqueda('')}
+                aria-label="Limpiar búsqueda"
+                title="Limpiar"
+              >
+                <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M18 6L6 18M6 6l12 12" />
+                </svg>
+              </button>
+            )}
+          </div>
+        </div>
+
         <div className={styles.lista}>
           {loadingUsers && <p className={styles.cargando}>Cargando…</p>}
-          {abogados.map(a => (
+          {!loadingUsers && abogadosFiltrados.length === 0 && (
+            <p className={styles.cargando}>Sin resultados</p>
+          )}
+          {abogadosFiltrados.map(a => (
             <button
               key={a.id}
               className={`${styles.item} ${selected?.id === a.id ? styles.itemActive : ''}`}
@@ -461,8 +561,8 @@ export default function AdminInternalChat({ miId }) {
               <div className={styles.itemInfo}>
                 <p className={styles.itemNombre}>{a.nombre} {a.apellido}</p>
                 <p className={styles.itemCiudad}>
-                  <span className={`${styles.rolPill} ${a.rol === 'contador' ? styles.rolPillContador : styles.rolPillAbogado}`}>
-                    {a.rol === 'contador' ? 'Contador' : 'Abogado'}
+                  <span className={`${styles.rolPill} ${a.rol === 'contador' ? styles.rolPillContador : a.rol === 'gestor' ? styles.rolPillGestor : styles.rolPillAbogado}`}>
+                    {nombreRol(a.rol)}
                   </span>
                   {a.ciudad && <span className={styles.itemCiudadTxt}> · {a.ciudad}</span>}
                 </p>
@@ -500,12 +600,12 @@ export default function AdminInternalChat({ miId }) {
               <div>
                 <p className={styles.chatHeadNombre}>
                   {selected.nombre} {selected.apellido}
-                  <span className={`${styles.rolPill} ${selected.rol === 'contador' ? styles.rolPillContador : styles.rolPillAbogado}`}>
-                    {selected.rol === 'contador' ? 'Contador' : 'Abogado'}
+                  <span className={`${styles.rolPill} ${selected.rol === 'contador' ? styles.rolPillContador : selected.rol === 'gestor' ? styles.rolPillGestor : styles.rolPillAbogado}`}>
+                    {nombreRol(selected.rol)}
                   </span>
                 </p>
                 <p className={styles.chatHeadSub}>
-                  Chat interno · Visible solo para ti y el {selected.rol === 'contador' ? 'contador' : 'abogado'}
+                  Chat interno · Visible solo para ti y el {nombreRol(selected.rol).toLowerCase()}
                 </p>
               </div>
             </div>
@@ -590,7 +690,7 @@ export default function AdminInternalChat({ miId }) {
               <input
                 className={styles.inputMsg}
                 type="text"
-                placeholder={`Escribe un mensaje al ${selected.rol === 'contador' ? 'contador' : 'abogado'}…`}
+                placeholder={`Escribe un mensaje al ${nombreRol(selected.rol).toLowerCase()}…`}
                 value={texto}
                 onChange={e => setTexto(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && !e.shiftKey && enviar()}

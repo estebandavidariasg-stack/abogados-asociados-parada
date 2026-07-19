@@ -307,6 +307,81 @@
   margin: 0 0 1.5rem;
 }
 
+/* ── Reseña del cliente (abierta desde un testimonio) ─── */
+.resenaBlock {
+  position: relative;
+  margin: 0 0 1.5rem;
+  padding: 1.15rem 1.25rem 1.1rem;
+  background: linear-gradient(145deg, #f4f7fd 0%, #eef3fb 100%);
+  border: 1px solid rgba(13, 45, 94, 0.1);
+  border-left: 3px solid var(--gold, #c9a84c);
+  border-radius: 12px;
+}
+
+/* Comilla decorativa de fondo */
+.resenaBlock::before {
+  content: '\201C';
+  position: absolute;
+  top: -6px;
+  right: 14px;
+  font-family: 'Cinzel', Georgia, serif;
+  font-size: 3.2rem;
+  line-height: 1;
+  color: rgba(201, 168, 76, 0.22);
+  pointer-events: none;
+}
+
+.resenaHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 0.6rem;
+}
+
+.resenaLabel {
+  font-family: 'Cinzel', serif;
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  color: #5a6f96;
+  font-weight: 600;
+}
+
+.resenaStars {
+  display: inline-flex;
+  gap: 2px;
+  font-size: 0.85rem;
+  line-height: 1;
+}
+
+.resenaTexto {
+  font-size: 0.9rem;
+  line-height: 1.75;
+  color: #33456b;
+  margin: 0;
+  font-style: italic;
+  /* Comentario íntegro: sin recorte de líneas. */
+  white-space: pre-line;
+  word-break: break-word;
+}
+
+.resenaAutor {
+  margin: 0.7rem 0 0;
+  font-size: 0.78rem;
+  color: #6b7fa3;
+}
+
+.resenaAutorNombre {
+  font-weight: 700;
+  color: #0d2d5e;
+}
+
+.resenaAutorRol {
+  color: #7a8fad;
+}
+
 /* ── Secciones ───────────────────────────────── */
 .modalSection { margin-bottom: 1.5rem; }
 
@@ -417,6 +492,8 @@
   .modalName { font-size: 1.05rem; }
   .modalCta { padding: 11px 18px; font-size: 0.82rem; }
   .rolPill { font-size: 0.5rem; padding: 1px 6px; }
+  .resenaBlock { padding: 1rem 1rem 0.95rem; }
+  .resenaTexto { font-size: 0.86rem; }
 }
 
 /* ── Pill de rol (Abogado / Contador) ───────────── */

@@ -1,12 +1,10 @@
-import { useState, useEffect, useRef, lazy, Suspense } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { getAuthHeaders } from '../../lib/supabase'
-import { listarEvidencia } from '../../lib/firmaService'
+import { listarEvidencia, urlFirmada } from '../../lib/firmaService'
 import EnviarAFirmar from '../firma/EnviarAFirmar'
 import { IconFirma, IconDoc, IconFolder, IconUpload, IconDownload } from '../shared/Icons'
 import styles from './MisContratos.module.css'
-
-const UbicarFirma = lazy(() => import('../firma/UbicarFirma'))
 
 // Papelera clara (estilo Lucide trash-2) — más legible que el icono base
 const IconTrash = (p) => (
@@ -34,9 +32,23 @@ function fmtBytes(b) {
   return `${(b / 1048576).toFixed(1)} MB`
 }
 function fmtFecha(ts) {
-  return new Date(ts).toLocaleDateString('es-CO', {
+  if (!ts) return ''
+  // Fecha + hora (ej: "15 jul 2026, 3:42 p. m.") — el equipo necesita saber
+  // exactamente cuándo se subió el archivo y cuándo llegó el firmado.
+  return new Date(ts).toLocaleString('es-CO', {
     day: 'numeric', month: 'short', year: 'numeric',
+    hour: '2-digit', minute: '2-digit',
   })
+}
+
+// Momento en que se recibió la evidencia firmada: el último firmante que firmó
+// (o, si aún no consta, la fecha de creación de la solicitud).
+function fechaFirmado(s) {
+  const firmados = (s?.firmas_firmantes || [])
+    .map(f => f?.firmado_at)
+    .filter(Boolean)
+    .sort()
+  return firmados[firmados.length - 1] || s?.created_at
 }
 
 export default function MisContratos({ abogadoId, isSuperAdmin = false }) {
@@ -54,7 +66,6 @@ export default function MisContratos({ abogadoId, isSuperAdmin = false }) {
   const [tab, setTab]               = useState('subidos') // subidos | clientes
   const [evidencia, setEvidencia]   = useState({ clientes: [], administracion: [] })
   const [enviarFirma, setEnviarFirma] = useState(null)     // contrato a firmar | {} nuevo
-  const [ubicar, setUbicar] = useState(null)               // payload para ubicar la firma
 
   useEffect(() => { if (abogadoId) { cargar(); cargarEvidencia() } }, [abogadoId])
 
@@ -63,6 +74,19 @@ export default function MisContratos({ abogadoId, isSuperAdmin = false }) {
       const headers = await getAuthHeaders()
       setEvidencia(await listarEvidencia(abogadoId, headers))
     } catch { /* tablas de firma aún no aplicadas: sección vacía */ }
+  }
+
+  // Abre el documento firmado ya compuesto (evidencia con la firma ubicada)
+  // en una pestaña nueva, mintando una URL firmada fresca del bucket privado.
+  async function verDocumento(s) {
+    try {
+      const headers = await getAuthHeaders()
+      const url = await urlFirmada(s.doc_firmado_path, headers)
+      if (!url) throw new Error('No se pudo obtener el documento firmado')
+      window.open(url, '_blank', 'noopener,noreferrer')
+    } catch (e) {
+      setError('No se pudo abrir el documento firmado. ' + (e?.message || ''))
+    }
   }
 
   // Genera el certificado de firma AL VUELO desde la traza de los firmantes y
@@ -288,22 +312,17 @@ export default function MisContratos({ abogadoId, isSuperAdmin = false }) {
                   <div className={styles.contratoInfo}>
                     <p className={styles.contratoNombre}>Documento firmado</p>
                     {nombres && <p className={styles.contratoDesc}>Firmantes: {nombres}</p>}
-                    <p className={styles.contratoMeta}>{fmtFecha(s.created_at)}</p>
+                    <p className={styles.contratoMeta}>Recibido firmado: {fmtFecha(fechaFirmado(s))}</p>
                   </div>
                   <div className={styles.contratoAcciones}>
-                    <button
-                      className={styles.btnFirmarSm}
-                      onClick={() => setUbicar({
-                        origPath: s.doc_original_path,
-                        firmaPath: `${s.id}/firma.png`,
-                        pie: (() => {
-                          const f = (s.firmas_firmantes || []).find(x => x.rol_firma === 'cliente') || s.firmas_firmantes?.[0] || {}
-                          return { nombre: f.nombre, cedula: f.cedula, telefono: f.telefono, correo: f.correo, ciudad: f.ciudad, fecha: f.firmado_at, rol: f.rol_firma }
-                        })(),
-                      })}
-                    >
-                      <IconFirma size={14} /> Ubicar firma y descargar
-                    </button>
+                    {s.doc_firmado_path && (
+                      <button
+                        className={styles.btnFirmarSm}
+                        onClick={() => verDocumento(s)}
+                      >
+                        <IconDoc size={14} /> Ver documento
+                      </button>
+                    )}
                     <button
                       className={styles.btnDown}
                       onClick={() => descargarCertificado(s)}
@@ -337,7 +356,7 @@ export default function MisContratos({ abogadoId, isSuperAdmin = false }) {
                 <p className={styles.contratoNombre}>{c.nombre_archivo}</p>
                 {c.descripcion && <p className={styles.contratoDesc}>{c.descripcion}</p>}
                 <p className={styles.contratoMeta}>
-                  {fmtFecha(c.created_at)}{c.size_bytes ? ` · ${fmtBytes(c.size_bytes)}` : ''}
+                  Subido: {fmtFecha(c.created_at)}{c.size_bytes ? ` · ${fmtBytes(c.size_bytes)}` : ''}
                 </p>
               </div>
               <div className={styles.contratoAcciones}>
@@ -363,19 +382,6 @@ export default function MisContratos({ abogadoId, isSuperAdmin = false }) {
           ))}
         </div>
       ))}
-
-      {/* Modal: ubicar la firma del cliente y descargar el PDF */}
-      {ubicar && (
-        <Suspense fallback={null}>
-          <UbicarFirma
-            origPath={ubicar.origPath}
-            firmaPath={ubicar.firmaPath}
-            pie={ubicar.pie}
-            filename="documento-firmado.pdf"
-            onClose={() => setUbicar(null)}
-          />
-        </Suspense>
-      )}
 
       {/* Modal: iniciar solicitud de firma */}
       {enviarFirma && (

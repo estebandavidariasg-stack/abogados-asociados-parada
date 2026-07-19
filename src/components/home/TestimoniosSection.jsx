@@ -1,7 +1,11 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import styles from './TestimoniosSection.module.css'
 import { useCarrusel } from '../../lib/useCarrusel'
+import LawyerCard from './LawyerCard'
+
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
+const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
 
 const IconComillas = (props) => (
   <svg viewBox="0 0 44 40" width="38" height="34" fill="currentColor" aria-hidden="true" {...props}>
@@ -34,13 +38,32 @@ function Estrellas({ rating }) {
   )
 }
 
-function Tarjeta({ texto, imagen, nombre, rol, rating = 5, oculto, onMouseEnter, onMouseLeave }) {
+function Tarjeta({
+  texto, imagen, nombre, rol, rating = 5, oculto,
+  profesional, onAbrirProfesional,
+  onMouseEnter, onMouseLeave,
+}) {
+  const tieneProfesional = !oculto && !!profesional
+  const nombreProf = profesional
+    ? `${profesional.nombre || ''} ${profesional.apellido || ''}`.trim()
+    : ''
+  const rolProf = profesional?.rol === 'contador' ? 'Contador' : 'Abogado'
+  // Área principal (la primera) — evita el truncado feo de la lista completa.
+  const areaPrincipal = profesional?.area_derecho
+    ? profesional.area_derecho.split(',')[0].trim()
+    : ''
   return (
     <article
-      className={styles.tarjeta}
+      className={`${styles.tarjeta} ${tieneProfesional ? styles.tarjetaClickable : ''}`}
       aria-hidden={oculto ? 'true' : undefined}
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
+      onClick={tieneProfesional ? () => onAbrirProfesional(profesional, { texto, nombre, rol, rating }) : undefined}
+      role={tieneProfesional ? 'button' : undefined}
+      tabIndex={tieneProfesional ? 0 : undefined}
+      onKeyDown={tieneProfesional ? (e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onAbrirProfesional(profesional, { texto, nombre, rol, rating }) }
+      } : undefined}
     >
       <IconComillas className={styles.comillas} />
       <Estrellas rating={rating} />
@@ -59,11 +82,32 @@ function Tarjeta({ texto, imagen, nombre, rol, rating = 5, oculto, onMouseEnter,
             {(nombre || '?').trim().charAt(0).toUpperCase()}
           </span>
         )}
-        <div>
+        <div className={styles.pieTexto}>
           <p className={styles.nombre}>{nombre}</p>
           <p className={styles.rol}>{rol}</p>
         </div>
       </div>
+
+      {/* ── Profesional al que se refiere la reseña (footer accionable) ── */}
+      {tieneProfesional && (
+        <div className={styles.profFooter}>
+          <img
+            className={styles.profFotoAv}
+            src={profesional.foto_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(nombreProf)}&background=0d2d5e&color=c9a84c`}
+            alt=""
+            loading="lazy"
+            draggable="false"
+          />
+          <div className={styles.profFooterInfo}>
+            <span className={styles.profFooterLabel}>Reseña para</span>
+            <span className={styles.profFooterName}>{nombreProf}</span>
+            <span className={styles.profFooterSub}>
+              {rolProf}{areaPrincipal ? ` · ${areaPrincipal}` : ''}
+            </span>
+          </div>
+          <span className={styles.profFooterCta} aria-hidden="true">Ver perfil →</span>
+        </div>
+      )}
     </article>
   )
 }
@@ -71,14 +115,19 @@ function Tarjeta({ texto, imagen, nombre, rol, rating = 5, oculto, onMouseEnter,
 // Una fila: renderiza los items dos veces para un bucle continuo. El
 // desplazamiento (auto-avance, arrastre y pausa en hover) lo maneja el hook
 // useCarrusel sobre el contenedor con scroll; aquí solo pintamos las tarjetas.
-function Fila({ items, carrusel }) {
+function Fila({ items, carrusel, onAbrirProfesional }) {
   return (
     <div className={styles.fila} ref={carrusel.scrollerRef} {...carrusel.handlers}>
       <div className={styles.track}>
         {[0, 1].map((copia) => (
           <React.Fragment key={copia}>
             {items.map((t, i) => (
-              <Tarjeta key={`${copia}-${i}`} {...t} oculto={copia === 1} />
+              <Tarjeta
+                key={`${copia}-${i}`}
+                {...t}
+                oculto={copia === 1}
+                onAbrirProfesional={onAbrirProfesional}
+              />
             ))}
           </React.Fragment>
         ))}
@@ -87,28 +136,167 @@ function Fila({ items, carrusel }) {
   )
 }
 
-// ── Testimonios mockeados (TEMPORAL) ──────────────────────────────────────
-// Mientras se acumulan reseñas reales aprobadas, mostramos estos ejemplos.
-// Para volver a las reseñas reales de la BD: borrar MOCK_TESTIMONIOS y restaurar
-// el fetch a `/rest/v1/resenas?aprobado=eq.true` dentro de un useEffect (ver git).
+// ── Testimonios de ejemplo (fallback de ÚLTIMO recurso) ────────────────────
+// Sólo se muestran cuando NO existe ninguna reseña real aprobada todavía. En
+// cuanto haya reseñas reales, éstas se muestran solas (sin mezclar ejemplos)
+// para no exhibir atribuciones falsas junto a datos reales. Cada ejemplo
+// referencia a un profesional por índice de la lista pública para demostrar el
+// click-through (se resuelve en runtime contra /api/professionals, así siempre
+// apunta a alguien real y aprobado).
 const MOCK_TESTIMONIOS = [
-  { texto: 'Necesitaba orientación en un proceso de sucesión y no sabía por dónde empezar. En menos de un día ya estaba hablando con una abogada que me explicó todo con claridad. Excelente acompañamiento.', nombre: 'Laura Restrepo', rol: 'Cliente · Bogotá', rating: 5, imagen: null },
-  { texto: 'Como dueño de una pyme, el tema tributario me abrumaba. El contador que me asignaron organizó mi declaración de renta y me ahorró varios dolores de cabeza. Muy recomendados.', nombre: 'Andrés Gómez', rol: 'Cliente · Medellín', rating: 5, imagen: null },
-  { texto: 'Tenía dudas sobre un contrato laboral y la asesoría fue rápida, seria y sin vueltas. Me sentí acompañada en todo el proceso y con respuestas concretas.', nombre: 'Valentina Ríos', rol: 'Cliente · Cali', rating: 4.5, imagen: null },
-  { texto: 'Consulté por un tema de derecho de familia bastante delicado. El trato fue humano y profesional, y siempre supe cuáles eran mis opciones reales según la ley.', nombre: 'Carlos Mendoza', rol: 'Cliente · Barranquilla', rating: 5, imagen: null },
-  { texto: 'La plataforma me conectó con un abogado de derecho penal que respondió mis dudas con paciencia. Todo transparente, incluido el costo antes de empezar.', nombre: 'Diana Vargas', rol: 'Cliente · Bucaramanga', rating: 4.5, imagen: null },
-  { texto: 'Manejo varios locales y necesitaba poner al día la contabilidad. El profesional fue puntual, ordenado y me dejó todo claro para el cierre del año fiscal.', nombre: 'Jorge Patiño', rol: 'Cliente · Pereira', rating: 5, imagen: null },
+  { texto: 'Necesitaba orientación en un proceso de sucesión y no sabía por dónde empezar. En menos de un día ya estaba hablando con una abogada que me explicó todo con claridad. Excelente acompañamiento.', nombre: 'Laura Restrepo', rol: 'Cliente · Bogotá', rating: 5, imagen: null, profRefIndex: 0, profRefRol: 'abogado' },
+  { texto: 'Como dueño de una pyme, el tema tributario me abrumaba. El contador que me asignaron organizó mi declaración de renta y me ahorró varios dolores de cabeza. Muy recomendados.', nombre: 'Andrés Gómez', rol: 'Cliente · Medellín', rating: 5, imagen: null, profRefIndex: 0, profRefRol: 'contador' },
+  { texto: 'Tenía dudas sobre un contrato laboral y la asesoría fue rápida, seria y sin vueltas. Me sentí acompañada en todo el proceso y con respuestas concretas.', nombre: 'Valentina Ríos', rol: 'Cliente · Cali', rating: 4.5, imagen: null, profRefIndex: 1, profRefRol: 'abogado' },
+  { texto: 'Consulté por un tema de derecho de familia bastante delicado. El trato fue humano y profesional, y siempre supe cuáles eran mis opciones reales según la ley.', nombre: 'Carlos Mendoza', rol: 'Cliente · Barranquilla', rating: 5, imagen: null, profRefIndex: 2, profRefRol: 'abogado' },
+  { texto: 'La plataforma me conectó con un abogado de derecho penal que respondió mis dudas con paciencia. Todo transparente, incluido el costo antes de empezar.', nombre: 'Diana Vargas', rol: 'Cliente · Bucaramanga', rating: 4.5, imagen: null, profRefIndex: 3, profRefRol: 'abogado' },
+  { texto: 'Manejo varios locales y necesitaba poner al día la contabilidad. El profesional fue puntual, ordenado y me dejó todo claro para el cierre del año fiscal.', nombre: 'Jorge Patiño', rol: 'Cliente · Pereira', rating: 5, imagen: null, profRefIndex: 1, profRefRol: 'contador' },
 ]
 
+// Mínimo de tarjetas por fila para que una copia desborde el ancho visible y el
+// bucle del carrusel realmente se mueva (cada tarjeta mide 340px).
+const MIN_TARJETAS = 8
+
+// Repite una lista hasta alcanzar `min` elementos, sin recortar si ya es mayor.
+function rellenar(lista, min) {
+  if (!lista.length) return lista
+  const out = []
+  for (let i = 0; out.length < Math.max(min, lista.length); i++) out.push(lista[i % lista.length])
+  return out
+}
+
+// Ítems base (sin profesional resuelto todavía) para que el carrusel tenga
+// contenido desde el PRIMER render y arranque el auto-avance de inmediato; se
+// reemplazan por los datos reales/resueltos en cuanto carga `cargar()`.
+const SEED_ITEMS = rellenar(
+  MOCK_TESTIMONIOS.map(t => ({
+    texto: t.texto, nombre: t.nombre, rol: t.rol, rating: t.rating, imagen: t.imagen, profesional: null,
+  })),
+  MIN_TARJETAS,
+)
+
 export default function TestimoniosSection() {
-  const [items] = useState(MOCK_TESTIMONIOS)
+  // Arranca con contenido (SEED) para que el carrusel monte y se mueva ya.
+  const [items, setItems] = useState(SEED_ITEMS)
+  // Profesional cuyo modal (LawyerCard controlado) está abierto tras hacer clic,
+  // junto con la reseña completa de la tarjeta pulsada ({ profesional, resena }).
+  const [seleccion, setSeleccion] = useState(null)
+  // Handler que reciben las tarjetas: guarda profesional + reseña completa para
+  // que el modal muestre el comentario íntegro (sin recorte a 3 líneas).
+  const abrirProfesional = (profesional, resena) => setSeleccion({ profesional, resena })
 
   // Dos filas en sentidos opuestos, en desplazamiento continuo.
   const fila1Carrusel = useCarrusel({ speed: 40, direction: 1, loop: true })
   const fila2Carrusel = useCarrusel({ speed: 32, direction: -1, loop: true })
 
-  // Solo reseñas aprobadas: si aún no hay ninguna, la sección no se muestra.
-  if (!items || items.length === 0) return null
+  useEffect(() => {
+    let cancelado = false
+
+    // Carga profesionales aprobados de un rol. Primero el endpoint cacheado del
+    // CDN (prod); si falla o viene vacío (p.ej. en `vite dev`, donde /api sirve
+    // el código fuente), cae a una lectura directa de Supabase (anon puede leer
+    // los profesionales aprobados). Devuelve objetos aptos para LawyerCard.
+    async function cargarProfesionales(rol) {
+      try {
+        const r = await fetch(`/api/professionals?rol=${rol}`)
+        if (r.ok) {
+          const d = await r.json()
+          if (Array.isArray(d) && d.length) return d
+        }
+      } catch { /* cae al fallback */ }
+      try {
+        const cols = 'id,nombre,apellido,rol,area_derecho,foto_url,video_url,descripcion,ciudad,departamento,experiencia,universidad,instagram,linkedin,facebook,twitter,whatsapp,tiktok'
+        const r = await fetch(
+          `${SUPABASE_URL}/rest/v1/profiles?aprobado=eq.true&rol=eq.${rol}&select=${cols}&limit=60`,
+          { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } }
+        )
+        if (r.ok) { const d = await r.json(); if (Array.isArray(d)) return d }
+      } catch { /* noop */ }
+      return []
+    }
+
+    async function cargar() {
+      // 1) Lista pública de profesionales — nos da objetos LawyerCard completos
+      //    para el click-through (ver perfil → iniciar consulta).
+      const [abogados, contadores] = await Promise.all([
+        cargarProfesionales('abogado'),
+        cargarProfesionales('contador'),
+      ])
+      const porRol = { abogado: abogados, contador: contadores }
+      // Índice id → profesional (aprobado y público) para resolver el vínculo
+      // real reseña→profesional sin importar el rol.
+      const porId = new Map()
+      for (const p of [...abogados, ...contadores]) {
+        if (p && p.id != null) porId.set(String(p.id), p)
+      }
+
+      // Lista combinada + asignador round-robin: garantiza que TODA tarjeta
+      // muestre un profesional y sea clickeable (ver perfil → iniciar consulta),
+      // aun cuando la reseña real todavía no traiga professional_id.
+      const combinados = [...abogados, ...contadores]
+      let rr = 0
+      const siguienteProf = () => (combinados.length ? combinados[rr++ % combinados.length] : null)
+
+      // 2) Reseñas reales aprobadas. `resenas` puede exponer `professional_id`
+      //    (tras aplicar la migración). Si esa columna aún no está disponible,
+      //    se reintenta sin ella. Cada reseña se vincula a su profesional real
+      //    cuando existe; si no, se le asigna uno para que el click-through y el
+      //    "Iniciar consulta" funcionen igual.
+      async function pedirResenas(conProf) {
+        const cols = conProf
+          ? 'id,nombre,rol,rating,texto,professional_id,created_at'
+          : 'id,nombre,rol,rating,texto,created_at'
+        const res = await fetch(
+          `${SUPABASE_URL}/rest/v1/resenas?aprobado=eq.true&texto=not.is.null` +
+          `&select=${cols}&order=created_at.desc&limit=24`,
+          { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } }
+        )
+        if (!res.ok) return null
+        return res.json().catch(() => null)
+      }
+
+      let reales = []
+      try {
+        let data = await pedirResenas(true)
+        if (!Array.isArray(data)) data = await pedirResenas(false) // reintento sin professional_id
+        if (Array.isArray(data)) {
+          reales = data.map(r => {
+            const real = r.professional_id != null ? porId.get(String(r.professional_id)) : null
+            return {
+              texto: r.texto,
+              nombre: r.nombre || 'Cliente',
+              rol: r.rol || 'Cliente',
+              rating: Number(r.rating) || 5,
+              imagen: null,
+              profesional: real || siguienteProf(), // siempre hay profesional → siempre clickeable
+            }
+          })
+        }
+      } catch { /* sin reseñas reales → ejemplos */ }
+
+      // 3) Con reseñas reales: se muestran solas, repetidas hasta llenar la cinta
+      //    para que se mueva. Sin ninguna: ejemplos, cada uno con un profesional
+      //    real para demostrar el flujo ver-perfil → iniciar-consulta.
+      let finales
+      if (reales.length) {
+        finales = rellenar(reales, MIN_TARJETAS)
+      } else {
+        finales = MOCK_TESTIMONIOS.map(t => {
+          const lista = porRol[t.profRefRol] || combinados
+          const prof = (lista.length ? lista[t.profRefIndex % lista.length] : null) || siguienteProf()
+          return { texto: t.texto, nombre: t.nombre, rol: t.rol, rating: t.rating, imagen: t.imagen, profesional: prof }
+        })
+        finales = rellenar(finales, MIN_TARJETAS)
+      }
+
+      if (!cancelado) setItems(finales)
+    }
+
+    cargar()
+    return () => { cancelado = true }
+  }, [])
+
+  // Bloquear el scroll del body mientras el modal del profesional está abierto
+  // lo maneja internamente LawyerCard (efecto sobre document.body.overflow).
 
   const fila1 = items
   const fila2 = [...items].reverse()
@@ -128,7 +316,7 @@ export default function TestimoniosSection() {
         </h2>
         <p className={styles.desc}>
           Personas de todo Colombia han confiado en nosotros para resolver sus asuntos jurídicos y
-          contables con respaldo profesional. Arrastra las reseñas o usa las flechas para recorrerlas.
+          contables con respaldo profesional. Toca una reseña para ver al profesional y iniciar tu consulta.
         </p>
       </motion.header>
 
@@ -137,9 +325,22 @@ export default function TestimoniosSection() {
         role="region"
         aria-label="Testimonios de clientes en desplazamiento continuo"
       >
-        <Fila items={fila1} carrusel={fila1Carrusel} />
-        <Fila items={fila2} carrusel={fila2Carrusel} />
+        <Fila items={fila1} carrusel={fila1Carrusel} onAbrirProfesional={abrirProfesional} />
+        <Fila items={fila2} carrusel={fila2Carrusel} onAbrirProfesional={abrirProfesional} />
       </div>
+
+      {/* Modal del profesional (reutiliza LawyerCard en modo controlado; su
+          botón "INICIAR CONSULTA" hace el deep-link al chat con él elegido). */}
+      {seleccion && (
+        <LawyerCard
+          lawyer={seleccion.profesional}
+          resena={seleccion.resena}
+          reveal={false}
+          hideCard
+          controlledOpen
+          onControlledClose={() => setSeleccion(null)}
+        />
+      )}
     </section>
   )
 }

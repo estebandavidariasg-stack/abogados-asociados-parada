@@ -98,7 +98,13 @@ export default function ProfilePage() {
   const [apellido, setApellido]       = useState('')
   const [telefono, setTelefono]       = useState('')
   const [universidad, setUniversidad] = useState('')
+  // Cuando la universidad guardada no está en la lista, activamos el modo "Otra"
+  // (el <select> muestra 'Otra' y se revela un input con el texto escrito).
+  const [universidadOtra, setUniversidadOtra] = useState(false)
   const [experiencia, setExperiencia] = useState('')
+  // Especialidad libre cuando el abogado marca "Otra" en Áreas de derecho.
+  const [areaOtraTexto, setAreaOtraTexto] = useState('')
+  const [areaOtraOn, setAreaOtraOn]       = useState(false)
   const [direccion, setDireccion]     = useState('')
   const [ciudad, setCiudad]           = useState('')
   const [descripcion, setDescripcion] = useState('')
@@ -129,13 +135,24 @@ export default function ProfilePage() {
       setNombre(profile.nombre       || '')
       setApellido(profile.apellido   || '')
       setTelefono(profile.telefono   || '')
-      setUniversidad(profile.universidad || '')
+      // Universidad: si el valor guardado no está en la lista, es una
+      // universidad personalizada → activamos modo "Otra" y precargamos el input.
+      const uniDB = profile.universidad || ''
+      setUniversidad(uniDB)
+      setUniversidadOtra(!!uniDB && !UNIVERSIDADES.includes(uniDB))
       setExperiencia(profile.experiencia || '')
-      setAreasDerecho(
-        profile.area_derecho
-          ? profile.area_derecho.split(',').map(a => a.trim()).filter(Boolean)
-          : []
-      )
+      // Áreas: separamos las que están en la lista oficial de la personalizada.
+      // Cualquier valor guardado que NO esté en AREAS_DERECHO se trata como el
+      // texto libre de "Otra".
+      const areasDB = profile.area_derecho
+        ? profile.area_derecho.split(',').map(a => a.trim()).filter(Boolean)
+        : []
+      const areaLibre = areasDB.find(a => !AREAS_DERECHO.includes(a)) || ''
+      setAreaOtraTexto(areaLibre)
+      setAreaOtraOn(!!areaLibre)
+      // Guardamos en el estado sólo las áreas oficiales; la personalizada se
+      // reañade al guardar desde areaOtraTexto (evita duplicados/desalineación).
+      setAreasDerecho(areasDB.filter(a => AREAS_DERECHO.includes(a)))
       setDireccion(profile.direccion  || '')
       setDepartamento(profile.departamento || '')
       // ciudad puede venir en formato "Municipio - Barrio" cuando existe nivel 3
@@ -318,6 +335,9 @@ export default function ProfilePage() {
   async function handleSave(e) {
     e.preventDefault()
     if (!descripcion.trim()) { setError('El campo Perfil es obligatorio'); return }
+    // Áreas de derecho: oficiales seleccionadas + la personalizada (si aplica).
+    const areaOtraLimpia = areaOtraOn ? areaOtraTexto.trim() : ''
+    const areasFinal = [...areasDerecho, ...(areaOtraLimpia ? [areaOtraLimpia] : [])]
     setSaving(true); setError(null); setMsg(null)
     try {
       const headers = await getAuthHeaders()
@@ -335,7 +355,7 @@ export default function ProfilePage() {
             experiencia, direccion,
             ciudad: barrio ? `${ciudad} - ${barrio}` : ciudad,
             departamento,
-            area_derecho: areasDerecho.join(', '),
+            area_derecho: areasFinal.join(', '),
             descripcion, foto_url: fotoUrl, video_url: videoUrl,
             tarjeta_archivo_url: tarjetaArchivoUrl || null,
             instagram, linkedin, facebook, twitter, whatsapp, tiktok,
@@ -490,10 +510,34 @@ export default function ProfilePage() {
 
             <div className={styles.field}>
               <label className={styles.label}>Universidad</label>
-              <select className={styles.input} value={universidad} onChange={e => setUniversidad(e.target.value)}>
+              <select
+                className={styles.input}
+                value={universidadOtra ? 'Otra' : universidad}
+                onChange={e => {
+                  const v = e.target.value
+                  if (v === 'Otra') {
+                    setUniversidadOtra(true)
+                    setUniversidad('') // limpia hasta que escriba el valor real
+                  } else {
+                    setUniversidadOtra(false)
+                    setUniversidad(v)
+                  }
+                }}
+              >
                 <option value="">Seleccionar...</option>
                 {UNIVERSIDADES.map(u => <option key={u} value={u}>{u}</option>)}
               </select>
+              {universidadOtra && (
+                <input
+                  type="text"
+                  className={styles.input}
+                  style={{ marginTop: '0.5rem' }}
+                  placeholder="Escribe el nombre de tu universidad"
+                  value={universidad}
+                  onChange={e => setUniversidad(e.target.value)}
+                  aria-label="Nombre de tu universidad"
+                />
+              )}
             </div>
             <div className={styles.field}>
               <label className={styles.label}>Experiencia laboral</label>
@@ -526,10 +570,33 @@ export default function ProfilePage() {
                     <span>{area}</span>
                   </label>
                 ))}
+                <label className={styles.checkboxLabel}>
+                  <input
+                    type="checkbox"
+                    className={styles.checkbox}
+                    checked={areaOtraOn}
+                    onChange={e => {
+                      setAreaOtraOn(e.target.checked)
+                      if (!e.target.checked) setAreaOtraTexto('')
+                    }}
+                  />
+                  <span>Otra</span>
+                </label>
               </div>
-              {areasDerecho.length > 0 && (
+              {areaOtraOn && (
+                <input
+                  type="text"
+                  className={styles.input}
+                  style={{ marginTop: '0.6rem' }}
+                  placeholder="Escribe tu área o especialidad"
+                  value={areaOtraTexto}
+                  onChange={e => setAreaOtraTexto(e.target.value)}
+                  aria-label="Otra área de derecho"
+                />
+              )}
+              {(areasDerecho.length > 0 || (areaOtraOn && areaOtraTexto.trim())) && (
                 <p className={styles.selectedAreas}>
-                  Seleccionadas: <strong>{areasDerecho.join(' · ')}</strong>
+                  Seleccionadas: <strong>{[...areasDerecho, ...(areaOtraOn && areaOtraTexto.trim() ? [areaOtraTexto.trim()] : [])].join(' · ')}</strong>
                 </p>
               )}
             </div>
@@ -562,12 +629,16 @@ export default function ProfilePage() {
               <textarea
                 className={styles.input}
                 rows={4}
+                maxLength={500}
                 placeholder="Describe tu experiencia, especialidades y enfoque profesional…"
                 value={descripcion}
                 onChange={e => setDescripcion(e.target.value)}
                 required
                 style={{ resize: 'vertical', minHeight: 100 }}
               />
+              <span className={`${styles.charCount} ${descripcion.length >= 480 ? styles.charCountWarn : ''}`}>
+                {descripcion.length}/500
+              </span>
             </div>
 
             {/* ── Redes sociales ── */}

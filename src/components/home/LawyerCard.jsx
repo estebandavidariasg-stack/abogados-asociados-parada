@@ -25,8 +25,25 @@ function StarDisplay({ rating, total, dark = false }) {
   )
 }
 
-export default function LawyerCard({ lawyer, delay = 0, isSuperAdmin = false, reveal = true, ghost = false }) {
-  const [open, setOpen] = useState(false)
+export default function LawyerCard({
+  lawyer, delay = 0, isSuperAdmin = false, reveal = true, ghost = false,
+  // Modo controlado opcional (usado por TestimoniosSection para abrir el modal
+  // del profesional de una reseña sin renderizar la tarjeta del grid). Cuando
+  // `controlledOpen` !== undefined, el estado del modal lo maneja el padre y la
+  // tarjeta del grid no se renderiza (`hideCard`).
+  controlledOpen, onControlledClose, hideCard = false,
+  // Reseña completa opcional ({ texto, nombre, rol, rating }) — cuando la pasa
+  // TestimoniosSection, el modal muestra el comentario ÍNTEGRO (sin recortar).
+  // Sin ella (uso normal en el grid) no se renderiza ningún bloque de reseña.
+  resena,
+}) {
+  const [internalOpen, setInternalOpen] = useState(false)
+  const isControlled = controlledOpen !== undefined
+  const open = isControlled ? controlledOpen : internalOpen
+  const setOpen = (v) => {
+    if (isControlled) { if (!v) onControlledClose?.() }
+    else setInternalOpen(v)
+  }
   // El endpoint /api/professionals ya agrega la calificación (rating_promedio
   // + rating_total). La usamos directo y evitamos una query por tarjeta.
   const [rating, setRating] = useState(
@@ -78,6 +95,7 @@ export default function LawyerCard({ lawyer, delay = 0, isSuperAdmin = false, re
   return (
     <>
       {/* ── Tarjeta en el grid ── */}
+      {!hideCard && (
       <div
         className={`${styles.card}${reveal ? ' fade-up' : ''}`}
         style={reveal ? { transitionDelay: `${delay}s` } : undefined}
@@ -145,6 +163,7 @@ export default function LawyerCard({ lawyer, delay = 0, isSuperAdmin = false, re
 
         <div className={styles.cardHint}>Ver perfil →</div>
       </div>
+      )}
 
       {/* ── Modal ── */}
       {/* Portal a <body>: el carrusel de LawyersSection anima un ancestro con
@@ -208,6 +227,34 @@ export default function LawyerCard({ lawyer, delay = 0, isSuperAdmin = false, re
 
             <div className={styles.modalDivider} />
 
+            {/* Reseña completa del cliente (solo cuando se abre desde un
+                testimonio) — muestra el comentario ÍNTEGRO, sin recorte. */}
+            {resena?.texto && (
+              <div className={styles.resenaBlock}>
+                <div className={styles.resenaHead}>
+                  <span className={styles.resenaLabel}>Lo que opina un cliente</span>
+                  {resena.rating ? (
+                    <span className={styles.resenaStars} role="img" aria-label={`Calificación ${resena.rating} de 5`}>
+                      {[1,2,3,4,5].map(s => (
+                        <span
+                          key={s}
+                          style={{ color: s <= Math.round(resena.rating) ? 'var(--gold)' : 'rgba(13,45,94,0.18)' }}
+                        >★</span>
+                      ))}
+                    </span>
+                  ) : null}
+                </div>
+                <p className={styles.resenaTexto}>{resena.texto}</p>
+                {(resena.nombre || resena.rol) && (
+                  <p className={styles.resenaAutor}>
+                    {resena.nombre && <span className={styles.resenaAutorNombre}>{resena.nombre}</span>}
+                    {resena.nombre && resena.rol && <span aria-hidden="true"> · </span>}
+                    {resena.rol && <span className={styles.resenaAutorRol}>{resena.rol}</span>}
+                  </p>
+                )}
+              </div>
+            )}
+
 
             {/* Video */}
             {lawyer.video_url && (
@@ -243,6 +290,12 @@ export default function LawyerCard({ lawyer, delay = 0, isSuperAdmin = false, re
               className={styles.modalCta}
               onClick={() => {
                 setOpen(false)
+                // Deep-link a la Consulta Privada con este profesional pre-seleccionado.
+                // ChatSection parsea el hash (#chat?abogado=<id>&tipo=<rol>) en el paso
+                // de cédula: tras la cédula, salta directo al formulario con el
+                // profesional bloqueado y, al enviar, entra al chat con él ya elegido.
+                const tipo = lawyer.rol === 'contador' ? 'contador' : 'abogado'
+                window.location.hash = `#chat?abogado=${encodeURIComponent(lawyer.id)}&tipo=${tipo}`
                 // pequeño delay para que el modal se desmonte antes del scroll
                 setTimeout(() => {
                   const el = document.getElementById('chat')

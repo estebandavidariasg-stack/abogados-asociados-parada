@@ -789,6 +789,7 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
               nombre: activeRoom.client_nombre || null,
               correo: activeRoom.client_email,
               rol: 'Cliente',
+              professional_id: lawyerId,
             }),
           })
         } catch (_) { /* noop */ }

@@ -1,15 +1,13 @@
 import Navbar from '../components/layout/Navbar'
 import IntroSection from '../components/home/IntroSection'
-import Hero from '../components/home/Hero'
 import LawyersSection from '../components/home/LawyersSection'
 import TestimoniosSection from '../components/home/TestimoniosSection'
-import CTASection from '../components/home/CTASection'
+import NoticiasSection from '../components/home/NoticiasSection'
 import ChatSection from '../components/chat/ChatSection'
 import Footer from '../components/layout/Footer'
 import WhatsAppButton from '../components/home/WhatsAppButton'
 import { useState, useRef, useEffect, lazy, Suspense } from 'react'
 import { useScroll, useSpring, motion } from 'framer-motion'
-import { useAuth } from '../context/AuthContext'
 import SubNav from '../components/layout/SubNav'
 
 // Modales de registro/login: solo se montan al hacer clic — lazy para que el
@@ -81,10 +79,6 @@ export default function HomePage() {
   const [modal, setModal] = useState(null)
   const [contadorOpen, setContadorOpen] = useState(false)
   const [gestorOpen, setGestorOpen] = useState(false)
-  const [editMode, setEditMode] = useState(false)
-  const { profile } = useAuth()
-
-  const isSuperAdmin = profile?.rol === 'superadmin'
 
   return (
     <>
@@ -99,15 +93,10 @@ export default function HomePage() {
       <IntroSection onUnirse={() => setModal('register')} />
       <VideoCarousel/>
       <ChatSection />
-      <CTASection />
       <LawyersSection />
       <TestimoniosSection />
       <ModelosContractualesSection />
-      <Hero
-        editMode={editMode}
-        onToggleEdit={() => setEditMode((v) => !v)}
-        isSuperAdmin={isSuperAdmin}
-      />
+      <NoticiasSection />
       <DeferredMap />
       <Footer />
       <WhatsAppButton phone="573124086734" />

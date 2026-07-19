@@ -5,7 +5,7 @@ import { supabase } from '../lib/supabase'
 import { useNavigate } from 'react-router-dom'
 import styles from './AdminPage.module.css'
 import SuperAdminChatViewer from '../components/chat/SuperAdminChatViewer'
-import CodigosReferencia from '../components/admin/CodigosReferencia'
+import GestoresAdmin from '../components/admin/GestoresAdmin'
 import MisContratos from '../components/profile/MisContratos'
 import AdminInternalChat from '../components/chat/AdminInternalChat'
 import ProfileDetailModal from '../components/admin/ProfileDetailModal'
@@ -23,10 +23,10 @@ const IconRecover= (p) => (<svg viewBox="0 0 24 24" width="18" height="18" fill=
 const IconAlert  = (p) => (<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg>)
 const IconShield = (p) => (<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>)
 const IconDoc    = (p) => (<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 13h6M9 17h6"/></svg>)
-const IconQRcode = (p) => (<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3M21 14v.01M14 21h.01M21 21v-3h-3"/></svg>)
 const IconStar   = (p) => (<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>)
 const IconHome   = (p) => (<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>)
 const IconLogout = (p) => (<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg>)
+const IconGestor = (p) => (<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/><path d="M12 11v0"/></svg>)
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
@@ -52,6 +52,7 @@ export default function AdminPage() {
   const [activeTab, setActiveTab]             = useState('pending')
   const [pending, setPending]                 = useState([])
   const [approved, setApproved]               = useState([])
+  const [gestores, setGestores]               = useState([])   // para el badge de la pestaña Gestores
   const [loadingData, setLoadingData]         = useState(true)
   const [alertas, setAlertas]                 = useState([])
   const [chatsCerrados, setChatsCerrados]     = useState([])
@@ -59,11 +60,21 @@ export default function AdminPage() {
   const [extraCounts, setExtraCounts]         = useState({})   // contratos/firmas/reseñas/códigos
   const [abogadoContrato, setAbogadoContrato] = useState(null)
   // Sub-filtro por rol dentro de Solicitudes/Aprobados/Contratos
-  const [rolFilter, setRolFilter]             = useState('todos') // 'todos' | 'abogado' | 'contador'
+  const [rolFilter, setRolFilter]             = useState('todos') // 'todos' | 'abogado' | 'contador' | 'gestor'
+  // Búsqueda instantánea por nombre / cédula (compartida por las listas de personas)
+  const [personSearch, setPersonSearch]       = useState('')
+  // Filtro de SALAS (Recuperar / Alertas): chip de profesión + búsqueda instantánea.
+  // Cada pestaña tiene su propio estado para que no se pisen entre sí.
+  const [recuperarTipo, setRecuperarTipo]     = useState('todos') // 'todos'|'abogado'|'contador'
+  const [recuperarSearch, setRecuperarSearch] = useState('')
+  const [alertasTipo, setAlertasTipo]         = useState('todos')
+  const [alertasSearch, setAlertasSearch]     = useState('')
   // Vista detalle del perfil (modal)
   const [previewProfile, setPreviewProfile]   = useState(null)
   // Sala a abrir en el visor (deep-link desde la campanita / correo)
   const [chatRoomToOpen, setChatRoomToOpen]   = useState(null)
+  // Reasignación forzada (barrera 4h): sala elegida + estado del modal
+  const [reasignarRoom, setReasignarRoom]     = useState(null)   // room + escalation info
 
   useEffect(() => {
     if (loading) return
@@ -73,6 +84,7 @@ export default function AdminPage() {
     fetchChatsCerrados()
     fetchRooms()
     fetchExtraCounts()
+    fetchGestores()
   }, [user, profile, loading])
 
   // Deep-link: /admin?tab=chats&room=<id> (desde el correo de verificación).
@@ -98,19 +110,34 @@ export default function AdminPage() {
 
   async function fetchPending() {
     const headers = await getAuthHeaders()
-    // Trae abogados y contadores pendientes — el filtro por rol se aplica en cliente
+    // Trae abogados, contadores y gestores pendientes — el filtro por rol se
+    // aplica en cliente. Los gestores entran aquí para aprobarse/rechazarse
+    // igual que los profesionales (misma bandera `aprobado`).
     const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/profiles?aprobado=eq.false&rol=in.(abogado,contador)&select=*`,
+      `${SUPABASE_URL}/rest/v1/profiles?aprobado=eq.false&rol=in.(abogado,contador,gestor)&select=*`,
       { headers }
     )
     const data = await res.json()
     setPending(Array.isArray(data) ? data : [])
   }
 
+  // Lista de gestores para el badge de la pestaña Gestores (solo id/aprobado).
+  async function fetchGestores() {
+    try {
+      const headers = await getAuthHeaders()
+      const res = await fetch(
+        `${SUPABASE_URL}/rest/v1/profiles?rol=eq.gestor&select=id,aprobado`,
+        { headers }
+      )
+      const data = await res.json()
+      setGestores(Array.isArray(data) ? data : [])
+    } catch { setGestores([]) }
+  }
+
   async function fetchApproved() {
     const headers = await getAuthHeaders()
     const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/profiles?aprobado=eq.true&rol=in.(abogado,contador)&select=*`,
+      `${SUPABASE_URL}/rest/v1/profiles?aprobado=eq.true&rol=in.(abogado,contador,gestor)&select=*`,
       { headers }
     )
     const data = await res.json()
@@ -133,6 +160,7 @@ export default function AdminPage() {
       })
     } catch { /* el correo es secundario; la aprobación ya quedó */ }
     fetchAll()
+    fetchGestores()
   }
 
   async function rejectProfile(id) {
@@ -150,6 +178,7 @@ export default function AdminPage() {
       })
     } catch { /* el correo es secundario */ }
     fetchAll()
+    fetchGestores()
   }
 
   async function removeApproved(id) {
@@ -159,6 +188,7 @@ export default function AdminPage() {
       body: JSON.stringify({ aprobado: false }),
     })
     fetchAll()
+    fetchGestores()
   }
 
   async function toggleDescargaArchivos(id, current) {
@@ -176,11 +206,29 @@ export default function AdminPage() {
       // chat_rooms.status: 'waiting' | 'active' | 'closed' (NO existe `cerrado`).
       // Las alertas son chats abiertos (no closed) sin actividad +24h.
       // Limit explícito: sin él PostgREST trunca en max-rows en silencio.
-      const roomsRes = await fetch(
-        `${SUPABASE_URL}/rest/v1/chat_rooms?status=in.(waiting,active)&select=*&order=created_at.desc&limit=1000`,
-        { headers }
-      )
+      // En paralelo: salas abiertas + notificaciones de reasignación
+      // obligatoria (barrera de 4h superada) aún sin atender.
+      const [roomsRes, notifRes] = await Promise.all([
+        fetch(
+          `${SUPABASE_URL}/rest/v1/chat_rooms?status=in.(waiting,active)&select=*&order=created_at.desc&limit=1000`,
+          { headers }
+        ),
+        fetch(
+          `${SUPABASE_URL}/rest/v1/notificaciones?tipo=eq.reasignacion_obligatoria&atendida=eq.false&select=id,room_id&order=created_at.desc&limit=1000`,
+          { headers }
+        ).catch(() => null),
+      ])
       const rooms = await roomsRes.json()
+      // Notificación de escalada por sala (para el botón "Reasignar ahora").
+      const notifByRoom = {}
+      try {
+        const notifs = notifRes ? await notifRes.json() : []
+        if (Array.isArray(notifs)) {
+          for (const n of notifs) {
+            if (n.room_id && !notifByRoom[n.room_id]) notifByRoom[n.room_id] = n.id
+          }
+        }
+      } catch { /* sin notificaciones de escalada */ }
       if (!Array.isArray(rooms) || rooms.length === 0) { setAlertas([]); return }
       const hace24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
 
@@ -211,7 +259,11 @@ export default function AdminPage() {
       // actividad quede fuera del corte y aparezca como falsa alerta.
       const msgsAll = await enLotes('chat_messages', rooms.map(r => r.id), `&created_at=gte.${hace24h}&select=room_id`, 50)
       const conActividad = new Set(msgsAll.map(m => m.room_id))
-      const inactiveRooms = rooms.filter(r => !conActividad.has(r.id))
+      // Una sala entra a la lista si lleva +24h sin actividad O si tiene la
+      // barrera de 4h superada (reasignacion_forzada / notificación de escalada)
+      // — así una sala escalada nunca desaparece de la vista aunque cambie algo.
+      const esEscalada = (r) => !!r.reasignacion_forzada || !!notifByRoom[r.id]
+      const inactiveRooms = rooms.filter(r => !conActividad.has(r.id) || esEscalada(r))
       if (inactiveRooms.length === 0) { setAlertas([]); return }
 
       const lawyersAll = await enLotes('chat_room_lawyers', inactiveRooms.map(r => r.id), '&select=room_id,lawyer_id')
@@ -224,7 +276,12 @@ export default function AdminPage() {
       const inactivas = inactiveRooms.map(r => ({
         ...r,
         lawyer_ids: lawyersByRoom[r.id] || [],
+        escalada:   esEscalada(r),
+        notifId:    notifByRoom[r.id] || null,
       }))
+      // Las salas escaladas (barrera 4h superada) van SIEMPRE arriba para que
+      // el admin no las pase por alto.
+      inactivas.sort((a, b) => (b.escalada === true) - (a.escalada === true))
       setAlertas(inactivas)
     } catch (err) {
       console.error('[fetchAlertas] error:', err)
@@ -332,40 +389,319 @@ export default function AdminPage() {
     }
   }
 
-  // ── Filtrados derivados por rol ───────────────────────────────────────
-  const filterByRol = arr => rolFilter === 'todos'
-    ? arr
-    : arr.filter(p => p.rol === rolFilter)
+  // ── Filtrado unificado por rol + búsqueda (nombre / cédula) ───────────
+  // Normaliza cédulas quitando puntos y espacios para comparar.
+  const soloDigitos = s => (s || '').toString().replace(/[.\s]/g, '')
+  const coincidePersona = (p) => {
+    const q = personSearch.trim().toLowerCase()
+    if (!q) return true
+    const qDigits = soloDigitos(q)
+    const campos = [p.nombre, p.apellido, p.username, p.email]
+      .filter(Boolean).map(x => x.toLowerCase())
+    if (campos.some(c => c.includes(q))) return true
+    // Cédula: comparar sin puntos/espacios (permite buscar "1.234" o "1234").
+    if (qDigits && soloDigitos(p.cedula).includes(qDigits)) return true
+    return false
+  }
+  // Filtra por rol (incluye 'gestor') + texto instantáneo. `roles` restringe
+  // qué roles admite la lista (p. ej. Contratos = abogado/contador).
+  const filtrarPersonas = (arr, roles = null) => arr.filter(p => {
+    if (roles && !roles.includes(p.rol)) return false
+    if (rolFilter !== 'todos' && p.rol !== rolFilter) return false
+    return coincidePersona(p)
+  })
 
-  const pendingFiltered  = filterByRol(pending)
-  const approvedFiltered = filterByRol(approved)
+  const pendingFiltered  = filtrarPersonas(pending)
+  const approvedFiltered = filtrarPersonas(approved)
+  // Contratos: solo profesionales con contratos (abogado / contador).
+  const contratosFiltered = filtrarPersonas(approved, ['abogado', 'contador'])
 
-  // Chip-row reutilizable para filtrar Solicitudes/Aprobados/Contratos por rol
-  const RolChips = () => (
-    <div className={styles.rolChipsRow}>
-      <button
-        type="button"
-        className={`${styles.rolChip} ${rolFilter === 'todos' ? styles.rolChipActive : ''}`}
-        onClick={() => setRolFilter('todos')}
-      >
-        Todos
-      </button>
-      <button
-        type="button"
-        className={`${styles.rolChip} ${rolFilter === 'abogado' ? styles.rolChipActive : ''}`}
-        onClick={() => setRolFilter('abogado')}
-      >
-        Abogados
-      </button>
-      <button
-        type="button"
-        className={`${styles.rolChip} ${rolFilter === 'contador' ? styles.rolChipActive : ''}`}
-        onClick={() => setRolFilter('contador')}
-      >
-        Contadores
-      </button>
+  // Barra de filtro reutilizable: chips de rol + búsqueda instantánea. Una sola
+  // definición reusada en Solicitudes, Aprobados y Contratos. `roles` limita las
+  // chips visibles (Contratos oculta "Gestores"); `placeholder` es opcional.
+  const PersonFilterBar = ({ roles = ['abogado', 'contador', 'gestor'], placeholder = 'Buscar por nombre o cédula…' }) => (
+    <div className={styles.filterBar}>
+      <div className={styles.rolChipsRow}>
+        <button
+          type="button"
+          className={`${styles.rolChip} ${rolFilter === 'todos' ? styles.rolChipActive : ''}`}
+          onClick={() => setRolFilter('todos')}
+        >
+          Todos
+        </button>
+        {roles.includes('abogado') && (
+          <button
+            type="button"
+            className={`${styles.rolChip} ${rolFilter === 'abogado' ? styles.rolChipActive : ''}`}
+            onClick={() => setRolFilter('abogado')}
+          >
+            Abogados
+          </button>
+        )}
+        {roles.includes('contador') && (
+          <button
+            type="button"
+            className={`${styles.rolChip} ${rolFilter === 'contador' ? styles.rolChipActive : ''}`}
+            onClick={() => setRolFilter('contador')}
+          >
+            Contadores
+          </button>
+        )}
+        {roles.includes('gestor') && (
+          <button
+            type="button"
+            className={`${styles.rolChip} ${rolFilter === 'gestor' ? styles.rolChipActive : ''}`}
+            onClick={() => setRolFilter('gestor')}
+          >
+            Gestores
+          </button>
+        )}
+      </div>
+      <div className={styles.searchWrap}>
+        <svg className={styles.searchIcon} viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" />
+        </svg>
+        <input
+          type="search"
+          className={styles.searchInput}
+          value={personSearch}
+          onChange={e => setPersonSearch(e.target.value)}
+          placeholder={placeholder}
+          aria-label="Buscar por nombre o cédula"
+        />
+        {personSearch && (
+          <button
+            type="button"
+            className={styles.searchClear}
+            onClick={() => setPersonSearch('')}
+            aria-label="Limpiar búsqueda"
+            title="Limpiar"
+          >
+            ×
+          </button>
+        )}
+      </div>
     </div>
   )
+
+  // ── Filtro de SALAS (Recuperar / Alertas) ────────────────────────────
+  // Barra reutilizable idéntica a PersonFilterBar: chips de profesión
+  // [Todos | Abogados | Contadores] filtrando por `tipo_profesional`, más una
+  // búsqueda instantánea (sin botón) sobre cliente / código / área / cédula.
+  // Recibe su estado por props para que cada pestaña mantenga el suyo.
+  const RoomFilterBar = ({
+    tipo, setTipo, search, setSearch,
+    placeholder = 'Buscar por cliente, cédula o código…',
+  }) => (
+    <div className={styles.filterBar}>
+      <div className={styles.rolChipsRow}>
+        <button
+          type="button"
+          className={`${styles.rolChip} ${tipo === 'todos' ? styles.rolChipActive : ''}`}
+          onClick={() => setTipo('todos')}
+        >
+          Todos
+        </button>
+        <button
+          type="button"
+          className={`${styles.rolChip} ${tipo === 'abogado' ? styles.rolChipActive : ''}`}
+          onClick={() => setTipo('abogado')}
+        >
+          Abogados
+        </button>
+        <button
+          type="button"
+          className={`${styles.rolChip} ${tipo === 'contador' ? styles.rolChipActive : ''}`}
+          onClick={() => setTipo('contador')}
+        >
+          Contadores
+        </button>
+      </div>
+      <div className={styles.searchWrap}>
+        <svg className={styles.searchIcon} viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" />
+        </svg>
+        <input
+          type="search"
+          className={styles.searchInput}
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder={placeholder}
+          aria-label="Buscar por cliente, cédula o código"
+        />
+        {search && (
+          <button
+            type="button"
+            className={styles.searchClear}
+            onClick={() => setSearch('')}
+            aria-label="Limpiar búsqueda"
+            title="Limpiar"
+          >
+            ×
+          </button>
+        )}
+      </div>
+    </div>
+  )
+
+  // Filtra una lista de salas por profesión + texto instantáneo. El texto matchea
+  // contra client_nombre / codigo_referencia / area_derecho (y, opcionalmente, la
+  // cédula: los datos guardan client_cedula como hash SHA-256, así que sólo
+  // coincide si el usuario pega el hash completo — priorizamos nombre/código/área).
+  const coincideSala = (r, q) => {
+    const s = (q || '').trim().toLowerCase()
+    if (!s) return true
+    const campos = [r.client_nombre, r.codigo_referencia, r.area_derecho, r.client_email]
+      .filter(Boolean).map(x => x.toString().toLowerCase())
+    if (campos.some(c => c.includes(s))) return true
+    // Cédula hasheada: coincidencia exacta opcional (poco común, pero soportada).
+    if (r.client_cedula && r.client_cedula.toString().toLowerCase().includes(s)) return true
+    return false
+  }
+  const filtrarSalas = (arr, tipo, search) => (arr || []).filter(r => {
+    if (tipo !== 'todos' && (r.tipo_profesional || 'abogado') !== tipo) return false
+    return coincideSala(r, search)
+  })
+
+  // Listas de salas filtradas. `filtrarSalas` preserva el orden de entrada, así
+  // que las alertas escaladas (ya ordenadas primero en fetchAlertas) siguen arriba.
+  const recuperarFiltrados = filtrarSalas(chatsCerrados, recuperarTipo, recuperarSearch)
+  const alertasFiltradas   = filtrarSalas(alertas, alertasTipo, alertasSearch)
+
+  // Enlaces sociales de un perfil (usado en tarjetas de gestor). Solo renderiza
+  // los que existan; guarda campos ausentes.
+  const PersonSocialLinks = ({ p }) => {
+    const redes = [
+      ['Instagram', p.instagram],
+      ['LinkedIn',  p.linkedin],
+      ['Facebook',  p.facebook],
+      ['TikTok',    p.tiktok],
+    ].filter(([, url]) => !!url)
+    const cert = p.certificado_bancario_url
+    if (redes.length === 0 && !cert) return null
+    return (
+      <div className={styles.socialRow}>
+        {redes.map(([label, url]) => (
+          <a
+            key={label}
+            href={url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={styles.socialLink}
+            onClick={e => e.stopPropagation()}
+          >
+            {label}
+          </a>
+        ))}
+        {cert && (
+          <a
+            href={cert}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={styles.cardTarjetaLink}
+            onClick={e => e.stopPropagation()}
+          >
+            Certificado bancario
+          </a>
+        )}
+      </div>
+    )
+  }
+
+  // Etiqueta legible del rol para el badge de las tarjetas.
+  const rolLabel = (rol) => rol === 'contador' ? 'Contador' : rol === 'gestor' ? 'Gestor' : 'Abogado'
+  const rolBadgeClass = (rol) => rol === 'contador'
+    ? styles.cardRolBadgeContador
+    : rol === 'gestor'
+    ? styles.cardRolBadgeGestor
+    : styles.cardRolBadgeAbogado
+
+  // ── Reasignación forzada (barrera 4h) ─────────────────────────────────
+  // Candidatos de la MISMA profesión con solape de área; POST a /api/reassign.
+  const [reasignCandidatos, setReasignCandidatos] = useState([])  // {p, matchArea}
+  const [reasignElegido, setReasignElegido]       = useState('')  // newLawyerId
+  const [reasignEstado, setReasignEstado]         = useState('idle') // idle|loading|sending|error
+  const [reasignError, setReasignError]           = useState('')
+
+  // Tokeniza area_derecho por comas (minúsculas, sin vacíos).
+  const tokensArea = (s) => (s || '')
+    .split(',').map(t => t.trim().toLowerCase()).filter(Boolean)
+
+  async function abrirReasignar(room) {
+    setReasignarRoom(room)
+    setReasignElegido('')
+    setReasignError('')
+    setReasignEstado('loading')
+    setReasignCandidatos([])
+    try {
+      const headers = await getAuthHeaders()
+      const tipo = room.tipo_profesional || 'abogado'
+      // Todos los aprobados de la MISMA profesión que la sala.
+      const res = await fetch(
+        `${SUPABASE_URL}/rest/v1/profiles?aprobado=eq.true&rol=eq.${tipo}&select=id,nombre,apellido,area_derecho,username&order=nombre.asc&limit=500`,
+        { headers }
+      )
+      const data = await res.json()
+      const asignados = new Set(room.lawyer_ids || [])
+      const disponibles = (Array.isArray(data) ? data : []).filter(p => !asignados.has(p.id))
+      const roomTokens = tokensArea(room.area_derecho)
+      // matchArea: algún token del área de la sala aparece (substring) en el área
+      // del profesional, o viceversa.
+      const conMatch = disponibles.map(p => {
+        const pTokens = tokensArea(p.area_derecho)
+        const match = roomTokens.length === 0 ? false : roomTokens.some(rt =>
+          pTokens.some(pt => pt.includes(rt) || rt.includes(pt))
+        )
+        return { p, matchArea: match }
+      })
+      // Si hay coincidencias de área, mostramos primero esas; si no, caemos a
+      // todos los de la profesión (marcados "otra área").
+      const hayMatch = conMatch.some(c => c.matchArea)
+      const ordenados = hayMatch
+        ? [...conMatch].sort((a, b) => (b.matchArea === true) - (a.matchArea === true))
+        : conMatch
+      setReasignCandidatos(ordenados)
+      setReasignEstado('idle')
+    } catch (err) {
+      console.error('[abrirReasignar] error:', err)
+      setReasignEstado('error')
+      setReasignError('No se pudieron cargar los profesionales disponibles.')
+    }
+  }
+
+  async function confirmarReasignar() {
+    if (!reasignarRoom || !reasignElegido) return
+    setReasignEstado('sending')
+    setReasignError('')
+    try {
+      const headers = await getAuthHeaders()
+      const oldLawyerId = (reasignarRoom.lawyer_ids && reasignarRoom.lawyer_ids[0]) || null
+      const res = await fetch('/api/reassign', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: headers.Authorization },
+        body: JSON.stringify({
+          roomId:      reasignarRoom.id,
+          oldLawyerId,
+          newLawyerId: reasignElegido,
+          notifId:     reasignarRoom.notifId || null,
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        // Superficie del error de profesión (400) del backend.
+        setReasignError(data?.error || 'No se pudo reasignar la consulta.')
+        setReasignEstado('error')
+        return
+      }
+      setReasignarRoom(null)
+      setReasignEstado('idle')
+      fetchAlertas()
+    } catch (err) {
+      console.error('[confirmarReasignar] error:', err)
+      setReasignError('Error de red al reasignar. Intenta de nuevo.')
+      setReasignEstado('error')
+    }
+  }
 
   if (loading || loadingData)
     return (
@@ -381,13 +717,13 @@ export default function AdminPage() {
   const TABS = [
     { key: 'pending',      label: 'Solicitudes',         count: pending.length,       Icon: IconInbox },
     { key: 'approved',     label: 'Aprobados',            count: approved.length,      Icon: IconUsers },
+    { key: 'gestores',     label: 'Gestores',             count: gestores.filter(g => !g.aprobado).length, Icon: IconGestor },
     { key: 'chats',        label: 'Historial chats',                                   Icon: IconChat },
     { key: 'recuperar',    label: 'Recuperar chats',      count: chatsCerrados.length, Icon: IconRecover },
     { key: 'alertas',      label: 'Alertas',              count: alertas.length, alert: true, Icon: IconAlert },
     { key: 'chat_interno', label: 'Chat interno',                                      Icon: IconShield },
     { key: 'contratos',    label: 'Contratos',                                         Icon: IconDoc },
     { key: 'resenas',      label: 'Reseñas',                                           Icon: IconStar },
-    { key: 'codigos',      label: 'Códigos QR',                                        Icon: IconQRcode },
   ]
 
   return (
@@ -457,7 +793,11 @@ export default function AdminPage() {
                 </h1>
               </div>
               <div className={styles.headerActions}>
-                <NotificationBell onOpenRoom={handleOpenRoom} />
+                {/* Campana "$" (pagos y cobros) a la izquierda; campana de alertas
+                    a la derecha. Ambas van portaleadas/fijas: sus dropdowns se
+                    anclan a su propio botón, así que no se solapan. */}
+                <NotificationBell modo="dinero" />
+                <NotificationBell modo="alertas" onOpenRoom={handleOpenRoom} />
               </div>
             </div>
 
@@ -486,17 +826,21 @@ export default function AdminPage() {
           {/* ── Solicitudes pendientes ── */}
           {activeTab === 'pending' && (
             <div className={styles.section}>
-              <RolChips />
+              {PersonFilterBar({})}
               {pendingFiltered.length === 0 ? (
                 <div className={styles.emptyState}>
                   <span className={styles.emptyIcon} style={{ color: '#c9a84c' }}><IconInbox width={40} height={40} /></span>
                   <p className={styles.emptyTxt}>
                     No hay solicitudes pendientes
-                    {rolFilter !== 'todos' ? ` de ${rolFilter}es` : ''}
+                    {rolFilter === 'gestor' ? ' de gestores'
+                      : rolFilter !== 'todos' ? ` de ${rolFilter}es` : ''}
+                    {personSearch.trim() ? ` para "${personSearch.trim()}"` : ''}
                   </p>
                   <p className={styles.emptySub}>Cuando alguien se registre aparecerá aquí</p>
                 </div>
-              ) : pendingFiltered.map(p => (
+              ) : pendingFiltered.map(p => {
+                const esGestor = p.rol === 'gestor'
+                return (
                 <div
                   key={p.id}
                   className={styles.card}
@@ -508,33 +852,43 @@ export default function AdminPage() {
                 >
                   <div className={styles.cardPhoto}>
                     {p.foto_url
-                      ? <img src={p.foto_url} alt={p.nombre} width="48" height="48" loading="lazy" decoding="async" />
-                      : <span>{p.nombre?.[0] || '?'}{p.apellido?.[0] || ''}</span>
+                      ? <img src={p.foto_url} alt={p.nombre || p.username} width="48" height="48" loading="lazy" decoding="async" />
+                      : <span>{(p.nombre?.[0] || p.username?.[0] || '?')}{p.apellido?.[0] || ''}</span>
                     }
                   </div>
                   <div className={styles.cardInfo}>
                     <h3 className={styles.cardName}>
-                      {p.nombre} {p.apellido}
-                      <span className={`${styles.cardRolBadge} ${p.rol === 'contador' ? styles.cardRolBadgeContador : styles.cardRolBadgeAbogado}`}>
-                        {p.rol === 'contador' ? 'Contador' : 'Abogado'}
+                      {(p.nombre || p.apellido) ? `${p.nombre || ''} ${p.apellido || ''}`.trim() : `@${p.username || 'gestor'}`}
+                      <span className={`${styles.cardRolBadge} ${rolBadgeClass(p.rol)}`}>
+                        {rolLabel(p.rol)}
                       </span>
                     </h3>
-                    <span className={styles.cardMeta}>@{p.username} · {p.email}</span>
-                    {p.area_derecho && <span className={styles.cardBadge}>{p.area_derecho}</span>}
-                    {p.universidad  && <span className={styles.cardMeta}>{p.universidad}</span>}
-                    {p.ciudad && (
-                      <span className={styles.cardMeta}>
-                        {p.ciudad}{p.departamento ? `, ${p.departamento}` : ''}
-                      </span>
+                    <span className={styles.cardMeta}>@{p.username || '—'} · {p.email}</span>
+                    {p.cedula && <span className={styles.cardMeta}>CC {p.cedula}</span>}
+                    {esGestor ? (
+                      <>
+                        {p.comunidad_descripcion && <p className={styles.cardDesc}>{p.comunidad_descripcion}</p>}
+                        <PersonSocialLinks p={p} />
+                      </>
+                    ) : (
+                      <>
+                        {p.area_derecho && <span className={styles.cardBadge}>{p.area_derecho}</span>}
+                        {p.universidad  && <span className={styles.cardMeta}>{p.universidad}</span>}
+                        {p.ciudad && (
+                          <span className={styles.cardMeta}>
+                            {p.ciudad}{p.departamento ? `, ${p.departamento}` : ''}
+                          </span>
+                        )}
+                        {p.tarjeta_archivo_url && (
+                          <TarjetaPreview
+                            rawPath={p.tarjeta_archivo_url}
+                            storagePath={p.tarjeta_archivo_url}
+                            compact
+                          />
+                        )}
+                        {p.descripcion && <p className={styles.cardDesc}>{p.descripcion}</p>}
+                      </>
                     )}
-                    {p.tarjeta_archivo_url && (
-                      <TarjetaPreview
-                        rawPath={p.tarjeta_archivo_url}
-                        storagePath={p.tarjeta_archivo_url}
-                        compact
-                      />
-                    )}
-                    {p.descripcion && <p className={styles.cardDesc}>{p.descripcion}</p>}
                   </div>
                   <div className={styles.cardActions}>
                     <button
@@ -551,22 +905,25 @@ export default function AdminPage() {
                     </button>
                   </div>
                 </div>
-              ))}
+              )})}
             </div>
           )}
 
           {/* ── Aprobados ── */}
           {activeTab === 'approved' && (
             <div className={styles.section}>
-              <RolChips />
+              {PersonFilterBar({})}
               {approvedFiltered.length === 0 ? (
                 <div className={styles.emptyState}>
                   <span className={styles.emptyIcon} style={{ color: '#c9a84c' }}><IconUsers width={40} height={40} /></span>
                   <p className={styles.emptyTxt}>
-                    No hay {rolFilter === 'contador' ? 'contadores' : rolFilter === 'abogado' ? 'abogados' : 'profesionales'} aprobados aún
+                    No hay {rolFilter === 'contador' ? 'contadores' : rolFilter === 'abogado' ? 'abogados' : rolFilter === 'gestor' ? 'gestores' : 'profesionales'} aprobados
+                    {personSearch.trim() ? ` para "${personSearch.trim()}"` : ' aún'}
                   </p>
                 </div>
-              ) : approvedFiltered.map(p => (
+              ) : approvedFiltered.map(p => {
+                const esGestor = p.rol === 'gestor'
+                return (
                 <div
                   key={p.id}
                   className={styles.card}
@@ -578,54 +935,67 @@ export default function AdminPage() {
                 >
                   <div className={styles.cardPhoto}>
                     {p.foto_url
-                      ? <img src={p.foto_url} alt={p.nombre} width="48" height="48" loading="lazy" decoding="async" />
-                      : <span>{p.nombre?.[0] || '?'}{p.apellido?.[0] || ''}</span>
+                      ? <img src={p.foto_url} alt={p.nombre || p.username} width="48" height="48" loading="lazy" decoding="async" />
+                      : <span>{(p.nombre?.[0] || p.username?.[0] || '?')}{p.apellido?.[0] || ''}</span>
                     }
                   </div>
                   <div className={styles.cardInfo}>
                     <h3 className={styles.cardName}>
-                      {p.nombre} {p.apellido}
-                      <span className={`${styles.cardRolBadge} ${p.rol === 'contador' ? styles.cardRolBadgeContador : styles.cardRolBadgeAbogado}`}>
-                        {p.rol === 'contador' ? 'Contador' : 'Abogado'}
+                      {(p.nombre || p.apellido) ? `${p.nombre || ''} ${p.apellido || ''}`.trim() : `@${p.username || 'gestor'}`}
+                      <span className={`${styles.cardRolBadge} ${rolBadgeClass(p.rol)}`}>
+                        {rolLabel(p.rol)}
                       </span>
                     </h3>
-                    <span className={styles.cardMeta}>@{p.username} · {p.email}</span>
-                    {p.area_derecho && <span className={styles.cardBadge}>{p.area_derecho}</span>}
-                    {p.ciudad && (
-                      <span className={styles.cardMeta}>
-                        {p.ciudad}{p.departamento ? `, ${p.departamento}` : ''}
-                      </span>
-                    )}
-                    {p.tarjeta_archivo_url && (
-                      <TarjetaPreview
-                        rawPath={p.tarjeta_archivo_url}
-                        storagePath={p.tarjeta_archivo_url}
-                        compact
-                      />
+                    <span className={styles.cardMeta}>@{p.username || '—'} · {p.email}</span>
+                    {p.cedula && <span className={styles.cardMeta}>CC {p.cedula}</span>}
+                    {esGestor ? (
+                      <>
+                        {p.comunidad_descripcion && <p className={styles.cardDesc}>{p.comunidad_descripcion}</p>}
+                        <PersonSocialLinks p={p} />
+                      </>
+                    ) : (
+                      <>
+                        {p.area_derecho && <span className={styles.cardBadge}>{p.area_derecho}</span>}
+                        {p.ciudad && (
+                          <span className={styles.cardMeta}>
+                            {p.ciudad}{p.departamento ? `, ${p.departamento}` : ''}
+                          </span>
+                        )}
+                        {p.tarjeta_archivo_url && (
+                          <TarjetaPreview
+                            rawPath={p.tarjeta_archivo_url}
+                            storagePath={p.tarjeta_archivo_url}
+                            compact
+                          />
+                        )}
+                      </>
                     )}
                   </div>
                   <div className={styles.cardActions}>
-                    <button
-                      type="button"
-                      className={`${styles.toggleDescarga} ${p.puede_descargar_archivos ? styles.toggleDescargaOn : ''}`}
-                      onClick={e => { e.stopPropagation(); toggleDescargaArchivos(p.id, p.puede_descargar_archivos) }}
-                      title={p.puede_descargar_archivos ? 'Deshabilitar descarga de archivos' : 'Habilitar descarga de archivos'}
-                      aria-pressed={!!p.puede_descargar_archivos}
-                    >
-                      <span className={styles.toggleDescargaTrack}>
-                        <span className={styles.toggleDescargaThumb} />
-                      </span>
-                      <span className={styles.toggleDescargaLabel}>
-                        Descargar archivos
-                      </span>
-                    </button>
+                    {!esGestor && (
+                      <button
+                        type="button"
+                        className={`${styles.toggleDescarga} ${p.puede_descargar_archivos ? styles.toggleDescargaOn : ''}`}
+                        onClick={e => { e.stopPropagation(); toggleDescargaArchivos(p.id, p.puede_descargar_archivos) }}
+                        title={p.puede_descargar_archivos ? 'Deshabilitar descarga de archivos' : 'Habilitar descarga de archivos'}
+                        aria-pressed={!!p.puede_descargar_archivos}
+                      >
+                        <span className={styles.toggleDescargaTrack}>
+                          <span className={styles.toggleDescargaThumb} />
+                        </span>
+                        <span className={styles.toggleDescargaLabel}>
+                          Descargar archivos
+                        </span>
+                      </button>
+                    )}
                     <button
                       className={styles.btnReject}
                       onClick={e => {
                         e.stopPropagation()
+                        const quien = (p.nombre || p.apellido) ? `${p.nombre || ''} ${p.apellido || ''}`.trim() : `@${p.username || 'este usuario'}`
                         setConfirmAction({
                           title: 'Quitar de la página',
-                          message: `${p.nombre} ${p.apellido} dejará de aparecer en el sitio público y no podrá usar su panel. Podrás volver a aprobarlo más adelante. ¿Quitar?`,
+                          message: `${quien} dejará de aparecer en el sitio público y no podrá usar su panel. Podrás volver a aprobarlo más adelante. ¿Quitar?`,
                           confirmLabel: 'Quitar',
                           toneClass: 'cfOkDanger',
                           onConfirm: () => removeApproved(p.id),
@@ -636,7 +1006,7 @@ export default function AdminPage() {
                     </button>
                   </div>
                 </div>
-              ))}
+              )})}
             </div>
           )}
 
@@ -654,12 +1024,24 @@ export default function AdminPage() {
                 <h3 className={styles.sectionTitle}>Chats cerrados — Recuperar sesión</h3>
                 <button className={styles.btnRefresh} onClick={fetchChatsCerrados}>↻ Actualizar</button>
               </div>
+              {RoomFilterBar({
+                tipo: recuperarTipo, setTipo: setRecuperarTipo,
+                search: recuperarSearch, setSearch: setRecuperarSearch,
+              })}
               {chatsCerrados.length === 0 ? (
                 <div className={styles.emptyState}>
                   <span className={styles.emptyIcon} style={{ color: '#c9a84c' }}><IconChat width={40} height={40} /></span>
                   <p className={styles.emptyTxt}>No hay chats cerrados registrados</p>
                 </div>
-              ) : chatsCerrados.map(r => (
+              ) : recuperarFiltrados.length === 0 ? (
+                <div className={styles.emptyState}>
+                  <span className={styles.emptyIcon} style={{ color: '#c9a84c' }}><IconChat width={40} height={40} /></span>
+                  <p className={styles.emptyTxt}>
+                    Ningún chat cerrado coincide con el filtro
+                    {recuperarSearch.trim() ? ` "${recuperarSearch.trim()}"` : ''}
+                  </p>
+                </div>
+              ) : recuperarFiltrados.map(r => (
                 <div key={r.id} className={styles.alertaCard}>
                   <span className={styles.alertaIcono} style={{ color: '#c9a84c' }}><IconChat width={22} height={22} /></span>
                   <div className={styles.alertaInfo}>
@@ -702,16 +1084,29 @@ export default function AdminPage() {
                 <h3 className={styles.sectionTitle}>Chats sin actividad · +24 horas</h3>
                 <button className={styles.btnRefresh} onClick={fetchAlertas}>↻ Actualizar</button>
               </div>
+              {RoomFilterBar({
+                tipo: alertasTipo, setTipo: setAlertasTipo,
+                search: alertasSearch, setSearch: setAlertasSearch,
+              })}
               {alertas.length === 0 ? (
                 <div className={styles.alertaOk}>
                   <span style={{ color: '#2f855a', display: 'inline-flex' }}><IconCheck size={20} /></span>
                   <p>Todos los chats activos tienen actividad reciente. ¡Todo en orden!</p>
                 </div>
-              ) : alertas.map(r => {
+              ) : alertasFiltradas.length === 0 ? (
+                <div className={styles.emptyState}>
+                  <span className={styles.emptyIcon} style={{ color: '#c9a84c' }}><IconAlert width={40} height={40} /></span>
+                  <p className={styles.emptyTxt}>
+                    Ninguna alerta coincide con el filtro
+                    {alertasSearch.trim() ? ` "${alertasSearch.trim()}"` : ''}
+                  </p>
+                </div>
+              ) : alertasFiltradas.map(r => {
                 const estado = notifEstado[r.id]
                 const sinAbogados = !r.lawyer_ids || r.lawyer_ids.length === 0
+                const escalada = !!r.escalada
                 return (
-                  <div key={r.id} className={styles.alertaCard}>
+                  <div key={r.id} className={`${styles.alertaCard} ${escalada ? styles.alertaCardEscalada : ''}`}>
                     <span className={styles.alertaIcono} style={{ color: '#c0392b' }}><IconAlert width={22} height={22} /></span>
                     <div className={styles.alertaInfo}>
                       <p className={styles.alertaNombre}>
@@ -733,10 +1128,25 @@ export default function AdminPage() {
                           ? 'Sin profesional asignado'
                           : `${r.lawyer_ids.length} profesional${r.lawyer_ids.length > 1 ? 'es' : ''} asignado${r.lawyer_ids.length > 1 ? 's' : ''}`}
                       </p>
+                      {escalada && (
+                        <p className={styles.alertaEscaladaMsg}>
+                          El profesional fue notificado y no respondió en 4 horas.
+                          Debes reasignar la consulta ahora.
+                        </p>
+                      )}
                     </div>
                     <div className={styles.alertaActions}>
-                      <span className={styles.alertaBadge}>+24h sin actividad</span>
-                      {!sinAbogados && (
+                      {escalada
+                        ? <span className={styles.alertaBadgeEscalada}>Reasignación obligatoria — barrera de 4h superada</span>
+                        : <span className={styles.alertaBadge}>+24h sin actividad</span>}
+                      {escalada ? (
+                        <button
+                          className={styles.btnReasignar}
+                          onClick={() => abrirReasignar(r)}
+                        >
+                          ⇄ Reasignar ahora
+                        </button>
+                      ) : !sinAbogados && (
                         <button
                           className={`${styles.btnNotificar} ${estado === 'sent' ? styles.btnNotificarDone : ''}`}
                           onClick={() => {
@@ -781,46 +1191,122 @@ export default function AdminPage() {
                 <h3 className={styles.sectionTitle}>Contratos por profesional</h3>
               </div>
               <p className={styles.contratosHint}>
-                Selecciona un profesional aprobado para ver o gestionar sus contratos:
+                Busca un profesional por nombre o cédula para ver o gestionar sus contratos:
               </p>
-              <RolChips />
-              <div className={styles.abogadoSelector}>
-                {approvedFiltered.map(a => (
-                  <button
-                    key={a.id}
-                    className={`${styles.abogadoChip} ${abogadoContrato?.id === a.id ? styles.chipActivo : ''}`}
-                    onClick={() => setAbogadoContrato(a)}
-                    title={a.rol === 'contador' ? 'Contador' : 'Abogado'}
-                  >
-                    {a.nombre} {a.apellido}
-                    <span className={`${styles.cardRolBadge} ${a.rol === 'contador' ? styles.cardRolBadgeContador : styles.cardRolBadgeAbogado}`}>
-                      {a.rol === 'contador' ? 'C' : 'A'}
+              {/* Contratos solo aplican a abogados/contadores → sin chip Gestores.
+                  La selección es guiada por búsqueda: no hay nube fija de cápsulas. */}
+              {PersonFilterBar({ roles: ['abogado', 'contador'] })}
+
+              {/* Profesional seleccionado: chip destacado con "×" para deseleccionar */}
+              {abogadoContrato && (
+                <div className={styles.contratoSelectedRow}>
+                  <span className={styles.contratoSelectedLabel}>Viendo contratos de</span>
+                  <span className={styles.contratoSelectedChip}>
+                    {(abogadoContrato.nombre || abogadoContrato.apellido)
+                      ? `${abogadoContrato.nombre || ''} ${abogadoContrato.apellido || ''}`.trim()
+                      : `@${abogadoContrato.username || '—'}`}
+                    <span className={`${styles.cardRolBadge} ${abogadoContrato.rol === 'contador' ? styles.cardRolBadgeContador : styles.cardRolBadgeAbogado}`}>
+                      {abogadoContrato.rol === 'contador' ? 'C' : 'A'}
                     </span>
-                  </button>
-                ))}
-              </div>
-              {abogadoContrato ? (
-                <MisContratos abogadoId={abogadoContrato.id} isSuperAdmin={true} />
-              ) : (
-                <div className={styles.emptyState}>
-                  <span className={styles.emptyIcon} style={{ color: '#c9a84c' }}><IconDoc width={40} height={40} /></span>
-                  <p className={styles.emptyTxt}>Selecciona un profesional arriba</p>
-                  <p className={styles.emptySub}>Sus contratos aparecerán aquí</p>
+                    <button
+                      type="button"
+                      className={styles.contratoSelectedClear}
+                      onClick={() => setAbogadoContrato(null)}
+                      aria-label="Quitar profesional seleccionado"
+                      title="Quitar selección"
+                    >
+                      ×
+                    </button>
+                  </span>
                 </div>
               )}
+
+              {/* Resultados de búsqueda: lista vertical legible, solo al escribir.
+                  Cada fila = avatar/inicial + nombre + badge de rol + afordancia
+                  "Ver contratos →". Cap 12 con nota "mostrando N de M". */}
+              {personSearch.trim() && (
+                <div className={styles.contratoResults}>
+                  {contratosFiltered.length === 0 ? (
+                    <p className={styles.contratosHint} style={{ margin: 0 }}>
+                      Ningún profesional coincide con "{personSearch.trim()}".
+                    </p>
+                  ) : (
+                    <>
+                      <ul className={styles.contratoResultList} role="listbox" aria-label="Profesionales encontrados">
+                        {contratosFiltered.slice(0, 12).map(a => {
+                          const nombre = (a.nombre || a.apellido)
+                            ? `${a.nombre || ''} ${a.apellido || ''}`.trim()
+                            : `@${a.username || '—'}`
+                          const inicial = (a.nombre?.[0] || a.username?.[0] || '?').toUpperCase()
+                            + (a.apellido?.[0] || '').toUpperCase()
+                          const esContador = a.rol === 'contador'
+                          const activo = abogadoContrato?.id === a.id
+                          return (
+                            <li key={a.id} role="option" aria-selected={activo}>
+                              <button
+                                type="button"
+                                className={`${styles.contratoResultRow} ${activo ? styles.contratoResultRowActive : ''}`}
+                                onClick={() => setAbogadoContrato(a)}
+                              >
+                                <span
+                                  className={`${styles.contratoResultAvatar} ${esContador ? styles.contratoResultAvatarContador : ''}`}
+                                  aria-hidden="true"
+                                >
+                                  {a.foto_url
+                                    ? <img src={a.foto_url} alt="" width="36" height="36" loading="lazy" decoding="async" />
+                                    : inicial}
+                                </span>
+                                <span className={styles.contratoResultMain}>
+                                  <span className={styles.contratoResultName}>{nombre}</span>
+                                  <span className={styles.contratoResultMeta}>
+                                    @{a.username || '—'}{a.cedula ? ` · CC ${a.cedula}` : ''}
+                                  </span>
+                                </span>
+                                <span className={`${styles.cardRolBadge} ${esContador ? styles.cardRolBadgeContador : styles.cardRolBadgeAbogado}`}>
+                                  {esContador ? 'Contador' : 'Abogado'}
+                                </span>
+                                <span className={styles.contratoResultGo} aria-hidden="true">
+                                  {activo ? 'Seleccionado' : 'Ver contratos'}
+                                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14" /><path d="m13 6 6 6-6 6" /></svg>
+                                </span>
+                              </button>
+                            </li>
+                          )
+                        })}
+                      </ul>
+                      {contratosFiltered.length > 12 && (
+                        <p className={styles.contratoResultCount}>
+                          Mostrando 12 de {contratosFiltered.length}. Afina la búsqueda para ver más.
+                        </p>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
+
+              {abogadoContrato ? (
+                <MisContratos abogadoId={abogadoContrato.id} isSuperAdmin={true} />
+              ) : !personSearch.trim() ? (
+                <div className={styles.emptyState}>
+                  <span className={styles.emptyIcon} style={{ color: '#c9a84c' }}><IconDoc width={40} height={40} /></span>
+                  <p className={styles.emptyTxt}>Busca un profesional por nombre o cédula</p>
+                  <p className={styles.emptySub}>Sus contratos aparecerán aquí</p>
+                </div>
+              ) : null}
             </div>
           )}
 
-          {/* ── Códigos QR ── */}
+          {/* ── Reseñas ── */}
           {activeTab === 'resenas' && (
             <div className={styles.section}>
               <ResenasAdmin />
             </div>
           )}
 
-          {activeTab === 'codigos' && (
+          {/* ── Gestores (incluye gestión de códigos de referencia QR) ── */}
+          {activeTab === 'gestores' && (
             <div className={styles.section}>
-              <CodigosReferencia />
+              <GestoresAdmin onChange={fetchGestores} />
             </div>
           )}
 
@@ -838,6 +1324,84 @@ export default function AdminPage() {
           profile={previewProfile}
           onClose={() => setPreviewProfile(null)}
         />
+      )}
+
+      {/* ── Modal de reasignación forzada (barrera 4h superada) ── */}
+      {reasignarRoom && (
+        <div
+          className={styles.logoutOverlay}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="reasignTitle"
+          onClick={() => { if (reasignEstado !== 'sending') setReasignarRoom(null) }}
+        >
+          <div className={`${styles.logoutModal} ${styles.reasignModal}`} onClick={e => e.stopPropagation()}>
+            <span className={styles.reasignBadge}>Reasignación obligatoria</span>
+            <h2 id="reasignTitle" className={styles.logoutTitle}>Reasignar consulta</h2>
+            <p className={styles.logoutText}>
+              El profesional asignado no respondió tras la barrera de 4 horas.
+              Elige un {reasignarRoom.tipo_profesional === 'contador' ? 'contador' : 'abogado'} disponible
+              para retomar la consulta de <strong>{reasignarRoom.client_nombre || 'el cliente'}</strong>.
+            </p>
+
+            {reasignEstado === 'loading' ? (
+              <p className={styles.reasignInfo}>Cargando profesionales disponibles…</p>
+            ) : reasignCandidatos.length === 0 ? (
+              <p className={styles.reasignInfo}>
+                No hay otros profesionales aprobados de esta profesión disponibles.
+              </p>
+            ) : (
+              <div className={styles.reasignList} role="radiogroup" aria-label="Profesionales disponibles">
+                {reasignCandidatos.map(({ p, matchArea }) => (
+                  <label
+                    key={p.id}
+                    className={`${styles.reasignOpt} ${reasignElegido === p.id ? styles.reasignOptActive : ''}`}
+                  >
+                    <input
+                      type="radio"
+                      name="reasignPro"
+                      value={p.id}
+                      checked={reasignElegido === p.id}
+                      onChange={() => setReasignElegido(p.id)}
+                    />
+                    <span className={styles.reasignOptBody}>
+                      <span className={styles.reasignOptName}>
+                        {(p.nombre || p.apellido) ? `${p.nombre || ''} ${p.apellido || ''}`.trim() : `@${p.username || '—'}`}
+                      </span>
+                      <span className={styles.reasignOptArea}>
+                        {p.area_derecho || 'Sin área declarada'}
+                        {matchArea
+                          ? <span className={styles.reasignMatch}>coincide área</span>
+                          : <span className={styles.reasignOtra}>otra área</span>}
+                      </span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            )}
+
+            {reasignError && <p className={styles.reasignError}>{reasignError}</p>}
+
+            <div className={styles.logoutActions}>
+              <button
+                type="button"
+                className={styles.logoutCancel}
+                onClick={() => setReasignarRoom(null)}
+                disabled={reasignEstado === 'sending'}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className={`${styles.cfOk} ${styles.cfOkNavy}`}
+                onClick={confirmarReasignar}
+                disabled={!reasignElegido || reasignEstado === 'sending' || reasignEstado === 'loading'}
+              >
+                {reasignEstado === 'sending' ? 'Reasignando…' : 'Reasignar ahora'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* ── Modal de confirmación reutilizable (quitar / reabrir / notificar) ── */}

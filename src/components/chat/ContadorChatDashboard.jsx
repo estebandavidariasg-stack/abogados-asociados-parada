@@ -807,6 +807,7 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
               nombre: activeRoom.client_nombre || null,
               correo: activeRoom.client_email,
               rol: 'Cliente',
+              professional_id: contadorId,
             }),
           })
         } catch (_) { /* noop */ }

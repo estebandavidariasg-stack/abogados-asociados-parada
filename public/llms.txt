@@ -1,11 +1,11 @@
 # Parada Bridge
 
-> Bufete jurídico y de servicios contables en Bogotá, Colombia. Plataforma de consultas en línea con abogados y contadores verificados. Asesoría en derecho penal, civil, corporativo, de familia, laboral y administrativo.
+> Asesoría jurídica y de servicios contables en Bogotá, Colombia. Plataforma de consultas en línea con abogados y contadores verificados. Asesoría en derecho penal, civil, corporativo, de familia, laboral y administrativo.
 
 ## Información general
 
 - **Nombre:** Parada Bridge
-- **Tipo:** Bufete jurídico y contable
+- **Tipo:** Firma de asesoría jurídica y contable
 - **Sede:** Calle 93 # 15-23, Of. 804, Bogotá D.C., Colombia
 - **Teléfono:** +57 312 408 6734
 - **Correo:** abogadosyasociados.parada@gmail.com
@@ -35,7 +35,7 @@ Los profesionales son verificados y aprobados por el equipo administrativo. Las 
 
 ## Contenido del sitio disponible para IA
 
-- Descripción del bufete y sus servicios
+- Descripción de la firma y sus servicios
 - Perfiles públicos de profesionales aprobados (nombre, especialidad, ciudad)
 - Modelos contractuales descargables
 - Información de contacto y cobertura geográfica

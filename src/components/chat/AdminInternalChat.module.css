@@ -41,6 +41,104 @@
   margin: 0;
 }
 
+/* ── Barra de filtro del sidebar (chips de rol + búsqueda instantánea) ──
+   Look unificado del panel admin: navy/dorado, redondeado, chip activo dorado. */
+.filterBar {
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(13, 45, 94, 0.1);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.rolChipsRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.rolChip {
+  font-family: 'Raleway', sans-serif;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  padding: 5px 11px;
+  border-radius: 999px;
+  border: 1px solid rgba(13, 45, 94, 0.22);
+  background: rgba(255, 255, 255, 0.75);
+  color: #46546e;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.16s, color 0.16s, border-color 0.16s, box-shadow 0.16s;
+}
+.rolChip:hover {
+  border-color: rgba(201, 168, 76, 0.5);
+  color: #0d2d5e;
+}
+.rolChipActive {
+  background: linear-gradient(135deg, #15376b 0%, #0d2d5e 100%);
+  border-color: #0d2d5e;
+  color: #f5edd4;
+  box-shadow: 0 2px 8px rgba(13, 45, 94, 0.22);
+}
+.rolChipActive:hover {
+  color: #f5edd4;
+  border-color: #0d2d5e;
+}
+
+/* Input de búsqueda con icono lupa a la izquierda y botón limpiar a la derecha. */
+.searchWrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.searchIcon {
+  position: absolute;
+  left: 10px;
+  color: #7d8bab;
+  pointer-events: none;
+}
+.searchInput {
+  width: 100%;
+  box-sizing: border-box;
+  background: #fff;
+  border: 1px solid #cdd6e6;
+  border-radius: 999px;
+  color: #13305f;
+  padding: 8px 30px 8px 32px;
+  font-size: 0.72rem;
+  font-family: 'Raleway', sans-serif;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.searchInput:focus {
+  border-color: var(--gold, #c9a84c);
+  box-shadow: 0 0 0 3px rgba(201, 168, 76, 0.15);
+}
+.searchInput::placeholder { color: #94a3b8; }
+/* Oculta la 'x' nativa del type=search para usar la nuestra (on-brand). */
+.searchInput::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; }
+
+.searchClear {
+  position: absolute;
+  right: 6px;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 50%;
+  background: rgba(13, 45, 94, 0.08);
+  color: #46546e;
+  cursor: pointer;
+  padding: 0;
+  transition: background 0.16s, color 0.16s;
+}
+.searchClear:hover {
+  background: rgba(201, 168, 76, 0.18);
+  color: var(--gold-dk, #9a7a2c);
+}
+
 .lista {
   flex: 1;
   overflow-y: auto;
@@ -539,6 +637,9 @@
     background: transparent;
   }
   .sidebarHead { display: block; padding: 0 2px 10px; border: none; }
+  /* En móvil el filtro va sin borde/relleno lateral extra y las chips envuelven. */
+  .filterBar { padding: 0 2px 12px; border: none; }
+  .searchInput { font-size: 0.78rem; padding-top: 9px; padding-bottom: 9px; }
   .lista {
     display: flex;
     flex-direction: column;
@@ -630,4 +731,11 @@
   background: #fffdf6;
   color: #8a6a28;
   border: 1px solid rgba(201, 168, 76, 0.6);
+}
+
+/* Gestor: navy suave para distinguirlo de abogado (blanco) y contador (dorado). */
+.rolPillGestor {
+  background: rgba(19, 48, 95, 0.9);
+  color: #f5edd4;
+  border: 1px solid rgba(13, 45, 94, 0.5);
 }

@@ -38,7 +38,101 @@ function IconBell() {
   )
 }
 
-export default function NotificationBell({ onOpenRoom }) {
+/* Campana de "dinero": círculo con símbolo de peso/dólar (circle-dollar-sign). */
+function IconDollarBell() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M14.6 9.1a2.7 2.7 0 0 0-2.6-1.6c-1.55 0-2.6.85-2.6 2.05s1.05 1.75 2.6 2.05 2.6.95 2.6 2.1-1.05 2.05-2.6 2.05a2.7 2.7 0 0 1-2.6-1.6" />
+      <path d="M12 5.9v12.2" />
+    </svg>
+  )
+}
+
+/* Formateador de moneda colombiana (sin decimales): 1500000 → "$1.500.000". */
+const copFmt = new Intl.NumberFormat('es-CO', {
+  style: 'currency',
+  currency: 'COP',
+  maximumFractionDigits: 0,
+})
+function fmtCOP(v) {
+  if (v == null || v === '' || isNaN(Number(v))) return ''
+  return copFmt.format(Number(v))
+}
+
+/* Iconos por tipo de notificación (mismo trazo/estilo que los existentes). */
+function IconWarn() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M10.3 3.9 2.4 18a2 2 0 0 0 1.7 3h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" />
+      <path d="M12 9v4" /><path d="M12 17h.01" />
+    </svg>
+  )
+}
+function IconReview() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="11" cy="11" r="7" /><path d="m21 21-4.3-4.3" />
+    </svg>
+  )
+}
+function IconMoney() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M14.5 9.2a2.6 2.6 0 0 0-2.5-1.5c-1.5 0-2.5.8-2.5 2s1 1.7 2.5 2 2.5.9 2.5 2-1 2-2.5 2a2.6 2.6 0 0 1-2.5-1.5" />
+      <path d="M12 6.2v11.6" />
+    </svg>
+  )
+}
+
+/* Config declarativa por tipo: icono, clase de color, etiqueta y si reasigna. */
+const TIPOS = {
+  inactividad: {
+    label: 'Inactividad',
+    Icon: IconWarn,
+    iconClass: 'iconWarn',
+    reasigna: true,
+  },
+  reasignacion_obligatoria: {
+    label: 'Reasignación obligatoria',
+    Icon: IconWarn,
+    iconClass: 'iconCritical',
+    cardClass: 'cardCritical',
+    reasigna: true,
+    accionLabel: 'Reasignar ahora',
+  },
+  verificacion: {
+    label: 'Verificación',
+    Icon: IconReview,
+    iconClass: 'iconReview',
+    verConversacion: true,
+  },
+  pago: {
+    label: 'Pago a profesional',
+    Icon: IconMoney,
+    iconClass: 'iconPago',
+    conMonto: true,
+  },
+  cobro: {
+    label: 'Cobro de gestor',
+    Icon: IconMoney,
+    iconClass: 'iconCobro',
+    conMonto: true,
+    esGestor: true,
+  },
+}
+
+/* Tipos "de dinero" — se enrutan a la campana `modo='dinero'`; el resto queda
+   en la campana de alertas. Se filtra en cliente tras el fetch. */
+const TIPOS_DINERO = ['pago', 'cobro']
+
+export default function NotificationBell({ onOpenRoom, modo = 'alertas' }) {
+  const esDinero = modo === 'dinero'
   const [open, setOpen]         = useState(false)
   const [items, setItems]       = useState([])
   const [reassign, setReassign] = useState(null)   // notificación en reasignación
@@ -60,18 +154,24 @@ export default function NotificationBell({ onOpenRoom }) {
     })
   }, [])
 
-  /* ── Cargar no leídas (RLS superadmin) ── */
+  /* ── Cargar no leídas (RLS superadmin) ──
+     El filtro por tipo lo hace el servidor: la campana de dinero solo trae
+     pago/cobro; la de alertas trae todo lo demás. Así cada badge cuenta solo
+     lo suyo y no se pisan. */
   const fetchItems = useCallback(async () => {
     try {
       const headers = await getAuthHeaders()
+      const tipoFilter = esDinero
+        ? `&tipo=in.(${TIPOS_DINERO.join(',')})`
+        : `&tipo=not.in.(${TIPOS_DINERO.join(',')})`
       const res = await fetch(
-        `${SUPABASE_URL}/rest/v1/notificaciones?leido=eq.false&order=created_at.desc&select=*`,
+        `${SUPABASE_URL}/rest/v1/notificaciones?leido=eq.false${tipoFilter}&order=created_at.desc&select=*`,
         { headers }
       )
       const data = await res.json()
       if (Array.isArray(data)) setItems(data)
     } catch { /* silencioso */ }
-  }, [])
+  }, [esDinero])
 
   useEffect(() => {
     fetchItems()
@@ -146,102 +246,140 @@ export default function NotificationBell({ onOpenRoom }) {
 
   const count = items.length
 
+  const dropTitle    = esDinero ? 'Pagos y cobros' : 'Notificaciones'
+  const emptyCopy    = esDinero ? 'No hay pagos ni cobros pendientes.' : 'No tienes notificaciones pendientes.'
+  const markAllLabel = esDinero ? 'Marcar todo gestionado' : 'Marcar todas leídas'
+
   const dropdown = (
     <div
-      className={styles.dropdown}
+      className={`${styles.dropdown} ${esDinero ? styles.dropdownDinero : ''}`}
       role="dialog"
-      aria-label="Notificaciones"
+      aria-label={dropTitle}
       ref={dropRef}
       style={coords ? { top: coords.top, right: coords.right } : undefined}
     >
       <div className={styles.dropHeader}>
-        <span className={styles.dropTitle}>Notificaciones</span>
+        <span className={styles.dropTitle}>{dropTitle}</span>
         {count > 0 && (
-          <button className={styles.markAll} onClick={markAll}>Marcar todas leídas</button>
+          <button className={styles.markAll} onClick={markAll}>{markAllLabel}</button>
         )}
       </div>
 
       <div className={styles.list}>
         {count === 0 && (
           <div className={styles.empty}>
-            <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-              strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
-              <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-            </svg>
-            <p>No tienes notificaciones pendientes.</p>
+            {esDinero ? (
+              <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="9" />
+                <path d="M14.6 9.1a2.7 2.7 0 0 0-2.6-1.6c-1.55 0-2.6.85-2.6 2.05s1.05 1.75 2.6 2.05 2.6.95 2.6 2.1-1.05 2.05-2.6 2.05a2.7 2.7 0 0 1-2.6-1.6" />
+                <path d="M12 5.9v12.2" />
+              </svg>
+            ) : (
+              <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+              </svg>
+            )}
+            <p>{emptyCopy}</p>
           </div>
         )}
 
-        {items.map(n => (
-          <div key={n.id} className={styles.card}>
-            <div className={`${styles.cardIcon} ${n.tipo === 'inactividad' ? styles.iconWarn : styles.iconReview}`}>
-              {n.tipo === 'inactividad' ? (
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                  strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M10.3 3.9 2.4 18a2 2 0 0 0 1.7 3h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" />
-                  <path d="M12 9v4" /><path d="M12 17h.01" />
-                </svg>
-              ) : (
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                  strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <circle cx="11" cy="11" r="7" /><path d="m21 21-4.3-4.3" />
-                </svg>
-              )}
-            </div>
-
-            <div className={styles.cardBody}>
-              <div className={styles.cardTop}>
-                <span className={styles.cardTipo}>
-                  {n.tipo === 'inactividad' ? 'Inactividad' : 'Verificación'}
-                </span>
-                <span className={styles.cardTime}>{fmtHace(n.created_at)}</span>
+        {items.map(n => {
+          const cfg = TIPOS[n.tipo] || TIPOS.verificacion
+          const Icon = cfg.Icon
+          const monto = cfg.conMonto ? fmtCOP(n.monto) : ''
+          // Contexto: los pagos/cobros muestran el actor (gestor o profesional);
+          // los demás muestran al cliente.
+          const contextoLabel = cfg.esGestor ? 'Gestor' : 'Cliente'
+          return (
+            <div key={n.id} className={`${styles.card} ${cfg.cardClass ? styles[cfg.cardClass] : ''}`}>
+              <div className={`${styles.cardIcon} ${styles[cfg.iconClass]}`}>
+                <Icon />
               </div>
-              <p className={styles.cardCliente}>
-                Cliente: <strong>{n.client_nombre || 'Anónimo'}</strong>
-                {n.area ? ` · ${n.area}` : ''}
-              </p>
-              {n.mensaje && <p className={styles.cardMsg}>{n.mensaje}</p>}
 
-              <div className={styles.cardActions}>
-                {n.tipo === 'inactividad' ? (
-                  <button className={styles.btnPrimary} onClick={() => setReassign(n)}>
-                    Reasignar abogado
-                  </button>
-                ) : (
-                  <button className={styles.btnPrimary} onClick={() => verConversacion(n)}>
-                    Ver conversación
-                  </button>
+              <div className={styles.cardBody}>
+                <div className={styles.cardTop}>
+                  <span className={styles.cardTipo}>{cfg.label}</span>
+                  <span className={styles.cardTime}>{fmtHace(n.created_at)}</span>
+                </div>
+
+                {n.tipo === 'reasignacion_obligatoria' && (
+                  <p className={styles.cardBarrier}>Se superó la barrera de 4 horas sin respuesta.</p>
                 )}
-                <button className={styles.btnGhost} onClick={() => markRead(n.id)}>
-                  Descartar
-                </button>
+
+                <p className={styles.cardCliente}>
+                  {contextoLabel}: <strong>{n.client_nombre || 'Anónimo'}</strong>
+                  {n.area ? ` · ${n.area}` : ''}
+                </p>
+
+                {monto && (
+                  <p className={styles.cardMonto}>
+                    Monto: <strong>{monto}</strong>
+                  </p>
+                )}
+
+                {n.mensaje && <p className={styles.cardMsg}>{n.mensaje}</p>}
+
+                <div className={styles.cardActions}>
+                  {cfg.reasigna ? (
+                    <button
+                      className={`${styles.btnPrimary} ${cfg.cardClass ? styles.btnCriticalAction : ''}`}
+                      onClick={() => setReassign(n)}
+                    >
+                      {cfg.accionLabel || 'Reasignar abogado'}
+                    </button>
+                  ) : cfg.verConversacion ? (
+                    <button className={styles.btnPrimary} onClick={() => verConversacion(n)}>
+                      Ver conversación
+                    </button>
+                  ) : cfg.conMonto ? (
+                    <button className={styles.btnPrimary} onClick={() => markRead(n.id)}>
+                      Marcar gestionado
+                    </button>
+                  ) : null}
+                  <button className={styles.btnGhost} onClick={() => markRead(n.id)}>
+                    Descartar
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
     </div>
   )
+
+  const bellAria = esDinero
+    ? (count > 0 ? `Pagos y cobros, ${count} pendientes` : 'Pagos y cobros')
+    : (count > 0 ? `Notificaciones, ${count} sin leer` : 'Notificaciones')
+  const srAnnounce = esDinero
+    ? (count > 0 ? `${count} pagos o cobros pendientes` : '')
+    : (count > 0 ? `${count} notificaciones sin leer` : '')
 
   return (
     <div className={styles.wrap} ref={wrapRef}>
       <button
         ref={btnRef}
         type="button"
-        className={`${styles.bell} ${open ? styles.bellOpen : ''}`}
+        className={`${styles.bell} ${esDinero ? styles.bellDinero : ''} ${open ? styles.bellOpen : ''}`}
         onClick={() => { if (!open) updateCoords(); setOpen(o => !o) }}
         aria-haspopup="dialog"
         aria-expanded={open}
-        aria-label={count > 0 ? `Notificaciones, ${count} sin leer` : 'Notificaciones'}
+        aria-label={bellAria}
       >
-        <IconBell />
-        {count > 0 && <span className={styles.badge}>{count > 9 ? '9+' : count}</span>}
+        {esDinero ? <IconDollarBell /> : <IconBell />}
+        {count > 0 && (
+          <span className={`${styles.badge} ${esDinero ? styles.badgeDinero : ''}`}>
+            {count > 9 ? '9+' : count}
+          </span>
+        )}
       </button>
 
       {/* Anuncio para lectores de pantalla */}
       <span className={styles.srOnly} aria-live="polite">
-        {count > 0 ? `${count} notificaciones sin leer` : ''}
+        {srAnnounce}
       </span>
 
       {open && (typeof document !== 'undefined' ? createPortal(dropdown, document.body) : dropdown)}
@@ -270,7 +408,12 @@ function ReassignModal({ notif, onClose, onDone }) {
   const cardRef   = useRef(null)
   const selectRef = useRef(null)
 
-  // Cargar candidatos: abogados del mismo tipo + área, excluyendo al actual.
+  // Cargar candidatos: MISMA profesión que la sala + área más cercana.
+  //  1) La profesión (abogado/contador) sale de chat_rooms.tipo_profesional y es
+  //     un filtro DURO — /api/professionals?rol=<x> solo devuelve esa profesión,
+  //     así nunca ofrecemos un profesional del tipo equivocado.
+  //  2) Dentro de esa profesión preferimos coincidencia de área; si nadie
+  //     coincide, mostramos a todos los aprobados marcados "· otra área".
   useEffect(() => {
     let cancel = false
     ;(async () => {
@@ -285,14 +428,23 @@ function ReassignModal({ notif, onClose, onDone }) {
         const pRes = await fetch(`/api/professionals?rol=${rol}`)
         const all = pRes.ok ? await pRes.json() : []
         const tokens = (notif.area || '').toLowerCase().split(',').map(s => s.trim()).filter(Boolean)
-        let cands = (Array.isArray(all) ? all : []).filter(l => l.id !== notif.lawyer_id)
-        const byArea = cands.filter(l => tokens.some(a => (l.area_derecho || '').toLowerCase().includes(a)))
-        cands = byArea.length ? byArea : cands   // fallback: todos del tipo
+        // Todos los aprobados de la profesión correcta, menos el actual.
+        const mismaProfesion = (Array.isArray(all) ? all : []).filter(l => l.id !== notif.lawyer_id)
+        // Partición por coincidencia de área.
+        const byArea = tokens.length
+          ? mismaProfesion.filter(l => tokens.some(a => (l.area_derecho || '').toLowerCase().includes(a)))
+          : []
+        const otraArea = mismaProfesion.filter(l => !byArea.includes(l))
+        // Preferimos misma-área arriba; marcamos el resto como "otra área".
+        const cands = [
+          ...byArea.map(l => ({ ...l, _otraArea: false })),
+          ...otraArea.map(l => ({ ...l, _otraArea: true })),
+        ]
         if (cancel) return
         setCandidates(cands)
         setSelected(cands[0]?.id || '')
       } catch {
-        if (!cancel) setError('No se pudieron cargar los abogados disponibles.')
+        if (!cancel) setError('No se pudieron cargar los profesionales disponibles.')
       } finally {
         if (!cancel) setLoading(false)
       }
@@ -338,10 +490,24 @@ function ReassignModal({ notif, onClose, onDone }) {
           notifId: notif.id,
         }),
       })
-      if (!res.ok) throw new Error()
+      if (!res.ok) {
+        // El endpoint responde 400 si la profesión no coincide con la sala.
+        // Mostramos el texto del servidor cuando esté disponible.
+        let msg = 'No se pudo reasignar. Intenta de nuevo.'
+        if (res.status === 400) {
+          try {
+            const body = await res.json()
+            msg = body?.error || body?.message ||
+              'El profesional elegido no corresponde a la profesión de esta consulta.'
+          } catch {
+            msg = 'El profesional elegido no corresponde a la profesión de esta consulta.'
+          }
+        }
+        throw new Error(msg)
+      }
       onDone()
-    } catch {
-      setError('No se pudo reasignar. Intenta de nuevo.')
+    } catch (e) {
+      setError(e?.message || 'No se pudo reasignar. Intenta de nuevo.')
       setSubmitting(false)
     }
   }
@@ -372,7 +538,7 @@ function ReassignModal({ notif, onClose, onDone }) {
         {loading ? (
           <p className={styles.modalLoading}>Cargando disponibles…</p>
         ) : candidates.length === 0 ? (
-          <p className={styles.modalEmpty}>No hay otros profesionales disponibles para esta área.</p>
+          <p className={styles.modalEmpty}>No hay otros profesionales de esta profesión disponibles.</p>
         ) : (
           <div className={styles.field}>
             <label htmlFor="reassignSelect" className={styles.fieldLabel}>Profesional disponible</label>
@@ -388,6 +554,7 @@ function ReassignModal({ notif, onClose, onDone }) {
                 <option key={c.id} value={c.id}>
                   {`${c.nombre || ''} ${c.apellido || ''}`.trim()}
                   {c.ciudad ? ` — ${c.ciudad}` : ''}
+                  {c._otraArea ? ' · otra área' : ''}
                 </option>
               ))}
             </select>

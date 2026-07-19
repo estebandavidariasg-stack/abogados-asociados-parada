@@ -149,6 +149,7 @@ export default function LawyersSection() {
       </motion.div>
 
       {/* ── Switch de profesión (chips) ── */}
+      <span className={`${styles.profesionLabel} fade-up`}>Profesión</span>
       <div className={`${styles.profesionRow} fade-up`}>
         <button
           type="button"

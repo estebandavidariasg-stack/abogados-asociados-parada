@@ -30,6 +30,20 @@ async function verDocFirma(path) {
   } catch { if (win) win.close() }
 }
 
+// Icono de verificación estilo Lucide (shield-check), currentColor. Se usa en
+// los tres indicadores de "verificación pendiente" (chip de fila, toggle de
+// filtro y chip del header) para que sea consistente con el resto de iconos.
+function IconVerif({ size = 14 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"
+      strokeLinejoin="round" aria-hidden="true">
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+      <path d="m9 12 2 2 4-4" />
+    </svg>
+  )
+}
+
 function formatSize(bytes) {
   if (!bytes) return ''
   if (bytes < 1024) return `${bytes} B`
@@ -41,13 +55,49 @@ function isImage(name) {
   return /\.(jpe?g|png|webp|gif|bmp|svg)$/i.test(name || '')
 }
 
-// Renderiza **negrillas** estilo markdown conservando los saltos de línea.
+// Patrón de cédula tal como aparece en el primer mensaje del cliente:
+// "Cédula: 12.345.678" (dígitos con puntos de miles). Capturamos SOLO el número.
+const CEDULA_RE = /(C[ée]dula:\s*)(\d{1,3}(?:\.\d{3})+|\d{6,})/gi
+
+// Extrae la cédula cruda (sin puntos) del texto de un mensaje, si aparece.
+// Se usa para que la búsqueda por cédula matchee también por el contenido del
+// primer mensaje (además del hash de client_cedula).
+function extraerCedulaDeTexto(text) {
+  if (!text) return null
+  const m = String(text).match(/C[ée]dula:\s*(\d{1,3}(?:\.\d{3})+|\d{6,})/i)
+  return m ? m[1].replace(/\D/g, '') : null
+}
+
+// Renderiza **negrillas** estilo markdown conservando los saltos de línea, y
+// resalta el número de cédula con un <mark> tipo resaltador amarillo (encima
+// del bold que ya aplica el markdown).
 function renderMensaje(text) {
   if (text == null) return text
+  // 1) Partimos por bloques **bold**.
   return String(text).split(/(\*\*[^*\n]+\*\*)/g).map((parte, i) => {
-    const m = parte.match(/^\*\*([^*\n]+)\*\*$/)
-    return m ? <strong key={i}>{m[1]}</strong> : parte
+    const bold = parte.match(/^\*\*([^*\n]+)\*\*$/)
+    const contenido = bold ? bold[1] : parte
+    // 2) Dentro de cada bloque, resaltamos la cédula si aparece.
+    const nodos = resaltarCedula(contenido, i)
+    return bold ? <strong key={i}>{nodos}</strong> : <span key={i}>{nodos}</span>
   })
+}
+
+// Devuelve el texto con la cédula (el número) envuelta en <mark> amarillo.
+function resaltarCedula(texto, keyPrefix) {
+  if (!texto || !/C[ée]dula:/i.test(texto)) return texto
+  CEDULA_RE.lastIndex = 0
+  const out = []
+  let last = 0, m, k = 0
+  while ((m = CEDULA_RE.exec(texto)) !== null) {
+    if (m.index > last) out.push(texto.slice(last, m.index))
+    out.push(m[1]) // "Cédula: "
+    out.push(<mark key={`${keyPrefix}-c-${k++}`} className={styles.cedulaMark}>{m[2]}</mark>)
+    last = m.index + m[0].length
+  }
+  if (last === 0) return texto
+  if (last < texto.length) out.push(texto.slice(last))
+  return out
 }
 
 /* Resuelve en UNA query los nombres de todos los profesionales asignados a un
@@ -352,7 +402,7 @@ function PqrPanel({ onUnreadChange }) {
   )
 }
 
-const FIELDS = 'id, area_derecho, status, created_at, client_nombre, client_email, client_celular, client_cedula, codigo_referencia'
+const FIELDS = 'id, area_derecho, status, created_at, client_nombre, client_email, client_celular, client_cedula, codigo_referencia, tipo_profesional'
 
 export default function SuperAdminChatViewer({ initialRoomId = null }) {
   const [rooms, setRooms]       = useState([])
@@ -365,6 +415,14 @@ export default function SuperAdminChatViewer({ initialRoomId = null }) {
   const [filterStatus, setFilterStatus] = useState('all')
   const [filterArea, setFilterArea]     = useState('')
   const [search, setSearch]             = useState('')
+  const [rolFilter, setRolFilter]       = useState('todos')  // 'todos'|'abogado'|'contador'
+  const [soloVerif, setSoloVerif]       = useState(false)    // filtro "Solo verificación"
+  // Hash SHA-256 de lo que se está escribiendo en el buscador (cuando parece
+  // una cédula) para poder matchear contra client_cedula (que está hasheado).
+  const [searchHash, setSearchHash]     = useState('')
+  // Set de room_id con una verificación pendiente (notificaciones tipo
+  // 'verificacion' y atendida=false). Un solo fetch batcheado al cargar salas.
+  const [verifRooms, setVerifRooms]     = useState(() => new Set())
   const [searchMode, setSearchMode]     = useState('all')
   const [searchQuery, setSearchQuery]   = useState('')
   const [searching, setSearching]       = useState(false)
@@ -424,22 +482,52 @@ export default function SuperAdminChatViewer({ initialRoomId = null }) {
     return () => { cancelled = true }
   }, [SUPABASE_URL])
 
+  // Debounce: cuando el texto del buscador parece una cédula (solo dígitos,
+  // ≥6), calculamos su hash SHA-256 para poder cruzarlo con client_cedula.
+  useEffect(() => {
+    const raw = search.replace(/\D/g, '')
+    if (raw.length < 6) { setSearchHash(''); return }
+    let cancel = false
+    const t = setTimeout(async () => {
+      try {
+        const h = await hashCedula(raw)
+        if (!cancel) setSearchHash(h)
+      } catch { if (!cancel) setSearchHash('') }
+    }, 250)
+    return () => { cancel = true; clearTimeout(t) }
+  }, [search])
+
   useEffect(() => {
     let list = [...rooms]
     if (filterStatus !== 'all') list = list.filter(r => r.status === filterStatus)
     if (filterArea) list = list.filter(r => r.area_derecho?.toLowerCase().includes(filterArea.toLowerCase()))
-    // Búsqueda libre: matchea contra nombre del cliente, código de referencia
-    // y área (antes solo matcheaba área, redundante con el dropdown filterArea).
+    // Chips de profesión: filtra por el rol/tipo_profesional de la sala.
+    if (rolFilter !== 'todos') {
+      list = list.filter(r =>
+        (r.tipo_profesional || r._professionalRol) === rolFilter
+      )
+    }
+    // Solo salas con verificación pendiente.
+    if (soloVerif) list = list.filter(r => verifRooms.has(r.id))
+    // Búsqueda unificada instantánea: nombre del cliente, nombre del
+    // profesional asignado, código de referencia, área, y cédula (por hash
+    // O por el número crudo que aparece en el primer mensaje / cache).
     if (search) {
       const s = search.toLowerCase()
+      const rawCedula = search.replace(/\D/g, '')  // dígitos que teclea
       list = list.filter(r =>
         r.client_nombre?.toLowerCase().includes(s) ||
+        r._professionalNombre?.toLowerCase().includes(s) ||
         r.codigo_referencia?.toLowerCase().includes(s) ||
-        r.area_derecho?.toLowerCase().includes(s)
+        r.area_derecho?.toLowerCase().includes(s) ||
+        // cédula por hash (client_cedula está hasheado)
+        (searchHash && r.client_cedula === searchHash) ||
+        // cédula por número crudo detectado en el primer mensaje
+        (rawCedula.length >= 6 && r._cedulaCruda && r._cedulaCruda.includes(rawCedula))
       )
     }
     setFiltered(list)
-  }, [rooms, filterStatus, filterArea, search])
+  }, [rooms, filterStatus, filterArea, search, searchHash, rolFilter, soloVerif, verifRooms])
 
   useEffect(() => {
     if (!activeRoom) return
@@ -493,6 +581,12 @@ export default function SuperAdminChatViewer({ initialRoomId = null }) {
     // Nombres de los profesionales asignados (1 query batched) para etiquetar
     // cada tarjeta del sidebar con el profesional que atiende.
     const nameMap = await resolveProfessionalNames(byRoom, headers, SUPABASE_URL)
+
+    // Cédula cruda del primer mensaje del cliente (que ahora contiene
+    // "Cédula: 12.345.678"). 1 query batcheada filtrando por texto para poder
+    // buscar por número aunque client_cedula esté hasheado.
+    const cedulaByRoom = await loadCedulasCrudas(roomIds, headers)
+
     const withLawyers = data.map(room => {
       const assigns = byRoom[room.id] || []
       const prof = pickProfessional(assigns, nameMap)
@@ -501,9 +595,53 @@ export default function SuperAdminChatViewer({ initialRoomId = null }) {
         chat_room_lawyers: assigns,
         _professionalNombre: prof?.nombre || null,
         _professionalRol:    prof?.rol || null,
+        _cedulaCruda:        cedulaByRoom[room.id] || null,
       }
     })
     setRooms(withLawyers)
+
+    // Verificaciones pendientes (una sola query batcheada).
+    loadVerificaciones(roomIds, headers)
+  }
+
+  // Trae los mensajes del cliente que contienen "Cédula:" para las salas dadas
+  // y devuelve { roomId: '12345678' } (número sin puntos). Batcheado en 1 query.
+  async function loadCedulasCrudas(roomIds, headers) {
+    if (!roomIds.length) return {}
+    try {
+      const idsList = roomIds.join(',')
+      const res = await fetch(
+        `${SUPABASE_URL}/rest/v1/chat_messages?room_id=in.(${idsList})&sender_type=eq.client&content=ilike.*C%C3%A9dula:*&select=room_id,content&order=created_at.asc`,
+        { headers }
+      )
+      const rows = await res.json().catch(() => [])
+      const map = {}
+      for (const m of (Array.isArray(rows) ? rows : [])) {
+        if (map[m.room_id]) continue        // primero gana (order asc)
+        const c = extraerCedulaDeTexto(m.content)
+        if (c) map[m.room_id] = c
+      }
+      return map
+    } catch { return {} }
+  }
+
+  // Marca qué salas tienen una verificación pendiente (notificaciones tipo
+  // 'verificacion', atendida=false). Superadmin puede SELECT notificaciones.
+  async function loadVerificaciones(roomIds, headers) {
+    if (!roomIds.length) { setVerifRooms(new Set()); return }
+    try {
+      const idsList = roomIds.join(',')
+      const res = await fetch(
+        `${SUPABASE_URL}/rest/v1/notificaciones?tipo=eq.verificacion&atendida=eq.false&room_id=in.(${idsList})&select=room_id`,
+        { headers }
+      )
+      const rows = await res.json().catch(() => [])
+      const s = new Set()
+      for (const n of (Array.isArray(rows) ? rows : [])) {
+        if (n.room_id) s.add(n.room_id)
+      }
+      setVerifRooms(s)
+    } catch { /* el badge es informativo; no romper la carga */ }
   }
 
   async function loadMessages(rid) {
@@ -747,8 +885,6 @@ export default function SuperAdminChatViewer({ initialRoomId = null }) {
     setMessages(prev => prev.filter(m => m.id !== mid))
   }
 
-  const areas = [...new Set(rooms.map(r => r.area_derecho))].sort()
-
   return (
     <div className={styles.viewer}>
 
@@ -818,11 +954,33 @@ export default function SuperAdminChatViewer({ initialRoomId = null }) {
         {searchError && <p className={styles.searchError}>{searchError}</p>}
       </div>
 
-      {/* ── Filtros generales ── */}
+      {/* ── Filtro unificado (chips de profesión + búsqueda instantánea) ── */}
       {searchMode === 'all' && (
-        <div className={styles.filters}>
-          <input className={styles.searchInput} value={search}
-            onChange={e => setSearch(e.target.value)} placeholder="Buscar por cliente, código o área…" />
+        <div className={styles.unifiedBar}>
+          <div className={styles.rolChips}>
+            {[
+              { v: 'todos',    l: 'Todos' },
+              { v: 'abogado',  l: 'Abogados' },
+              { v: 'contador', l: 'Contadores' },
+            ].map(opt => (
+              <button
+                key={opt.v}
+                type="button"
+                className={rolFilter === opt.v ? styles.rolChipActive : styles.rolChip}
+                onClick={() => setRolFilter(opt.v)}
+              >
+                {opt.l}
+              </button>
+            ))}
+          </div>
+
+          <input
+            className={styles.searchInput}
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Buscar por nombre o cédula…"
+          />
+
           <select className={styles.filterSelect} value={filterStatus}
             onChange={e => setFilterStatus(e.target.value)}>
             <option value="all">Todos los estados</option>
@@ -830,11 +988,21 @@ export default function SuperAdminChatViewer({ initialRoomId = null }) {
             <option value="active">Activos</option>
             <option value="closed">Cerrados</option>
           </select>
-          <select className={styles.filterSelect} value={filterArea}
-            onChange={e => setFilterArea(e.target.value)}>
-            <option value="">Todas las áreas</option>
-            {areas.map(a => <option key={a} value={a}>{a}</option>)}
-          </select>
+
+          <button
+            type="button"
+            className={soloVerif ? styles.verifToggleActive : styles.verifToggle}
+            onClick={() => setSoloVerif(v => !v)}
+            aria-pressed={soloVerif}
+            title="Mostrar solo chats con verificación pendiente"
+          >
+            <IconVerif size={15} />
+            Solo verificación
+            {verifRooms.size > 0 && (
+              <span className={styles.verifCount}>{verifRooms.size}</span>
+            )}
+          </button>
+
           <button className={styles.refreshBtn} onClick={loadRooms}>↺ Actualizar</button>
         </div>
       )}
@@ -866,11 +1034,13 @@ export default function SuperAdminChatViewer({ initialRoomId = null }) {
               {searchMode !== 'all' ? 'Usa el buscador para encontrar chats.' : 'Sin resultados.'}
             </p>
           )}
-          {filtered.map(room => (
+          {filtered.map(room => {
+            const flagged = verifRooms.has(room.id)
+            return (
             <div key={room.id}
-              className={activeRoom?.id === room.id
+              className={`${activeRoom?.id === room.id
                 ? styles.roomRowActive
-                : `${styles.roomRow} ${styles['room_' + room.status] || ''}`}
+                : `${styles.roomRow} ${styles['room_' + room.status] || ''}`} ${flagged ? styles.roomRowVerif : ''}`}
               onClick={() => setActiveRoom(room)}
             >
               <div className={styles.roomTop}>
@@ -879,6 +1049,13 @@ export default function SuperAdminChatViewer({ initialRoomId = null }) {
                   {STATUS_LABEL[room.status]}
                 </span>
               </div>
+              {flagged && (
+                <span className={styles.verifChip} title="Solicitud de verificación pendiente">
+                  <IconVerif size={12} />
+                  Verificación
+                  <span className={styles.verifChipDot} aria-hidden="true" />
+                </span>
+              )}
               <p className={styles.roomArea}>{room.area_derecho}</p>
               {room._professionalNombre && (
                 <p className={styles.roomProfesional}>
@@ -904,7 +1081,8 @@ export default function SuperAdminChatViewer({ initialRoomId = null }) {
                 })}
               </p>
             </div>
-          ))}
+            )
+          })}
         </div>
 
         {/* Panel principal */}
@@ -927,7 +1105,15 @@ export default function SuperAdminChatViewer({ initialRoomId = null }) {
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
                   Volver
                 </button>
-                <p className={styles.chatTitle}>{activeRoom.area_derecho}</p>
+                <div className={styles.chatTitleRow}>
+                  <p className={styles.chatTitle}>{activeRoom.area_derecho}</p>
+                  {verifRooms.has(activeRoom.id) && (
+                    <span className={styles.verifChipHeader} title="Solicitud de verificación pendiente">
+                      <IconVerif size={14} />
+                      Verificación pendiente
+                    </span>
+                  )}
+                </div>
                 {activeRoom.client_nombre && (
                   <p className={styles.chatClient}>
                     {activeRoom.client_nombre}

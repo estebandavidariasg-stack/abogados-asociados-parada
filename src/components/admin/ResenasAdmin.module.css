@@ -16,6 +16,52 @@
 .tab:hover { color: #0d2d5e; }
 .tabOn { color: #0d2d5e; border-bottom-color: #c9a84c; }
 
+/* Barra de filtros: chips de profesión + búsqueda por profesional */
+.filterBar {
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+}
+
+/* Chips de profesión (Todos / Abogados / Contadores) */
+.profesionChips { display: flex; gap: 8px; flex-wrap: wrap; }
+.profesionChip {
+  background: transparent; border: 1px solid rgba(13,45,94,0.22); color: #0d2d5e;
+  padding: 7px 16px; border-radius: 999px;
+  font-family: 'Cinzel', serif; font-size: 0.72rem; letter-spacing: 0.06em;
+  cursor: pointer; min-height: 34px; white-space: nowrap;
+  transition: background 0.18s, color 0.18s, border-color 0.18s;
+}
+.profesionChip:hover { background: rgba(201,168,76,0.06); }
+.profesionChipActive {
+  background: #c9a84c; border-color: #c9a84c; color: #0d2d5e; font-weight: 700;
+}
+.profesionChipActive:hover { background: #d8bd72; }
+
+/* Filtro por profesional (búsqueda instantánea) */
+.filtroProf {
+  position: relative; display: flex; align-items: center;
+  max-width: 420px; flex: 1 1 260px; min-width: 220px;
+}
+.searchIcon {
+  position: absolute; left: 12px; font-size: 1rem; color: #8a93a5; pointer-events: none;
+}
+.searchInput {
+  width: 100%; font-family: inherit; font-size: 0.82rem; color: #26324a;
+  padding: 9px 34px 9px 32px; border: 1px solid rgba(13,45,94,0.18); border-radius: 10px;
+  background: #fff; transition: border-color 0.2s, box-shadow 0.2s;
+}
+.searchInput::placeholder { color: #9aa4b8; }
+.searchInput:focus {
+  outline: none; border-color: #c9a84c; box-shadow: 0 0 0 3px rgba(201,168,76,0.14);
+}
+.searchInput::-webkit-search-cancel-button { display: none; }
+.clearBtn {
+  position: absolute; right: 8px; width: 20px; height: 20px; line-height: 1;
+  display: flex; align-items: center; justify-content: center;
+  border: none; border-radius: 50%; cursor: pointer; font-size: 1.05rem;
+  color: #6b7fa3; background: rgba(13,45,94,0.06); transition: background 0.18s, color 0.18s;
+}
+.clearBtn:hover { background: rgba(13,45,94,0.14); color: #0d2d5e; }
+
 .muted { font-size: 0.85rem; color: #6b7fa3; }
 .empty { text-align: center; padding: 3rem 1rem; color: #6b7fa3; }
 .emptyIcon { display: block; font-size: 2.4rem; color: rgba(201,168,76,0.5); margin-bottom: 0.5rem; }
@@ -42,6 +88,20 @@
 .texto { font-size: 0.9rem; line-height: 1.5; color: #26324a; margin: 0; }
 .meta { font-size: 0.78rem; color: #5f6e8a; margin: 0; }
 .meta strong { color: #0d2d5e; }
+
+.prof {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 6px;
+  font-size: 0.76rem; color: #5f6e8a; margin: 0;
+  padding-top: 8px; border-top: 1px dashed rgba(13,45,94,0.1);
+}
+.profLabel { color: #8a93a5; text-transform: uppercase; letter-spacing: 0.04em; font-size: 0.66rem; font-weight: 700; }
+.profNombre { color: #0d2d5e; font-weight: 700; }
+.rolBadge {
+  font-size: 0.62rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
+  color: #0d2d5e; background: rgba(13,45,94,0.08); border: 1px solid rgba(13,45,94,0.16);
+  padding: 1px 7px; border-radius: 999px;
+}
+.profNone { color: #a0a9bb; font-style: italic; }
 
 .acciones { display: flex; gap: 8px; margin-top: 6px; flex-wrap: wrap; }
 .btnAprobar, .btnQuitar, .btnEliminar {

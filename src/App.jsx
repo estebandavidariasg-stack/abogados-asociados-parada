@@ -7,6 +7,7 @@ import HomePage from './pages/HomePage'   // eager: es el landing público (LCP)
 // abogado/contador/admin en la carga inicial → bundle inicial más liviano.
 const ProfilePage         = lazy(() => import('./pages/ProfilePage'))
 const ProfileContadorPage = lazy(() => import('./pages/ProfileContadorPage'))
+const ProfileGestorPage   = lazy(() => import('./pages/ProfileGestorPage'))
 const AdminPage           = lazy(() => import('./pages/AdminPage'))
 const ResetPasswordPage   = lazy(() => import('./pages/ResetPasswordPage'))
 const OpinarPage          = lazy(() => import('./pages/OpinarPage'))
@@ -31,6 +32,7 @@ export default function App() {
         <Route path="/"                 element={<HomePage />} />
         <Route path="/perfil"           element={<ProfilePage />} />
         <Route path="/perfil-contador"  element={<ProfileContadorPage />} />
+        <Route path="/perfil-gestor"    element={<ProfileGestorPage />} />
         <Route path="/admin"            element={<AdminPage />} />
         <Route path="/nueva-contrasena" element={<ResetPasswordPage />} />
         <Route path="/opinar"           element={<OpinarPage />} />

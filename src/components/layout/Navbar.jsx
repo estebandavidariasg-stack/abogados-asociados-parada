@@ -43,7 +43,10 @@ export default function Navbar({ onLogin, onRegister, onRegisterContador, onRegi
 
   const displayName = profile?.nombre ?? user?.user_metadata?.nombre ?? user?.email ?? 'Usuario'
   const isSuperAdmin = profile?.rol === 'superadmin'
-  const perfilHref = profile?.rol === 'contador' ? '/perfil-contador' : '/perfil'
+  const perfilHref =
+    profile?.rol === 'contador' ? '/perfil-contador'
+    : profile?.rol === 'gestor' ? '/perfil-gestor'
+    : '/perfil'
 
   return (
     <nav className={`${styles.nav} ${scrolled ? styles.navScrolled : ''}`}>

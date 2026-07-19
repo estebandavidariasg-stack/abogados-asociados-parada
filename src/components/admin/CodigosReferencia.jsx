@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase'
 import { getAuthHeaders } from '../../lib/supabase'
 import styles from './CodigosReferencia.module.css'
 import { IconPlus, IconX, IconCheck, IconDownload, IconQR, IconPencil } from '../shared/Icons'
+import { getQRUrl, downloadQRCard, chatUrlFor } from '../../lib/qrCard'
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
@@ -16,9 +17,13 @@ function generarCodigo() {
   return code
 }
 
-function getQRUrl(codigo, size = 320) {
-  const chatUrl = `${APP_URL}/#chat?codigo=${encodeURIComponent(codigo)}`
-  return `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(chatUrl)}&color=1A1A2E&bgcolor=FAFAFA&margin=2&qzone=1`
+// Descarga la tarjeta de un código de comisionista (QR → chat con código).
+function downloadComisionista(codigo, nombre, apellido) {
+  return downloadQRCard({
+    target: chatUrlFor(codigo),
+    codigo, nombre, apellido,
+    filename: `Tarjeta_AAP_${codigo}.png`,
+  })
 }
 
 export default function CodigosReferencia() {
@@ -31,6 +36,13 @@ export default function CodigosReferencia() {
   const [selectedQR, setSelectedQR] = useState(null)
   const [error, setError]       = useState('')
   const [success, setSuccess]   = useState('')
+
+  // ── Código oficial de la plataforma (fila con es_plataforma=true) ──
+  const [plataforma, setPlataforma]   = useState(null)
+  const [platModalOpen, setPlatModalOpen] = useState(false)
+  const [platDestino, setPlatDestino] = useState(APP_URL)
+  const [platCodigo, setPlatCodigo]   = useState('AAP-OFICIAL')
+  const [platSaving, setPlatSaving]   = useState(false)
 
   const FORM_VACIO = { nombre: '', apellido: '', cedula: '', correo: '', cuentas_bancarias: '', entidad: '' }
 
@@ -49,8 +61,62 @@ export default function CodigosReferencia() {
       { headers }
     )
     const data = await res.json()
-    setCodigos(Array.isArray(data) ? data : [])
+    const filas = Array.isArray(data) ? data : []
+    // Separa el código oficial de la plataforma del resto (comisionistas).
+    const plat = filas.find(c => c.es_plataforma) || null
+    setPlataforma(plat)
+    if (plat) { setPlatDestino(plat.destino_url || APP_URL); setPlatCodigo(plat.codigo || 'AAP-OFICIAL') }
+    setCodigos(filas.filter(c => !c.es_plataforma))
     setLoading(false)
+  }
+
+  // ── Guardar / crear el código oficial de la plataforma ──
+  async function savePlataforma() {
+    const destino = platDestino.trim()
+    if (!/^https?:\/\/.+/i.test(destino)) {
+      setError('El destino debe ser una URL válida (empieza por https://).'); return
+    }
+    setPlatSaving(true); setError(''); setSuccess('')
+    try {
+      const headers = await getAuthHeaders()
+      const codigo = (platCodigo.trim().toUpperCase() || 'AAP-OFICIAL')
+      if (plataforma) {
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/codigos_referencia?id=eq.${plataforma.id}`, {
+          method: 'PATCH',
+          headers: { ...headers, Prefer: 'return=representation' },
+          body: JSON.stringify({ destino_url: destino, codigo }),
+        })
+        if (!res.ok) { const e = await res.json(); throw new Error(e.message || 'Error actualizando') }
+      } else {
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/codigos_referencia`, {
+          method: 'POST',
+          headers: { ...headers, Prefer: 'return=representation' },
+          body: JSON.stringify({
+            codigo, es_plataforma: true, destino_url: destino,
+            nombre: 'Plataforma', apellido: 'Oficial', cedula: '', correo: '', activo: true,
+          }),
+        })
+        if (!res.ok) { const e = await res.json(); throw new Error(e.message || 'Error creando') }
+      }
+      setSuccess('Código oficial guardado.')
+      setPlatModalOpen(false)
+      await fetchCodigos()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setPlatSaving(false)
+    }
+  }
+
+  function downloadPlataforma() {
+    return downloadQRCard({
+      target: platDestino || APP_URL,
+      codigo: platCodigo || 'AAP-OFICIAL',
+      nombre: 'Plataforma oficial', apellido: '',
+      subtitulo: 'Sitio oficial', etiqueta: 'CÓDIGO OFICIAL DE LA PLATAFORMA',
+      instruccion: 'Escanea para visitar nuestro sitio oficial',
+      filename: 'Tarjeta_AAP_Oficial.png',
+    })
   }
 
   async function handleSubmit(e) {
@@ -124,149 +190,6 @@ export default function CodigosReferencia() {
     fetchCodigos()
   }
 
-  async function downloadQR(codigo, nombre, apellido) {
-    const chatUrl = `${APP_URL}/#chat?codigo=${encodeURIComponent(codigo)}`
-
-    const SCALE = 2
-    const W = 600, H = 860
-
-    const canvas = document.createElement('canvas')
-    canvas.width  = W * SCALE
-    canvas.height = H * SCALE
-    const ctx = canvas.getContext('2d')
-    ctx.scale(SCALE, SCALE)
-
-    // Fondo degradado navy (tono de marca, no casi-negro: mejor legibilidad)
-    const bg = ctx.createLinearGradient(0, 0, 0, H)
-    bg.addColorStop(0,   '#15376b')
-    bg.addColorStop(0.5, '#1d4d86')
-    bg.addColorStop(1,   '#15376b')
-    ctx.fillStyle = bg
-    ctx.fillRect(0, 0, W, H)
-
-    // Textura sutil
-    ctx.fillStyle = 'rgba(255,255,255,0.013)'
-    for (let y = 0; y < H; y += 4) ctx.fillRect(0, y, W, 1)
-
-    // Marco exterior
-    ctx.strokeStyle = 'rgba(201,168,76,0.3)'
-    ctx.lineWidth = 1
-    ctx.strokeRect(24, 24, W - 48, H - 48)
-
-    // Líneas acento superior e inferior
-    ctx.strokeStyle = '#C9A84C'
-    ctx.lineWidth = 2.5
-    ctx.beginPath(); ctx.moveTo(110, 24); ctx.lineTo(W - 110, 24); ctx.stroke()
-    ctx.beginPath(); ctx.moveTo(110, H - 24); ctx.lineTo(W - 110, H - 24); ctx.stroke()
-
-    // Esquinas decorativas
-    const corners = [[44,44],[W-44,44],[44,H-44],[W-44,H-44]]
-    const dirs    = [[1,1],[-1,1],[1,-1],[-1,-1]]
-    ctx.strokeStyle = 'rgba(201,168,76,0.65)'
-    ctx.lineWidth = 2
-    corners.forEach(([cx,cy], i) => {
-      const [dx,dy] = dirs[i]
-      ctx.beginPath(); ctx.moveTo(cx,cy); ctx.lineTo(cx+dx*24,cy); ctx.stroke()
-      ctx.beginPath(); ctx.moveTo(cx,cy); ctx.lineTo(cx,cy+dy*24); ctx.stroke()
-    })
-
-    // Cabecera firma
-    ctx.textAlign = 'center'
-    ctx.fillStyle = 'rgba(232,201,106,0.85)'
-    ctx.font = '600 9px sans-serif'
-    ctx.fillText('─── DESPACHO JURÍDICO ───', W / 2, 74)
-
-    // "PARADA" en blanco (el azul de marca no contrastaría sobre el fondo navy
-    // de la tarjeta) + "BRIDGE" en dorado.
-    ctx.font = 'bold 24px serif'
-    ctx.fillStyle = '#ffffff'
-    const wParada = ctx.measureText('PARADA ').width
-    const wBridge = ctx.measureText('BRIDGE').width
-    const startX = W / 2 - (wParada + wBridge) / 2
-    ctx.textAlign = 'left'
-    ctx.fillText('PARADA ', startX, 118)
-    ctx.fillStyle = '#C9A84C'
-    ctx.fillText('BRIDGE', startX + wParada, 118)
-    ctx.textAlign = 'center'
-
-    // Separador 1
-    ctx.strokeStyle = 'rgba(201,168,76,0.2)'
-    ctx.lineWidth = 1
-    ctx.beginPath(); ctx.moveTo(100,148); ctx.lineTo(W-100,148); ctx.stroke()
-    ctx.fillStyle = 'rgba(201,168,76,0.55)'
-    ctx.beginPath(); ctx.moveTo(W/2,143); ctx.lineTo(W/2+5,148); ctx.lineTo(W/2,153); ctx.lineTo(W/2-5,148); ctx.closePath(); ctx.fill()
-
-    // Etiqueta
-    ctx.fillStyle = 'rgba(255,255,255,0.62)'
-    ctx.font = '600 10px sans-serif'
-    ctx.fillText('CÓDIGO DE REFERENCIA AUTORIZADO', W / 2, 178)
-
-    // QR a 700px — nítido en canvas 2x
-    const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=700x700&data=${encodeURIComponent(chatUrl)}&color=1A1A2E&bgcolor=FAFAFA&margin=2&qzone=1`
-    const qrImg = new Image()
-    qrImg.crossOrigin = 'anonymous'
-    await new Promise((res, rej) => { qrImg.onload = res; qrImg.onerror = rej; qrImg.src = qrApiUrl })
-
-    // Fondo blanco redondeado para el QR
-    const qrX = 148, qrY = 196, qrSize = 304, r = 10
-    ctx.fillStyle = '#FAFAFA'
-    ctx.shadowColor = 'rgba(201,168,76,0.2)'
-    ctx.shadowBlur = 24
-    ctx.beginPath()
-    ctx.moveTo(qrX+r,qrY)
-    ctx.arcTo(qrX+qrSize,qrY,qrX+qrSize,qrY+qrSize,r)
-    ctx.arcTo(qrX+qrSize,qrY+qrSize,qrX,qrY+qrSize,r)
-    ctx.arcTo(qrX,qrY+qrSize,qrX,qrY,r)
-    ctx.arcTo(qrX,qrY,qrX+qrSize,qrY,r)
-    ctx.closePath()
-    ctx.fill()
-    ctx.shadowBlur = 0
-
-    ctx.strokeStyle = 'rgba(201,168,76,0.4)'
-    ctx.lineWidth = 1
-    ctx.stroke()
-    ctx.drawImage(qrImg, qrX+10, qrY+10, qrSize-20, qrSize-20)
-
-    // Código
-    ctx.fillStyle = '#C9A84C'
-    ctx.font = 'bold 26px monospace'
-    ctx.shadowColor = 'rgba(201,168,76,0.35)'
-    ctx.shadowBlur = 12
-    ctx.fillText(codigo, W/2, 562)
-    ctx.shadowBlur = 0
-
-    // Separador 2
-    ctx.strokeStyle = 'rgba(201,168,76,0.18)'
-    ctx.lineWidth = 1
-    ctx.beginPath(); ctx.moveTo(100,582); ctx.lineTo(W-100,582); ctx.stroke()
-    ctx.fillStyle = 'rgba(201,168,76,0.45)'
-    ctx.beginPath(); ctx.moveTo(W/2,577); ctx.lineTo(W/2+4,582); ctx.lineTo(W/2,587); ctx.lineTo(W/2-4,582); ctx.closePath(); ctx.fill()
-
-    // Nombre
-    ctx.fillStyle = '#fbf7ec'
-    ctx.font = 'bold 20px serif'
-    ctx.fillText(`${nombre} ${apellido}`, W/2, 632)
-
-    ctx.fillStyle = 'rgba(232,201,106,0.8)'
-    ctx.font = '600 9.5px sans-serif'
-    ctx.fillText('COMISIONISTA AUTORIZADO', W/2, 656)
-
-    // Instrucción
-    ctx.fillStyle = 'rgba(255,255,255,0.6)'
-    ctx.font = '11px sans-serif'
-    ctx.fillText('Escanea el código QR para iniciar tu consulta jurídica', W/2, 722)
-
-    // URL
-    ctx.fillStyle = 'rgba(232,201,106,0.85)'
-    ctx.font = '600 12px sans-serif'
-    ctx.fillText('abogadosparada.com', W/2, 806)
-
-    // Descargar
-    const link = document.createElement('a')
-    link.download = `Tarjeta_AAP_${codigo}.png`
-    link.href = canvas.toDataURL('image/png')
-    link.click()
-  }
 
   // Campos del formulario (compartidos por el form inline de crear y el modal de editar)
   const camposForm = (
@@ -327,8 +250,62 @@ export default function CodigosReferencia() {
       </div>
 
       {/* Mensajes */}
-      {error   && !modalOpen && <p className={styles.error}>{error}</p>}
+      {error   && !modalOpen && !platModalOpen && <p className={styles.error}>{error}</p>}
       {success && <p className={styles.successMsg}>{success}</p>}
+
+      {/* ── Código oficial de la plataforma (destacado) ── */}
+      {!loading && (
+        <div className={styles.platCard}>
+          <div className={styles.platGlow} aria-hidden="true" />
+          <span className={styles.platBadge}>Código oficial</span>
+
+          <div className={styles.platBody}>
+            <div className={styles.platQrBox}>
+              <img
+                src={getQRUrl(platDestino || APP_URL, 260)}
+                alt="QR oficial de la plataforma"
+                className={styles.platQrImg}
+                width="130" height="130" loading="lazy" decoding="async"
+              />
+            </div>
+
+            <div className={styles.platInfo}>
+              <p className={styles.platTitle}>Parada Bridge · Sitio oficial</p>
+              <p className={styles.platDesc}>
+                Este QR redirige directamente a nuestra página. Compártelo en material impreso o digital.
+              </p>
+              <p className={styles.platCodigo}>{platCodigo || 'AAP-OFICIAL'}</p>
+              <a className={styles.platUrl} href={platDestino || APP_URL} target="_blank" rel="noopener noreferrer">
+                {(platDestino || APP_URL).replace(/^https?:\/\//, '')}
+              </a>
+            </div>
+
+            <div className={styles.platActions}>
+              <button
+                className={styles.btnDownload}
+                style={{ display:'inline-flex', alignItems:'center', gap:'6px' }}
+                onClick={downloadPlataforma}
+              >
+                <IconDownload /> Descargar
+              </button>
+              <button
+                className={styles.btnEdit}
+                style={{ display:'inline-flex', alignItems:'center', gap:'6px' }}
+                onClick={() => {
+                  setPlatDestino(plataforma?.destino_url || APP_URL)
+                  setPlatCodigo(plataforma?.codigo || 'AAP-OFICIAL')
+                  setError(''); setSuccess('')
+                  setPlatModalOpen(true)
+                }}
+              >
+                <IconPencil /> Editar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className={styles.listHeading}>Códigos de comisionistas</div>
 
       {/* Lista de códigos */}
       {loading ? (
@@ -366,7 +343,7 @@ export default function CodigosReferencia() {
                 <button
                   className={styles.btnDownload}
                   style={{ display:'inline-flex', alignItems:'center', gap:'6px' }}
-                  onClick={() => downloadQR(c.codigo, c.nombre, c.apellido)}
+                  onClick={() => downloadComisionista(c.codigo, c.nombre, c.apellido)}
                   title="Descargar tarjeta"
                 >
                   <IconDownload /> Descargar
@@ -404,7 +381,7 @@ export default function CodigosReferencia() {
 
                     <div className={styles.qrImageWrap}>
                       <img
-                        src={getQRUrl(c.codigo, 400)}
+                        src={getQRUrl(chatUrlFor(c.codigo), 400)}
                         alt={`QR ${c.codigo}`}
                         className={styles.qrImg}
                         width="400"
@@ -426,7 +403,7 @@ export default function CodigosReferencia() {
                   <button
                     className={styles.btnDownloadBig}
                     style={{ display:'inline-flex', alignItems:'center', justifyContent:'center', gap:'8px' }}
-                    onClick={() => downloadQR(c.codigo, c.nombre, c.apellido)}
+                    onClick={() => downloadComisionista(c.codigo, c.nombre, c.apellido)}
                   >
                     <IconDownload /> Descargar tarjeta en alta resolución
                   </button>
@@ -486,6 +463,59 @@ export default function CodigosReferencia() {
                   {saving
                     ? (editingId ? 'Guardando…' : 'Generando…')
                     : (editingId ? <><IconCheck /> Guardar cambios</> : <><IconCheck /> Generar código</>)}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* ── Modal: editar el código oficial de la plataforma ── */}
+      {platModalOpen && createPortal(
+        <div
+          className={styles.modalOverlay}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="platEditTitle"
+          onClick={() => setPlatModalOpen(false)}
+        >
+          <div className={styles.modalCard} onClick={e => e.stopPropagation()}>
+            <div className={styles.modalHead}>
+              <div>
+                <h3 id="platEditTitle" className={styles.modalTitle}>Código oficial de la plataforma</h3>
+                <p className={styles.modalSub}>El QR redirige al destino que definas aquí.</p>
+              </div>
+              <button type="button" className={styles.modalClose} onClick={() => setPlatModalOpen(false)} aria-label="Cerrar">
+                <IconX />
+              </button>
+            </div>
+
+            {error && <p className={styles.error}>{error}</p>}
+
+            <form onSubmit={e => { e.preventDefault(); savePlataforma() }}>
+              <div className={styles.formGrid}>
+                <div className={`${styles.field} ${styles.fullWidth}`}>
+                  <label className={styles.label}>Código (etiqueta)</label>
+                  <input className={styles.input} value={platCodigo}
+                    onChange={e => setPlatCodigo(e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, ''))}
+                    placeholder="AAP-OFICIAL" maxLength={16}
+                    style={{ letterSpacing:'2px', fontWeight:600 }} />
+                </div>
+                <div className={`${styles.field} ${styles.fullWidth}`}>
+                  <label className={styles.label}>Destino del QR <span className={styles.req}>*</span></label>
+                  <input className={styles.input} type="url" value={platDestino}
+                    onChange={e => setPlatDestino(e.target.value)}
+                    placeholder="https://abogadosparada.com" />
+                </div>
+              </div>
+              <div className={styles.modalActions}>
+                <button type="button" className={styles.btnCancel} onClick={() => setPlatModalOpen(false)}>
+                  Cancelar
+                </button>
+                <button type="submit" className={styles.btnSave} disabled={platSaving}
+                  style={{ display:'inline-flex', alignItems:'center', gap:'7px' }}>
+                  {platSaving ? 'Guardando…' : <><IconCheck /> Guardar</>}
                 </button>
               </div>
             </form>

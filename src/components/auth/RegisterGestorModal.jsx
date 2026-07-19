@@ -8,8 +8,7 @@ import ReCAPTCHA from 'react-google-recaptcha'
 import { IconX } from '../shared/Icons'
 import VerificationStep from './VerificationStep'
 import {
-  PASSWORD_RULES, getPasswordStrength, isPasswordValid,
-  validarCelular, validarCorreo, normalizarCelular,
+  PASSWORD_RULES, getPasswordStrength, isPasswordValid, validarCorreo,
 } from '../../lib/validaciones'
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
@@ -42,6 +41,14 @@ function FieldHint({ valid, msg, touched }) {
   )
 }
 
+// Cédula colombiana: 6–12 dígitos.
+function validarCedula(v) {
+  const raw = String(v || '').trim()
+  if (!raw) return { valid: null, msg: '' }
+  if (!/^\d{6,12}$/.test(raw)) return { valid: false, msg: 'Debe tener entre 6 y 12 dígitos.' }
+  return { valid: true, msg: 'Cédula válida' }
+}
+
 export default function RegisterGestorModal({ onClose }) {
   const { signIn } = useAuth()
 
@@ -55,26 +62,29 @@ export default function RegisterGestorModal({ onClose }) {
   const [loginPassword,   setLoginPassword]   = useState('')
   const [showLoginPassword, setShowLoginPassword] = useState(false)
 
-  // Campos base
-  const [nombre, setNombre]               = useState('')
-  const [apellido, setApellido]           = useState('')
+  // Registro — solo datos básicos: usuario, correo, contraseña, cédula.
   const [username, setUsername]           = useState('')
-  const [telefono, setTelefono]           = useState('')
+  const [cedula, setCedula]               = useState('')
   const [regEmail, setRegEmail]           = useState('')
   const [regPassword, setRegPassword]     = useState('')
   const [showPassword, setShowPassword]   = useState(false)
   const [pwTouched, setPwTouched]         = useState(false)
   const [emailTouched, setEmailTouched]   = useState(false)
-  const [telTouched, setTelTouched]       = useState(false)
+  const [cedulaTouched, setCedulaTouched] = useState(false)
   const [aceptaTerminos, setAceptaTerminos] = useState(false)
   const [captchaValue, setCaptchaValue]   = useState(null)
 
-  // ── Campos específicos del GESTOR ──────────────────────────────────────
-  const [trabajoSeguros, setTrabajoSeguros]     = useState(false)
-  const [detalleSeguros, setDetalleSeguros]     = useState('')
-  const [liderComunidad, setLiderComunidad]     = useState(false)
-  const [detalleComunidad, setDetalleComunidad] = useState('')
-  const [evidencias, setEvidencias]             = useState('')
+  // Redes sociales (opcionales) — mismas claves que SocialLinks.jsx.
+  const [instagram, setInstagram] = useState('')
+  const [linkedin,  setLinkedin]  = useState('')
+  const [facebook,  setFacebook]  = useState('')
+  const [twitter,   setTwitter]   = useState('')
+  const [whatsapp,  setWhatsapp]  = useState('')
+  const [tiktok,    setTiktok]    = useState('')
+
+  // ¿Manejas alguna comunidad? (máx 500) → profiles.comunidad_descripcion.
+  const [comunidad, setComunidad] = useState('')
+  const COMUNIDAD_MAX = 500
 
   const recaptchaRef = useRef()
 
@@ -87,12 +97,12 @@ export default function RegisterGestorModal({ onClose }) {
   const pwStrength = getPasswordStrength(regPassword)
   const pwValid    = isPasswordValid(regPassword)
   const emailVal   = validarCorreo(regEmail)
-  const telVal     = validarCelular(telefono)
+  const cedulaVal  = validarCedula(cedula)
   const showPwList = pwTouched && regPassword.length > 0
 
   const canRegister =
-    pwValid && emailVal.valid === true && aceptaTerminos &&
-    captchaValue && !loading
+    pwValid && emailVal.valid === true && cedulaVal.valid === true &&
+    username.trim() && aceptaTerminos && captchaValue && !loading
 
   useEffect(() => {
     const handleKey = (e) => { if (e.key === 'Escape') onClose() }
@@ -153,26 +163,22 @@ export default function RegisterGestorModal({ onClose }) {
 
   async function handleRegister(e) {
     e.preventDefault()
-    if (!captchaValue)   { setError('Por favor completa el captcha'); return }
-    if (!pwValid)        { setError('La contraseña no cumple los requisitos'); setPwTouched(true); return }
-    if (!emailVal.valid) { setError('El correo no es válido'); setEmailTouched(true); return }
-    if (telVal.valid !== true) { setError('Ingresa un celular válido (10 dígitos, empieza por 3).'); setTelTouched(true); return }
-    // Campos del gestor — todos obligatorios.
-    if (trabajoSeguros && !detalleSeguros.trim()) { setError('Indica en qué agencia(s) de seguros has trabajado.'); return }
-    if (liderComunidad && !detalleComunidad.trim()) { setError('Indica cuál comunidad lideras.'); return }
-    if (!evidencias.trim()) { setError('Cuéntanos tu experiencia y evidencias como gestor.'); return }
-    if (!aceptaTerminos) { setError('Debes aceptar los términos y condiciones'); return }
+    if (!captchaValue)          { setError('Por favor completa el captcha'); return }
+    if (!username.trim())       { setError('Elige un nombre de usuario'); return }
+    if (cedulaVal.valid !== true) { setError('Ingresa una cédula válida (6–12 dígitos)'); setCedulaTouched(true); return }
+    if (!pwValid)               { setError('La contraseña no cumple los requisitos'); setPwTouched(true); return }
+    if (!emailVal.valid)        { setError('El correo no es válido'); setEmailTouched(true); return }
+    if (!aceptaTerminos)        { setError('Debes aceptar los términos y condiciones'); return }
 
     setError(null); setEmailErrorInline(''); setLoading(true)
     try {
-      if (username) {
-        const res = await fetch(
-          `${SUPABASE_URL}/rest/v1/profiles?username=eq.${username}&select=id`,
-          { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } }
-        )
-        const data = await res.json()
-        if (data && data.length > 0) throw new Error('Ese nombre de usuario ya está en uso')
-      }
+      // Username único — chequeo previo al envío del código.
+      const res = await fetch(
+        `${SUPABASE_URL}/rest/v1/profiles?username=eq.${username}&select=id`,
+        { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } }
+      )
+      const data = await res.json()
+      if (data && data.length > 0) throw new Error('Ese nombre de usuario ya está en uso')
       await sendVerificationCode()
     } catch (err) {
       if (err.message) setError(err.message)
@@ -244,22 +250,11 @@ export default function RegisterGestorModal({ onClose }) {
     }
   }
 
-  // Resumen de la experiencia del gestor → se guarda en `descripcion` (no requiere
-  // columnas nuevas). El admin lo ve al revisar la solicitud.
-  function buildDescripcionGestor() {
-    const lineas = [
-      `Trabajó en agencias de seguros: ${trabajoSeguros ? 'Sí' : 'No'}${trabajoSeguros && detalleSeguros.trim() ? ` — ${detalleSeguros.trim()}` : ''}`,
-      `Líder de comunidad: ${liderComunidad ? 'Sí' : 'No'}${liderComunidad && detalleComunidad.trim() ? ` — ${detalleComunidad.trim()}` : ''}`,
-    ]
-    if (evidencias.trim()) lineas.push(`Experiencia / evidencias: ${evidencias.trim()}`)
-    return lineas.join('\n')
-  }
-
   async function actuallyCreateGestorAccount() {
     const { error: signUpError } = await supabase.auth.signUp({
       email: regEmail,
       password: regPassword,
-      options: { data: { nombre, apellido, username, telefono } },
+      options: { data: { username } },
     })
     if (signUpError) throw new Error(signUpError.message || 'Error al crear cuenta')
 
@@ -278,11 +273,19 @@ export default function RegisterGestorModal({ onClose }) {
       headers: { ...headers, 'Prefer': 'resolution=merge-duplicates,return=minimal' },
       body: JSON.stringify({
         id: userId,
-        nombre, apellido, username, telefono,
+        username,
+        cedula,
         email: regEmail,
         rol: 'gestor',
         aprobado: false,
-        descripcion: buildDescripcionGestor(),
+        // Redes sociales (opcionales) + descripción de comunidad.
+        instagram: instagram.trim() || null,
+        linkedin:  linkedin.trim()  || null,
+        facebook:  facebook.trim()  || null,
+        twitter:   twitter.trim()   || null,
+        whatsapp:  whatsapp.trim()  || null,
+        tiktok:    tiktok.trim()    || null,
+        comunidad_descripcion: comunidad.trim() || null,
       }),
     })
     if (!upsertRes.ok) {
@@ -420,21 +423,7 @@ export default function RegisterGestorModal({ onClose }) {
         {tab === 'register' && !success && verificationStep === 'form' && (
           <form className={styles.form} onSubmit={handleRegister}>
 
-            {/* Nombre + Apellido */}
-            <div className={styles.row}>
-              <div className={styles.field}>
-                <label className={styles.label}>Nombre <span className={styles.req}>*</span></label>
-                <input type="text" className={styles.input} placeholder="Nombre"
-                  value={nombre} onChange={(e) => setNombre(e.target.value)} required />
-              </div>
-              <div className={styles.field}>
-                <label className={styles.label}>Apellido <span className={styles.req}>*</span></label>
-                <input type="text" className={styles.input} placeholder="Apellido"
-                  value={apellido} onChange={(e) => setApellido(e.target.value)} required />
-              </div>
-            </div>
-
-            {/* Username */}
+            {/* Usuario */}
             <div className={styles.field}>
               <label className={styles.label}>Nombre de usuario <span className={styles.req}>*</span></label>
               <input type="text" className={styles.input} placeholder="@usuario"
@@ -442,22 +431,22 @@ export default function RegisterGestorModal({ onClose }) {
                 onChange={(e) => setUsername(e.target.value.replace(/\s/g, '').toLowerCase())} required />
             </div>
 
-            {/* Teléfono */}
+            {/* Cédula */}
             <div className={styles.field}>
-              <label className={styles.label}>Celular <span className={styles.req}>*</span></label>
+              <label className={styles.label}>Cédula <span className={styles.req}>*</span></label>
               <input
-                type="tel"
+                type="text"
                 inputMode="numeric"
                 className={styles.input}
-                placeholder="3001234567"
-                value={telefono}
-                onChange={(e) => setTelefono(normalizarCelular(e.target.value))}
-                onBlur={() => setTelTouched(true)}
-                maxLength={10}
+                placeholder="Número de cédula"
+                value={cedula}
+                onChange={(e) => setCedula(e.target.value.replace(/\D/g, ''))}
+                onBlur={() => setCedulaTouched(true)}
+                maxLength={12}
                 required
-                style={borderFor(telVal.valid, telTouched, telefono)}
+                style={borderFor(cedulaVal.valid, cedulaTouched, cedula)}
               />
-              <FieldHint valid={telVal.valid} msg={telVal.msg} touched={telTouched && !!telefono} />
+              <FieldHint valid={cedulaVal.valid} msg={cedulaVal.msg} touched={cedulaTouched && !!cedula} />
             </div>
 
             {/* Correo */}
@@ -541,69 +530,52 @@ export default function RegisterGestorModal({ onClose }) {
               )}
             </div>
 
-            {/* ── Experiencia del gestor ──
-                El acento dorado se conserva en TODO el formulario; solo esta
-                sección propia del gestor usa el teal (mismo color del botón),
-                mediante variables locales. */}
-            <div
-              className={styles.gestorSection}
-              style={{
-                '--reg-accent': '#2a6f75',
-                '--reg-accent-dk': '#1c5157',
-                '--reg-tint': 'rgba(42, 111, 117, 0.08)',
-                '--reg-focus': 'rgba(42, 111, 117, 0.16)',
-              }}
-            >
-              <p className={styles.gestorSectionTitle}>Tu experiencia como gestor</p>
-
-              <div>
-                <label className={styles.toggleRow} data-on={trabajoSeguros ? 'true' : 'false'}>
-                  <input
-                    type="checkbox"
-                    checked={trabajoSeguros}
-                    onChange={e => setTrabajoSeguros(e.target.checked)}
-                  />
-                  <span>He trabajado en agencias de seguros</span>
-                </label>
-                {trabajoSeguros && (
-                  <input type="text" className={`${styles.input} ${styles.subField}`}
-                    placeholder="¿Cuál(es) y cuánto tiempo?"
-                    value={detalleSeguros}
-                    onChange={(e) => setDetalleSeguros(e.target.value)}
-                    required />
-                )}
+            {/* ¿Manejas alguna comunidad? */}
+            <div className={styles.field}>
+              <label className={styles.label}>¿Manejas alguna comunidad?</label>
+              <textarea
+                className={styles.input}
+                rows={3}
+                maxLength={COMUNIDAD_MAX}
+                placeholder="Cuéntanos brevemente. Ej: soy líder comunal, dirijo una fundación o asociación, coordino un colectivo, JAC, grupo religioso, sindicato, cooperativa…"
+                value={comunidad}
+                onChange={(e) => setComunidad(e.target.value.slice(0, COMUNIDAD_MAX))}
+                style={{ resize: 'vertical', minHeight: 76, fontFamily: 'inherit' }}
+              />
+              <div style={{
+                display: 'flex', justifyContent: 'space-between', gap: 8,
+                marginTop: 4, fontSize: '0.68rem', color: 'rgba(255,255,255,0.55)',
+              }}>
+                <span>Nos ayuda a entender tu alcance como gestor.</span>
+                <span style={{ color: comunidad.length >= COMUNIDAD_MAX ? 'rgba(220,120,100,0.95)' : 'rgba(201,168,76,0.9)' }}>
+                  {comunidad.length}/{COMUNIDAD_MAX}
+                </span>
               </div>
+            </div>
 
-              <div>
-                <label className={styles.toggleRow} data-on={liderComunidad ? 'true' : 'false'}>
+            {/* Redes sociales (opcionales) */}
+            <div className={styles.field}>
+              <label className={styles.label}>
+                Redes sociales <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0, opacity: 0.6 }}>(opcional)</span>
+              </label>
+              <div style={{ display: 'grid', gap: 8 }}>
+                {[
+                  { ph: 'https://instagram.com/tu_usuario',  value: instagram, set: setInstagram },
+                  { ph: 'https://linkedin.com/in/tu_perfil', value: linkedin,  set: setLinkedin  },
+                  { ph: 'https://facebook.com/tu_perfil',    value: facebook,  set: setFacebook  },
+                  { ph: 'https://x.com/tu_usuario',          value: twitter,   set: setTwitter   },
+                  { ph: 'https://wa.me/57300…',              value: whatsapp,  set: setWhatsapp  },
+                  { ph: 'https://tiktok.com/@tu_usuario',    value: tiktok,    set: setTiktok    },
+                ].map(({ ph, value, set }) => (
                   <input
-                    type="checkbox"
-                    checked={liderComunidad}
-                    onChange={e => setLiderComunidad(e.target.checked)}
+                    key={ph}
+                    type="url"
+                    className={styles.input}
+                    placeholder={ph}
+                    value={value}
+                    onChange={(e) => set(e.target.value)}
                   />
-                  <span>Soy líder de una comunidad</span>
-                </label>
-                {liderComunidad && (
-                  <input type="text" className={`${styles.input} ${styles.subField}`}
-                    placeholder="¿Cuál comunidad y cuántas personas?"
-                    value={detalleComunidad}
-                    onChange={(e) => setDetalleComunidad(e.target.value)}
-                    required />
-                )}
-              </div>
-
-              <div className={styles.field} style={{ margin: 0 }}>
-                <label className={styles.label}>Experiencia y evidencias <span className={styles.req}>*</span></label>
-                <textarea
-                  className={styles.input}
-                  placeholder="Cuéntanos tu experiencia como gestor y comparte evidencias o enlaces (redes, comunidades, referidos…)."
-                  value={evidencias}
-                  onChange={(e) => setEvidencias(e.target.value)}
-                  rows={3}
-                  maxLength={600}
-                  required
-                  style={{ minHeight: 76, resize: 'vertical', fontFamily: 'inherit' }}
-                />
+                ))}
               </div>
             </div>
 

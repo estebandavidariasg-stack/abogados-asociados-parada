@@ -128,6 +128,68 @@
   color: #6b6250;
 }
 
+/* ── Banner de profesional pre-seleccionado (deep-link desde LawyerCard) ── */
+.deepLinkBanner {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  margin-bottom: 20px;
+  border-radius: 14px;
+  border: 1px solid rgba(13, 45, 94, 0.14);
+  background:
+    radial-gradient(130% 150% at 100% 0%, rgba(201, 168, 76, 0.14) 0%, transparent 60%),
+    linear-gradient(180deg, #ffffff 0%, #f7f9fc 100%);
+  box-shadow: 0 4px 16px rgba(13, 45, 94, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+.deepLinkAvatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+  border: 2px solid #ffffff;
+  outline: 2px solid rgba(201, 168, 76, 0.6);
+  box-shadow: 0 2px 10px rgba(13, 45, 94, 0.16);
+}
+.deepLinkInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.deepLinkLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: 'Raleway', sans-serif;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--gold-dk, #8a6a28);
+}
+.deepLinkLabel svg { opacity: 0.85; }
+.deepLinkName {
+  font-family: 'Cormorant Garamond', 'Georgia', serif;
+  font-size: 1.28rem;
+  font-weight: 700;
+  line-height: 1.15;
+  color: var(--navy, #0d2d5e);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.deepLinkArea {
+  font-family: 'Raleway', sans-serif;
+  font-size: 0.76rem;
+  line-height: 1.35;
+  color: #55627a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .field {
   display: flex;
   flex-direction: column;
@@ -1624,4 +1686,80 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .modalOverlay, .modalCard { animation: none; }
+}
+/* ─────────────────────────────────────────────────────────────────────────
+   Paso intermedio "¿cómo elegir profesional?" (IA vs manual).
+   Las tarjetas base heredan .aap-card-tipo (navy/gold, hover) del <style>
+   inline de ChatSection; aquí solo el grid, el reset de <button> y el detalle.
+   ───────────────────────────────────────────────────────────────────────── */
+.metodoGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+  margin-top: 8px;
+}
+.metodoCard {
+  /* reset de button */
+  appearance: none;
+  font: inherit;
+  color: inherit;
+  text-align: center;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 26px 18px 22px;
+}
+.metodoIcon {
+  width: 60px;
+  height: 60px;
+  display: grid;
+  place-items: center;
+  border-radius: 16px;
+  margin-bottom: 8px;
+  color: #0d2d5e;
+  background: linear-gradient(145deg, #f2d580 0%, #c9a84c 55%, #9a7a2c 100%);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  box-shadow:
+    0 0 0 3px rgba(201, 168, 76, 0.16),
+    0 4px 14px rgba(201, 168, 76, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+.metodoIcon[data-variant="manual"] {
+  color: #ffffff;
+  background: linear-gradient(155deg, #1d4d86 0%, #0d2d5e 60%, #081f44 100%);
+  border-color: rgba(201, 168, 76, 0.4);
+  box-shadow:
+    0 0 0 3px rgba(13, 45, 94, 0.12),
+    0 4px 14px rgba(13, 45, 94, 0.34),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+.metodoLabel {
+  font-family: 'Cinzel', serif;
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #0d2d5e;
+}
+.metodoDesc {
+  font-size: 0.82rem;
+  line-height: 1.55;
+  color: #3d4a63;
+  max-width: 30ch;
+}
+.metodoTag {
+  margin-top: 6px;
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #8a6a28;
+  background: rgba(201, 168, 76, 0.16);
+  border: 1px solid rgba(201, 168, 76, 0.4);
+  border-radius: 999px;
+  padding: 3px 10px;
+}
+@media (max-width: 560px) {
+  .metodoGrid { grid-template-columns: 1fr; }
 }

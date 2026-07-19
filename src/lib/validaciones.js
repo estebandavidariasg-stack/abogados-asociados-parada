@@ -39,6 +39,17 @@ export function validarCelular(raw) {
   return { valid: true, msg: 'Número válido ✓' }
 }
 
+// ── Cédula (formato colombiano con separador de miles) ─────────────────────
+// Agrupa los dígitos de 3 en 3 con punto: 12345678 → "12.345.678".
+// Se usa para MOSTRAR la cédula del cliente al profesional asignado dentro del
+// chat (cambio de producto deliberado); no altera el hash SHA-256 con el que
+// se guarda la identidad anónima en `client_cedula`.
+export function formatCedula(raw) {
+  const soloDigitos = String(raw ?? '').replace(/\D/g, '')
+  if (!soloDigitos) return ''
+  return soloDigitos.replace(/\B(?=(\d{3})+(?!\d))/g, '.')
+}
+
 // ── Correo ────────────────────────────────────────────────────────────────
 export function validarCorreo(email) {
   if (!email || email.trim() === '') return { valid: null, msg: '' }

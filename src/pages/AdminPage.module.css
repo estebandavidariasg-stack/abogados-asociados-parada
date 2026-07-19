@@ -486,20 +486,22 @@
 }
 
 .statNum {
-  font-family: 'Cinzel', serif;
-  font-size: 2rem;
-  font-weight: 400;
-  color: var(--gold, #C9A84C);
+  font-family: 'Raleway', sans-serif;
+  font-size: clamp(1.85rem, 2.2vw, 2.3rem);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums lining-nums;
+  letter-spacing: -0.015em;
+  color: #8a6a28;              /* oro oscuro: legible (~5:1) y de marca */
   line-height: 1;
 }
 .statAlert .statNum {
-  color: #d94444;
+  color: #cc3b3b;
 }
 
 .statLabel {
-  font-size: 0.6rem;
+  font-size: 0.62rem;
   font-weight: 700;
-  letter-spacing: 0.18em;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
   color: #5a6e90;
   line-height: 1.4;
@@ -1002,36 +1004,185 @@
   margin: 0 0 12px;
 }
 
-.abogadoSelector {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 22px;
-}
+/* ── Contratos: selección guiada por búsqueda ── */
 
-.abogadoChip {
-  padding: 7px 16px;
-  border-radius: 20px;
-  background: rgba(255, 255, 255, 0.75);
-  border: 1.5px solid rgba(13, 45, 94, 0.12);
-  color: #5a6f96;
-  font-size: 0.75rem;
+/* Fila del profesional actualmente seleccionado */
+.contratoSelectedRow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 4px 0 18px;
+}
+.contratoSelectedLabel {
+  font-size: 0.68rem;
   font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #5a6e90;
+}
+.contratoSelectedChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 7px 8px 7px 16px;
+  border-radius: 20px;
+  background: rgba(201, 168, 76, 0.12);
+  border: 1.5px solid rgba(201, 168, 76, 0.42);
+  color: #a07c20;
+  font-size: 0.78rem;
+  font-weight: 700;
+  box-shadow: 0 2px 8px rgba(201, 168, 76, 0.15);
+}
+.contratoSelectedClear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  margin-left: 8px;
+  border: none;
+  border-radius: 999px;
+  background: rgba(13, 45, 94, 0.08);
+  color: #5a6f96;
+  font-size: 1rem;
+  line-height: 1;
   cursor: pointer;
   font-family: inherit;
-  transition: all 0.2s;
-  box-shadow: 0 1px 4px rgba(10, 30, 100, 0.06);
+  transition: all 0.18s;
 }
-.abogadoChip:hover {
-  border-color: rgba(201, 168, 76, 0.35);
+.contratoSelectedClear:hover {
+  background: rgba(162, 59, 59, 0.14);
+  color: #a23b3b;
+}
+
+/* Resultados de búsqueda: lista vertical de filas legibles */
+.contratoResults {
+  margin: 0 0 22px;
+}
+.contratoResultList {
+  list-style: none;
+  margin: 0;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: rgba(255, 255, 255, 0.6);
+  border: 1px solid rgba(13, 45, 94, 0.1);
+  border-radius: 14px;
+  box-shadow: 0 4px 16px rgba(10, 30, 100, 0.05);
+}
+.contratoResultRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: #2c3e5c;
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+  transition: background 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
+}
+.contratoResultRow:hover {
+  background: rgba(13, 45, 94, 0.04);
+  border-color: rgba(201, 168, 76, 0.28);
+}
+.contratoResultRow:focus-visible {
+  outline: none;
+  border-color: rgba(201, 168, 76, 0.55);
+  box-shadow: 0 0 0 3px rgba(201, 168, 76, 0.18);
+}
+.contratoResultRowActive {
+  background: rgba(201, 168, 76, 0.12);
+  border-color: rgba(201, 168, 76, 0.5);
+  box-shadow: inset 3px 0 0 0 var(--gold, #c9a84c);
+}
+.contratoResultRowActive:hover { background: rgba(201, 168, 76, 0.16); }
+
+/* Avatar / inicial */
+.contratoResultAvatar {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: rgba(13, 45, 94, 0.1);
+  color: var(--navy, #0d2d5e);
+  font-family: 'Cinzel', 'Georgia', serif;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.contratoResultAvatar img { width: 100%; height: 100%; object-fit: cover; }
+.contratoResultAvatarContador {
+  background: rgba(201, 168, 76, 0.2);
+  color: var(--gold-dk, #8a6a28);
+}
+
+/* Bloque nombre + meta */
+.contratoResultMain {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.contratoResultName {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--navy, #0d2d5e);
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.contratoResultMeta {
+  font-size: 0.72rem;
+  color: #6b7fa3;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Afordancia "Ver contratos →" — aparece al pasar el mouse / seleccionar */
+.contratoResultGo {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
   color: #a07c20;
-  background: rgba(255, 255, 255, 0.95);
+  opacity: 0;
+  transform: translateX(-4px);
+  transition: opacity 0.16s ease, transform 0.16s ease;
 }
-.chipActivo {
-  background: rgba(201, 168, 76, 0.1) !important;
-  border-color: rgba(201, 168, 76, 0.4) !important;
-  color: #a07c20 !important;
-  box-shadow: 0 2px 8px rgba(201, 168, 76, 0.15) !important;
+.contratoResultRow:hover .contratoResultGo,
+.contratoResultRow:focus-visible .contratoResultGo,
+.contratoResultRowActive .contratoResultGo {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+/* Nota "mostrando N de M" */
+.contratoResultCount {
+  margin: 8px 2px 0;
+  font-size: 0.72rem;
+  color: #6b7fa3;
+}
+
+@media (max-width: 560px) {
+  .contratoResultGo { display: none; }   /* prioriza nombre + badge en móvil */
+  .contratoResultName { font-size: 0.86rem; }
 }
 
 /* ── Pie del riel: volver al inicio + cerrar sesión ── */
@@ -1617,10 +1768,18 @@
   color: var(--gold-dk, #8a6a28);
 }
 
-/* ── Badge mini en chips de Contratos ── */
-.abogadoChip .cardRolBadge {
-  padding: 2px 6px;
-  margin-left: 6px;
+/* Gestor: verde azulado sobrio para distinguirlo de abogado/contador */
+.cardRolBadgeGestor {
+  background: rgba(30, 122, 100, 0.14);
+  color: #1a6b56;
+}
+
+/* ── Badge mini en chips de Contratos (resultados + chip seleccionado) ── */
+.contratoResultRow .cardRolBadge,
+.contratoSelectedChip .cardRolBadge {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  margin-left: 0;
   font-size: 0.58rem;
 }
 
@@ -1649,4 +1808,272 @@
   letter-spacing: 0.05em;
   margin-top: 2px;
   text-transform: none;
+}
+
+/* ══════════════════════════════════════════
+   FILTRO UNIFICADO DE PERSONAS
+   Chips de rol + búsqueda instantánea (una sola fila; envuelve en móvil).
+   Reusado en Solicitudes, Aprobados y Contratos.
+   ══════════════════════════════════════════ */
+.filterBar {
+  display: flex;
+  align-items: center;
+  gap: 12px 16px;
+  flex-wrap: wrap;
+  margin: 0 0 16px;
+}
+/* Dentro de la barra, la fila de chips no aporta su propio margen inferior */
+.filterBar .rolChipsRow { margin: 0; flex: 0 1 auto; }
+
+.searchWrap {
+  position: relative;
+  flex: 1 1 240px;
+  min-width: 200px;
+  max-width: 380px;
+  display: flex;
+  align-items: center;
+}
+.searchIcon {
+  position: absolute;
+  left: 12px;
+  color: rgba(13, 45, 94, 0.42);
+  pointer-events: none;
+}
+.searchInput {
+  width: 100%;
+  padding: 8px 34px 8px 36px;
+  border: 1px solid rgba(13, 45, 94, 0.18);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.85);
+  color: #1a2a4a;
+  font-family: 'Raleway', sans-serif;
+  font-size: 0.82rem;
+  outline: none;
+  transition: border-color 0.18s, box-shadow 0.18s, background 0.18s;
+  min-height: 38px;
+  box-sizing: border-box;
+}
+.searchInput::placeholder { color: #9aaac0; }
+.searchInput:focus {
+  border-color: rgba(201, 168, 76, 0.55);
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(201, 168, 76, 0.14);
+}
+/* Ocultar la X nativa de <input type="search"> (usamos la nuestra) */
+.searchInput::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; }
+.searchClear {
+  position: absolute;
+  right: 8px;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border: none;
+  border-radius: 50%;
+  background: rgba(13, 45, 94, 0.08);
+  color: #5a6e90;
+  font-size: 1.05rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.16s, color 0.16s;
+}
+.searchClear:hover { background: rgba(13, 45, 94, 0.16); color: #0d2d5e; }
+
+@media (max-width: 480px) {
+  .searchWrap { flex: 1 1 100%; max-width: none; }
+}
+
+/* ── Enlaces sociales en tarjetas de gestor ── */
+.socialRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  align-items: center;
+  margin-top: 6px;
+}
+.socialLink {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--navy, #0d2d5e);
+  background: rgba(13, 45, 94, 0.06);
+  border: 1px solid rgba(13, 45, 94, 0.14);
+  border-radius: 999px;
+  padding: 2px 10px;
+  text-decoration: none;
+  transition: background 0.16s, border-color 0.16s, color 0.16s;
+}
+.socialLink:hover {
+  background: rgba(201, 168, 76, 0.12);
+  border-color: rgba(201, 168, 76, 0.4);
+  color: #a07c20;
+}
+
+/* ══════════════════════════════════════════
+   ALERTAS — Reasignación obligatoria (barrera 4h)
+   ══════════════════════════════════════════ */
+.alertaCardEscalada {
+  border-color: rgba(217, 68, 68, 0.5);
+  background: rgba(255, 244, 244, 0.92);
+  box-shadow: 0 4px 18px rgba(217, 68, 68, 0.14);
+}
+.alertaCardEscalada:hover {
+  border-color: rgba(217, 68, 68, 0.7);
+  box-shadow: 0 6px 22px rgba(217, 68, 68, 0.2);
+}
+
+.alertaEscaladaMsg {
+  font-size: 0.72rem;
+  color: #b23636;
+  line-height: 1.5;
+  margin: 6px 0 0;
+  font-weight: 600;
+}
+
+.alertaBadgeEscalada {
+  font-size: 0.58rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #fff;
+  background: #d94444;
+  border: 1px solid #c93131;
+  border-radius: 12px;
+  padding: 4px 11px;
+  text-align: center;
+  line-height: 1.3;
+  box-shadow: 0 2px 8px rgba(217, 68, 68, 0.35);
+  max-width: 220px;
+}
+
+.btnReasignar {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: linear-gradient(135deg, #e35555 0%, #c93131 100%);
+  border: 1px solid rgba(201, 49, 49, 0.6);
+  border-radius: 10px;
+  color: #fff;
+  font-family: 'Raleway', sans-serif;
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  white-space: nowrap;
+  box-shadow: 0 4px 14px rgba(201, 49, 49, 0.3);
+  transition: box-shadow 0.2s, transform 0.15s, filter 0.2s;
+}
+.btnReasignar:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 7px 20px rgba(201, 49, 49, 0.42);
+  filter: brightness(1.06);
+}
+.btnReasignar:active { transform: none; }
+
+/* ══════════════════════════════════════════
+   MODAL DE REASIGNACIÓN
+   ══════════════════════════════════════════ */
+.reasignModal {
+  max-width: 460px;
+  text-align: left;
+}
+.reasignModal .logoutTitle { text-align: left; }
+.reasignModal .logoutText  { text-align: left; }
+
+.reasignBadge {
+  display: inline-block;
+  font-size: 0.56rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #fff;
+  background: #d94444;
+  border-radius: 8px;
+  padding: 4px 10px;
+  margin-bottom: 12px;
+}
+
+.reasignInfo {
+  font-size: 0.8rem;
+  color: #5a6e90;
+  margin: 4px 0 14px;
+}
+
+.reasignList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 280px;
+  overflow-y: auto;
+  margin: 4px 0 14px;
+  padding-right: 2px;
+}
+.reasignList::-webkit-scrollbar { width: 6px; }
+.reasignList::-webkit-scrollbar-thumb { background: rgba(13, 45, 94, 0.16); border-radius: 3px; }
+
+.reasignOpt {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1.5px solid rgba(13, 45, 94, 0.12);
+  border-radius: 11px;
+  background: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  transition: border-color 0.16s, background 0.16s, box-shadow 0.16s;
+}
+.reasignOpt:hover { border-color: rgba(201, 168, 76, 0.4); background: #fff; }
+.reasignOpt input { accent-color: var(--gold, #c9a84c); flex-shrink: 0; }
+.reasignOptActive {
+  border-color: rgba(201, 168, 76, 0.6);
+  background: rgba(201, 168, 76, 0.08);
+  box-shadow: 0 2px 8px rgba(201, 168, 76, 0.16);
+}
+
+.reasignOptBody { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.reasignOptName {
+  font-family: 'Cinzel', serif;
+  font-size: 0.86rem;
+  color: #0d2d5e;
+}
+.reasignOptArea {
+  font-size: 0.68rem;
+  color: #5a6e90;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.reasignMatch {
+  font-size: 0.56rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #1a7a40;
+  background: rgba(29, 168, 81, 0.12);
+  border: 1px solid rgba(29, 168, 81, 0.3);
+  border-radius: 6px;
+  padding: 1px 7px;
+}
+.reasignOtra {
+  font-size: 0.56rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #9a7a2c;
+  background: rgba(201, 168, 76, 0.12);
+  border: 1px solid rgba(201, 168, 76, 0.3);
+  border-radius: 6px;
+  padding: 1px 7px;
+}
+
+.reasignError {
+  font-size: 0.76rem;
+  color: #c03030;
+  background: rgba(220, 50, 50, 0.07);
+  border: 1px solid rgba(220, 50, 50, 0.22);
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin: 0 0 14px;
 }

@@ -101,7 +101,11 @@ export default function ProfileContadorPage() {
   const [apellido, setApellido]       = useState('')
   const [telefono, setTelefono]       = useState('')
   const [universidad, setUniversidad] = useState('')
+  // Modo "Otra" universidad: <select> muestra 'Otra' y revela un input libre.
+  const [universidadOtra, setUniversidadOtra] = useState(false)
   const [experiencia, setExperiencia] = useState('')
+  // Especialidad libre cuando el contador marca "Otro" en Especialidades.
+  const [especialidadOtraTexto, setEspecialidadOtraTexto] = useState('')
   const [direccion, setDireccion]     = useState('')
   const [ciudad, setCiudad]           = useState('')
   const [descripcion, setDescripcion] = useState('')
@@ -132,15 +136,25 @@ export default function ProfileContadorPage() {
       setNombre(profile.nombre       || '')
       setApellido(profile.apellido   || '')
       setTelefono(profile.telefono   || '')
-      setUniversidad(profile.universidad || '')
+      // Universidad: si el valor guardado no está en la lista → modo "Otra".
+      const uniDB = profile.universidad || ''
+      setUniversidad(uniDB)
+      setUniversidadOtra(!!uniDB && !UNIVERSIDADES.includes(uniDB))
       setExperiencia(profile.experiencia || '')
       // El campo BD se llama area_derecho aunque para contador signifique
-      // "especialidad". Reusamos la columna existente.
-      setEspecialidades(
-        profile.area_derecho
-          ? profile.area_derecho.split(',').map(a => a.trim()).filter(Boolean)
-          : []
-      )
+      // "especialidad". Reusamos la columna existente. Cualquier valor que NO
+      // esté en la lista oficial se trata como el texto libre de "Otro".
+      const espDB = profile.area_derecho
+        ? profile.area_derecho.split(',').map(a => a.trim()).filter(Boolean)
+        : []
+      const espLibre = espDB.find(a => !ESPECIALIDADES_CONTADURIA.includes(a)) || ''
+      setEspecialidadOtraTexto(espLibre)
+      // En el estado guardamos las oficiales; si hay valor libre, marcamos 'Otro'
+      // como seleccionado para que el checkbox aparezca activo.
+      setEspecialidades([
+        ...espDB.filter(a => ESPECIALIDADES_CONTADURIA.includes(a)),
+        ...(espLibre ? ['Otro'] : []),
+      ])
       setDireccion(profile.direccion  || '')
       setDepartamento(profile.departamento || '')
       const ciudadDB = profile.ciudad || ''
@@ -291,6 +305,11 @@ export default function ProfileContadorPage() {
   async function handleSave(e) {
     e.preventDefault()
     if (!descripcion.trim()) { setError('El campo Perfil es obligatorio'); return }
+    // Especialidades: reemplaza el literal "Otro" por el texto escrito (si hay).
+    const otroTexto = especialidadOtraTexto.trim()
+    const especialidadesFinal = especialidades
+      .filter(a => a !== 'Otro')
+      .concat(especialidades.includes('Otro') && otroTexto ? [otroTexto] : [])
     setSaving(true); setError(null); setMsg(null)
     try {
       const headers = await getAuthHeaders()
@@ -305,7 +324,7 @@ export default function ProfileContadorPage() {
             ciudad: barrio ? `${ciudad} - ${barrio}` : ciudad,
             departamento,
             // Reusamos la columna area_derecho para almacenar especialidades
-            area_derecho: especialidades.join(', '),
+            area_derecho: especialidadesFinal.join(', '),
             descripcion, foto_url: fotoUrl, video_url: videoUrl,
             tarjeta_archivo_url: tarjetaArchivoUrl || null,
             instagram, linkedin, facebook, twitter, whatsapp, tiktok,
@@ -456,10 +475,34 @@ export default function ProfileContadorPage() {
 
             <div className={styles.field}>
               <label className={styles.label}>Universidad</label>
-              <select className={styles.input} value={universidad} onChange={e => setUniversidad(e.target.value)}>
+              <select
+                className={styles.input}
+                value={universidadOtra ? 'Otra' : universidad}
+                onChange={e => {
+                  const v = e.target.value
+                  if (v === 'Otra') {
+                    setUniversidadOtra(true)
+                    setUniversidad('')
+                  } else {
+                    setUniversidadOtra(false)
+                    setUniversidad(v)
+                  }
+                }}
+              >
                 <option value="">Seleccionar...</option>
                 {UNIVERSIDADES.map(u => <option key={u} value={u}>{u}</option>)}
               </select>
+              {universidadOtra && (
+                <input
+                  type="text"
+                  className={styles.input}
+                  style={{ marginTop: '0.5rem' }}
+                  placeholder="Escribe el nombre de tu universidad"
+                  value={universidad}
+                  onChange={e => setUniversidad(e.target.value)}
+                  aria-label="Nombre de tu universidad"
+                />
+              )}
             </div>
             <div className={styles.field}>
               <label className={styles.label}>Experiencia laboral</label>
@@ -486,6 +529,7 @@ export default function ProfileContadorPage() {
                           setEspecialidades(prev => [...prev, area])
                         } else {
                           setEspecialidades(prev => prev.filter(a => a !== area))
+                          if (area === 'Otro') setEspecialidadOtraTexto('')
                         }
                       }}
                     />
@@ -493,9 +537,22 @@ export default function ProfileContadorPage() {
                   </label>
                 ))}
               </div>
+              {especialidades.includes('Otro') && (
+                <input
+                  type="text"
+                  className={styles.input}
+                  style={{ marginTop: '0.6rem' }}
+                  placeholder="Escribe tu especialidad"
+                  value={especialidadOtraTexto}
+                  onChange={e => setEspecialidadOtraTexto(e.target.value)}
+                  aria-label="Otra especialidad contable"
+                />
+              )}
               {especialidades.length > 0 && (
                 <p className={styles.selectedAreas}>
-                  Seleccionadas: <strong>{especialidades.join(' · ')}</strong>
+                  Seleccionadas: <strong>{especialidades
+                    .map(a => (a === 'Otro' ? (especialidadOtraTexto.trim() || 'Otro') : a))
+                    .join(' · ')}</strong>
                 </p>
               )}
             </div>
@@ -522,12 +579,16 @@ export default function ProfileContadorPage() {
               <textarea
                 className={styles.input}
                 rows={4}
+                maxLength={500}
                 placeholder="Describe tu experiencia, especialidades y enfoque profesional…"
                 value={descripcion}
                 onChange={e => setDescripcion(e.target.value)}
                 required
                 style={{ resize: 'vertical', minHeight: 100 }}
               />
+              <span className={`${styles.charCount} ${descripcion.length >= 480 ? styles.charCountWarn : ''}`}>
+                {descripcion.length}/500
+              </span>
             </div>
 
             {/* Redes */}

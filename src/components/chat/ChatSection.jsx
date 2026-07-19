@@ -27,7 +27,7 @@ function parseFirmaOk(content) {
   try { const o = JSON.parse(content); return o?.t === 'firma_ok' ? o : null } catch { return null }
 }
 import { IconPaperclip, IconMic, IconFirma } from '../shared/Icons'
-import { validarCelular, validarCorreo, normalizarCelular, contieneContacto } from '../../lib/validaciones'
+import { validarCelular, validarCorreo, normalizarCelular, contieneContacto, formatCedula } from '../../lib/validaciones'
 import { AREAS_DERECHO } from '../../lib/areasDerecho'
 import { AREAS_CONTADURIA } from '../../lib/areasContaduria'
 
@@ -792,6 +792,11 @@ function RatingPanel({ roomId, onDone }) {
 function StepCedula({ onNew, onResume }) {
   const urlParams = new URLSearchParams(window.location.hash.split('?')[1] || '')
   const codigoURL = urlParams.get('codigo') || ''
+  // Deep-link desde LawyerCard: #chat?abogado=<id>&tipo=<abogado|contador>.
+  // Cuando viene, tras la cédula saltamos al formulario con ese profesional
+  // pre-seleccionado (sin pasar por el paso de método/IA ni por la lista).
+  const abogadoURL = urlParams.get('abogado') || ''
+  const tipoURL    = urlParams.get('tipo') === 'contador' ? 'contador' : 'abogado'
   const [cedula, setCedula] = useState('')
   const [codigo, setCodigo] = useState(codigoURL)
   const [acepta, setAcepta] = useState(false)
@@ -805,12 +810,16 @@ function StepCedula({ onNew, onResume }) {
     setLoading(true); setError('')
     const hash = await hashCedula(rawCedula)
     localStorage.setItem('chat_cedula_hash', hash)
+    // La cédula EN CLARO se guarda solo en este navegador para mostrarla (en
+    // negrilla) al profesional asignado dentro del primer mensaje del chat.
+    // El identificador anónimo (client_cedula) sigue siendo el hash SHA-256.
+    localStorage.setItem('chat_cedula_raw', rawCedula)
     if (codigo.trim()) localStorage.setItem('chat_codigo_ref', codigo.trim().toUpperCase())
     else localStorage.removeItem('chat_codigo_ref')
     const { data: rooms } = await supabase.from('chat_rooms').select(ANON_ROOM_COLS).eq('client_cedula', hash).order('created_at', { ascending: false })
     const existing = rooms?.find(r => r.status === 'waiting' || r.status === 'active')
     if (existing) onResume(existing)
-    else onNew()
+    else onNew(abogadoURL ? { abogadoId: abogadoURL, tipo: tipoURL } : null)
     setLoading(false)
   }
 
@@ -874,6 +883,7 @@ export default function ChatSection() {
   const [desdeIA, setDesdeIA] = useState(false)            // flujo guiado por IA → form reducido + directo al chat
   const [profesionalIA, setProfesionalIA] = useState(null) // profesional recomendado por la IA (para notificar)
   const [costoIA, setCostoIA] = useState('')               // costo sugerido por la IA (recordatorio en el form)
+  const [profesionalDeepLink, setProfesionalDeepLink] = useState(null) // profesional pre-seleccionado desde LawyerCard
   const prefersReducedMotion = useReducedMotion()
   const [form, setForm]         = useState({
     nombre:'', apellido:'', ciudad:'', departamento:'', barrio:'',
@@ -1103,6 +1113,72 @@ export default function ChatSection() {
     return () => supabase.removeChannel(ch)
   }, [roomId])
 
+  // Tras la cédula: si viene un profesional por deep-link (LawyerCard →
+  // #chat?abogado=<id>&tipo=<rol>), lo buscamos en la lista pública (cacheada
+  // en el CDN, misma data del home) y saltamos al formulario con él bloqueado.
+  // Si no existe / no está aprobado, caemos al flujo normal de método.
+  async function handleNew(deepLink) {
+    if (!deepLink?.abogadoId) { setProfesionalDeepLink(null); setStep('metodo'); return }
+    const tipo = deepLink.tipo === 'contador' ? 'contador' : 'abogado'
+    let prof = null
+    try {
+      const res = await fetch(`/api/professionals?rol=${tipo}`)
+      if (res.ok) {
+        const lista = await res.json()
+        prof = (Array.isArray(lista) ? lista : []).find(p => String(p.id) === String(deepLink.abogadoId)) || null
+      }
+    } catch { /* cae al fallback directo */ }
+
+    // Fallback directo a Supabase: en `vite dev` /api sirve el código fuente (no
+    // JSON) y en prod el CDN podría fallar. El cliente anon puede leer a los
+    // profesionales aprobados, así que resolvemos el profesional igualmente.
+    if (!prof) {
+      try {
+        const { data } = await supabase.from('profiles')
+          .select('id,nombre,apellido,rol,area_derecho,foto_url,video_url,descripcion,ciudad,departamento,experiencia,universidad,instagram,linkedin,facebook,twitter,whatsapp,tiktok')
+          .eq('id', deepLink.abogadoId).eq('rol', tipo).eq('aprobado', true).single()
+        if (data && data.id) prof = data
+      } catch { /* prof queda null */ }
+    }
+
+    if (!prof) {
+      // El profesional ya no existe o no está aprobado → limpiar el param y
+      // seguir con el flujo normal (elección de método), sin romper nada.
+      limpiarDeepLinkHash()
+      setStep('metodo')
+      return
+    }
+
+    setProfesionalDeepLink(prof)
+    setPicked([prof.id])
+    // El profesional ya fue elegido: sus áreas/especialidades se conocen, así
+    // que las fijamos y bloqueamos (el cliente no vuelve a seleccionarlas).
+    const areasProf = normalizarAreas(prof.area_derecho || '', tipo)
+    setAreasBloqueadas(areasProf.length > 0)
+    setForm(f => ({
+      ...f,
+      tipo_profesional: tipo,
+      areas: areasProf.length ? areasProf : f.areas,
+    }))
+    // Ya consumimos el deep-link: limpiamos los params para que un reinicio del
+    // flujo (resetToStart) no vuelva a dispararlo. #chat se conserva.
+    limpiarDeepLinkHash()
+    setStep('form')
+  }
+
+  // Quita solo los params abogado/tipo del hash conservando #chat (para que el
+  // ancla siga funcionando) — se usa al entrar al form o al fallar el fetch.
+  function limpiarDeepLinkHash() {
+    try {
+      const params = new URLSearchParams(window.location.hash.split('?')[1] || '')
+      if (params.has('abogado') || params.has('tipo')) {
+        params.delete('abogado'); params.delete('tipo')
+        const qs = params.toString()
+        history.replaceState(null, '', `#chat${qs ? `?${qs}` : ''}`)
+      }
+    } catch { /* noop */ }
+  }
+
   function handleResume(room) {
     setRoomId(room.id)
     setRoomStatus(room.status)
@@ -1119,7 +1195,8 @@ export default function ChatSection() {
     setPqrTipo(''); setPqrMensaje(''); setPqrSent(false); setPqrError(''); setPqrYaExiste(false)
     setTriageResumen(''); setSolicitudAbierta(false); setAreasBloqueadas(false)
     setDesdeIA(false); setProfesionalIA(null); setCostoIA('')
-    localStorage.removeItem('chat_cedula_hash'); localStorage.removeItem('chat_nombre'); localStorage.removeItem('chat_codigo_ref')
+    setProfesionalDeepLink(null)
+    localStorage.removeItem('chat_cedula_hash'); localStorage.removeItem('chat_cedula_raw'); localStorage.removeItem('chat_nombre'); localStorage.removeItem('chat_codigo_ref')
   }
 
   async function handleFormSubmit() {
@@ -1150,6 +1227,14 @@ export default function ChatSection() {
     // Guiado por IA con profesional ya recomendado → entra directo al chat,
     // sin repetir el paso de elegir profesional.
     if (desdeIA && picked.length) {
+      setSubmitting(false)
+      await startChat()
+      return
+    }
+
+    // Deep-link desde LawyerCard: profesional ya elegido y bloqueado → entra
+    // directo al chat con él, sin pasar por la lista de selección.
+    if (profesionalDeepLink && picked.length) {
       setSubmitting(false)
       await startChat()
       return
@@ -1245,15 +1330,25 @@ export default function ChatSection() {
     const resumenBloque = (triageResumen && triageResumen.trim() && triageResumen.trim() !== descripcion.trim())
       ? `\n\n📋 Resumen del asistente IA:\n${triageResumen}`
       : ''
+    // Cédula en claro, en negrilla, con separador de miles colombiano (12.345.678).
+    // Solo va en el cuerpo del mensaje para que el profesional asignado la vea; el
+    // identificador anónimo (client_cedula) sigue siendo el hash SHA-256.
+    const cedulaRaw   = localStorage.getItem('chat_cedula_raw') || ''
+    const cedulaLinea = cedulaRaw ? `\n**Cédula: ${formatCedula(cedulaRaw)}**` : ''
     await supabase.from('chat_messages').insert({
       room_id: room.id, sender_type:'client', lawyer_id: null,
-      content: `Hola, mi nombre es ${nombre} ${apellido}.\n\n**Ubicación:** ${ubicacionTxt}\n**Área(s):** ${areas.join(', ')}\n\n**Descripción del caso:**\n${descripcion}${resumenBloque}`,
+      content: `Hola, mi nombre es ${nombre} ${apellido}.${cedulaLinea}\n\n**Ubicación:** ${ubicacionTxt}\n**Área(s):** ${areas.join(', ')}\n\n**Descripción del caso:**\n${descripcion}${resumenBloque}`,
     })
     // En el flujo guiado por IA no pasamos por la lista (`lawyers` queda vacío),
     // así que sumamos el profesional recomendado por la IA para poder notificarlo.
     const todosAbogados = [...lawyers.cercanos, ...lawyers.porArea]
     if (profesionalIA && !todosAbogados.some(l => l.id === profesionalIA.id)) {
       todosAbogados.push(profesionalIA)
+    }
+    // Flujo deep-link: el profesional no vino por la lista, así que lo sumamos
+    // para que /api/notify lo avise igual que en el flujo IA.
+    if (profesionalDeepLink && !todosAbogados.some(l => l.id === profesionalDeepLink.id)) {
+      todosAbogados.push(profesionalDeepLink)
     }
     for (const abogado of todosAbogados.filter(l => picked.includes(l.id))) {
       // El email lo resuelve /api/notify server-side a partir del lawyerId,
@@ -1559,7 +1654,7 @@ export default function ChatSection() {
 
           <div className={styles.centerContent}>
             {step === 'cedula' && (
-              <StepCedula onNew={() => setStep('triage')} onResume={handleResume} />
+              <StepCedula onNew={handleNew} onResume={handleResume} />
             )}
 
             {step === 'chat' && (
@@ -1788,6 +1883,75 @@ export default function ChatSection() {
         </div>
       )}
 
+      {/* ── Paso intermedio: ¿cómo elegir profesional? ──
+          Tras la cédula, el cliente decide si quiere ayuda de la IA para
+          encontrar profesional o prefiere elegirlo él mismo. El resto del
+          flujo NO cambia: "IA" → triage; "yo mismo" → formulario manual. */}
+      {step === 'metodo' && (
+        <div className={styles.floatingLayout} ref={lawyersRef}>
+          <SideCards cards={CARDS_LEFT} side="left" />
+          <div className={styles.centerContent}>
+            <div className={`${styles.card} aap-card-cedula`}>
+              <p className={styles.cedulaTitle}>¿Cómo quieres elegir tu profesional?</p>
+              <p className={styles.cedulaHint}>
+                Deja que nuestro asistente te oriente según tu caso, o elige tú mismo entre los profesionales disponibles.
+              </p>
+
+              <div className={styles.metodoGrid}>
+                {/* Opción IA */}
+                <button
+                  type="button"
+                  className={`aap-card-tipo ${styles.metodoCard}`}
+                  onClick={() => setStep('triage')}
+                >
+                  <span className={styles.metodoIcon} data-variant="ia" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"
+                      strokeLinecap="round" strokeLinejoin="round" width="30" height="30">
+                      <path d="M12 3v2M12 19v2M5 12H3M21 12h-2M6.3 6.3 4.9 4.9M19.1 19.1l-1.4-1.4M17.7 6.3l1.4-1.4M4.9 19.1l1.4-1.4"/>
+                      <circle cx="12" cy="12" r="3.2"/>
+                    </svg>
+                  </span>
+                  <span className={styles.metodoLabel}>Con ayuda de la IA</span>
+                  <span className={styles.metodoDesc}>
+                    Responde unas preguntas y te recomendamos al profesional ideal para tu caso.
+                  </span>
+                  <span className={styles.metodoTag}>Recomendado</span>
+                </button>
+
+                {/* Opción manual */}
+                <button
+                  type="button"
+                  className={`aap-card-tipo ${styles.metodoCard}`}
+                  onClick={() => {
+                    // Flujo manual: el cliente elige todo → form completo, sin modo IA.
+                    setSolicitudAbierta(false); setAreasBloqueadas(false)
+                    setDesdeIA(false); setProfesionalIA(null); setCostoIA('')
+                    setStep('form')
+                  }}
+                >
+                  <span className={styles.metodoIcon} data-variant="manual" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"
+                      strokeLinecap="round" strokeLinejoin="round" width="30" height="30">
+                      <path d="M9 11l3 3L22 4"/>
+                      <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+                    </svg>
+                  </span>
+                  <span className={styles.metodoLabel}>Elegir yo mismo</span>
+                  <span className={styles.metodoDesc}>
+                    Explora los profesionales disponibles y selecciona directamente a quién consultar.
+                  </span>
+                </button>
+              </div>
+
+              <button className={styles.btnBack} style={{ marginTop: 22 }} onClick={() => setStep('cedula')}>
+                ← Volver
+              </button>
+            </div>
+          </div>
+          <SideCards cards={CARDS_RIGHT} side="right" />
+        </div>
+      )}
+
       {step === 'triage' && (
         <div className={styles.floatingLayout} ref={lawyersRef}>
           <SideCards cards={CARDS_LEFT} side="left" />
@@ -1848,6 +2012,32 @@ export default function ChatSection() {
         <div className={styles.form}>
           <div className={`${styles.formCard} aap-card-form`}>
 
+            {/* ── Deep-link desde la tarjeta del profesional: viene ya elegido y
+                se muestra BLOQUEADO. El cliente completa sus datos + descripción
+                y entra directo al chat con este profesional. ── */}
+            {profesionalDeepLink && (
+              <div className={styles.deepLinkBanner}>
+                <img
+                  className={styles.deepLinkAvatar}
+                  src={profesionalDeepLink.foto_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(`${profesionalDeepLink.nombre||''} ${profesionalDeepLink.apellido||''}`.trim())}&background=0d2d5e&color=c9a84c`}
+                  alt={`${profesionalDeepLink.nombre||''} ${profesionalDeepLink.apellido||''}`.trim()}
+                  width="48" height="48" loading="lazy" decoding="async"
+                />
+                <div className={styles.deepLinkInfo}>
+                  <span className={styles.deepLinkLabel}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                    Consulta con
+                  </span>
+                  <span className={styles.deepLinkName}>
+                    {`${profesionalDeepLink.nombre||''} ${profesionalDeepLink.apellido||''}`.trim()}
+                  </span>
+                  {profesionalDeepLink.area_derecho && (
+                    <span className={styles.deepLinkArea}>{profesionalDeepLink.area_derecho}</span>
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* ── Guiado por IA: el asistente ya tiene el caso, el área y el
                 profesional; el cliente solo completa sus datos. Recordamos el
                 costo sugerido para que no se pierda al cambiar de pantalla. ── */}
@@ -1866,8 +2056,9 @@ export default function ChatSection() {
               </div>
             )}
 
-            {/* ── Selector de tipo de profesional (oculto en flujo IA) ─────── */}
-            {!desdeIA && (
+            {/* ── Selector de tipo de profesional (oculto en flujo IA y en
+                deep-link: el tipo ya lo fija el profesional elegido) ───────── */}
+            {!desdeIA && !profesionalDeepLink && (
             <div className={styles.field}>
               <label className={styles.label}>
                 ¿Qué tipo de profesional necesitas? <span className={styles.required}>*</span>
@@ -2085,7 +2276,7 @@ export default function ChatSection() {
             <button className={styles.btnGold} onClick={handleFormSubmit} disabled={submitting || sending}>
               {solicitudAbierta
                 ? ((submitting || sending) ? 'Publicando…' : 'Publicar mi consulta')
-                : desdeIA
+                : (desdeIA || profesionalDeepLink)
                   ? ((submitting || sending) ? 'Entrando a la consulta…' : 'Entrar a la consulta')
                   : (submitting
                       ? (form.tipo_profesional === 'contador' ? 'Buscando contadores…' : 'Buscando abogados…')

@@ -513,3 +513,119 @@
   transition: background 0.18s, border-color 0.18s, color 0.18s;
 }
 .btnCancel:hover { background: rgba(13, 45, 94, 0.05); border-color: #1a5276; color: #0d2d5e; }
+/* ─────────────────────────────────────────────────────────────────────────
+   Código oficial de la plataforma — tarjeta navy destacada arriba de la lista.
+   ───────────────────────────────────────────────────────────────────────── */
+.platCard {
+  position: relative;
+  overflow: hidden;
+  border-radius: 18px;
+  padding: 22px 22px 20px;
+  margin-bottom: 26px;
+  background:
+    radial-gradient(ellipse at 12% 0%, rgba(201,168,76,0.16) 0%, transparent 55%),
+    linear-gradient(155deg, #15376b 0%, #0d2d5e 55%, #081f44 100%);
+  border: 1px solid rgba(201,168,76,0.55);
+  box-shadow:
+    0 12px 30px rgba(13,45,94,0.28),
+    0 0 0 1px rgba(201,168,76,0.14),
+    inset 0 1px 0 rgba(255,255,255,0.08);
+}
+.platGlow {
+  position: absolute;
+  top: -40%; right: -10%;
+  width: 260px; height: 260px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(201,168,76,0.22), transparent 70%);
+  pointer-events: none;
+}
+.platBadge {
+  display: inline-block;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #0d2d5e;
+  background: linear-gradient(135deg, #f2d580, #c9a84c 55%, #9a7a2c);
+  border-radius: 999px;
+  padding: 4px 12px;
+  margin-bottom: 16px;
+  box-shadow: 0 2px 8px rgba(201,168,76,0.4);
+}
+.platBody {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+.platQrBox {
+  flex-shrink: 0;
+  width: 150px; height: 150px;
+  display: grid;
+  place-items: center;
+  background: #FAFAFA;
+  border-radius: 14px;
+  border: 1px solid rgba(201,168,76,0.4);
+  box-shadow: 0 6px 18px rgba(0,0,0,0.25);
+}
+.platQrImg { width: 130px; height: 130px; display: block; }
+.platInfo { flex: 1; min-width: 0; }
+.platTitle {
+  font-family: 'Cinzel', serif;
+  font-size: 1.08rem;
+  font-weight: 700;
+  color: #ffffff;
+  margin: 0 0 6px;
+}
+.platDesc {
+  font-size: 0.84rem;
+  line-height: 1.55;
+  color: rgba(255,255,255,0.78);
+  margin: 0 0 12px;
+  max-width: 46ch;
+}
+.platCodigo {
+  font-family: 'Courier New', monospace;
+  font-size: 1.1rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: #e8c96a;
+  margin: 0 0 4px;
+}
+.platUrl {
+  font-size: 0.82rem;
+  color: rgba(232,201,106,0.9);
+  text-decoration: none;
+  border-bottom: 1px solid rgba(232,201,106,0.3);
+}
+.platUrl:hover { color: #f2d580; border-bottom-color: rgba(232,201,106,0.7); }
+.platActions {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.platActions .btnDownload,
+.platActions .btnEdit {
+  background: rgba(255,255,255,0.95);
+  border-color: rgba(201,168,76,0.5);
+  color: #0d2d5e;
+}
+.platActions .btnDownload:hover,
+.platActions .btnEdit:hover { background: #ffffff; }
+
+.listHeading {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(13,45,94,0.5);
+  margin: 0 0 12px;
+}
+
+@media (max-width: 620px) {
+  .platBody { flex-direction: column; align-items: stretch; text-align: center; }
+  .platQrBox { margin: 0 auto; }
+  .platDesc { max-width: none; }
+  .platActions { flex-direction: row; justify-content: center; }
+}

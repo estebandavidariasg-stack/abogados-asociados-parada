@@ -19,6 +19,19 @@
 .bell:focus-visible { outline: 2px solid #c9a84c; outline-offset: 2px; }
 .bellOpen { background: rgba(201, 168, 76, 0.22); border-color: rgba(201, 168, 76, 0.7); }
 
+/* ── Campana de dinero ($): acento verde esmeralda + dorado (tono "pago"),
+      distinto del rojo de urgencia de la campana de alertas. ── */
+.bellDinero {
+  border-color: rgba(16, 122, 87, 0.4);
+  background: rgba(16, 122, 87, 0.08);
+  color: #0f7a57;
+}
+.bellDinero:hover { background: rgba(16, 122, 87, 0.16); border-color: rgba(16, 122, 87, 0.6); }
+.bellDinero:focus-visible { outline-color: #0f7a57; }
+.bellDinero.bellOpen { background: rgba(16, 122, 87, 0.2); border-color: rgba(16, 122, 87, 0.7); }
+/* Badge de dinero: dorado sólido (lee como "$"), no rojo de alerta. */
+.badgeDinero { background: #b8841c; }
+
 .badge {
   position: absolute;
   top: -5px;
@@ -62,6 +75,15 @@
   from { opacity: 0; transform: translateY(-8px); }
   to   { opacity: 1; transform: translateY(0); }
 }
+
+/* Dropdown de la campana de dinero: filete superior esmeralda para reforzar
+   que es otra bandeja (pagos/cobros), no las alertas operativas. */
+.dropdownDinero { border-color: rgba(16, 122, 87, 0.4); }
+.dropdownDinero .dropHeader {
+  border-bottom-color: rgba(16, 122, 87, 0.18);
+  box-shadow: inset 0 3px 0 -1px rgba(16, 122, 87, 0.5);
+}
+.dropdownDinero .dropTitle { color: #0f7a57; }
 
 .dropHeader {
   display: flex;
@@ -127,6 +149,39 @@
 }
 .iconWarn   { background: rgba(214, 52, 44, 0.12); color: #c0392b; }
 .iconReview { background: rgba(201, 168, 76, 0.16); color: #b8841c; }
+/* Crítico: rojo más saturado y sólido para máxima urgencia. */
+.iconCritical { background: #c0392b; color: #fff; }
+/* Pago a profesional: verde esmeralda. */
+.iconPago  { background: rgba(16, 122, 87, 0.14); color: #0f7a57; }
+/* Cobro de gestor: dorado/ámbar (tono distinto al pago). */
+.iconCobro { background: rgba(184, 132, 28, 0.16); color: #a86e12; }
+
+/* ── Tarjeta crítica: reasignación obligatoria (la más urgente) ── */
+.cardCritical {
+  background: rgba(214, 52, 44, 0.06);
+  border: 1px solid rgba(214, 52, 44, 0.28);
+  border-left: 4px solid #c0392b;
+  box-shadow: 0 2px 10px rgba(192, 57, 43, 0.12);
+}
+.cardCritical:hover { background: rgba(214, 52, 44, 0.1); }
+.cardCritical .cardTipo { color: #c0392b; }
+
+/* Aviso "barrera de 4h" dentro de la tarjeta crítica. */
+.cardBarrier {
+  margin: 5px 0 0;
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: #c0392b;
+  line-height: 1.4;
+}
+
+/* Línea de monto (pagos y cobros). */
+.cardMonto { margin: 5px 0 0; font-size: 0.84rem; color: #2c3e5c; line-height: 1.45; }
+.cardMonto strong { color: #0d2d5e; font-variant-numeric: tabular-nums; }
+
+/* Botón de acción en tono crítico (rojo) para la reasignación obligatoria. */
+.btnCriticalAction { background: #c0392b; }
+.btnCriticalAction:hover { background: #a5281f; }
 
 .cardBody { flex: 1; min-width: 0; }
 .cardTop { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
