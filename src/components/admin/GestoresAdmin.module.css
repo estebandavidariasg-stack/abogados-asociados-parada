@@ -82,11 +82,13 @@
   border-radius: 999px; padding: 6px 13px;
   transition: background 0.15s, color 0.15s, border-color 0.15s;
 }
-.statusChip:hover { color: #0d2d5e; background: rgba(13,45,94,0.09); }
+.statusChip:hover:not(.statusChipActive) { color: #0d2d5e; background: rgba(13,45,94,0.09); }
 .statusChipActive {
   color: #0d2d5e; font-weight: 700;
   background: rgba(201,168,76,0.14); border-color: rgba(201,168,76,0.45);
 }
+/* El chip activo conserva su resaltado dorado en hover (un punto más intenso). */
+.statusChipActive:hover { background: rgba(201,168,76,0.22); border-color: rgba(201,168,76,0.6); }
 .chipCount {
   display: inline-grid; place-items: center; min-width: 18px; height: 18px;
   padding: 0 5px; border-radius: 999px; line-height: 1;
@@ -251,7 +253,9 @@
   border-radius: 999px; padding: 3px 10px;
 }
 
-.actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+/* Alinea el select (con su label encima) y el botón "Ver detalle" por su base,
+   para que ambos controles queden a la misma altura. */
+.actions { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; }
 
 .assignRow { display: flex; flex-direction: column; gap: 3px; }
 .assignLabel { font-size: 0.66rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: rgba(13,45,94,0.5); }
@@ -275,20 +279,73 @@
 .btnReject:hover { background: rgba(220,80,80,0.14); }
 .btnExpand { color: #0d2d5e; background: rgba(13,45,94,0.06); border-color: rgba(13,45,94,0.16); }
 .btnExpand:hover { background: rgba(13,45,94,0.1); }
-.chev { transition: transform 0.2s; font-size: 0.7rem; }
-.chevOpen { transform: rotate(180deg); }
+.chevR { font-size: 1rem; line-height: 1; margin-left: -1px; transition: transform 0.16s ease; }
+.btnExpand:hover .chevR { transform: translateX(2px); }
 
-/* ── Panel expandible ── */
+/* ── Bloques internos del detalle (perfil / trazabilidad / cobros) ── */
 .panel {
-  border-top: 1px solid rgba(13,45,94,0.08);
-  background: rgba(13,45,94,0.015);
-  padding: 18px;
   display: flex; flex-direction: column; gap: 18px;
 }
-.panelFoot {
-  border-top: 1px solid rgba(13,45,94,0.08);
-  padding: 12px 18px; display: flex; justify-content: flex-end;
+
+/* ══════════════════════════════════════════════════════════════════
+   Modal de detalle del gestor
+   ══════════════════════════════════════════════════════════════════ */
+.modalBackdrop {
+  position: fixed; inset: 0; z-index: 1000;
+  background: rgba(9, 24, 48, 0.55); backdrop-filter: blur(2px);
+  display: flex; align-items: flex-start; justify-content: center;
+  padding: max(24px, 5vh) 16px 24px;
+  overflow-y: auto;
+  animation: modalFade 0.18s ease;
+}
+.modal {
+  width: min(760px, 100%); background: #fff; border-radius: 18px;
+  box-shadow: 0 24px 60px rgba(9, 24, 48, 0.32);
+  display: flex; flex-direction: column; max-height: calc(100vh - 10vh);
+  overflow: hidden; animation: modalRise 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.modalHead {
+  display: flex; align-items: center; justify-content: space-between; gap: 14px;
+  padding: 18px 20px; border-bottom: 1px solid rgba(13,45,94,0.1);
+  background: linear-gradient(180deg, #f7f9fc, #fff);
+}
+.modalHeadInfo { display: flex; align-items: center; gap: 13px; min-width: 0; }
+.modalAvatar {
+  flex-shrink: 0; width: 42px; height: 42px; border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'Cormorant Garamond', Georgia, serif; font-size: 1.35rem; font-weight: 700; color: #0d2d5e;
+  background: linear-gradient(135deg, #f2d580, #c9a84c 55%, #9a7a2c);
+}
+.modalTitle { margin: 0; font-size: 1.1rem; font-weight: 800; color: #0d2d5e; }
+.modalSub { margin: 2px 0 0; font-size: 0.82rem; color: #55617a; }
+.modalSub strong { color: #9a7a2c; font-family: 'Raleway', sans-serif; }
+.modalClose {
+  flex-shrink: 0; width: 34px; height: 34px; border-radius: 9px;
+  border: 1px solid rgba(13,45,94,0.14); background: #fff; color: #55617a; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center; transition: all .15s ease;
+}
+.modalClose:hover { background: #f4f7fc; color: #0d2d5e; border-color: rgba(13,45,94,0.28); }
+.modalBody {
+  padding: 18px 20px; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 18px;
   background: rgba(13,45,94,0.015);
+}
+.modalFoot {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 13px 20px; border-top: 1px solid rgba(13,45,94,0.1); background: #fff;
+}
+.modalDone {
+  border: 1px solid rgba(13,45,94,0.16); background: #0d2d5e; color: #fff; cursor: pointer;
+  font-family: 'Raleway', sans-serif; font-size: 0.82rem; font-weight: 700; padding: 9px 18px; border-radius: 10px;
+  transition: filter .15s ease;
+}
+.modalDone:hover { filter: brightness(1.1); }
+
+@keyframes modalFade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes modalRise { from { opacity: 0; transform: translateY(12px) scale(0.99); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .modalBackdrop, .modal { animation: none; }
+  .chevR, .btnExpand:hover .chevR { transition: none; transform: none; }
 }
 
 .block {
@@ -419,19 +476,35 @@
 .cobroPreview strong { color: #9a7a2c; }
 
 .cobroTableWrap { margin-top: 16px; overflow-x: auto; }
-.cobroTable { width: 100%; border-collapse: collapse; font-size: 0.83rem; }
+.cobroTable {
+  width: 100%; border-collapse: collapse; font-size: 0.83rem;
+  font-family: 'Raleway', sans-serif;
+}
+/* Encabezados y celdas centrados. */
 .cobroTable th {
-  text-align: left; font-size: 0.66rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+  text-align: center; font-size: 0.66rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
   color: rgba(13,45,94,0.5); padding: 6px 10px; border-bottom: 1px solid rgba(13,45,94,0.12);
 }
-.cobroTable td { padding: 9px 10px; border-bottom: 1px solid rgba(13,45,94,0.06); color: #263149; }
-.tRight { text-align: right; }
-.tNota { color: #55617a; max-width: 180px; }
-.chipPagado, .chipPendiente {
+.cobroTable td {
+  padding: 9px 10px; border-bottom: 1px solid rgba(13,45,94,0.06); color: #263149;
+  text-align: center; vertical-align: middle;
+}
+/* Montos y códigos en Raleway con cifras tabulares (no Courier New) para que
+   coincidan con la tipografía del resto del panel y queden bien alineados. */
+.cobroTable .mono {
+  font-family: 'Raleway', sans-serif; letter-spacing: 0.01em;
+  font-variant-numeric: tabular-nums; font-weight: 600;
+}
+.tRight { text-align: center; }
+.tNota { color: #55617a; max-width: 220px; }
+.chipPagado, .chipPendiente, .chipSolicitado, .chipDisponible {
+  display: inline-block; white-space: nowrap;
   font-size: 0.68rem; font-weight: 700; border-radius: 999px; padding: 3px 9px;
 }
-.chipPagado   { color: #1f7a4d; background: rgba(46,204,113,0.14); border: 1px solid rgba(46,204,113,0.4); }
-.chipPendiente{ color: #8a6a28; background: rgba(201,168,76,0.16); border: 1px solid rgba(201,168,76,0.4); }
+.chipPagado    { color: #1f7a4d; background: rgba(46,204,113,0.14); border: 1px solid rgba(46,204,113,0.4); }
+.chipPendiente { color: #8a6a28; background: rgba(201,168,76,0.16); border: 1px solid rgba(201,168,76,0.4); }
+.chipDisponible{ color: #8a6a28; background: rgba(201,168,76,0.16); border: 1px solid rgba(201,168,76,0.4); }
+.chipSolicitado{ color: #2f6bd8; background: rgba(47,107,216,0.12); border: 1px solid rgba(47,107,216,0.4); }
 .pagarBtn {
   cursor: pointer; font-family: 'Raleway', sans-serif; font-size: 0.74rem; font-weight: 700; color: #0d2d5e;
   background: rgba(13,45,94,0.06); border: 1px solid rgba(13,45,94,0.16);
@@ -439,8 +512,58 @@
 }
 .pagarBtn:hover { background: rgba(13,45,94,0.1); }
 
+/* ── Pagos: configuración de tarifa/comisión ── */
+.cfgHead { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.cfgGrid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 10px; }
+.cfgCard {
+  display: flex; flex-direction: column; gap: 4px; align-items: flex-start;
+  padding: 14px 16px; border-radius: 12px;
+  border: 1px solid rgba(201,168,76,0.32); background: rgba(201,168,76,0.06);
+}
+.cfgLabel { font-size: 0.68rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: rgba(13,45,94,0.55); }
+.cfgValue {
+  font-family: 'Raleway', sans-serif; font-size: 1.4rem; font-weight: 800;
+  font-variant-numeric: tabular-nums lining-nums; letter-spacing: -0.015em; color: #0d2d5e; line-height: 1.1;
+}
+.cfgHelp { font-size: 0.82rem; color: #55617a; line-height: 1.5; margin: 12px 0 0; }
+.cfgForm {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: end;
+  padding: 14px; border: 1px solid rgba(201,168,76,0.3); background: rgba(201,168,76,0.05); border-radius: 12px;
+}
+.cfgFormActions { display: flex; align-items: center; gap: 8px; grid-column: 1 / -1; }
+
+/* ── Comisiones de gestores: badge de solicitudes + fila + acción ── */
+.solicPill {
+  align-self: center;
+  font-size: 0.72rem; font-weight: 700; letter-spacing: 0.02em;
+  color: #2f6bd8; background: rgba(47,107,216,0.1);
+  border: 1px solid rgba(47,107,216,0.4);
+  border-radius: 999px; padding: 4px 12px; white-space: nowrap;
+}
+.rowSolic { background: rgba(47,107,216,0.05); }
+.pagarComisionBtn {
+  display: inline-flex; align-items: center; gap: 5px;
+  cursor: pointer; font-family: 'Raleway', sans-serif;
+  font-size: 0.76rem; font-weight: 700; color: #0d2d5e;
+  background: linear-gradient(135deg, #f2d580, #c9a84c 55%, #9a7a2c);
+  border: none; border-radius: 8px; padding: 6px 12px; white-space: nowrap;
+}
+.pagarComisionBtn:hover { filter: brightness(1.05); }
+
+/* ── Pagos: resumen (tiles) ── */
+.pagosStatGrid { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 10px; }
+.tile[data-tone="req"] { border-color: rgba(47,107,216,0.35); background: rgba(47,107,216,0.07); }
+.tile[data-tone="req"] .tileValue { color: #2f6bd8; }
+
+/* ── Pagos: tabla ── */
+.pagoGestor { display: block; font-family: 'Raleway', sans-serif; font-size: 0.68rem; font-weight: 600; color: #8a6a28; margin-top: 2px; }
+.tableNote { font-size: 0.76rem; color: #8791a5; margin: 10px 0 0; }
+
 /* ── Responsive ── */
 @media (max-width: 720px) {
+  .pagosStatGrid { grid-template-columns: repeat(2, minmax(0,1fr)); }
+  .cfgGrid { grid-template-columns: 1fr; }
+  .cfgForm { grid-template-columns: 1fr; }
   .statGrid { grid-template-columns: repeat(2, minmax(0,1fr)); }
   .cobroForm { grid-template-columns: 1fr 1fr; }
   .cobroNota { grid-column: 1 / -1; }

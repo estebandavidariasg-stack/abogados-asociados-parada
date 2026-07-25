@@ -82,6 +82,31 @@
   box-shadow: 0 0 0 3px rgba(201, 168, 76, 0.2);
 }
 
+.redSocial { margin-top: 0.9rem; text-align: left; }
+.input {
+  width: 100%;
+  padding: 0.72rem 0.9rem;
+  font-family: inherit;
+  font-size: 0.92rem;
+  color: #1a2338;
+  background: #fff;
+  border: 1.5px solid rgba(13, 45, 94, 0.18);
+  border-radius: 12px;
+  transition: border-color 0.18s, box-shadow 0.18s;
+}
+.input::placeholder { color: #9aa4b8; }
+.input:focus {
+  outline: none;
+  border-color: var(--gold, #c9a84c);
+  box-shadow: 0 0 0 3px rgba(201, 168, 76, 0.2);
+}
+.helper {
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: #6b7896;
+  margin: 0.45rem 0.1rem 0;
+}
+
 .err { color: #9a2b2b; font-size: 0.85rem; margin: 0.8rem 0 0; }
 
 .btn {

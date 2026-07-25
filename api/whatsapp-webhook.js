@@ -16,6 +16,23 @@
 //     para no entrar en bucles de reintento.
 // ───────────────────────────────────────────────────────────────────────────
 
+import crypto from 'node:crypto'
+
+// Meta firma cada POST con HMAC-SHA256 del cuerpo CRUDO en X-Hub-Signature-256.
+// Para verificarla necesitamos el body sin parsear, así que desactivamos el
+// body parser de Vercel y lo leemos como Buffer nosotros mismos.
+export const config = { api: { bodyParser: false } }
+
+// Lee el cuerpo crudo de la petición como Buffer.
+function readRawBody(req) {
+  return new Promise((resolve, reject) => {
+    const chunks = []
+    req.on('data', (c) => chunks.push(c))
+    req.on('end', () => resolve(Buffer.concat(chunks)))
+    req.on('error', reject)
+  })
+}
+
 // ── Variables de entorno (ya configuradas en Vercel) ───────────────────────
 const SUPABASE_URL =
   process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL
@@ -261,9 +278,38 @@ export default async function handler(req, res) {
         return res.status(403).end()
       }
     }
+
+    // Cuerpo crudo (bodyParser desactivado) → necesario para HMAC y para parsear.
+    let raw
     try {
+      raw = await readRawBody(req)
+    } catch {
+      return res.status(200).json({ ok: true })
+    }
+
+    // Verificación de firma HMAC (opt-in): si WHATSAPP_APP_SECRET está definido,
+    // exigimos que X-Hub-Signature-256 coincida con el HMAC-SHA256 del cuerpo
+    // crudo, calculado con el App Secret de Meta. Comparación en tiempo
+    // constante. Sin el secreto se conserva el comportamiento actual.
+    const appSecret = process.env.WHATSAPP_APP_SECRET
+    if (appSecret) {
+      const recibida = String(req.headers['x-hub-signature-256'] || '')
+      const esperada =
+        'sha256=' + crypto.createHmac('sha256', appSecret).update(raw).digest('hex')
+      const iguales =
+        recibida.length === esperada.length &&
+        crypto.timingSafeEqual(Buffer.from(recibida), Buffer.from(esperada))
+      if (!iguales) return res.status(401).end()
+    }
+
+    try {
+      // Parseo del payload de Meta desde el cuerpo crudo.
+      let payload
+      try { payload = JSON.parse(raw.toString('utf8') || '{}') }
+      catch { return res.status(200).json({ ok: true }) }
+
       // Extracción defensiva del payload de Meta.
-      const value = req.body?.entry?.[0]?.changes?.[0]?.value
+      const value = payload?.entry?.[0]?.changes?.[0]?.value
       const msg   = value?.messages?.[0]
 
       // Sin mensaje (eventos de status/delivery, etc.) → 200 y fin.

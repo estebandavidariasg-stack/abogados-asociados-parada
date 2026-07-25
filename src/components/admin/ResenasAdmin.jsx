@@ -189,6 +189,22 @@ export default function ResenasAdmin() {
               <p className={styles.meta}>
                 <strong>{r.nombre || 'Anónimo'}</strong>{r.correo ? ` · ${r.correo}` : ''}
               </p>
+              {r.red_social && (
+                <a
+                  className={styles.redSocial}
+                  href={r.red_social}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title={r.red_social}
+                >
+                  <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                    <polyline points="15 3 21 3 21 9" />
+                    <line x1="10" y1="14" x2="21" y2="3" />
+                  </svg>
+                  Red social
+                </a>
+              )}
               <p className={styles.prof}>
                 {r.professional_id && profs[r.professional_id] ? (
                   <>

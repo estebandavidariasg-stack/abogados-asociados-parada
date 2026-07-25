@@ -49,8 +49,10 @@
   font-size: clamp(2rem, 4vw, 3.2rem);
   font-weight: 300;
   color: var(--navy);
-  margin-bottom: 1rem;
+  margin: 0 auto 1rem;
+  max-width: 20ch;            /* fuerza el quiebre en ~2 líneas, no de borde a borde */
   line-height: 1.15;
+  text-wrap: balance;         /* reparte las líneas de forma pareja */
 }
 
 .title em {

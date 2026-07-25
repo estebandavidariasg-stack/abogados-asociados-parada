@@ -138,6 +138,11 @@ export default function AdminStats({
   // (Solicitudes), no repetida en cada apartado.
   const mostrarGrafica = activeTab === 'pending' && chartData.some(d => d.Registros || d.Consultas)
 
+  // Gestores y Pagos y cobros tienen su propio módulo con sub-pestañas y
+  // resúmenes propios, así que las tarjetas genéricas del panel sobran ahí —
+  // se ocultan para no duplicar información.
+  if (activeTab === 'gestores' || activeTab === 'pagos') return null
+
   return (
     <div className={styles.wrap}>
       <div className={styles.cards}>

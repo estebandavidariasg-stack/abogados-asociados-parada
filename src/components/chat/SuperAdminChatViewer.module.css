@@ -170,7 +170,9 @@
 
 /* Toggle "Solo verificación" */
 .verifToggle,
-.verifToggleActive {
+.verifToggleActive,
+.verifDoneToggle,
+.verifDoneToggleActive {
   display: inline-flex;
   align-items: center;
   gap: 7px;
@@ -224,6 +226,23 @@
   background: #0d2d5e;
   color: var(--gold, #c9a84c);
 }
+
+/* Toggle "Verificadas" — variante VERDE (consulta ya pagada = verificada) */
+.verifDoneToggle {
+  border: 1.5px solid #bfe6cf;
+  background: #ffffff;
+  color: #1f7a4d;
+}
+.verifDoneToggle:hover { background: #eefbf3; color: #185f3b; }
+.verifDoneToggleActive {
+  border: 1.5px solid #2e9e5f;
+  background: #1f7a4d;
+  color: #ffffff;
+  box-shadow: 0 2px 10px rgba(31,122,77,0.35);
+}
+.verifDoneToggleActive:hover { background: #256a45; }
+.verifDoneToggle .verifCount { background: #1f7a4d; color: #ffffff; }
+.verifDoneToggleActive .verifCount { background: #ffffff; color: #1f7a4d; }
 
 /* Chip de verificación en la tarjeta del sidebar — píldora dorada sólida */
 .verifChip {
@@ -282,6 +301,19 @@
   border: 1px solid #b9963a;
   box-shadow: 0 2px 8px rgba(201,168,76,0.5);
   white-space: nowrap;
+}
+
+/* Verificada (verde): el profesional ya pagó → la consulta quedó verificada. */
+.verifChipDone {
+  display: inline-flex; align-items: center; gap: 5px; align-self: flex-start;
+  margin: 6px 0 2px; padding: 3px 10px; border-radius: 999px;
+  font-size: 0.67rem; font-weight: 800; letter-spacing: 0.02em;
+  color: #1f7a4d; background: #e7f6ee; border: 1px solid #bfe6cf; white-space: nowrap;
+}
+.verifChipHeaderDone {
+  display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 999px;
+  font-size: 0.72rem; font-weight: 800; letter-spacing: 0.01em;
+  color: #1f7a4d; background: #e7f6ee; border: 1px solid #bfe6cf; white-space: nowrap;
 }
 
 /* Respeta prefers-reduced-motion */
@@ -595,6 +627,15 @@
   justify-content: space-between;
   gap: 12px;
   flex-shrink: 0;
+  flex-wrap: wrap;              /* meta y acciones bajan de línea antes de aplastarse/cortarse */
+}
+
+/* Bloque meta (título / cliente / código / abogados) — el primer hijo directo
+   del header no lleva clase propia. Le damos base flexible + min-width:0 para
+   que se mantenga legible y empuje las acciones a otra fila cuando falta ancho. */
+.chatHeader > div:first-child {
+  flex: 1 1 260px;
+  min-width: 0;
 }
 
 .chatTitle {
@@ -958,6 +999,7 @@
   .unifiedBar .searchInput,
   .unifiedBar .filterSelect,
   .verifToggle, .verifToggleActive,
+  .verifDoneToggle, .verifDoneToggleActive,
   .unifiedBar .refreshBtn { width: 100%; justify-content: center; }
 }
 
@@ -978,7 +1020,8 @@
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
-  flex-shrink: 0;
+  min-width: 0;                /* puede encoger para que su flex-wrap interno actúe */
+  justify-content: flex-end;   /* las acciones quedan alineadas a la derecha al envolver */
 }
 
 .btnSendCard {
@@ -1029,6 +1072,296 @@
 @media (max-width: 720px) {
   .headerActions { width: 100%; }
   .btnSendCard, .headerActions .btnForceClose { flex: 1 1 auto; }
+}
+
+/* ══════════════════════════════════════════
+   COBRO AL PROFESIONAL (tarifa fija de plataforma)
+   Atado a la verificación de la consulta.
+   ══════════════════════════════════════════ */
+
+/* Botón primario "Generar cobro" — dorado on-brand */
+.btnCobro {
+  background: var(--gold, #c9a84c);
+  border: 1px solid #b9963a;
+  color: #0d2d5e;
+  border-radius: 6px;
+  padding: 7px 14px;
+  font-size: 0.72rem;
+  font-family: inherit;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: background 0.2s, box-shadow 0.2s, transform 0.1s;
+}
+.btnCobro:hover:not(:disabled) {
+  background: var(--gold-lt, #d8bd68);
+  box-shadow: 0 2px 8px rgba(201, 168, 76, 0.4);
+}
+.btnCobro:active:not(:disabled) { transform: translateY(1px); }
+.btnCobro:disabled { cursor: not-allowed; opacity: 0.65; }
+
+/* Cuando la sala está marcada para verificación, el cobro es el paso esperado:
+   lo destacamos ligeramente con un halo dorado pulsante y sutil. */
+.btnCobroDestacado {
+  box-shadow: 0 0 0 3px rgba(201, 168, 76, 0.28);
+  animation: cobroPulse 2s ease-in-out infinite;
+}
+@keyframes cobroPulse {
+  0%, 100% { box-shadow: 0 0 0 3px rgba(201, 168, 76, 0.22); }
+  50%      { box-shadow: 0 0 0 5px rgba(201, 168, 76, 0.40); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .btnCobroDestacado { animation: none; }
+}
+
+/* Estado "cargando estado del cobro" */
+.cobroLoading {
+  font-size: 0.72rem;
+  color: var(--muted, #6b7fa3);
+  font-style: italic;
+  white-space: nowrap;
+  align-self: center;
+}
+
+/* Chip de estado del cobro (existe pago) */
+.cobroChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+/* Pendiente — ámbar */
+.cobroChipPendiente {
+  color: #8a5a10;
+  background: rgba(230, 160, 40, 0.14);
+  border: 1px solid rgba(214, 140, 42, 0.55);
+}
+
+/* Pagado — verde */
+.cobroChipPagado {
+  color: #1f7a34;
+  background: rgba(76, 175, 80, 0.14);
+  border: 1px solid rgba(76, 175, 80, 0.55);
+}
+
+.cobroChipFecha {
+  font-weight: 600;
+  opacity: 0.85;
+}
+
+/* Nota "incluye 5% para el gestor" */
+.cobroChipNota {
+  font-weight: 600;
+  font-size: 0.66rem;
+  opacity: 0.9;
+  border-left: 1px solid currentColor;
+  padding-left: 7px;
+  margin-left: 1px;
+}
+
+/* Aviso de éxito inline (cuando el chip aún no se refrescó) */
+.cobroSuccess {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 11px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: #1f7a34;
+  background: rgba(76, 175, 80, 0.14);
+  border: 1px solid rgba(76, 175, 80, 0.5);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* Error inline dismissible — rojo suave */
+.cobroError {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px 5px 12px;
+  border-radius: 8px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #b02a1f;
+  background: rgba(192, 57, 43, 0.10);
+  border: 1px solid rgba(192, 57, 43, 0.4);
+  max-width: 320px;
+  line-height: 1.35;
+}
+.cobroErrorClose {
+  background: transparent;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  font-size: 0.78rem;
+  line-height: 1;
+  padding: 2px 4px;
+  border-radius: 4px;
+  flex-shrink: 0;
+  opacity: 0.75;
+  transition: opacity 0.15s, background 0.15s;
+}
+.cobroErrorClose:hover { opacity: 1; background: rgba(192, 57, 43, 0.15); }
+
+/* ── Resumen del cobro en el header (cuando existe pago) ── */
+.cobroResumenWrap {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 7px;
+  min-width: 220px;
+}
+.cobroChipRow {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+/* Luz verde — el profesional confirmó el pago */
+.luzVerde {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  color: #146c2c;
+  background: rgba(76, 175, 80, 0.16);
+  border: 1px solid rgba(76, 175, 80, 0.6);
+  box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.12);
+  line-height: 1.3;
+  text-align: right;
+}
+
+/* Tabla de desglose (resumen del header y modal). Numerales tabulares. */
+.cobroTabla {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.74rem;
+  color: var(--navy, #0d2d5e);
+}
+.cobroTd {
+  padding: 4px 8px 4px 0;
+  color: var(--muted, #4a6080);
+  white-space: nowrap;
+}
+.cobroTdNum {
+  padding: 4px 0;
+  text-align: right;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+  white-space: nowrap;
+}
+/* Fila resaltada: lo que paga el profesional */
+.cobroTrPaga .cobroTd,
+.cobroTrPaga .cobroTdNum {
+  border-top: 1px solid rgba(201, 168, 76, 0.5);
+  padding-top: 7px;
+  color: #8a5a10;
+  font-weight: 800;
+}
+.cobroSinGestor {
+  color: var(--muted, #8a97ad);
+  font-weight: 500;
+  font-style: italic;
+  font-size: 0.94em;
+}
+
+/* ── Modal "Definir cobro" ── */
+.cobroModal {
+  max-width: 460px;
+}
+.cobroForm {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.cobroField {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  flex: 1;
+}
+.cobroLabel {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--navy, #0d2d5e);
+  letter-spacing: 0.02em;
+}
+.cobroInput {
+  border: 1px solid rgba(13, 45, 94, 0.22);
+  border-radius: 6px;
+  padding: 9px 11px;
+  font-size: 0.9rem;
+  font-family: inherit;
+  color: var(--navy, #0d2d5e);
+  font-variant-numeric: tabular-nums;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.cobroInput:focus {
+  outline: none;
+  border-color: var(--gold, #c9a84c);
+  box-shadow: 0 0 0 3px rgba(201, 168, 76, 0.22);
+}
+.cobroPctRow {
+  display: flex;
+  gap: 12px;
+}
+.cobroValidacion {
+  margin: 0 0 12px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: #b02a1f;
+  background: rgba(192, 57, 43, 0.10);
+  border: 1px solid rgba(192, 57, 43, 0.4);
+  line-height: 1.4;
+}
+.cobroNota {
+  margin: 10px 0 0;
+  font-size: 0.72rem;
+  color: var(--muted, #6b7fa3);
+  font-style: italic;
+  line-height: 1.4;
+}
+/* En el modal la tabla ocupa el ancho y separa del formulario */
+.cobroModal .cobroTabla {
+  margin: 4px 0 4px;
+  font-size: 0.8rem;
+}
+.cobroModal .confirmActions {
+  margin-top: 18px;
+}
+
+@media (max-width: 720px) {
+  .btnCobro { flex: 1 1 auto; text-align: center; }
+  .cobroChip, .cobroSuccess { justify-content: center; }
+  .cobroError { max-width: 100%; width: 100%; box-sizing: border-box; }
+  .cobroResumenWrap { align-items: stretch; width: 100%; min-width: 0; }
+  .cobroChipRow { justify-content: center; }
+  .luzVerde { text-align: center; justify-content: center; }
+}
+
+@media (max-width: 480px) {
+  .cobroPctRow { flex-direction: column; gap: 12px; }
 }
 
 /* ── Modal confirmación envío de fichas ── */

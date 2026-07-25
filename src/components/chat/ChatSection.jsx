@@ -705,6 +705,7 @@ function RatingPanel({ roomId, onDone }) {
   const [lawyers, setLawyers]       = useState([])
   const [ratings, setRatings]       = useState({})
   const [comentario, setComentario] = useState('')
+  const [redSocial, setRedSocial]   = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted]   = useState(false)
 
@@ -727,6 +728,29 @@ function RatingPanel({ roomId, onDone }) {
     for (const [lawyer_id, rating] of Object.entries(ratings)) {
       await supabase.from('chat_ratings').insert({ room_id: roomId, lawyer_id, rating, comentario: comentario.trim() || null })
     }
+    // Además de la calificación privada (chat_ratings), enviamos la reseña a la
+    // tabla `resenas` vía RPC SECURITY DEFINER (misma anon key que OpinarPage).
+    // Best-effort: si falla no bloquea la UI ni el onDone.
+    try {
+      const vals = Object.values(ratings)
+      if (vals.length > 0) {
+        const promedio = Math.round(vals.reduce((a, b) => a + b, 0) / vals.length)
+        const pRating = Math.min(5, Math.max(1, promedio))
+        await fetch(`${SUPABASE_URL}/rest/v1/rpc/enviar_resena_directa`, {
+          method: 'POST',
+          headers: {
+            apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            p_room_id: roomId,
+            p_rating: pRating,
+            p_texto: comentario.trim() || null,
+            p_red_social: redSocial.trim() || null,
+          }),
+        })
+      }
+    } catch { /* best-effort */ }
     setSubmitted(true)
     setTimeout(onDone, 2000)
     setSubmitting(false)
@@ -779,6 +803,13 @@ function RatingPanel({ roomId, onDone }) {
           onChange={e => setComentario(e.target.value)}
           placeholder="¿Algo que quieras compartir sobre la atención?" rows={3} />
       </div>
+      <div style={{ marginBottom:20, display:'flex', flexDirection:'column', gap:6 }}>
+        <label className={styles.label}>Red social (opcional)</label>
+        <input className={styles.input} type="url" value={redSocial}
+          onChange={e => setRedSocial(e.target.value)}
+          placeholder="https://instagram.com/tu_usuario" />
+        <p className={styles.redSocialHelp}>Déjanos el link de tu red social (opcional). Ayuda a mostrar en las reseñas que eres una persona real.</p>
+      </div>
       <div style={{ display:'flex', gap:10 }}>
         <button className={styles.btnGold} style={{ flex:1 }} onClick={handleSubmit} disabled={submitting}>
           {submitting ? 'Enviando…' : 'Enviar calificación'}
@@ -826,7 +857,7 @@ function StepCedula({ onNew, onResume }) {
   return (
     <div className={`${styles.card} aap-card-cedula`}>
       <p className={styles.cedulaTitle}>Identificación</p>
-      <p className={styles.cedulaHint}>Ingresa tu cédula para iniciar o retomar una consulta.</p>
+      <p className={styles.cedulaHint}>Ingresa tu cédula para iniciar o retomar una consulta. Usamos este dato únicamente para proteger tu consulta, identificar tu proceso y garantizar la confidencialidad de tu información.</p>
       <div className={styles.field} style={{ marginBottom:16 }}>
         <label className={styles.label}>Número de cédula <span className={styles.required}>*</span></label>
         <input className={styles.input} value={cedula}
@@ -1643,7 +1674,10 @@ export default function ChatSection() {
       <div className={styles.header}>
         <h2 className={styles.title}>Consulta <span className={styles.titleGold}>Privada</span></h2>
         <p className={styles.subtitle}>
-          Conecta directamente con abogados y contadores especializados. Tu cédula se convierte en un código anónimo.
+          Describe tu situación y conecta con profesionales verificados de forma rápida y segura.
+        </p>
+        <p className={styles.subtitle} style={{ marginTop: '0.6rem', fontSize: '0.85rem', opacity: 0.8 }}>
+          Tu información personal permanece protegida durante todo el proceso mediante un sistema de identificación anónima.
         </p>
       </div>
 
@@ -1892,6 +1926,9 @@ export default function ChatSection() {
           <SideCards cards={CARDS_LEFT} side="left" />
           <div className={styles.centerContent}>
             <div className={`${styles.card} aap-card-cedula`}>
+              <button className={styles.btnBack} onClick={() => setStep('cedula')}>
+                ← Volver
+              </button>
               <p className={styles.cedulaTitle}>¿Cómo quieres elegir tu profesional?</p>
               <p className={styles.cedulaHint}>
                 Deja que nuestro asistente te oriente según tu caso, o elige tú mismo entre los profesionales disponibles.
@@ -1942,10 +1979,6 @@ export default function ChatSection() {
                   </span>
                 </button>
               </div>
-
-              <button className={styles.btnBack} style={{ marginTop: 22 }} onClick={() => setStep('cedula')}>
-                ← Volver
-              </button>
             </div>
           </div>
           <SideCards cards={CARDS_RIGHT} side="right" />
@@ -2011,6 +2044,7 @@ export default function ChatSection() {
       {step === 'form' && (
         <div className={styles.form}>
           <div className={`${styles.formCard} aap-card-form`}>
+            <button className={styles.btnBack} onClick={() => setStep('cedula')}>← Volver</button>
 
             {/* ── Deep-link desde la tarjeta del profesional: viene ya elegido y
                 se muestra BLOQUEADO. El cliente completa sus datos + descripción
@@ -2282,7 +2316,6 @@ export default function ChatSection() {
                       ? (form.tipo_profesional === 'contador' ? 'Buscando contadores…' : 'Buscando abogados…')
                       : (form.tipo_profesional === 'contador' ? 'Buscar contadores disponibles' : 'Buscar abogados disponibles'))}
             </button>
-            <button className={styles.btnBack} onClick={() => setStep('cedula')}>← Volver</button>
           </div>
         </div>
       )}
@@ -2355,6 +2388,11 @@ export default function ChatSection() {
       {/* ── Post-chat: banner + PQR + opción de continuar con otro profesional ── */}
       {step === 'post_chat' && (
         <div className={styles.lawyersWrap} ref={lawyersRef}>
+          <div className={`${styles.postChatActions} ${styles.postChatActionsTop}`}>
+            <button className={styles.btnBack} onClick={resetToStart}>
+              Salir
+            </button>
+          </div>
           <div className={styles.closedBanner}>
             <strong>Tu consulta anterior fue cerrada.</strong>
             Gracias por usar AAP. Si quieres, déjanos un comentario antes de continuar.
@@ -2414,18 +2452,18 @@ export default function ChatSection() {
               )}
             </div>
           )}
-
-          <div className={styles.postChatActions}>
-            <button className={styles.btnBack} onClick={resetToStart}>
-              Salir
-            </button>
-          </div>
         </div>
       )}
 
       {/* ── Elegir otro profesional (solo se llega desde post_chat al pulsar "Buscar otro") ── */}
       {step === 'choose_another' && (
         <div className={styles.lawyersWrap} ref={lawyersRef}>
+          <div className={`${styles.postChatActions} ${styles.postChatActionsTop}`}>
+            <button className={styles.btnBack} onClick={() => setStep('post_chat')}>
+              ← Volver
+            </button>
+            <button className={styles.btnBack} onClick={resetToStart}>Salir</button>
+          </div>
           <p className={styles.areaTitle}>
             Continuar con otro {form.tipo_profesional === 'contador' ? 'contador' : 'abogado'}
           </p>
@@ -2440,13 +2478,6 @@ export default function ChatSection() {
             }}
             startLabel={sending ? 'Iniciando chat…' : 'Iniciar nueva consulta'}
           />
-
-          <div className={styles.postChatActions} style={{ marginTop: 16 }}>
-            <button className={styles.btnBack} onClick={() => setStep('post_chat')}>
-              ← Volver
-            </button>
-            <button className={styles.btnBack} onClick={resetToStart}>Salir</button>
-          </div>
         </div>
       )}
 

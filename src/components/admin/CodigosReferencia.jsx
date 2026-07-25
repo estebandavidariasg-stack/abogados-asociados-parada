@@ -11,9 +11,13 @@ const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
 const APP_URL      = 'https://abogadosparada.com'
 
 function generarCodigo() {
+  // 32 caracteres (sin I/O para no confundir) → 256 % 32 === 0, así que
+  // `byte % 32` no introduce sesgo. Usamos CSPRNG en vez de Math.random()
+  // para que el código no sea predecible.
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+  const bytes = crypto.getRandomValues(new Uint8Array(6))
   let code = 'AAP-'
-  for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)]
+  for (let i = 0; i < 6; i++) code += chars[bytes[i] % chars.length]
   return code
 }
 
@@ -60,6 +64,13 @@ export default function CodigosReferencia() {
       `${SUPABASE_URL}/rest/v1/codigos_referencia?select=*&order=created_at.desc`,
       { headers }
     )
+    // Programación defensiva: si el servidor responde 4xx/5xx no intentamos
+    // parsear la respuesta como si fuera la lista (evita estados corruptos).
+    if (!res.ok) {
+      setError('No se pudieron cargar los códigos.')
+      setCodigos([]); setPlataforma(null); setLoading(false)
+      return
+    }
     const data = await res.json()
     const filas = Array.isArray(data) ? data : []
     // Separa el código oficial de la plataforma del resto (comisionistas).

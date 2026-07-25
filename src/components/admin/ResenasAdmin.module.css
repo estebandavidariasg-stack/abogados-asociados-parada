@@ -89,6 +89,19 @@
 .meta { font-size: 0.78rem; color: #5f6e8a; margin: 0; }
 .meta strong { color: #0d2d5e; }
 
+.redSocial {
+  align-self: flex-start;
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 0.72rem; font-weight: 700; letter-spacing: 0.01em;
+  color: #0d2d5e; text-decoration: none;
+  padding: 4px 10px; border-radius: 999px;
+  background: rgba(201,168,76,0.12); border: 1px solid rgba(201,168,76,0.45);
+  max-width: 100%;
+  transition: background 0.18s, border-color 0.18s;
+}
+.redSocial:hover { background: rgba(201,168,76,0.22); border-color: #c9a84c; }
+.redSocial svg { flex-shrink: 0; color: #8a6a28; }
+
 .prof {
   display: flex; align-items: center; flex-wrap: wrap; gap: 6px;
   font-size: 0.76rem; color: #5f6e8a; margin: 0;

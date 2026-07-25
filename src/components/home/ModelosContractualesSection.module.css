@@ -119,125 +119,55 @@
 }
 
 /* ══════════════════════════════════════════
-   GRID
+   LISTADO — filas (sin cuadro de previsualización)
    ══════════════════════════════════════════ */
-.grid {
-  display: grid;
-  grid-template-columns: 1fr;          /* móvil */
-  gap: 20px;
-  max-width: 1200px;
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 920px;
   margin: 0 auto;
   padding: 0 0.5rem;
 }
 
-@media (min-width: 600px) {
-  .grid { grid-template-columns: repeat(2, 1fr); }
-}
-@media (min-width: 1024px) {
-  .grid { grid-template-columns: repeat(3, 1fr); }
-}
-
-/* ══════════════════════════════════════════
-   CARD
-   ══════════════════════════════════════════ */
-.card {
+/* ── Fila ── */
+.row {
   position: relative;
+  display: flex;
+  align-items: center;
+  gap: 16px;
   background: var(--ivory);
-  border-left: 3px solid var(--gold);
-  border-radius: 8px;
-  padding: 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  transition: box-shadow 0.2s ease, transform 0.2s ease;
-  cursor: pointer;
-  outline: none;
-}
-.card:hover {
-  box-shadow: 0 8px 22px rgba(201, 168, 76, 0.22);
-  transform: translateY(-2px);
-}
-.card:focus-visible {
-  box-shadow: 0 0 0 3px rgba(201, 168, 76, 0.4);
-}
-
-.cardIcon {
-  position: absolute;
-  top: 14px;
-  right: 14px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-/* Miniatura "primera página" — iframe del visor con lazy-load
-   (Office Online para .docx/.xlsx, nativo para PDF). El iframe se monta
-   sólo cuando la card entra al viewport. */
-.cardThumb {
-  width: 100%;
-  aspect-ratio: 4 / 3;
-  background: linear-gradient(180deg, #f7f3e8 0%, var(--ivory) 100%);
   border: 1px solid rgba(13, 45, 94, 0.08);
-  border-radius: 6px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  position: relative;
-  overflow: hidden;
-  margin: -4px 0 4px;
+  border-radius: 10px;
+  padding: 14px 18px;
+  transition: box-shadow 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
 }
-/* Hoja tipo documento: ícono de formato + líneas simuladas. Instantánea,
-   sin iframes ni red — la vista previa real del contenido va en el modal. */
-.cardThumbPage {
-  position: relative;
-  width: 65%;
-  aspect-ratio: 3 / 4;
-  background: #ffffff;
-  border: 1px solid rgba(13, 45, 94, 0.12);
-  border-radius: 4px;
-  box-shadow: 0 4px 14px rgba(13, 45, 94, 0.1);
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 14px;
-  padding: 18px 16px 26px;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-}
-.card:hover .cardThumbPage {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 20px rgba(201, 168, 76, 0.25);
-}
-.thumbIcon { display: flex; }
-.thumbIcon svg { width: 40px; height: 40px; }
-.thumbLines {
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-  width: 78%;
-}
-.thumbLines i {
-  display: block;
-  height: 5px;
-  border-radius: 3px;
-  background: rgba(13, 45, 94, 0.10);
-}
-.thumbLines i:nth-child(3n) { width: 68%; }
-.thumbLines i:last-child { width: 45%; }
-.thumbFormato {
-  position: absolute;
-  bottom: 8px;
-  font-size: 0.58rem;
-  letter-spacing: 0.14em;
-  font-weight: 700;
-  color: var(--gold-dk, #8a6a28);
+.row:hover {
+  border-color: rgba(201, 168, 76, 0.5);
+  box-shadow: 0 6px 18px rgba(201, 168, 76, 0.16);
+  transform: translateY(-1px);
 }
 
-.cardBody {
+/* Tile con el ícono del formato (W / X / PDF) — pequeño, no es previsualización */
+.rowIcon {
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #ffffff;
+  border: 1px solid rgba(13, 45, 94, 0.1);
+  border-radius: 8px;
+}
+.rowIcon svg { width: 26px; height: 26px; }
+
+.rowInfo {
+  flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 4px;
 }
 
 .cardCategoria {
@@ -252,51 +182,109 @@
   border-radius: 4px;
 }
 
-.cardNombre {
+.rowNombre {
   font-family: 'Cinzel', serif;
   font-size: 15px;
   font-weight: 600;
   color: var(--navy);
-  line-height: 1.35;
+  line-height: 1.3;
   margin: 0;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
+  white-space: nowrap;
   overflow: hidden;
-  word-break: break-word;
+  text-overflow: ellipsis;
 }
 
-.cardDescripcion {
+.rowDescripcion {
   color: var(--muted);
-  font-size: 13px;
-  line-height: 1.5;
+  font-size: 12.5px;
+  line-height: 1.4;
   margin: 0;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
+  white-space: nowrap;
   overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-/* ── Botón de descarga ── */
-.cardDownload {
-  width: 100%;
+/* ── Acciones (previsualizar + descargar) ── */
+.rowActions {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rowPreview {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: 1px solid rgba(13, 45, 94, 0.25);
+  color: var(--navy);
+  border-radius: 6px;
+  padding: 9px 14px;
+  font-family: 'Raleway', sans-serif;
+  font-weight: 600;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  min-height: 40px;
+  white-space: nowrap;
+  transition: background 0.2s, border-color 0.2s, color 0.2s;
+}
+.rowPreview:hover { background: rgba(13, 45, 94, 0.05); border-color: var(--navy); }
+.rowPreview svg { flex-shrink: 0; }
+
+.rowDownload {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   background: var(--gold);
   color: var(--navy);
-  border: none;
-  border-radius: 4px;
-  padding: 10px 12px;
+  border: 1px solid var(--gold);
+  border-radius: 6px;
+  padding: 9px 16px;
   font-family: 'Raleway', sans-serif;
   font-weight: 700;
   font-size: 12px;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   cursor: pointer;
-  transition: background 0.2s ease;
-  min-height: 44px;
-  margin-top: auto;
+  min-height: 40px;
+  white-space: nowrap;
+  transition: background 0.2s;
 }
-.cardDownload:hover { background: var(--gold-lt); }
-.cardDownload:active { transform: scale(0.99); }
+.rowDownload:hover { background: var(--gold-lt); }
+.rowDownload:active { transform: scale(0.99); }
+
+/* Eliminar (solo superadmin) */
+.rowDeleteBtn {
+  flex-shrink: 0;
+  width: 34px;
+  height: 40px;
+  background: transparent;
+  border: 1px solid rgba(192, 57, 43, 0.3);
+  color: #c0392b;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  padding: 0;
+  transition: background 0.2s, color 0.2s, border-color 0.2s;
+}
+.rowDeleteBtn:hover { background: #dc3545; color: #fff; border-color: #dc3545; }
+
+/* Skeleton de fila (listado cargando) */
+.rowSkeleton {
+  height: 72px;
+  border: 1px solid rgba(13, 45, 94, 0.08);
+  border-radius: 10px;
+  background: linear-gradient(90deg, var(--ivory) 0%, #f0e8d6 50%, var(--ivory) 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s linear infinite;
+}
 
 /* ══════════════════════════════════════════
    LOAD MORE
@@ -331,19 +319,7 @@
 /* ══════════════════════════════════════════
    SKELETON (shimmer dorado/ivory)
    ══════════════════════════════════════════ */
-.skeleton {
-  height: 220px;
-  border-left: 3px solid var(--gold);
-  border-radius: 8px;
-  background: linear-gradient(
-    90deg,
-    var(--ivory) 0%,
-    #f0e8d6   50%,
-    var(--ivory) 100%
-  );
-  background-size: 200% 100%;
-  animation: shimmer 1.4s linear infinite;
-}
+/* (el skeleton del listado es .rowSkeleton, definido arriba) */
 @keyframes shimmer {
   0%   { background-position: 200% 0; }
   100% { background-position: -200% 0; }
@@ -406,13 +382,43 @@
 
   .chip { flex-shrink: 0; }
 
-  .grid { padding: 0 0.25rem; gap: 16px; }
+  .list { padding: 0; gap: 8px; }
+
+  .row {
+    flex-wrap: wrap;
+    gap: 10px 14px;
+    padding: 14px 16px;
+  }
+
+  /* En móvil el nombre se ENVUELVE (hasta 2 líneas) en vez de cortarse con "…" */
+  .rowNombre {
+    white-space: normal;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  /* Acciones a lo ancho, ambos botones exactamente del mismo tamaño */
+  .rowActions { width: 100%; gap: 10px; }
+  .rowPreview,
+  .rowDownload {
+    flex: 1 1 0;
+    min-width: 0;
+    justify-content: center;
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    padding: 11px 8px;
+  }
 }
 
 /* Móvil pequeño */
 @media (max-width: 400px) {
   .section { padding: 3.5rem 0.85rem; }
-  .cardNombre { font-size: 14px; }
+  .rowNombre { font-size: 14px; }
+  .row { padding: 13px 14px; gap: 10px 12px; }
+  .rowIcon { width: 40px; height: 40px; }
+  .rowIcon svg { width: 24px; height: 24px; }
 }
 
 /* ══════════════════════════════════════════
@@ -450,49 +456,6 @@
     max-width: 320px;
     margin: 0 auto 1.25rem;
   }
-}
-
-/* ══════════════════════════════════════════
-   ADMIN — botón ✕ eliminar en card
-   ══════════════════════════════════════════ */
-/* Control de eliminar (solo superadmin). Va DENTRO de la tarjeta, arriba a la
-   derecha, con estilo sutil (blanco + marca roja) para que se lea como una
-   acción y no como una alerta. Antes colgaba fuera de la esquina (left:-10px)
-   y parecía un error. */
-.cardDeleteBtn {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  left: auto;
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.92);
-  color: #c0392b;
-  border: 1px solid rgba(192, 57, 43, 0.35);
-  font-size: 14px;
-  font-weight: 700;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  line-height: 1;
-  padding: 0;
-  box-shadow: 0 2px 8px rgba(13, 45, 94, 0.15);
-  transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.15s ease, box-shadow 0.2s ease;
-  z-index: 3;
-}
-.cardDeleteBtn:hover {
-  background: #dc3545;
-  color: #fff;
-  border-color: #dc3545;
-  transform: scale(1.08);
-  box-shadow: 0 4px 12px rgba(220, 53, 69, 0.35);
-}
-.cardDeleteBtn:active { transform: scale(1); }
-@media (prefers-reduced-motion: reduce) {
-  .cardDeleteBtn { transition: background 0.2s ease, color 0.2s ease; }
-  .cardDeleteBtn:hover { transform: none; }
 }
 
 /* ══════════════════════════════════════════

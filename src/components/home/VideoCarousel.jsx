@@ -570,10 +570,10 @@ export default function VideoCarousel() {
           Plataforma de servicios jurídicos y contables a nivel global
         </motion.span>
         <motion.h2 className={styles.title} variants={fadeUp}>
-          Conoce nuestra <em>firma</em>
+          Más que una firma, un <em>puente</em> hacia las soluciones profesionales
         </motion.h2>
         <motion.p className={styles.subtitle} variants={fadeUp}>
-          Descubre quiénes somos, cómo trabajamos y el compromiso que tenemos con cada cliente.
+          Tienes una necesidad; nosotros asignamos al profesional más calificado para tu caso y resolvemos, de manera simple, lo que necesitas.
         </motion.p>
       </motion.div>
 

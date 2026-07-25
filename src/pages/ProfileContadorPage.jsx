@@ -6,6 +6,7 @@ import { useNavigate } from 'react-router-dom'
 // componente NO lo modifica; las clases siguen siendo scoped al archivo.
 import styles from './ProfilePage.module.css'
 import MisContratos from '../components/profile/MisContratos'
+import MisPagos from '../components/profile/MisPagos'
 import LawyerInternalChat from '../components/chat/LawyerInternalChat'
 import AsistenteIA from '../components/chat/AsistenteIA'
 import ContadorChatDashboard from '../components/chat/ContadorChatDashboard'
@@ -71,6 +72,7 @@ const IconShield   = (p) => (<svg viewBox="0 0 24 24" width="18" height="18" fil
 const IconDoc      = (p) => (<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 13h6M9 17h6"/></svg>)
 const IconHome     = (p) => (<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>)
 const IconLogout   = (p) => (<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg>)
+const IconWallet   = (p) => (<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M19 7V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-2"/><path d="M3 7h16a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H3"/><circle cx="16" cy="13" r="1.2"/></svg>)
 
 const SECCIONES = [
   { id: 'perfil',    label: 'Mi perfil',    Icon: IconUser },
@@ -78,6 +80,7 @@ const SECCIONES = [
   { id: 'asistente', label: 'IA Parada Precise', Icon: IconSparkles },
   { id: 'interno',   label: 'Chat interno', Icon: IconShield },
   { id: 'contratos', label: 'Contratos',    Icon: IconDoc },
+  { id: 'pagos',     label: 'Pagos',        Icon: IconWallet },
 ]
 
 export default function ProfileContadorPage() {
@@ -426,7 +429,7 @@ export default function ProfileContadorPage() {
         {seccion === 'perfil' && (
         <section className={styles.panel}>
           <div className={styles.panelHead}>
-            <h1 className={styles.panelTitle}>Mi perfil — <em>Contador</em></h1>
+            <h1 className={styles.panelTitle}>Mi Perfil — <em>Contador</em></h1>
             <span className={styles.status}>
               {profile?.aprobado ? '✦ Aprobado — visible en la página' : '◌ Pendiente de aprobación'}
             </span>
@@ -682,7 +685,7 @@ export default function ProfileContadorPage() {
         {seccion === 'consultas' && (
         <section className={styles.panel}>
           <div className={styles.panelHead}>
-            <h1 className={styles.panelTitle}>Consultas de <em>clientes</em></h1>
+            <h1 className={styles.panelTitle}>Consultas de <em>Clientes</em></h1>
             <span className={styles.panelSub}>Chats de clientes asignados a tu especialidad.</span>
           </div>
           <ContadorChatDashboard key={consultasKey} contadorId={user?.id} canDownloadFiles={!!profile?.puede_descargar_archivos} />
@@ -698,7 +701,7 @@ export default function ProfileContadorPage() {
         {seccion === 'interno' && (
         <section className={styles.panel}>
           <div className={styles.panelHead}>
-            <h1 className={styles.panelTitle}>Canal interno · <em>Administración</em></h1>
+            <h1 className={styles.panelTitle}>Canal Interno · <em>Administración</em></h1>
             <span className={styles.panelSub}>Comunicación directa y privada con el equipo de AAP.</span>
           </div>
           <LawyerInternalChat miId={user?.id} />
@@ -708,11 +711,21 @@ export default function ProfileContadorPage() {
         {seccion === 'contratos' && (
         <section className={styles.panel}>
           <div className={styles.panelHead}>
-            <h1 className={styles.panelTitle}>Mis <em>contratos</em></h1>
+            <h1 className={styles.panelTitle}>Mis <em>Contratos</em></h1>
           </div>
           <div className={styles.contractsWrap}>
             <MisContratos abogadoId={user?.id} isSuperAdmin={false} />
           </div>
+        </section>
+        )}
+
+        {seccion === 'pagos' && (
+        <section className={styles.panel}>
+          <div className={styles.panelHead}>
+            <h1 className={styles.panelTitle}>Mis <em>Pagos</em></h1>
+            <span className={styles.panelSub}>Cobros generados por tus consultas verificadas.</span>
+          </div>
+          <MisPagos userId={user?.id} />
         </section>
         )}
 

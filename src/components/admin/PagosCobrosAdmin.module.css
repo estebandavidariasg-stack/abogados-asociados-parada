@@ -1,0 +1,246 @@
+/* ══════════════════════════════════════════════════════════════════
+   Pagos y cobros — panel admin del dinero. Reutiliza la paleta y las
+   proporciones del resto del panel (navy #0d2d5e, oro #c9a84c).
+   ══════════════════════════════════════════════════════════════════ */
+.screen { display: flex; flex-direction: column; gap: 18px; font-family: 'Raleway', sans-serif; }
+.ico { display: inline-block; vertical-align: middle; flex-shrink: 0; }
+.loading { color: #55617a; font-size: 0.9rem; padding: 32px 4px; }
+
+.msgOk {
+  margin: 0; font-size: 0.84rem; font-weight: 600; color: #1f7a4d;
+  background: #e7f6ee; border: 1px solid #bfe6cf; border-radius: 10px; padding: 9px 14px;
+}
+
+/* ── Sub-pestañas segmentadas ── */
+.subTabs {
+  display: inline-flex; gap: 4px; padding: 4px;
+  background: #eef2f8; border: 1px solid rgba(13,45,94,0.08); border-radius: 12px;
+  align-self: flex-start; flex-wrap: wrap;
+}
+.subTab {
+  display: inline-flex; align-items: center; gap: 8px;
+  border: none; background: transparent; cursor: pointer;
+  font-family: inherit; font-size: 0.86rem; font-weight: 600; color: #55617a;
+  padding: 9px 16px; border-radius: 9px; transition: background .16s ease, color .16s ease;
+}
+.subTab:hover { color: #0d2d5e; }
+.subTabActive { background: #fff; color: #0d2d5e; box-shadow: 0 1px 3px rgba(13,45,94,0.12); }
+.subTabBadge {
+  font-size: 0.72rem; font-weight: 700; color: #0d2d5e;
+  background: rgba(201,168,76,0.22); border-radius: 999px; padding: 1px 8px; min-width: 20px; text-align: center;
+}
+
+/* ── Cabecera de sección ── */
+.section { display: flex; flex-direction: column; gap: 16px; }
+.head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.title {
+  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-size: 1.6rem; font-weight: 700; color: #0d2d5e; margin: 0; line-height: 1.1;
+  letter-spacing: -0.01em;
+}
+.sub { margin: 5px 0 0; font-size: 0.88rem; line-height: 1.55; color: #55617a; max-width: 62ch; }
+.refresh {
+  border: 1px solid rgba(13,45,94,0.16); background: #fff; color: #0d2d5e; cursor: pointer;
+  font-family: inherit; font-size: 0.8rem; font-weight: 600; padding: 8px 14px; border-radius: 9px;
+  white-space: nowrap; transition: background .15s ease, border-color .15s ease;
+}
+.refresh:hover { background: #f4f7fc; border-color: rgba(13,45,94,0.28); }
+
+/* ── Tiles de resumen ── */
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
+.tile {
+  display: flex; flex-direction: column; gap: 3px;
+  padding: 14px 16px; border-radius: 14px; border: 1px solid rgba(13,45,94,0.08);
+  background: #fff;
+}
+.tileVal { font-size: 1.18rem; font-weight: 800; color: #0d2d5e; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+.tileLbl { font-size: 0.74rem; font-weight: 600; color: #6b7896; letter-spacing: 0.01em; }
+.tile[data-tone="ok"]   { background: linear-gradient(180deg, #eefbf3, #fff); border-color: #cdeeda; }
+.tile[data-tone="ok"]   .tileVal { color: #1f7a4d; }
+.tile[data-tone="gold"] { background: linear-gradient(180deg, #fdf6e6, #fff); border-color: #efe0b8; }
+.tile[data-tone="gold"] .tileVal { color: #9a7a2c; }
+.tile[data-tone="req"]  { background: linear-gradient(180deg, #eef3fe, #fff); border-color: #cddcf7; }
+.tile[data-tone="req"]  .tileVal { color: #2f6bd8; }
+.tile[data-tone="navy"] { background: linear-gradient(180deg, #eef2f8, #fff); border-color: rgba(13,45,94,0.12); }
+
+/* ── Barra de filtros ── */
+.toolbar {
+  display: flex; flex-direction: column; gap: 14px;
+  background: #fff; border: 1px solid rgba(13,45,94,0.08); border-radius: 14px; padding: 16px;
+}
+/* Fila 1: buscador (crece a lo ancho) + fechas ancladas a la derecha. */
+.filterRow { display: flex; align-items: flex-end; gap: 16px; flex-wrap: wrap; }
+.filterBar {
+  display: flex; align-items: center; gap: 8px;
+  background: #f4f7fc; border: 1px solid rgba(13,45,94,0.1); border-radius: 10px;
+  padding: 0 10px; height: 40px; flex: 1 1 300px; min-width: 240px;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+.filterBar:focus-within { border-color: #c9a84c; box-shadow: 0 0 0 3px rgba(201,168,76,0.16); }
+.searchIcon { color: #8791a5; display: inline-flex; }
+.searchInput {
+  border: none; background: transparent; outline: none; flex: 1;
+  font-family: inherit; font-size: 0.88rem; color: #263149; min-width: 0;
+}
+.searchInput::placeholder { color: #97a2b6; }
+.searchClear {
+  border: none; background: rgba(13,45,94,0.08); color: #55617a; cursor: pointer;
+  width: 22px; height: 22px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center;
+}
+.searchClear:hover { background: rgba(13,45,94,0.16); color: #0d2d5e; }
+
+/* Chips de estado / profesión */
+.chips { display: flex; flex-wrap: wrap; gap: 7px; }
+.chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  border: 1px solid rgba(13,45,94,0.14); background: #fff; color: #55617a; cursor: pointer;
+  font-family: inherit; font-size: 0.8rem; font-weight: 600; padding: 6px 12px; border-radius: 999px;
+  transition: all .15s ease;
+}
+.chip:hover:not(.chipActive) { border-color: rgba(13,45,94,0.3); color: #0d2d5e; }
+.chipActive { background: #0d2d5e; border-color: #0d2d5e; color: #fff; }
+/* El chip seleccionado (fondo navy, texto blanco) se oscurece un punto en hover,
+   sin heredar el color de texto navy del hover base (que lo dejaba ilegible). */
+.chipActive:hover { background: #0a2450; border-color: #0a2450; }
+.chipCount {
+  font-size: 0.7rem; font-weight: 700; background: rgba(13,45,94,0.1); color: inherit;
+  border-radius: 999px; padding: 0 6px; min-width: 18px; text-align: center;
+}
+.chipActive .chipCount { background: rgba(255,255,255,0.22); }
+
+/* Grupo de fechas (fila 1, a la derecha del buscador) */
+.dateGroup { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; }
+
+/* Fila 2: chips de profesión + estado en una sola línea con separador. */
+.chipRow { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.chipDivider { align-self: stretch; width: 1px; min-height: 22px; background: rgba(13,45,94,0.14); }
+.presets { display: inline-flex; gap: 6px; }
+.presetBtn {
+  border: 1px solid rgba(13,45,94,0.14); background: #f4f7fc; color: #55617a; cursor: pointer;
+  font-family: inherit; font-size: 0.76rem; font-weight: 600; padding: 7px 11px; border-radius: 8px;
+  transition: all .15s ease;
+}
+.presetBtn:hover { background: #e9eff8; color: #0d2d5e; border-color: rgba(13,45,94,0.28); }
+.dateField { display: flex; flex-direction: column; gap: 3px; }
+.dateField > span { font-size: 0.68rem; font-weight: 700; color: #6b7896; text-transform: uppercase; letter-spacing: 0.04em; padding-left: 2px; }
+.dateInput {
+  border: 1px solid rgba(13,45,94,0.14); background: #fff; border-radius: 9px;
+  font-family: inherit; font-size: 0.82rem; color: #263149; padding: 7px 10px; height: 36px;
+  color-scheme: light;
+}
+.dateInput:focus { outline: none; border-color: #c9a84c; box-shadow: 0 0 0 3px rgba(201,168,76,0.16); }
+.clearAll {
+  margin-left: auto; border: none; background: transparent; color: #b23b3b; cursor: pointer;
+  font-family: inherit; font-size: 0.78rem; font-weight: 600; padding: 7px 6px; text-decoration: underline; text-underline-offset: 2px;
+}
+.clearAll:hover { color: #8f2f2f; }
+
+/* ── Tabla ── */
+.tableWrap {
+  overflow-x: auto; background: #fff; border: 1px solid rgba(13,45,94,0.08); border-radius: 14px;
+}
+.table { width: 100%; border-collapse: collapse; font-size: 0.84rem; }
+.table th {
+  text-align: center; font-size: 0.66rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+  color: rgba(13,45,94,0.55); padding: 11px 12px; border-bottom: 1px solid rgba(13,45,94,0.12);
+  background: #f8fafd; white-space: nowrap;
+}
+.table td {
+  text-align: center; vertical-align: middle; padding: 11px 12px;
+  border-bottom: 1px solid rgba(13,45,94,0.05); color: #33405b;
+}
+.table tbody tr:last-child td { border-bottom: none; }
+.table tbody tr:hover { background: #f9fbfe; }
+.strong { font-weight: 700; color: #0d2d5e; }
+.num { font-variant-numeric: tabular-nums; letter-spacing: 0.01em; }
+.muted { color: #97a2b6; font-style: italic; }
+.gestorTag { display: block; font-size: 0.7rem; font-weight: 600; color: #8a6a28; margin-top: 2px; }
+
+/* Celda de fecha+hora: creación arriba, hitos de dinero (con HORA resaltada) debajo */
+.fechaCell { font-variant-numeric: tabular-nums; letter-spacing: 0.01em; white-space: nowrap; }
+.fechaMain { display: block; font-weight: 600; color: #33405b; }
+.fechaHito { display: block; font-size: 0.7rem; font-weight: 600; color: #6b7896; margin-top: 3px; }
+/* La HORA del evento de dinero, resaltada en oro */
+.horaTag {
+  font-weight: 700; color: #8a6a28; background: #fbf0d3;
+  border-radius: 6px; padding: 1px 6px; font-variant-numeric: tabular-nums;
+}
+.rowSolic { background: #fbf7ea; }
+.rowSolic:hover { background: #f8f1dd; }
+
+/* Badges de profesión */
+.badgeAbog, .badgeCont {
+  display: inline-block; font-size: 0.7rem; font-weight: 700; border-radius: 999px; padding: 3px 10px;
+}
+.badgeAbog { color: #0d2d5e; background: #e6ecf7; }
+.badgeCont { color: #1f6d5a; background: #e2f4ee; }
+
+/* Pills de estado */
+.pill { display: inline-block; white-space: nowrap; font-size: 0.7rem; font-weight: 700; border-radius: 999px; padding: 3px 11px; }
+.pillOk   { color: #1f7a4d; background: #e7f6ee; }
+.pillWarn { color: #9a7a2c; background: #fdf3dd; }
+.pillGold { color: #8a6a28; background: #fbf0d3; }
+.pillReq  { color: #2f6bd8; background: #e6eefc; }
+.pillMuted{ color: #6b7896; background: #eef1f6; }
+
+/* Botón pagar comisión */
+.payBtn {
+  display: inline-flex; align-items: center; gap: 6px;
+  border: none; cursor: pointer; font-family: inherit; font-size: 0.76rem; font-weight: 700;
+  color: #0d2d5e; background: linear-gradient(135deg, #dcbb59, #c9a84c);
+  padding: 7px 12px; border-radius: 9px; white-space: nowrap;
+  box-shadow: 0 1px 2px rgba(201,168,76,0.4); transition: filter .15s ease, transform .1s ease;
+}
+.payBtn:hover { filter: brightness(1.05); }
+.payBtn:active { transform: translateY(1px); }
+
+/* ── Paginación ── */
+.pager {
+  display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap;
+  padding: 4px 2px;
+}
+.perPage { display: inline-flex; align-items: center; gap: 8px; }
+.perPageLbl { font-size: 0.78rem; font-weight: 600; color: #55617a; }
+.perPageSel {
+  border: 1px solid rgba(13,45,94,0.16); background: #fff; border-radius: 8px;
+  font-family: inherit; font-size: 0.82rem; font-weight: 600; color: #0d2d5e; padding: 6px 8px; cursor: pointer;
+}
+.perPageSel:focus { outline: none; border-color: #c9a84c; box-shadow: 0 0 0 3px rgba(201,168,76,0.16); }
+.pagerInfo { font-size: 0.82rem; color: #55617a; font-variant-numeric: tabular-nums; }
+.pagerInfo strong { color: #0d2d5e; }
+.pagerBtns { display: inline-flex; align-items: center; gap: 4px; }
+.pageBtn {
+  min-width: 34px; height: 34px; padding: 0 8px;
+  border: 1px solid rgba(13,45,94,0.14); background: #fff; color: #33405b; cursor: pointer;
+  font-family: inherit; font-size: 0.82rem; font-weight: 600; border-radius: 8px;
+  display: inline-flex; align-items: center; justify-content: center;
+  transition: all .14s ease;
+}
+.pageBtn:hover:not(:disabled) { border-color: rgba(13,45,94,0.3); background: #f4f7fc; }
+.pageBtn:disabled { opacity: 0.4; cursor: not-allowed; }
+.pageBtnActive { background: #0d2d5e; border-color: #0d2d5e; color: #fff; }
+.pageBtnActive:hover { background: #0d2d5e; }
+.pageGap { color: #97a2b6; padding: 0 4px; font-size: 0.82rem; }
+
+/* ── Vacío ── */
+.empty {
+  text-align: center; padding: 46px 20px; background: #fff;
+  border: 1px dashed rgba(13,45,94,0.16); border-radius: 14px;
+}
+.emptyTxt { margin: 0 0 5px; font-size: 0.96rem; font-weight: 700; color: #0d2d5e; }
+.emptySub { margin: 0; font-size: 0.84rem; color: #6b7896; max-width: 46ch; margin-inline: auto; line-height: 1.5; }
+
+/* ── Responsive ── */
+@media (max-width: 640px) {
+  .title { font-size: 1.35rem; }
+  .filterBar { max-width: none; }
+  .pager { justify-content: center; }
+  .dateGroup { width: 100%; }
+  .clearAll { margin-left: 0; }
+  /* El separador vertical no aporta cuando los grupos de chips se apilan. */
+  .chipDivider { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .subTab, .chip, .presetBtn, .pageBtn, .refresh, .payBtn, .searchClear { transition: none; }
+}

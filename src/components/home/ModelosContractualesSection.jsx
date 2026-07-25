@@ -64,22 +64,14 @@ function FormatIcon({ formato }) {
   return null
 }
 
-// ── Miniatura tipo "documento" (ligera, instantánea) ──────────────────────
-// SIN iframe de Office Online: antes cada tarjeta montaba el visor de Office,
-// que es lento y a veces queda en blanco, así que el grid tardaba muchísimo en
-// cargar para los visitantes. La vista previa REAL del contenido queda solo en
-// el modal (al hacer clic). Aquí mostramos una hoja con el ícono de formato.
-function CardThumb({ formato }) {
+// ── Ícono "ojo" para el botón de previsualización ─────────────────────────
+function EyeIcon() {
   return (
-    <div className={styles.cardThumb}>
-      <div className={styles.cardThumbPage}>
-        <span className={styles.thumbIcon}><FormatIcon formato={formato} /></span>
-        <span className={styles.thumbLines} aria-hidden="true">
-          <i /><i /><i /><i /><i /><i />
-        </span>
-        <span className={styles.thumbFormato}>{FORMAT_LABEL[formato] || (formato || '').toUpperCase()}</span>
-      </div>
-    </div>
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
   )
 }
 
@@ -418,10 +410,11 @@ export default function ModelosContractualesSection() {
 
       {/* ── Grid / estados ── */}
       {loading ? (
-        <div className={styles.grid}>
-          <div className={styles.skeleton} />
-          <div className={styles.skeleton} />
-          <div className={styles.skeleton} />
+        <div className={styles.list}>
+          <div className={styles.rowSkeleton} />
+          <div className={styles.rowSkeleton} />
+          <div className={styles.rowSkeleton} />
+          <div className={styles.rowSkeleton} />
         </div>
       ) : error ? (
         <p className={styles.error}>{error}</p>
@@ -434,56 +427,58 @@ export default function ModelosContractualesSection() {
         </div>
       ) : (
         <>
-          <div className={styles.grid}>
+          <div className={styles.list}>
             {modelos.map((m, i) => (
               <motion.article
                 key={m.id}
-                className={styles.card}
-                onClick={() => openPreview(m)}
-                role="button"
-                tabIndex={0}
-                onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openPreview(m) } }}
-                // Cada tarjeta se anima al MONTARSE, de forma independiente. Así,
+                className={styles.row}
+                // Cada fila se anima al MONTARSE, de forma independiente. Así,
                 // un modelo recién subido (insertado al inicio) aparece siempre,
-                // sin depender de la orquestación del contenedor (que antes lo
-                // dejaba invisible ocupando la primera celda).
-                initial={{ opacity: 0, y: 16 }}
+                // sin depender de la orquestación del contenedor.
+                initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1], delay: Math.min(i, 8) * 0.04 }}
+                transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1], delay: Math.min(i, 8) * 0.035 }}
               >
+                {/* Ícono de formato (pequeño) — no es previsualización */}
+                <span className={styles.rowIcon}><FormatIcon formato={m.formato} /></span>
 
-                {isSuperAdmin && (
-                  <button
-                    type="button"
-                    className={styles.cardDeleteBtn}
-                    onClick={e => { e.stopPropagation(); setConfirmDelete(m) }}
-                    title="Eliminar modelo"
-                    aria-label="Eliminar modelo"
-                  >
-                    ✕
-                  </button>
-                )}
-
-                {/* Miniatura ligera tipo documento (la vista previa real va en el modal) */}
-                <CardThumb formato={m.formato} />
-
-                <div className={styles.cardBody}>
+                <div className={styles.rowInfo}>
                   <span className={styles.cardCategoria}>{m.categoria}</span>
-                  <h4 className={styles.cardNombre} title={m.nombre}>{m.nombre}</h4>
+                  <h4 className={styles.rowNombre} title={m.nombre}>{m.nombre}</h4>
                   {m.descripcion && (
-                    <p className={styles.cardDescripcion} title={m.descripcion}>
+                    <p className={styles.rowDescripcion} title={m.descripcion}>
                       {m.descripcion}
                     </p>
                   )}
                 </div>
 
-                <button
-                  type="button"
-                  className={styles.cardDownload}
-                  onClick={e => { e.stopPropagation(); handleDownload(m) }}
-                >
-                  ⬇ Descargar {FORMAT_LABEL[m.formato] || m.formato.toUpperCase()}
-                </button>
+                <div className={styles.rowActions}>
+                  <button
+                    type="button"
+                    className={styles.rowPreview}
+                    onClick={() => openPreview(m)}
+                  >
+                    <EyeIcon /> Previsualizar
+                  </button>
+                  <button
+                    type="button"
+                    className={styles.rowDownload}
+                    onClick={() => handleDownload(m)}
+                  >
+                    ⬇ Descargar {FORMAT_LABEL[m.formato] || m.formato.toUpperCase()}
+                  </button>
+                  {isSuperAdmin && (
+                    <button
+                      type="button"
+                      className={styles.rowDeleteBtn}
+                      onClick={() => setConfirmDelete(m)}
+                      title="Eliminar modelo"
+                      aria-label="Eliminar modelo"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
               </motion.article>
             ))}
           </div>

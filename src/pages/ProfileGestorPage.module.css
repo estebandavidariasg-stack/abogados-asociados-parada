@@ -383,18 +383,21 @@
   margin-top: 1.25rem;
 }
 .statTile {
-  background: rgba(255, 255, 255, 0.78);
-  border: 1px solid rgba(255, 255, 255, 0.85);
-  border-left: 3px solid rgba(13, 45, 94, 0.25);
+  background: #fff;
+  border: 1px solid rgba(13, 45, 94, 0.1);
   border-radius: 14px;
   padding: 1rem 1.1rem;
-  display: flex; flex-direction: column; gap: 4px;
-  box-shadow: 0 6px 18px rgba(13, 45, 94, 0.08);
+  display: flex; flex-direction: column; gap: 5px;
+  box-shadow: 0 4px 14px rgba(13, 45, 94, 0.06);
 }
-.statTile[data-tone="gold"] { border-left-color: #c9a84c; }
-.statTile[data-tone="navy"] { border-left-color: #15376b; }
-.statTile[data-tone="ok"]   { border-left-color: #1f7a4d; }
-.statTile[data-tone="bad"]  { border-left-color: #a23b3b; }
+/* Tono por tinte de superficie + numeral (sin franja lateral). */
+.statTile[data-tone="gold"] { background: linear-gradient(180deg, #fdf6e6, #fff); border-color: #efe0b8; }
+.statTile[data-tone="gold"] .statValue { color: #9a7a2c; }
+.statTile[data-tone="navy"] { background: linear-gradient(180deg, #eef2f8, #fff); border-color: rgba(13, 45, 94, 0.14); }
+.statTile[data-tone="ok"]   { background: linear-gradient(180deg, #eefbf3, #fff); border-color: #cdeeda; }
+.statTile[data-tone="ok"]   .statValue { color: #1f7a4d; }
+.statTile[data-tone="bad"]  { background: linear-gradient(180deg, #fdeeee, #fff); border-color: #f0cccc; }
+.statTile[data-tone="bad"]  .statValue { color: #a23b3b; }
 .statValue {
   font-family: 'Cormorant Garamond', serif;
   font-size: 2rem; font-weight: 600; line-height: 1; color: #0d2d5e;
@@ -408,6 +411,309 @@
   font-size: 0.6rem; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase;
   color: #6b7fa3;
 }
+
+/* ══════════════════════════════════════════
+   Numerales tabulares (Raleway) — resumen de cobros
+   ══════════════════════════════════════════ */
+.moneyValue {
+  font-family: 'Raleway', sans-serif;
+  font-size: 1.35rem; font-weight: 800; line-height: 1.1;
+  font-variant-numeric: tabular-nums lining-nums;
+  letter-spacing: -0.01em; color: #0d2d5e;
+}
+.numValue {
+  font-family: 'Raleway', sans-serif;
+  font-size: 1.7rem; font-weight: 800; line-height: 1;
+  font-variant-numeric: tabular-nums lining-nums;
+  letter-spacing: -0.01em; color: #0d2d5e;
+}
+.statTile[data-tone="gold"] .moneyValue { color: #9a7a2c; }
+.statTile[data-tone="ok"]   .moneyValue,
+.statTile[data-tone="ok"]   .numValue   { color: #1f7a4d; }
+
+/* ══════════════════════════════════════════
+   Gráfica (dona) + historial de consultas
+   ══════════════════════════════════════════ */
+.blockTitle {
+  position: relative; z-index: 1;
+  font-family: 'Raleway', sans-serif;
+  font-size: 0.72rem; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase;
+  color: #0d2d5e; margin: 0 0 0.9rem;
+}
+
+.chartRow {
+  position: relative; z-index: 1;
+  display: flex; align-items: center; gap: 2rem; flex-wrap: wrap;
+}
+.donutBox { position: relative; flex: 0 0 230px; width: 230px; }
+.donutCenter {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  pointer-events: none;
+}
+.donutCenterNum {
+  font-family: 'Cormorant Garamond', serif; font-size: 2rem; font-weight: 600; line-height: 1; color: #0d2d5e;
+}
+.donutCenterLbl {
+  font-family: 'Raleway', sans-serif; font-size: 0.6rem; font-weight: 700;
+  letter-spacing: 0.14em; text-transform: uppercase; color: #6b7896; margin-top: 3px;
+}
+/* Distribución por segmento con barra de proporción (llena el ancho). */
+.distList {
+  list-style: none; margin: 0; padding: 0; flex: 1 1 320px; min-width: 260px;
+  display: flex; flex-direction: column; gap: 0.95rem;
+}
+.distRow { display: flex; flex-direction: column; gap: 0.4rem; }
+.distHead { display: flex; align-items: center; gap: 0.6rem; }
+.chartDot { width: 11px; height: 11px; border-radius: 3px; flex-shrink: 0; }
+.distLabel { font-family: 'Raleway', sans-serif; font-size: 0.92rem; color: #33405b; }
+.distVal {
+  margin-left: auto; font-family: 'Raleway', sans-serif; font-weight: 700; color: #0d2d5e;
+  font-size: 0.86rem; font-variant-numeric: tabular-nums;
+}
+.distTrack { height: 8px; border-radius: 999px; background: rgba(13, 45, 94, 0.07); overflow: hidden; }
+.distFill { display: block; height: 100%; border-radius: 999px; transition: width 0.5s cubic-bezier(0.16, 1, 0.3, 1); }
+
+.historialList {
+  list-style: none; margin: 0; padding: 0; position: relative; z-index: 1;
+  display: flex; flex-direction: column;
+}
+/* Fila del historial: info + progreso que se estira para llenar el ancho. */
+.histItem {
+  display: grid; grid-template-columns: minmax(150px, 220px) 1fr; align-items: center;
+  gap: 1.75rem; padding: 1rem 0;
+  border-bottom: 1px solid rgba(13, 45, 94, 0.08);
+}
+.histItem:last-child { border-bottom: none; }
+.histInfo { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.histName { font-family: 'Raleway', sans-serif; font-weight: 700; color: #0d2d5e; font-size: 0.95rem; }
+.histWith { font-family: 'Raleway', sans-serif; font-size: 0.82rem; color: #55617a; display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+/* Badge de profesión del profesional (abogado / contador). */
+.histRol {
+  font-size: 0.66rem; font-weight: 700; letter-spacing: 0.02em; border-radius: 999px; padding: 2px 8px;
+  color: #0d2d5e; background: #e6ecf7;
+}
+.histRol[data-rol="contador"] { color: #1f6d5a; background: #e2f4ee; }
+.histDate { font-family: 'Raleway', sans-serif; font-size: 0.78rem; color: #7b8592; font-variant-numeric: tabular-nums; margin-top: 1px; }
+.histProg { display: flex; align-items: center; gap: 1.5rem; min-width: 0; }
+.histProg .stepper { flex: 1 1 auto; min-width: 0; }
+
+@media (max-width: 640px) {
+  .histItem { grid-template-columns: 1fr; gap: 0.9rem; }
+  .histProg { flex-wrap: wrap; gap: 0.9rem; }
+}
+@media (prefers-reduced-motion: reduce) { .distFill { transition: none; } }
+
+.histBadgeOk, .histBadgeBad, .histBadgeNeutral {
+  display: inline-block; white-space: nowrap;
+  font-family: 'Raleway', sans-serif; font-size: 0.72rem; font-weight: 700;
+  border-radius: 999px; padding: 3px 11px;
+}
+.histBadgeOk      { color: #1f7a4d; background: #e7f6ee; }
+.histBadgeBad     { color: #a23b3b; background: #fbeaea; }
+.histBadgeNeutral { color: #6b7896; background: #eef1f6; }
+
+/* Cabecera de bloque (título + contador de resultados) */
+.blockHead {
+  position: relative; z-index: 1;
+  display: flex; align-items: baseline; justify-content: space-between; gap: 1rem;
+  flex-wrap: wrap; margin-bottom: 0.9rem;
+}
+.blockCount {
+  font-family: 'Raleway', sans-serif; font-size: 0.78rem; font-weight: 600; color: #6b7896;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Barra de filtro (búsqueda + rango de fechas) ── */
+.gFilter {
+  position: relative; z-index: 1;
+  display: flex; align-items: flex-end; gap: 0.75rem; flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+.gSearch {
+  display: flex; align-items: center; gap: 8px;
+  background: rgba(255, 255, 255, 0.9); border: 1px solid rgba(13, 45, 94, 0.14); border-radius: 10px;
+  padding: 0 10px; height: 40px; flex: 1 1 240px; min-width: 200px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.gSearch:focus-within { border-color: #c9a84c; box-shadow: 0 0 0 3px rgba(201, 168, 76, 0.16); }
+.gSearchIcon { color: #8791a5; flex-shrink: 0; }
+.gSearchInput {
+  border: none; background: transparent; outline: none; flex: 1; min-width: 0;
+  font-family: 'Raleway', sans-serif; font-size: 0.9rem; color: #263149;
+}
+.gSearchInput::placeholder { color: #97a2b6; }
+.gClear {
+  border: none; background: rgba(13, 45, 94, 0.08); color: #55617a; cursor: pointer;
+  width: 22px; height: 22px; border-radius: 6px; line-height: 1; font-size: 1rem;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.gClear:hover { background: rgba(13, 45, 94, 0.16); color: #0d2d5e; }
+.gDateField { display: flex; flex-direction: column; gap: 3px; }
+.gDateField > span {
+  font-size: 0.64rem; font-weight: 700; color: #6b7896; text-transform: uppercase;
+  letter-spacing: 0.08em; padding-left: 2px;
+}
+.gDateInput {
+  border: 1px solid rgba(13, 45, 94, 0.14); background: #fff; border-radius: 9px;
+  font-family: 'Raleway', sans-serif; font-size: 0.82rem; color: #263149;
+  padding: 7px 10px; height: 36px; color-scheme: light;
+}
+.gDateInput:focus { outline: none; border-color: #c9a84c; box-shadow: 0 0 0 3px rgba(201, 168, 76, 0.16); }
+.gClearAll {
+  border: none; background: transparent; color: #b23b3b; cursor: pointer;
+  font-family: 'Raleway', sans-serif; font-size: 0.8rem; font-weight: 600;
+  padding: 8px 4px; text-decoration: underline; text-underline-offset: 2px;
+}
+.gClearAll:hover { color: #8f2f2f; }
+
+/* ══════════════════════════════════════════
+   3. Cobros — "cupones" de comisión + stepper
+   ══════════════════════════════════════════ */
+.cuponList { display: flex; flex-direction: column; gap: 0.9rem; position: relative; z-index: 1; }
+
+.cupon {
+  position: relative;
+  background: #fff;
+  border: 1px solid rgba(13, 45, 94, 0.1);
+  border-radius: 16px;
+  padding: 1.1rem 1.25rem;
+  box-shadow: 0 6px 18px rgba(13, 45, 94, 0.08);
+  display: flex; flex-direction: column; gap: 0.85rem;
+}
+/* Estado por tinte de superficie (sin franja lateral). */
+.cupon[data-estado="pendiente"]  { background: linear-gradient(180deg, #fdf9ef, #fff); border-color: #efe0b8; }
+.cupon[data-estado="solicitado"] { background: linear-gradient(180deg, #eef3fe, #fff); border-color: #cddcf7; }
+.cupon[data-estado="pagado"]     { background: linear-gradient(180deg, #f0faf4, #fff); border-color: #cdeeda; }
+
+.cuponHead {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 1rem; flex-wrap: wrap;
+}
+.cuponMeta { display: flex; align-items: center; gap: 0.55rem; flex-wrap: wrap; min-width: 0; }
+.cuponCodigo {
+  font-family: 'Courier New', monospace;
+  font-size: 0.92rem; font-weight: 700; letter-spacing: 0.06em; color: #0d2d5e;
+  background: rgba(13, 45, 94, 0.05); border: 1px solid rgba(13, 45, 94, 0.12);
+  border-radius: 7px; padding: 3px 9px;
+}
+.cuponFecha {
+  font-family: 'Raleway', sans-serif; font-size: 0.76rem; color: #6b7fa3;
+  font-variant-numeric: tabular-nums;
+}
+.cuponCasos {
+  font-family: 'Raleway', sans-serif; font-size: 0.68rem; font-weight: 700;
+  color: #8a6a28; background: rgba(201, 168, 76, 0.13);
+  border: 1px solid rgba(201, 168, 76, 0.32);
+  border-radius: 999px; padding: 2px 9px;
+}
+.cuponMontoWrap { display: flex; align-items: center; gap: 0.7rem; flex-wrap: wrap; }
+.cuponMonto {
+  font-family: 'Raleway', sans-serif;
+  font-size: 1.35rem; font-weight: 800; line-height: 1;
+  font-variant-numeric: tabular-nums lining-nums;
+  letter-spacing: -0.01em; color: #0d2d5e;
+}
+.cuponNota {
+  font-family: 'Raleway', sans-serif; font-size: 0.82rem; line-height: 1.5;
+  color: #4a6080; margin: 0;
+}
+
+/* Desglose transparente de la comisión (total · empresa · tu comisión). */
+.desglose {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1px;
+  border: 1px solid rgba(13, 45, 94, 0.1); border-radius: 12px; overflow: hidden;
+  background: rgba(13, 45, 94, 0.1);
+}
+.desItem {
+  display: flex; flex-direction: column; gap: 3px;
+  padding: 0.7rem 0.9rem; background: #fff;
+}
+.desLabel {
+  font-family: 'Raleway', sans-serif; font-size: 0.66rem; font-weight: 700;
+  letter-spacing: 0.06em; text-transform: uppercase; color: #7b8592;
+}
+.desVal {
+  font-family: 'Raleway', sans-serif; font-size: 1rem; font-weight: 800; color: #0d2d5e;
+  font-variant-numeric: tabular-nums;
+}
+.desItemStrong { background: linear-gradient(180deg, #fdf6e6, #fff); }
+.desItemStrong .desVal { color: #9a7a2c; }
+
+/* Pills de estado — 3 tonos */
+.pillDisponible, .pillSolicitado, .pillPagado {
+  display: inline-block; white-space: nowrap;
+  font-family: 'Raleway', sans-serif;
+  font-size: 0.6rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
+  padding: 4px 11px; border-radius: 999px;
+}
+.pillDisponible { color: #8a6a28; background: rgba(201, 168, 76, 0.14); border: 1px solid rgba(201, 168, 76, 0.4); }
+.pillSolicitado { color: #2f6bd8; background: rgba(47, 107, 216, 0.12); border: 1px solid rgba(47, 107, 216, 0.38); }
+.pillPagado     { color: #1f7a4d; background: rgba(31, 122, 77, 0.12); border: 1px solid rgba(31, 122, 77, 0.34); }
+
+/* Mini-stepper: Disponible → Solicitado → Pagado */
+.stepper { display: flex; align-items: flex-start; gap: 0; width: 100%; }
+.step {
+  position: relative;
+  flex: 1 1 0; min-width: 0;
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  text-align: center;
+}
+.stepBar {
+  position: absolute; top: 10px; right: 50%; width: 100%; height: 3px; border-radius: 3px;
+  background: rgba(13, 45, 94, 0.12);
+}
+.stepBar[data-state="done"] { background: linear-gradient(90deg, #d8b657, #c9a84c); }
+.stepDot {
+  position: relative; z-index: 1;
+  width: 22px; height: 22px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: #fff; border: 2px solid rgba(13, 45, 94, 0.18); color: #fff;
+  transition: background 0.2s, border-color 0.2s;
+}
+.stepInner { width: 7px; height: 7px; border-radius: 50%; background: rgba(13, 45, 94, 0.22); }
+.step[data-state="current"] .stepDot { border-color: #c9a84c; background: rgba(201, 168, 76, 0.16); }
+.step[data-state="current"] .stepInner { background: #c9a84c; }
+.step[data-state="done"] .stepDot { background: #1f7a4d; border-color: #1f7a4d; }
+.stepLabel {
+  font-family: 'Raleway', sans-serif;
+  font-size: 0.6rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+  color: #8a9ab5; line-height: 1.2;
+}
+.step[data-state="current"] .stepLabel { color: #8a6a28; }
+.step[data-state="done"] .stepLabel { color: #1f7a4d; }
+
+/* Fecha + hora bajo cada punto del stepper (trazabilidad). */
+.stepWhen {
+  display: flex; flex-direction: column; align-items: center; gap: 1px; margin-top: 1px;
+  font-family: 'Raleway', sans-serif; font-variant-numeric: tabular-nums;
+}
+.stepWhenDate { font-size: 0.64rem; font-weight: 600; color: #55617a; white-space: nowrap; }
+.stepWhenTime { font-size: 0.62rem; color: #8791a5; white-space: nowrap; }
+.stepWhenEmpty { font-size: 0.64rem; color: #b8c1d1; margin-top: 1px; }
+
+.cuponFoot { display: flex; align-items: center; justify-content: flex-end; }
+.solicitarBtn {
+  display: inline-flex; align-items: center; gap: 8px;
+  appearance: none; border: none; cursor: pointer;
+  font-family: 'Raleway', sans-serif;
+  font-size: 0.82rem; font-weight: 700; letter-spacing: 0.02em;
+  color: #0d2d5e;
+  background: linear-gradient(135deg, #f2d580, #c9a84c 55%, #9a7a2c);
+  border-radius: 11px; padding: 0.6rem 1.2rem;
+  box-shadow: 0 5px 14px rgba(201, 168, 76, 0.35);
+  transition: transform 0.15s, box-shadow 0.2s, opacity 0.2s;
+}
+.solicitarBtn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 9px 22px rgba(201, 168, 76, 0.45); }
+.solicitarBtn:active { transform: translateY(0); }
+.solicitarBtn:disabled { opacity: 0.6; cursor: default; }
+.cuponHint {
+  font-family: 'Raleway', sans-serif; font-size: 0.8rem; font-weight: 600; margin: 0;
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.cuponHint[data-tone="wait"] { color: #2f6bd8; }
+.cuponHint[data-tone="ok"]   { color: #1f7a4d; }
+@media (prefers-reduced-motion: reduce) { .solicitarBtn { transition: none; } }
 
 /* ══════════════════════════════════════════
    3. Cobros — tabla

@@ -38,8 +38,16 @@ function Estrellas({ rating }) {
   )
 }
 
+const IconRedSocial = (props) => (
+  <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...props}>
+    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+    <polyline points="15 3 21 3 21 9" />
+    <line x1="10" y1="14" x2="21" y2="3" />
+  </svg>
+)
+
 function Tarjeta({
-  texto, imagen, nombre, rol, rating = 5, oculto,
+  texto, imagen, nombre, rol, rating = 5, oculto, redSocial,
   profesional, onAbrirProfesional,
   onMouseEnter, onMouseLeave,
 }) {
@@ -85,6 +93,20 @@ function Tarjeta({
         <div className={styles.pieTexto}>
           <p className={styles.nombre}>{nombre}</p>
           <p className={styles.rol}>{rol}</p>
+          {!oculto && redSocial && (
+            <a
+              className={styles.redSocial}
+              href={redSocial}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              onKeyDown={(e) => e.stopPropagation()}
+              title="Perfil verificado del cliente"
+            >
+              <IconRedSocial />
+              <span>Red social</span>
+            </a>
+          )}
         </div>
       </div>
 
@@ -243,8 +265,8 @@ export default function TestimoniosSection() {
       //    "Iniciar consulta" funcionen igual.
       async function pedirResenas(conProf) {
         const cols = conProf
-          ? 'id,nombre,rol,rating,texto,professional_id,created_at'
-          : 'id,nombre,rol,rating,texto,created_at'
+          ? 'id,nombre,rol,rating,texto,red_social,professional_id,created_at'
+          : 'id,nombre,rol,rating,texto,red_social,created_at'
         const res = await fetch(
           `${SUPABASE_URL}/rest/v1/resenas?aprobado=eq.true&texto=not.is.null` +
           `&select=${cols}&order=created_at.desc&limit=24`,
@@ -267,6 +289,7 @@ export default function TestimoniosSection() {
               rol: r.rol || 'Cliente',
               rating: Number(r.rating) || 5,
               imagen: null,
+              redSocial: r.red_social || null, // red social del reseñador (transparencia)
               profesional: real || siguienteProf(), // siempre hay profesional → siempre clickeable
             }
           })
@@ -315,8 +338,8 @@ export default function TestimoniosSection() {
           Lo que dicen <em>nuestros clientes</em>
         </h2>
         <p className={styles.desc}>
-          Personas de todo Colombia han confiado en nosotros para resolver sus asuntos jurídicos y
-          contables con respaldo profesional. Toca una reseña para ver al profesional y iniciar tu consulta.
+          Conoce cómo otras personas encontraron el profesional adecuado para resolver sus necesidades de
+          manera rápida, segura y transparente. Toca una reseña para ver al profesional e iniciar tu consulta.
         </p>
       </motion.header>
 

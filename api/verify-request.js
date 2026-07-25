@@ -20,7 +20,11 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' })
   }
-  const { roomId, clientNombre, area } = req.body || {}
+  // clientNombre/area del body se IGNORAN a propósito: el nombre del cliente y
+  // el área se leen de la BD (abajo) usando el roomId, para que la
+  // notificación/correo al admin reflejen los datos reales y no lo que el
+  // cliente haya podido manipular en la petición.
+  const { roomId } = req.body || {}
   if (!roomId) return res.status(400).json({ error: 'Falta roomId.' })
 
   // 1) Autorización: profesional asignado a la sala.
@@ -36,8 +40,23 @@ export default async function handler(req, res) {
   // misma fila de profiles en una segunda query).
   const nombreAbogado = `${caller.nombre || ''} ${caller.apellido || ''}`.trim() || 'profesional'
 
-  const cliente = clientNombre || 'Anónimo'
-  const areaTxt = area || 'Consulta'
+  // Datos reales del cliente y del área desde la propia sala (fuente de verdad).
+  let cliente = 'Anónimo'
+  let areaTxt = 'Consulta'
+  try {
+    const rr = await fetch(
+      `${SUPABASE_URL}/rest/v1/chat_rooms?id=eq.${encodeURIComponent(roomId)}` +
+      `&select=client_nombre,area_derecho&limit=1`,
+      { headers: serviceHeaders() },
+    )
+    if (rr.ok) {
+      const rows = await rr.json()
+      if (Array.isArray(rows) && rows[0]) {
+        cliente = rows[0].client_nombre || 'Anónimo'
+        areaTxt = rows[0].area_derecho || 'Consulta'
+      }
+    }
+  } catch { /* si falla la lectura, se usan los valores por defecto */ }
 
   // 2) Notificación para la campanita.
   try {

@@ -6,6 +6,7 @@ import { useNavigate } from 'react-router-dom'
 import styles from './AdminPage.module.css'
 import SuperAdminChatViewer from '../components/chat/SuperAdminChatViewer'
 import GestoresAdmin from '../components/admin/GestoresAdmin'
+import PagosCobrosAdmin from '../components/admin/PagosCobrosAdmin'
 import MisContratos from '../components/profile/MisContratos'
 import AdminInternalChat from '../components/chat/AdminInternalChat'
 import ProfileDetailModal from '../components/admin/ProfileDetailModal'
@@ -27,6 +28,7 @@ const IconStar   = (p) => (<svg viewBox="0 0 24 24" width="18" height="18" fill=
 const IconHome   = (p) => (<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>)
 const IconLogout = (p) => (<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg>)
 const IconGestor = (p) => (<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/><path d="M12 11v0"/></svg>)
+const IconWallet = (p) => (<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4z"/></svg>)
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
@@ -718,6 +720,7 @@ export default function AdminPage() {
     { key: 'pending',      label: 'Solicitudes',         count: pending.length,       Icon: IconInbox },
     { key: 'approved',     label: 'Aprobados',            count: approved.length,      Icon: IconUsers },
     { key: 'gestores',     label: 'Gestores',             count: gestores.filter(g => !g.aprobado).length, Icon: IconGestor },
+    { key: 'pagos',        label: 'Pagos y cobros',                                    Icon: IconWallet },
     { key: 'chats',        label: 'Historial chats',                                   Icon: IconChat },
     { key: 'recuperar',    label: 'Recuperar chats',      count: chatsCerrados.length, Icon: IconRecover },
     { key: 'alertas',      label: 'Alertas',              count: alertas.length, alert: true, Icon: IconAlert },
@@ -1307,6 +1310,13 @@ export default function AdminPage() {
           {activeTab === 'gestores' && (
             <div className={styles.section}>
               <GestoresAdmin onChange={fetchGestores} />
+            </div>
+          )}
+
+          {/* ── Pagos y cobros (pagos de profesionales + comisiones de gestores) ── */}
+          {activeTab === 'pagos' && (
+            <div className={styles.section}>
+              <PagosCobrosAdmin />
             </div>
           )}
 

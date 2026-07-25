@@ -23,6 +23,7 @@ export default function OpinarPage() {
   const [rating, setRating] = useState(leerParams().rating)
   const [hover, setHover] = useState(0)
   const [texto, setTexto] = useState('')
+  const [redSocial, setRedSocial] = useState('')
   const [estado, setEstado] = useState('form') // form | enviando | ok | error
   const [error, setError] = useState('')
 
@@ -42,7 +43,7 @@ export default function OpinarPage() {
           apikey: ANON, Authorization: `Bearer ${ANON}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ p_token: token, p_rating: rating, p_texto: texto.trim() || null }),
+        body: JSON.stringify({ p_token: token, p_rating: rating, p_texto: texto.trim() || null, p_red_social: redSocial.trim() || null }),
       })
       const guardada = await res.json().catch(() => null)
       if (!res.ok) {
@@ -107,6 +108,23 @@ export default function OpinarPage() {
               rows={4}
               maxLength={500}
             />
+
+            <div className={styles.redSocial}>
+              <input
+                type="url"
+                className={styles.input}
+                value={redSocial}
+                onChange={(e) => setRedSocial(e.target.value)}
+                placeholder="https://instagram.com/tu_usuario"
+                inputMode="url"
+                autoComplete="url"
+                maxLength={200}
+                aria-label="Red social (opcional)"
+              />
+              <p className={styles.helper}>
+                Déjanos el link de tu red social (opcional). Ayuda a mostrar que eres una persona real.
+              </p>
+            </div>
 
             {error && <p className={styles.err}>{error}</p>}
 

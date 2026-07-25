@@ -39,7 +39,7 @@ function FieldHint({ valid, msg, touched }) {
   )
 }
 
-export default function AuthModal({ initialTab = 'login', onClose }) {
+export default function AuthModal({ initialTab = 'login', onClose, onRegister }) {
   const { signIn, signUp } = useAuth()
 
   const [tab, setTab]         = useState(initialTab)
@@ -325,7 +325,12 @@ export default function AuthModal({ initialTab = 'login', onClose }) {
 
         <div className={styles.tabs}>
           <button className={`${styles.tabBtn} ${tab === 'login'    ? styles.active : ''}`} onClick={() => switchTab('login')}>Iniciar sesión</button>
-          <button className={`${styles.tabBtn} ${tab === 'register' ? styles.active : ''}`} onClick={() => switchTab('register')}>Registrarse</button>
+          <button
+            className={`${styles.tabBtn} ${tab === 'register' ? styles.active : ''}`}
+            onClick={() => onRegister ? onRegister() : switchTab('register')}
+          >
+            Registrarse
+          </button>
         </div>
 
         {error   && <p className={styles.msgError}>{error}</p>}

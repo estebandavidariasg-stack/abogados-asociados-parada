@@ -8,7 +8,7 @@ import AudioPlayer from './AudioPlayer'
 import { ChatImage, openChatFile } from '../../lib/chatFiles'
 import { IconPaperclip, IconMic, IconFirma } from '../shared/Icons'
 import { pedirIA } from '../../lib/aiClient'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
 import Markdown from '../shared/Markdown'
 import EnviarAFirmar from '../firma/EnviarAFirmar'
 import { firmantesPendientes } from '../../lib/firmaService'
@@ -31,7 +31,7 @@ function isImage(name) {
   return /\.(jpe?g|png|webp|gif|bmp|svg)$/i.test(name || '')
 }
 
-// Renderiza **negrillas** estilo markdown conservando los saltos de línea.
+// Renderiza **negrillas** estilo markdown conservando los saltos de lÃ­nea.
 function renderMensaje(text) {
   if (text == null) return text
   return String(text).split(/(\*\*[^*\n]+\*\*)/g).map((parte, i) => {
@@ -88,12 +88,32 @@ function formatSize(bytes) {
 const STATUS_LABEL = { waiting: 'En espera', active: 'Activo', closed: 'Cerrado' }
 const STATUS_COLOR = { waiting: '#e6a817', active: '#4caf50', closed: '#666' }
 
-/* ── Mapa de "última vez visto" por sala (estilo WhatsApp) ──────────────────
+// Normaliza texto para bÃºsqueda: sin tildes, minÃºsculas.
+function normaliza(s) {
+  return (s || '')
+    .toString()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .trim()
+}
+
+// Ãcono de lupa (buscador) â€” reutiliza el lenguaje visual del panel admin.
+function IconLupa() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" />
+      <path d="m20 20-3.2-3.2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+/* â”€â”€ Mapa de "Ãºltima vez visto" por sala (estilo WhatsApp) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
    Persistido en localStorage por usuario. Sin columna `seen_at` en la BD,
-   cada navegador lleva su propio estado — basta para el caso de uso. Si en
+   cada navegador lleva su propio estado â€” basta para el caso de uso. Si en
    el futuro se necesita sync entre dispositivos, migrar a tabla Supabase.
-   markSeen sólo avanza, nunca retrocede: evita que un fetch viejo pise un
-   mark más reciente cuando llegan datos fuera de orden. */
+   markSeen sÃ³lo avanza, nunca retrocede: evita que un fetch viejo pise un
+   mark mÃ¡s reciente cuando llegan datos fuera de orden. */
 function readSeen(uid) {
   if (!uid) return {}
   try { return JSON.parse(localStorage.getItem(`chat_seen_${uid}`) || '{}') }
@@ -112,6 +132,7 @@ function markSeen(uid, roomId, ts) {
 }
 
 export default function ContadorChatDashboard({ contadorId, canDownloadFiles = false }) {
+  const prefersReducedMotion = useReducedMotion()
   const [rooms,        setRooms]        = useState([])
   const [activeRoom,   setActiveRoom]   = useState(null)
   const [messages,     setMessages]     = useState([])
@@ -122,8 +143,8 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
   const [confirmClose, setConfirmClose] = useState(false)
   const [confirmVerificar, setConfirmVerificar] = useState(false)
   const [sendingVerificar, setSendingVerificar] = useState(false)
-  // Salas a las que ya se les solicitó revisión en esta sesión (estado por
-  // navegador: no hay columna en BD; basta para evitar reenvíos y mostrar el tag).
+  // Salas a las que ya se les solicitÃ³ revisiÃ³n en esta sesiÃ³n (estado por
+  // navegador: no hay columna en BD; basta para evitar reenvÃ­os y mostrar el tag).
   const [verifiedRooms, setVerifiedRooms] = useState(() => new Set())
   const [rating,       setRating]       = useState(0)
   const [showRating,   setShowRating]   = useState(false)
@@ -134,12 +155,19 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
   const [iaCopiado, setIaCopiado]     = useState(false)
   const [iaCargando, setIaCargando]   = useState(false)
 
+  // â”€â”€ Filtros del sidebar (bÃºsqueda por nombre + rango de fechas) â”€â”€
+  // Estado en el componente padre â†’ los inputs se renderizan inline y no
+  // pierden el foco al teclear (no se remontan).
+  const [buscar,     setBuscar]     = useState('')
+  const [fechaDesde, setFechaDesde] = useState('')
+  const [fechaHasta, setFechaHasta] = useState('')
+
   const fileRef      = useRef(null)
   const mensajesRef  = useRef(null)
   const lastCountRef = useRef(0)
   const pollRooms    = useRef(null)
 
-  // ── Voz ──────────────────────────────────────────────────────────────────
+  // â”€â”€ Voz â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const [recording,      setRecording]      = useState(false)
   const [recordingTime,  setRecordingTime]  = useState(0)
   const [uploadingAudio, setUploadingAudio] = useState(false)
@@ -147,7 +175,7 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
   const audioChunksRef    = useRef([])
   const recordingTimerRef = useRef(null)
 
-  // ── Toast visual (reemplaza alert() del navegador al click de archivo) ──
+  // â”€â”€ Toast visual (reemplaza alert() del navegador al click de archivo) â”€â”€
   const [toast, setToast] = useState(null)
   useEffect(() => {
     if (!toast) return
@@ -155,9 +183,9 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
     return () => clearTimeout(t)
   }, [toast])
 
-  // Al desmontar con una grabación activa: libera el micrófono y el timer.
+  // Al desmontar con una grabaciÃ³n activa: libera el micrÃ³fono y el timer.
   // Sin esto el indicador de mic del navegador quedaba encendido y el interval
-  // seguía corriendo si el profesional navegaba a mitad de grabación.
+  // seguÃ­a corriendo si el profesional navegaba a mitad de grabaciÃ³n.
   useEffect(() => () => {
     clearInterval(recordingTimerRef.current)
     const r = mediaRecorderRef.current
@@ -167,7 +195,7 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
     }
   }, [])
 
-  // Polling del permiso de descarga — se actualiza sin recargar si el admin lo cambia
+  // Polling del permiso de descarga â€” se actualiza sin recargar si el admin lo cambia
   useEffect(() => {
     if (!contadorId) return
     async function fetchPermiso() {
@@ -182,13 +210,13 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
       } catch { /* silencioso */ }
     }
     fetchPermiso()
-    // Pausar el polling cuando la pestaña está oculta: no malgastar queries
-    // contra la BD si el profesional no está mirando.
+    // Pausar el polling cuando la pestaÃ±a estÃ¡ oculta: no malgastar queries
+    // contra la BD si el profesional no estÃ¡ mirando.
     const interval = setInterval(() => { if (!document.hidden) fetchPermiso() }, 60_000)
     return () => clearInterval(interval)
   }, [contadorId])
 
-  // ── Lightbox para imagenes (click en thumbnail = abrir fullscreen) ──
+  // â”€â”€ Lightbox para imagenes (click en thumbnail = abrir fullscreen) â”€â”€
   const [lightbox, setLightbox] = useState(null)
   const [firmaOpen, setFirmaOpen] = useState(false)
   const [adjuntarMenu, setAdjuntarMenu] = useState(false)
@@ -243,7 +271,7 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
     return () => document.removeEventListener('keydown', onKey)
   }, [lightbox])
 
-  // ── Modal de datos de contacto bloqueados ──
+  // â”€â”€ Modal de datos de contacto bloqueados â”€â”€
   const [contactoBlocked, setContactoBlocked] = useState(false)
   useEffect(() => {
     if (!contactoBlocked) return
@@ -252,7 +280,7 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
     return () => document.removeEventListener('keydown', onKey)
   }, [contactoBlocked])
 
-  // ── Modal de confirmar revisión (no cerrar a media petición) ──
+  // â”€â”€ Modal de confirmar revisiÃ³n (no cerrar a media peticiÃ³n) â”€â”€
   useEffect(() => {
     if (!confirmVerificar) return
     const onKey = (e) => { if (e.key === 'Escape' && !sendingVerificar) setConfirmVerificar(false) }
@@ -260,7 +288,7 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
     return () => document.removeEventListener('keydown', onKey)
   }, [confirmVerificar, sendingVerificar])
 
-  /* ── Cargar salas asignadas a este contador ── */
+  /* â”€â”€ Cargar salas asignadas a este contador â”€â”€ */
   const fetchRooms = useCallback(async () => {
     if (!contadorId) return
     try {
@@ -273,7 +301,7 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
     )
     const assignments = await aRes.json()
     // Respuesta de error (401 en el borde del refresh, 5xx): conservar el
-    // sidebar actual en vez de vaciarlo — solo un [] legítimo lo limpia.
+    // sidebar actual en vez de vaciarlo â€” solo un [] legÃ­timo lo limpia.
     if (!Array.isArray(assignments)) { setLoadingRooms(false); return }
     if (assignments.length === 0) {
       setRooms([])
@@ -281,13 +309,13 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
       return
     }
 
-    // 2. Datos de las salas — filtro extra tipo_profesional=eq.contador
+    // 2. Datos de las salas â€” filtro extra tipo_profesional=eq.contador
     //    como guardrail. Si el dato existe, evita que un contador vea
-    //    salas legacy de abogado por error de asignación.
-    //    Las asignaciones nunca se podan, así que el in.() se trocea en lotes
-    //    de 150 ids (una URL con cientos de UUIDs supera el límite del gateway
-    //    y el fetch falla entero) y el sidebar se acota a las 200 salas más
-    //    recientes — las más antiguas siguen en el Historial del admin.
+    //    salas legacy de abogado por error de asignaciÃ³n.
+    //    Las asignaciones nunca se podan, asÃ­ que el in.() se trocea en lotes
+    //    de 150 ids (una URL con cientos de UUIDs supera el lÃ­mite del gateway
+    //    y el fetch falla entero) y el sidebar se acota a las 200 salas mÃ¡s
+    //    recientes â€” las mÃ¡s antiguas siguen en el Historial del admin.
     const allIds = assignments.map(a => a.room_id)
     const idLotes = []
     for (let i = 0; i < allIds.length; i += 150) idLotes.push(allIds.slice(i, i + 150))
@@ -301,24 +329,24 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
     }))
     if (chunkResults.some(c => !Array.isArray(c))) { setLoadingRooms(false); return }
     // El cap de 200 NUNCA debe ocultar una sala abierta: se conservan TODAS
-    // las waiting/active (el trabajo abierto de un profesional está acotado
-    // por naturaleza) y se completa con las cerradas más recientes.
+    // las waiting/active (el trabajo abierto de un profesional estÃ¡ acotado
+    // por naturaleza) y se completa con las cerradas mÃ¡s recientes.
     const flat = chunkResults.flat()
     const abiertas = flat.filter(r => r.status !== 'closed')
     const cerradas = flat.filter(r => r.status === 'closed')
       .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
     const roomData = [...abiertas, ...cerradas].slice(0, Math.max(200, abiertas.length))
 
-    // 3. Últimos 50 mensajes por sala — uno solo bastaba para la preview,
-    //    pero también contamos los del cliente sin responder (recorrer desc
-    //    hasta el primer mensaje del profesional). 50 cubre la gran mayoría
+    // 3. Ãšltimos 50 mensajes por sala â€” uno solo bastaba para la preview,
+    //    pero tambiÃ©n contamos los del cliente sin responder (recorrer desc
+    //    hasta el primer mensaje del profesional). 50 cubre la gran mayorÃ­a
     //    de conversaciones sin pegar la latencia.
     const seenMap    = readSeen(contadorId)
     const lastMsgMap = {}
     const unreadMap  = {}
     // UNA sola query con los mensajes recientes de TODAS las salas. Antes era
-    // 1 query por sala → N+1 disparado cada 6s. Agrupamos en memoria y
-    // aplicamos el mismo algoritmo de no-leídos por sala. El tope global de
+    // 1 query por sala â†’ N+1 disparado cada 6s. Agrupamos en memoria y
+    // aplicamos el mismo algoritmo de no-leÃ­dos por sala. El tope global de
     // 1000 cubre de sobra la actividad reciente; una sala muy vieja sin
     // mensajes dentro de ese tope queda sin preview pero igual se lista.
     const recentIds = roomData.map(r => r.id).join(',')
@@ -339,7 +367,7 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
         const msgs = byRoom[room.id]
         if (!msgs || msgs.length === 0) continue
         lastMsgMap[room.id] = msgs[0]
-        // Cuenta msgs del cliente posteriores al último "visto"; el break en
+        // Cuenta msgs del cliente posteriores al Ãºltimo "visto"; el break en
         // 'lawyer' resetea el contador (cualquier respuesta nuestra lo limpia).
         const seenAt = seenMap[room.id] ? new Date(seenMap[room.id]).getTime() : 0
         let unread = 0
@@ -363,8 +391,8 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
       }
     })
 
-    // Orden puro por última actividad (mensaje más reciente, o creación si
-    // aún no hay mensajes). Sin agrupar por status — antes "waiting" caía
+    // Orden puro por Ãºltima actividad (mensaje mÃ¡s reciente, o creaciÃ³n si
+    // aÃºn no hay mensajes). Sin agrupar por status â€” antes "waiting" caÃ­a
     // al fondo de la lista y forzaba a hacer scroll para verla.
     enriched.sort((a, b) => {
       const ta = new Date(a.lastMsg?.created_at || a.created_at).getTime()
@@ -375,7 +403,7 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
     setRooms(enriched)
     setLoadingRooms(false)
     } catch (_) {
-      // Red caída a mitad del poll: conserva el sidebar visible; el próximo
+      // Red caÃ­da a mitad del poll: conserva el sidebar visible; el prÃ³ximo
       // tick (20s) o el visibilitychange reintentan.
       setLoadingRooms(false)
     }
@@ -383,9 +411,9 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
 
   useEffect(() => {
     fetchRooms()
-    // Sidebar por poll (lento, pausado con la pestaña oculta) + refresco al
-    // volver. La sala ABIERTA se actualiza al instante por Realtime; las demás
-    // (preview/badge) refrescan cada 20s — basta para chats que no miras.
+    // Sidebar por poll (lento, pausado con la pestaÃ±a oculta) + refresco al
+    // volver. La sala ABIERTA se actualiza al instante por Realtime; las demÃ¡s
+    // (preview/badge) refrescan cada 20s â€” basta para chats que no miras.
     pollRooms.current = setInterval(() => { if (!document.hidden) fetchRooms() }, 20000)
     const onVisible = () => { if (!document.hidden) fetchRooms() }
     document.addEventListener('visibilitychange', onVisible)
@@ -395,26 +423,26 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
     }
   }, [fetchRooms])
 
-  /* ── Mensajes de la sala activa ── */
+  /* â”€â”€ Mensajes de la sala activa â”€â”€ */
   const activeRoomIdRef = useRef(null)
   const fetchMessages = useCallback(async () => {
     const rid = activeRoomIdRef.current
     if (!rid) return
     try {
       const headers = await getAuthHeaders()
-      // Últimos 300 en vez del historial completo: en salas largas/reabiertas
-      // el historial entero se re-transfería tras cada envío. El índice
+      // Ãšltimos 300 en vez del historial completo: en salas largas/reabiertas
+      // el historial entero se re-transferÃ­a tras cada envÃ­o. El Ã­ndice
       // (room_id, created_at) sirve el desc+limit directo.
       const res = await fetch(
         `${SUPABASE_URL}/rest/v1/chat_messages?room_id=eq.${rid}&order=created_at.desc&limit=300&select=*`,
         { headers }
       )
       const data = await res.json()
-      // Respuesta tardía de una sala que ya no está abierta (cambio rápido de
+      // Respuesta tardÃ­a de una sala que ya no estÃ¡ abierta (cambio rÃ¡pido de
       // sala): descartar para no pintar mensajes bajo el encabezado equivocado.
       if (activeRoomIdRef.current !== rid) return
       if (Array.isArray(data)) setMessages(data.reverse())
-    } catch (_) { /* red caída: conserva lo visible; realtime/visibilitychange resincronizan */ }
+    } catch (_) { /* red caÃ­da: conserva lo visible; realtime/visibilitychange resincronizan */ }
   }, [])
 
   useEffect(() => {
@@ -423,8 +451,8 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
     if (!rid) return
     fetchMessages()   // historial al abrir la sala
     // Realtime: mensajes nuevos de ESTA sala (reemplaza el poll de 3s). Una
-    // sola suscripción y solo mientras hay un chat abierto → barata en cupo
-    // de Realtime. El status de la sala (cierre) también llega al instante.
+    // sola suscripciÃ³n y solo mientras hay un chat abierto â†’ barata en cupo
+    // de Realtime. El status de la sala (cierre) tambiÃ©n llega al instante.
     // Deps por ID (no por objeto): los UPDATE de chat_rooms mutan el objeto
     // activeRoom pero no deben destruir/recrear el WebSocket.
     let first = true
@@ -433,20 +461,20 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
         p => {
           setMessages(prev => prev.find(m => m.id === p.new.id) ? prev : [...prev, p.new])
           if (p.new.message_type === 'firma_ok' && p.new.sender_type === 'client') {
-            setToast('✅ El cliente firmó el documento')
+            setToast('âœ… El cliente firmÃ³ el documento')
           }
         })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'chat_rooms', filter: `id=eq.${rid}` },
         p => setActiveRoom(prev => (prev && prev.id === p.new.id) ? { ...prev, ...p.new } : prev))
       .subscribe(st => {
-        // Tras una reconexión automática del WS, re-sincroniza lo perdido
+        // Tras una reconexiÃ³n automÃ¡tica del WS, re-sincroniza lo perdido
         // durante el corte (fetchMessages deduplica por id).
         if (st === 'SUBSCRIBED') {
           if (first) { first = false; return }
           fetchMessages()
         }
       })
-    // Red de seguridad ante hipos del WS: re-sincroniza al volver a la pestaña.
+    // Red de seguridad ante hipos del WS: re-sincroniza al volver a la pestaÃ±a.
     const onVisible = () => { if (!document.hidden) fetchMessages() }
     document.addEventListener('visibilitychange', onVisible)
     return () => {
@@ -466,9 +494,9 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
     lastCountRef.current = 0
   }, [activeRoom?.id])
 
-  /* Mantén el "visto" al día mientras la sala está abierta. Si llegan
-     mensajes nuevos por polling mientras estás dentro, avanzan el timestamp
-     visto — al salir y volver, el badge sigue en 0 hasta nueva actividad. */
+  /* MantÃ©n el "visto" al dÃ­a mientras la sala estÃ¡ abierta. Si llegan
+     mensajes nuevos por polling mientras estÃ¡s dentro, avanzan el timestamp
+     visto â€” al salir y volver, el badge sigue en 0 hasta nueva actividad. */
   useEffect(() => {
     if (!activeRoom || messages.length === 0) return
     const latest = messages[messages.length - 1]
@@ -476,9 +504,9 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
   }, [messages, activeRoom?.id, contadorId])
 
   async function selectRoom(room) {
-    // Marca como visto inmediatamente — el badge de "no leídos" desaparece
+    // Marca como visto inmediatamente â€” el badge de "no leÃ­dos" desaparece
     // al abrir y NO vuelve hasta que llegue un mensaje nuevo (como WhatsApp).
-    // El effect sobre `messages` refinará con el timestamp real más reciente.
+    // El effect sobre `messages` refinarÃ¡ con el timestamp real mÃ¡s reciente.
     markSeen(contadorId, room.id, room.lastMsg?.created_at)
     setRooms(prev => prev.map(r => r.id === room.id ? { ...r, unreadCount: 0 } : r))
 
@@ -512,11 +540,11 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
     }
   }
 
-  /* sender_type = 'lawyer' aunque seamos contador — la columna sólo
+  /* sender_type = 'lawyer' aunque seamos contador â€” la columna sÃ³lo
      distingue cliente vs profesional, no el rol del profesional. */
   async function enviar() {
     if (!input.trim() || sending || !activeRoom) return
-    // ── Bloqueo de datos de contacto (teléfono / correo) ──
+    // â”€â”€ Bloqueo de datos de contacto (telÃ©fono / correo) â”€â”€
     if (contieneContacto(input.trim())) { setContactoBlocked(true); return }
     setSending(true)
     try {
@@ -532,14 +560,14 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
         }),
       })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      // Solo limpiar tras confirmar el insert — si falló, el texto se conserva
-      // para reintentar (antes se perdía en silencio).
+      // Solo limpiar tras confirmar el insert â€” si fallÃ³, el texto se conserva
+      // para reintentar (antes se perdÃ­a en silencio).
       setInput('')
       fetchMessages()
     } catch (_) {
-      setToast('No se pudo enviar el mensaje. Revisa tu conexión e intenta de nuevo.')
+      setToast('No se pudo enviar el mensaje. Revisa tu conexiÃ³n e intenta de nuevo.')
     } finally {
-      // Sin esto, un fallo de red dejaba el botón Enviar bloqueado para siempre.
+      // Sin esto, un fallo de red dejaba el botÃ³n Enviar bloqueado para siempre.
       setSending(false)
     }
   }
@@ -599,7 +627,7 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
     }
   }
 
-  /* ── Grabación de voz ── */
+  /* â”€â”€ GrabaciÃ³n de voz â”€â”€ */
   async function fixAudioDuration(blob) {
     return new Promise(resolve => {
       let done = false
@@ -657,7 +685,7 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
       setRecordingTime(0)
       recordingTimerRef.current = setInterval(() => setRecordingTime(t => t + 1), 1000)
     } catch (err) {
-      alert('No se pudo acceder al micrófono: ' + err.message)
+      alert('No se pudo acceder al micrÃ³fono: ' + err.message)
     }
   }
 
@@ -716,8 +744,8 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
     }
   }
 
-  /* ── Cerrar sala (contador) ── */
-  /* ── Verificar: notificar al administrador para revisión de proceso ──
+  /* â”€â”€ Cerrar sala (contador) â”€â”€ */
+  /* â”€â”€ Verificar: notificar al administrador para revisiÃ³n de proceso â”€â”€
      Inserta un mensaje en el canal interno (mensajes_internos) dirigido al
      superadmin, reutilizando la infraestructura del chat interno. */
   async function enviarVerificacion() {
@@ -725,22 +753,22 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
     setSendingVerificar(true)
     try {
       // Endpoint seguro: valida server-side que soy el profesional asignado,
-      // registra la notificación para la campanita del admin, deja el mensaje
-      // en el chat interno y envía el correo. Ver api/verify-request.js.
+      // registra la notificaciÃ³n para la campanita del admin, deja el mensaje
+      // en el chat interno y envÃ­a el correo. Ver api/verify-request.js.
       const headers = await getAuthHeaders()
       const res = await fetch('/api/verify-request', {
         method: 'POST',
         headers,
         body: JSON.stringify({
           roomId:       activeRoom.id,
-          clientNombre: activeRoom.client_nombre || 'Anónimo',
+          clientNombre: activeRoom.client_nombre || 'AnÃ³nimo',
           area:         activeRoom.area_derecho || 'Consulta',
         }),
       })
       if (!res.ok) throw new Error('verify-request failed')
 
       setVerifiedRooms(prev => new Set(prev).add(activeRoom.id))
-      setToast('Solicitud de revisión enviada al administrador.')
+      setToast('Solicitud de revisiÃ³n enviada al administrador.')
     } catch (err) {
       setToast('No se pudo enviar la solicitud. Intenta de nuevo.')
     } finally {
@@ -756,14 +784,14 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
       .map(m => `${m.sender_type === 'client' ? 'Cliente' : 'Profesional'}: ${m.content || ''}`)
       .join('\n')
     const instruccion = tipo === 'analisis'
-      ? `Analiza este caso para el profesional (área, hechos, pretensión, riesgos, próximos pasos).\n\nTranscripción:\n${transcripcion}`
-      : `Resume esta consulta para el profesional en pocas líneas (área, hechos clave y qué busca el cliente).\n\nTranscripción:\n${transcripcion}`
+      ? `Analiza este caso para el profesional (Ã¡rea, hechos, pretensiÃ³n, riesgos, prÃ³ximos pasos).\n\nTranscripciÃ³n:\n${transcripcion}`
+      : `Resume esta consulta para el profesional en pocas lÃ­neas (Ã¡rea, hechos clave y quÃ© busca el cliente).\n\nTranscripciÃ³n:\n${transcripcion}`
     const { Authorization } = await getAuthHeaders()
     const { ok, data } = await pedirIA(
       { modo: 'abogado', mensajes: [{ role: 'user', content: instruccion }], roomId: activeRoom.id, accion: tipo },
       { authHeader: Authorization }
     )
-    setIaResultado(ok && data?.reply ? data.reply : (data?.mensaje || 'El asistente no está disponible ahora.'))
+    setIaResultado(ok && data?.reply ? data.reply : (data?.mensaje || 'El asistente no estÃ¡ disponible ahora.'))
     setIaCargando(false)
   }
 
@@ -779,7 +807,7 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
       })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
 
-      // Calificación best-effort: su fallo no debe bloquear el cierre ya confirmado.
+      // CalificaciÃ³n best-effort: su fallo no debe bloquear el cierre ya confirmado.
       if (rating > 0) {
         try {
           await fetch(`${SUPABASE_URL}/rest/v1/chat_ratings`, {
@@ -794,7 +822,7 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
         } catch (_) { /* noop */ }
       }
 
-      // Programar el correo de reseña de la web (~5 min después, vía pg_cron) —
+      // Programar el correo de reseÃ±a de la web (~5 min despuÃ©s, vÃ­a pg_cron) â€”
       // best-effort, requiere el correo del cliente (del formulario de consulta).
       if (activeRoom.client_email) {
         try {
@@ -817,30 +845,107 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
       setActiveRoom(null)
       fetchRooms()
     } catch (_) {
-      setToast('No se pudo cerrar la consulta. Revisa tu conexión e intenta de nuevo.')
+      setToast('No se pudo cerrar la consulta. Revisa tu conexiÃ³n e intenta de nuevo.')
     } finally {
-      // Sin esto, un fallo de red dejaba el botón atascado en "Cerrando…".
+      // Sin esto, un fallo de red dejaba el botÃ³n atascado en "Cerrandoâ€¦".
       setClosing(false)
     }
   }
 
+  // Luz verde: el pago de la consulta habilita descargas y datos de contacto,
+  // ademÃ¡s del permiso global por polÃ­ticas (profiles.puede_descargar_archivos).
+  const pagoConfirmado = !!activeRoom?.pago_confirmado
+  const puedeDescargarSala = canDownload || pagoConfirmado
+
+  // â”€â”€ Filtrado en cliente sobre las salas ya cargadas â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // Nombre (sin tildes/case-insensitive) + rango de fechas por Ãºltima actividad
+  // (o creaciÃ³n si aÃºn no hay mensajes) â€” el mismo timestamp que ordena la lista.
+  const buscarNorm = normaliza(buscar)
+  const desdeTs = fechaDesde ? new Date(`${fechaDesde}T00:00:00`).getTime() : null
+  const hastaTs = fechaHasta ? new Date(`${fechaHasta}T23:59:59.999`).getTime() : null
+  const filtroActivo = !!(buscar.trim() || fechaDesde || fechaHasta)
+  const filteredRooms = rooms.filter(room => {
+    if (buscarNorm && !normaliza(room.client_nombre).includes(buscarNorm)) return false
+    if (desdeTs || hastaTs) {
+      const ts = new Date(room.lastMsg?.created_at || room.created_at).getTime()
+      if (desdeTs && ts < desdeTs) return false
+      if (hastaTs && ts > hastaTs) return false
+    }
+    return true
+  })
+
   return (
     <div className={`${styles.dashboard} ${activeRoom ? styles.dashboardChatOpen : ''}`}>
 
-      {/* ── Sidebar de salas ── */}
+      {/* â”€â”€ Sidebar de salas â”€â”€ */}
       <div className={styles.sidebar}>
         <div className={styles.sidebarHeader}>
           <p className={styles.sidebarTitle}>Consultas activas</p>
           <p className={styles.sidebarSub}>Ordenadas por actividad reciente</p>
         </div>
 
+        {/* â”€â”€ Barra de filtros: buscar por cliente + rango de fechas â”€â”€ */}
+        <div className={styles.filterBar}>
+          <div className={styles.searchBox}>
+            <span className={styles.searchIcon}><IconLupa /></span>
+            <input
+              className={styles.searchInput}
+              type="text"
+              placeholder="Buscar por clienteâ€¦"
+              value={buscar}
+              onChange={e => setBuscar(e.target.value)}
+              aria-label="Buscar consulta por nombre del cliente"
+            />
+            {buscar && (
+              <button
+                type="button"
+                className={styles.searchClear}
+                onClick={() => setBuscar('')}
+                aria-label="Limpiar bÃºsqueda"
+              >âœ•</button>
+            )}
+          </div>
+          <div className={styles.dateRow}>
+            <label className={styles.dateField}>
+              <span>Desde</span>
+              <input
+                className={styles.dateInput}
+                type="date"
+                value={fechaDesde}
+                max={fechaHasta || undefined}
+                onChange={e => setFechaDesde(e.target.value)}
+              />
+            </label>
+            <label className={styles.dateField}>
+              <span>Hasta</span>
+              <input
+                className={styles.dateInput}
+                type="date"
+                value={fechaHasta}
+                min={fechaDesde || undefined}
+                onChange={e => setFechaHasta(e.target.value)}
+              />
+            </label>
+            {filtroActivo && (
+              <button
+                type="button"
+                className={styles.clearAll}
+                onClick={() => { setBuscar(''); setFechaDesde(''); setFechaHasta('') }}
+              >Limpiar</button>
+            )}
+          </div>
+        </div>
+
         <div>
-          {loadingRooms && <p className={styles.empty}>Cargando…</p>}
+          {loadingRooms && <p className={styles.empty}>Cargandoâ€¦</p>}
           {!loadingRooms && rooms.length === 0 && (
-            <p className={styles.sinSalas}>No tienes consultas asignadas aún.</p>
+            <p className={styles.sinSalas}>No tienes consultas asignadas aÃºn.</p>
+          )}
+          {!loadingRooms && rooms.length > 0 && filteredRooms.length === 0 && (
+            <p className={styles.sinSalas}>Ninguna consulta coincide con el filtro.</p>
           )}
 
-          {rooms.map(room => {
+          {filteredRooms.map(room => {
             const isActive = activeRoom?.id === room.id
             const lastTs   = room.lastMsg?.created_at || room.created_at
             const showUnread = room.unreadCount > 0 && !isActive
@@ -851,13 +956,13 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
                 className={`${styles.roomRow} ${isActive ? styles.roomRowActive : ''} ${room.status === 'closed' ? styles.itemClosed : ''}`}
                 onClick={() => selectRoom(room)}
               >
-                {/* Ícono representativo de contador (calculadora) */}
-                <div className={styles.itemIcon}>🧮</div>
+                {/* Ãcono representativo de contador (calculadora) */}
+                <div className={styles.itemIcon}>ðŸ§®</div>
 
                 <div className={styles.itemInfo}>
-                  {/* Fila superior: NOMBRE del cliente + hora último mensaje */}
+                  {/* Fila superior: NOMBRE del cliente + hora Ãºltimo mensaje */}
                   <div className={styles.itemRow}>
-                    <span className={styles.itemNombre}>{room.client_nombre || 'Anónimo'}</span>
+                    <span className={styles.itemNombre}>{room.client_nombre || 'AnÃ³nimo'}</span>
                     <span className={styles.itemFecha}>{fmtSidebar(lastTs)}</span>
                   </div>
 
@@ -865,7 +970,7 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
                     <span className={styles.itemUltimo}>
                       {room.lastMsg
                         ? room.lastMsg.sender_type === 'lawyer'
-                          ? `Tú: ${previewMsg(room.lastMsg)}`
+                          ? `TÃº: ${previewMsg(room.lastMsg)}`
                           : previewMsg(room.lastMsg)
                         : 'Nueva consulta'}
                     </span>
@@ -884,9 +989,9 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
                     </span>
                   </div>
 
-                  {/* Fila inferior: área + fecha de inicio */}
+                  {/* Fila inferior: Ã¡rea + fecha de inicio */}
                   <div className={styles.itemInicio}>
-                    {room.area_derecho || 'Consulta'} · Inicio {fmtSidebar(room.created_at)}
+                    {room.area_derecho || 'Consulta'} Â· Inicio {fmtSidebar(room.created_at)}
                   </div>
                 </div>
               </button>
@@ -895,13 +1000,13 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
         </div>
       </div>
 
-      {/* ── Área de chat ── */}
+      {/* â”€â”€ Ãrea de chat â”€â”€ */}
       <div className={styles.main}>
         {!activeRoom ? (
           <div className={styles.placeholder}>
-            <span className={styles.placeholderIcon}>🧮</span>
+            <span className={styles.placeholderIcon}>ðŸ§®</span>
             <p className={styles.placeholderText}>Selecciona una consulta para responder</p>
-            <p className={styles.placeholderSub}>Los chats aparecen ordenados por más reciente</p>
+            <p className={styles.placeholderSub}>Los chats aparecen ordenados por mÃ¡s reciente</p>
           </div>
         ) : (
           <>
@@ -920,10 +1025,10 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
                 </button>
                 <p className={styles.chatTitle}>{activeRoom.area_derecho}</p>
                 <p className={styles.chatSubtitle}>
-                  Cliente · {activeRoom.client_nombre || 'Anónimo'}
-                  {activeRoom.ciudad ? ` · ${activeRoom.ciudad}` : ''}
+                  Cliente Â· {activeRoom.client_nombre || 'AnÃ³nimo'}
+                  {activeRoom.ciudad ? ` Â· ${activeRoom.ciudad}` : ''}
                   {activeRoom.created_at && (
-                    <span> · Inicio: {fmtHora(activeRoom.created_at)}</span>
+                    <span> Â· Inicio: {fmtHora(activeRoom.created_at)}</span>
                   )}
                 </p>
               </div>
@@ -932,23 +1037,23 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
                 <div className={styles.headerActions}>
                   {!confirmClose && (
                     verifiedRooms.has(activeRoom.id)
-                      ? <span className={styles.verificadoTag}>✓ Revisión solicitada</span>
+                      ? <span className={styles.verificadoTag}>âœ“ RevisiÃ³n solicitada</span>
                       : <button
                           className={styles.btnVerificar}
                           onClick={() => setConfirmVerificar(true)}
-                          title="Notificar al administrador para revisión de proceso"
+                          title="Notificar al administrador para revisiÃ³n de proceso"
                         >
                           Verificar
                         </button>
                   )}
                   {!confirmClose && (
                     <button type="button" className={styles.btnVerificar} disabled={iaCargando} onClick={() => pedirResumenIA('resumen')}>
-                      {iaCargando ? '✨ Generando…' : '✨ Resumir con IA'}
+                      {iaCargando ? 'âœ¨ Generandoâ€¦' : 'âœ¨ Resumir con IA'}
                     </button>
                   )}
                   {!confirmClose && (
                     <button type="button" className={styles.btnVerificar} disabled={iaCargando} onClick={() => pedirResumenIA('analisis')}>
-                      ✨ Analizar caso
+                      âœ¨ Analizar caso
                     </button>
                   )}
                   {!confirmClose
@@ -956,9 +1061,9 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
                         Finalizar consulta
                       </button>
                     : <div className={styles.confirmRow}>
-                        <span className={styles.confirmText}>¿Confirmar cierre?</span>
+                        <span className={styles.confirmText}>Â¿Confirmar cierre?</span>
                         <button className={styles.btnConfirm} onClick={() => setShowRating(true)}>
-                          Sí, cerrar
+                          SÃ­, cerrar
                         </button>
                         <button className={styles.btnCancel} onClick={() => setConfirmClose(false)}>
                           Cancelar
@@ -969,7 +1074,7 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
               )}
             </div>
 
-            {/* Panel de calificación — banda full-width debajo del header. */}
+            {/* Panel de calificaciÃ³n â€” banda full-width debajo del header. */}
             {showRating && (
               <div className={styles.ratingPanel}>
                 <p className={styles.ratingLabel}>Califica esta consulta</p>
@@ -979,7 +1084,7 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
                       key={n}
                       className={`${styles.star} ${rating >= n ? styles.starOn : ''}`}
                       onClick={() => setRating(n)}
-                    >★</button>
+                    >â˜…</button>
                   ))}
                 </div>
                 <div className={styles.ratingActions}>
@@ -994,15 +1099,59 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
                     onClick={closeRoom}
                     disabled={closing}
                   >
-                    {closing ? 'Cerrando…' : 'Confirmar cierre'}
+                    {closing ? 'Cerrandoâ€¦' : 'Confirmar cierre'}
                   </button>
                 </div>
               </div>
             )}
 
+            {/* Luz verde â€” pago confirmado habilita datos de contacto y descargas */}
+            {pagoConfirmado && (
+              <motion.div
+                initial={prefersReducedMotion ? false : { opacity: 0, y: -6 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.28, ease: 'easeOut' }}
+                role="status"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 10,
+                  padding: '10px 16px',
+                  background: 'linear-gradient(135deg, #f2f8f3 0%, #fbfdf9 100%)',
+                  borderTop: '1px solid rgba(46,125,76,0.2)',
+                  borderBottom: '1px solid rgba(46,125,76,0.2)',
+                  color: '#1f5e3c',
+                  fontSize: '0.86rem',
+                  lineHeight: 1.35,
+                }}
+              >
+                <span
+                  aria-hidden="true"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: 24,
+                    height: 24,
+                    borderRadius: '50%',
+                    background: 'linear-gradient(135deg, #2e9e5f 0%, #256a45 100%)',
+                    color: '#fff',
+                    fontWeight: 800,
+                    fontSize: 13,
+                    flexShrink: 0,
+                    boxShadow: '0 0 0 3px rgba(201,168,76,0.28)',
+                  }}
+                >âœ“</span>
+                <span>
+                  <strong style={{ color: '#0d2d5e' }}>Luz verde Â·</strong> Pago confirmado â€”
+                  datos de contacto y descarga de archivos habilitados.
+                </span>
+              </motion.div>
+            )}
+
             {activeRoom.status === 'closed' && (
               <div className={styles.closedBanner}>
-                Consulta finalizada · Solo lectura
+                Consulta finalizada Â· Solo lectura
               </div>
             )}
 
@@ -1018,11 +1167,11 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
                         <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: '#f2d580' }}>IA Parada Precise</span>
                         <strong style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: '1.2rem', fontWeight: 600 }}>
-                          {iaTipo === 'analisis' ? 'Análisis del caso' : 'Resumen de la consulta'}
+                          {iaTipo === 'analisis' ? 'AnÃ¡lisis del caso' : 'Resumen de la consulta'}
                         </strong>
                       </div>
                       <button type="button" onClick={() => setIaResultado(null)} disabled={iaCargando} aria-label="Cerrar"
-                        style={{ background: 'rgba(255,255,255,0.14)', border: 'none', color: '#fff', width: 32, height: 32, borderRadius: 8, cursor: iaCargando ? 'not-allowed' : 'pointer', fontSize: 16, lineHeight: 1, flexShrink: 0 }}>✕</button>
+                        style={{ background: 'rgba(255,255,255,0.14)', border: 'none', color: '#fff', width: 32, height: 32, borderRadius: 8, cursor: iaCargando ? 'not-allowed' : 'pointer', fontSize: 16, lineHeight: 1, flexShrink: 0 }}>âœ•</button>
                     </div>
                     <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: 18 }}>
                       {iaCargando ? (
@@ -1034,7 +1183,7 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
                               transition={{ duration: 1.1, repeat: Infinity, delay: i * 0.18 }}
                             />
                           ))}
-                          <span style={{ marginLeft: 6 }}>Generando…</span>
+                          <span style={{ marginLeft: 6 }}>Generandoâ€¦</span>
                         </div>
                       ) : <Markdown>{iaResultado}</Markdown>}
                     </div>
@@ -1042,7 +1191,7 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
                       <div style={{ padding: '12px 18px', borderTop: '1px solid #e1e8f2', display: 'flex', justifyContent: 'flex-end' }}>
                         <button type="button" onClick={() => { navigator.clipboard?.writeText(iaResultado); setIaCopiado(true); setTimeout(() => setIaCopiado(false), 1600) }}
                           style={{ background: 'linear-gradient(135deg,#f2d580,#c9a84c 55%,#9a7a2c)', color: '#0d2d5e', border: 'none', borderRadius: 8, padding: '8px 16px', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
-                          {iaCopiado ? 'Copiado ✓' : 'Copiar'}
+                          {iaCopiado ? 'Copiado âœ“' : 'Copiar'}
                         </button>
                       </div>
                     )}
@@ -1071,7 +1220,7 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
               )}
               {messages.length === 0 && (
                 <p className={styles.messagesEmpty}>
-                  No hay mensajes aún. Saluda al cliente para iniciar.
+                  No hay mensajes aÃºn. Saluda al cliente para iniciar.
                 </p>
               )}
               {messages.map((m, i) => {
@@ -1097,17 +1246,17 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
                             onOpen={setLightbox}
                             onBlocked={(e) => {
                               e.preventDefault()
-                              setToast('Por políticas de privacidad no puedes guardar esta imagen.')
+                              setToast('Por polÃ­ticas de privacidad no puedes guardar esta imagen.')
                             }}
                           />
                         ) : (
                           <button
                             className={styles.fileBtn}
-                            onClick={() => canDownload
+                            onClick={() => puedeDescargarSala
                               ? openChatFile(m.file_url)
-                              : setToast('Por políticas de privacidad no puedes descargar este archivo.')
+                              : setToast('Por polÃ­ticas de privacidad no puedes descargar este archivo.')
                             }
-                            title={canDownload ? 'Descargar archivo' : 'Archivo bloqueado por políticas de privacidad'}
+                            title={puedeDescargarSala ? 'Descargar archivo' : 'Archivo bloqueado por polÃ­ticas de privacidad'}
                           >
                             <IconPaperclip size={16} />
                             <span className={styles.fileName}>{m.file_name}</span>
@@ -1119,20 +1268,20 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
                           <span className={styles.firmaIcon}><IconFirma size={16} /></span>
                           <span className={`${styles.msgText} ${styles.firmaBody}`}>
                             <strong>Documento enviado para firma</strong>
-                            <span className={styles.firmaSub}>El cliente lo firmará desde el chat.</span>
+                            <span className={styles.firmaSub}>El cliente lo firmarÃ¡ desde el chat.</span>
                           </span>
                         </span>
                       ) : m.message_type === 'firma_ok' ? (
                         <span className={styles.firmaMsg}>
                           <span className={styles.firmaIcon}><IconFirma size={16} /></span>
                           <span className={`${styles.msgText} ${styles.firmaBody}`}>
-                            <strong>El cliente firmó el documento</strong>
+                            <strong>El cliente firmÃ³ el documento</strong>
                             <span className={styles.firmaDlRow}>
                               <button className={styles.firmaDlBtn} onClick={() => setUbicarFirma(parseFirmaOk(m.content))}>
                                 <IconFirma size={13} /> Ubicar firma y descargar PDF
                               </button>
                               <button className={styles.firmaDlBtnAlt} onClick={() => descargarCertificado(parseFirmaOk(m.content)?.solicitudId)}>
-                                ⬇ Certificado (PDF)
+                                â¬‡ Certificado (PDF)
                               </button>
                             </span>
                           </span>
@@ -1141,7 +1290,7 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
                         <p className={styles.msgText}>{renderMensaje(m.content)}</p>
                       )}
                       <p className={esMio ? styles.msgMetaMine : styles.msgMetaOther}>
-                        {esMio ? 'Tú' : 'Cliente'} · {fmtHora(m.created_at)}
+                        {esMio ? 'TÃº' : 'Cliente'} Â· {fmtHora(m.created_at)}
                       </p>
                     </div>
                   </div>
@@ -1160,7 +1309,7 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
                     aria-haspopup="menu"
                     aria-expanded={adjuntarMenu}
                   >
-                    {uploading ? '…' : <IconPaperclip size={15} />}
+                    {uploading ? 'â€¦' : <IconPaperclip size={15} />}
                   </button>
                   {adjuntarMenu && (
                     <>
@@ -1197,7 +1346,7 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
                 <input
                   className={styles.chatInput}
                   type="text"
-                  placeholder="Responde al cliente…"
+                  placeholder="Responde al clienteâ€¦"
                   value={input}
                   onChange={e => setInput(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && !e.shiftKey && enviar()}
@@ -1215,7 +1364,7 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
         )}
       </div>
 
-      {/* ── Modal: ubicar la firma y descargar PDF ── */}
+      {/* â”€â”€ Modal: ubicar la firma y descargar PDF â”€â”€ */}
       {ubicarFirma && (
         <Suspense fallback={null}>
           <UbicarFirma
@@ -1228,7 +1377,7 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
         </Suspense>
       )}
 
-      {/* ── Modal: enviar documento a firmar (chat) ── */}
+      {/* â”€â”€ Modal: enviar documento a firmar (chat) â”€â”€ */}
       {firmaOpen && activeRoom && (
         <EnviarAFirmar
           modo="chat"
@@ -1244,7 +1393,7 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
         />
       )}
 
-      {/* ── Modal: datos de contacto bloqueados ── */}
+      {/* â”€â”€ Modal: datos de contacto bloqueados â”€â”€ */}
       {contactoBlocked && (
         <div
           className={styles.modalOverlay}
@@ -1262,8 +1411,8 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
             </div>
             <h3 id="modalContactoTitleContador" className={styles.modalTitle}>No puedes compartir datos de contacto</h3>
             <p className={styles.modalText}>
-              Por seguridad, no está permitido enviar números de teléfono ni correos
-              electrónicos dentro del chat. Continúa la conversación sin compartir
+              Por seguridad, no estÃ¡ permitido enviar nÃºmeros de telÃ©fono ni correos
+              electrÃ³nicos dentro del chat. ContinÃºa la conversaciÃ³n sin compartir
               datos de contacto.
             </p>
             <div className={styles.modalActions}>
@@ -1275,7 +1424,7 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
         </div>
       )}
 
-      {/* ── Modal: confirmar envío de notificación de revisión ── */}
+      {/* â”€â”€ Modal: confirmar envÃ­o de notificaciÃ³n de revisiÃ³n â”€â”€ */}
       {confirmVerificar && (
         <div
           className={styles.modalOverlay}
@@ -1291,10 +1440,10 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
                 <path d="m9 12 2 2 4-4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>
             </div>
-            <h3 id="modalVerificarTitleContador" className={styles.modalTitle}>Enviar notificación de revisión</h3>
+            <h3 id="modalVerificarTitleContador" className={styles.modalTitle}>Enviar notificaciÃ³n de revisiÃ³n</h3>
             <p className={styles.modalText}>
-              ¿Seguro que deseas enviar al administrador una notificación para que
-              revise este proceso? Quedará registrada en el canal interno.
+              Â¿Seguro que deseas enviar al administrador una notificaciÃ³n para que
+              revise este proceso? QuedarÃ¡ registrada en el canal interno.
             </p>
             <div className={styles.modalActions}>
               <button
@@ -1309,7 +1458,7 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
                 onClick={enviarVerificacion}
                 disabled={sendingVerificar}
               >
-                {sendingVerificar ? 'Enviando…' : 'Sí, enviar'}
+                {sendingVerificar ? 'Enviandoâ€¦' : 'SÃ­, enviar'}
               </button>
             </div>
           </div>
@@ -1340,7 +1489,7 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
             onClick={() => setLightbox(null)}
             aria-label="Cerrar"
             type="button"
-          >×</button>
+          >Ã—</button>
         </div>
       )}
     </div>

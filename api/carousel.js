@@ -21,8 +21,11 @@ export default async function handler(req, res) {
   }
 
   try {
+    // Whitelist de columnas públicas (no `select=*`): evita exponer columnas
+    // que se agreguen en el futuro a videos_carrusel. El admin lee directo de
+    // Supabase (fetchVideos(true)), así que su vista no depende de esta lista.
     const url =
-      `${SUPABASE_URL}/rest/v1/videos_carrusel?select=*&order=orden.asc&activo=eq.true`
+      `${SUPABASE_URL}/rest/v1/videos_carrusel?select=id,video_url,poster_url,orden,activo&order=orden.asc&activo=eq.true`
     const upstream = await fetch(url, {
       headers: {
         apikey: SUPABASE_ANON_KEY,

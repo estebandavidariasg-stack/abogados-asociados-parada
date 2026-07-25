@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts'
 import { useAuth } from '../context/AuthContext'
 import { supabase, getAuthHeaders } from '../lib/supabase'
 import { getQRUrl, downloadQRCard, chatUrlFor } from '../lib/qrCard'
@@ -35,6 +36,81 @@ const fmtFecha = (iso) => {
   try {
     return new Date(iso).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' })
   } catch { return '—' }
+}
+
+// Fecha + HORA (coincide con el resto de la app): "22 jul 2026, 3:45 p. m."
+const fmtFechaHora = (iso) => {
+  if (!iso) return '—'
+  try {
+    return new Date(iso).toLocaleString('es-CO', {
+      day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true,
+    })
+  } catch { return '—' }
+}
+
+// Solo la hora — para los puntos del stepper (la fecha va aparte).
+const fmtHora = (iso) => {
+  if (!iso) return ''
+  try {
+    return new Date(iso).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: true })
+  } catch { return '' }
+}
+
+// Primer nombre (para el historial): "Prueba Cobro Prueba" → "Prueba".
+const primerNombre = (s) => {
+  const t = (s || '').toString().trim()
+  if (!t) return ''
+  return t.split(/\s+/)[0]
+}
+const rotularProfesion = (tipo) => (tipo === 'contador' ? 'Contador' : 'Abogado')
+
+const norm = (s) =>
+  (s || '').toString().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim()
+
+// Rango de fechas [desde, hasta] (YYYY-MM-DD) contra un ISO.
+const enRango = (iso, desde, hasta) => {
+  if (!desde && !hasta) return true
+  if (!iso) return false
+  const d = new Date(iso)
+  if (desde && d < new Date(`${desde}T00:00:00`)) return false
+  if (hasta && d > new Date(`${hasta}T23:59:59`)) return false
+  return true
+}
+
+// Barra de filtro reutilizable (búsqueda + rango de fechas). Definida a nivel
+// de módulo (identidad estable) para que el input no pierda el foco al teclear.
+function GestorFilterBar({ query, onQuery, desde, onDesde, hasta, onHasta, placeholder, onClear, hayFiltro }) {
+  return (
+    <div className={styles.gFilter}>
+      <div className={styles.gSearch}>
+        <svg className={styles.gSearchIcon} width="15" height="15" viewBox="0 0 15 15" fill="none" aria-hidden="true">
+          <circle cx="6.25" cy="6.25" r="4.5" stroke="currentColor" strokeWidth="1.5" />
+          <path d="M9.75 9.75L13.5 13.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+        </svg>
+        <input
+          className={styles.gSearchInput}
+          type="text" value={query}
+          onChange={(e) => onQuery(e.target.value)}
+          placeholder={placeholder}
+          aria-label={placeholder}
+        />
+        {query && (
+          <button className={styles.gClear} onClick={() => onQuery('')} aria-label="Limpiar búsqueda" type="button">×</button>
+        )}
+      </div>
+      <label className={styles.gDateField}>
+        <span>Desde</span>
+        <input type="date" className={styles.gDateInput} value={desde} max={hasta || undefined} onChange={(e) => onDesde(e.target.value)} />
+      </label>
+      <label className={styles.gDateField}>
+        <span>Hasta</span>
+        <input type="date" className={styles.gDateInput} value={hasta} min={desde || undefined} onChange={(e) => onHasta(e.target.value)} />
+      </label>
+      {hayFiltro && (
+        <button className={styles.gClearAll} onClick={onClear} type="button">Limpiar</button>
+      )}
+    </div>
+  )
 }
 
 export default function ProfileGestorPage() {
@@ -250,7 +326,7 @@ function SeccionCodigo({ aprobado, cargando, codigo, username, onDescargar }) {
       <div className={styles.panelHead}>
         <div>
           <p className={styles.eyebrow}>Hola{username ? `, @${username}` : ''}</p>
-          <h1 className={styles.panelTitle}>Mi <em>código</em></h1>
+          <h1 className={styles.panelTitle}>Mi <em>Código</em></h1>
         </div>
       </div>
 
@@ -291,7 +367,12 @@ function SeccionCodigo({ aprobado, cargando, codigo, username, onDescargar }) {
    ══════════════════════════════════════════════════════════════════ */
 function SeccionEstadisticas({ aprobado, codigo }) {
   const [stats, setStats]   = useState(null)
+  const [historial, setHistorial] = useState([])   // consultas que usaron el código
   const [estado, setEstado] = useState('idle') // idle | loading | ready | error
+  // Filtro del historial (nombre cliente/profesional + rango de fechas).
+  const [hQuery, setHQuery] = useState('')
+  const [hDesde, setHDesde] = useState('')
+  const [hHasta, setHHasta] = useState('')
 
   useEffect(() => {
     if (!aprobado || !codigo?.codigo) { setEstado('idle'); return }
@@ -319,6 +400,19 @@ function SeccionEstadisticas({ aprobado, codigo }) {
           })
           setEstado('ready')
         }
+
+        // Historial detallado (RPC opcional: si aún no está aplicado, degrada sin romper).
+        try {
+          const hRes = await fetch(`${SUPABASE_URL}/rest/v1/rpc/codigo_historial`, {
+            method: 'POST',
+            headers: { ...headers, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ p_codigo: codigo.codigo }),
+          })
+          if (hRes.ok) {
+            const h = await hRes.json()
+            if (!cancel) setHistorial(Array.isArray(h) ? h : [])
+          }
+        } catch { /* historial opcional */ }
       } catch {
         if (!cancel) setEstado('error')
       }
@@ -329,12 +423,28 @@ function SeccionEstadisticas({ aprobado, codigo }) {
   const decididos = stats ? stats.exitos + stats.fracasos : 0
   const tasaExito = decididos > 0 ? Math.round((stats.exitos / decididos) * 100) : 0
 
+  const historialFiltrado = historial.filter(h => {
+    if (!enRango(h.created_at, hDesde, hHasta)) return false
+    const q = norm(hQuery)
+    if (!q) return true
+    return norm(`${h.client_nombre || ''} ${h.profesional_nombre || ''}`).includes(q)
+  })
+  const hayFiltroHist = hQuery || hDesde || hHasta
+
+  // Segmentos para la dona: en curso / éxitos / fracasos / otras (cerradas sin resultado, etc.)
+  const donutData = stats ? [
+    { key: 'exitos',   label: 'Éxitos',   value: stats.exitos,   color: '#1f7a4d' },
+    { key: 'fracasos', label: 'Fracasos', value: stats.fracasos, color: '#a23b3b' },
+    { key: 'en_curso', label: 'En curso', value: stats.en_curso, color: '#c9a84c' },
+    { key: 'otras',    label: 'Sin resultado', value: Math.max(0, stats.total - stats.exitos - stats.fracasos - stats.en_curso), color: '#9fb0c8' },
+  ].filter(d => d.value > 0) : []
+
   return (
     <section className={styles.panel}>
       <div className={styles.panelHead}>
         <div>
           <p className={styles.eyebrow}>Trazabilidad de tu código</p>
-          <h1 className={styles.panelTitle}>Tus <em>estadísticas</em></h1>
+          <h1 className={styles.panelTitle}>Tus <em>Estadísticas</em></h1>
         </div>
       </div>
 
@@ -416,6 +526,124 @@ function SeccionEstadisticas({ aprobado, codigo }) {
             <StatTile label="Éxitos" value={stats.exitos} tone="ok" />
             <StatTile label="Fracasos" value={stats.fracasos} tone="bad" />
           </div>
+
+          {/* Gráfica (dona) + leyenda del reparto de consultas */}
+          {donutData.length > 0 && (
+            <div className={styles.cardGlass} style={{ marginTop: '1.25rem' }}>
+              <p className={styles.blockTitle}>Reparto de consultas</p>
+              <div className={styles.chartRow}>
+                <div className={styles.donutBox}>
+                  <ResponsiveContainer width="100%" height={190}>
+                    <PieChart>
+                      <Pie
+                        data={donutData}
+                        dataKey="value"
+                        nameKey="label"
+                        cx="50%" cy="50%"
+                        innerRadius={54}
+                        outerRadius={82}
+                        paddingAngle={2}
+                        stroke="none"
+                      >
+                        {donutData.map((d) => <Cell key={d.key} fill={d.color} />)}
+                      </Pie>
+                      <Tooltip
+                        formatter={(value, name) => [`${value} consulta${value === 1 ? '' : 's'}`, name]}
+                        contentStyle={{ borderRadius: 10, border: '1px solid rgba(13,45,94,0.1)', fontSize: 13, fontFamily: 'Raleway, sans-serif' }}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <div className={styles.donutCenter} aria-hidden="true">
+                    <span className={styles.donutCenterNum}>{stats.total}</span>
+                    <span className={styles.donutCenterLbl}>{stats.total === 1 ? 'consulta' : 'consultas'}</span>
+                  </div>
+                </div>
+                <ul className={styles.distList}>
+                  {donutData.map((d) => {
+                    const pct = stats.total ? Math.round((d.value / stats.total) * 100) : 0
+                    return (
+                      <li key={d.key} className={styles.distRow}>
+                        <span className={styles.distHead}>
+                          <span className={styles.chartDot} style={{ background: d.color }} aria-hidden="true" />
+                          <span className={styles.distLabel}>{d.label}</span>
+                          <span className={styles.distVal}>{d.value} · {pct}%</span>
+                        </span>
+                        <span className={styles.distTrack}>
+                          <span className={styles.distFill} style={{ width: `${pct}%`, background: d.color }} />
+                        </span>
+                      </li>
+                    )
+                  })}
+                </ul>
+              </div>
+            </div>
+          )}
+
+          {/* Historial de consultas que usaron el código */}
+          <div className={styles.cardGlass} style={{ marginTop: '1.25rem' }}>
+            <div className={styles.blockHead}>
+              <p className={styles.blockTitle} style={{ margin: 0 }}>Historial de consultas</p>
+              {historial.length > 0 && (
+                <span className={styles.blockCount}>
+                  {historialFiltrado.length} de {historial.length}
+                </span>
+              )}
+            </div>
+
+            {historial.length > 0 && (
+              <GestorFilterBar
+                query={hQuery} onQuery={setHQuery}
+                desde={hDesde} onDesde={setHDesde}
+                hasta={hHasta} onHasta={setHHasta}
+                placeholder="Buscar por cliente o profesional…"
+                onClear={() => { setHQuery(''); setHDesde(''); setHHasta('') }}
+                hayFiltro={hayFiltroHist}
+              />
+            )}
+
+            {historial.length === 0 ? (
+              <p className={styles.estadoDesc} style={{ margin: 0 }}>
+                El detalle por consulta aparecerá aquí a medida que las personas usen tu código.
+              </p>
+            ) : historialFiltrado.length === 0 ? (
+              <p className={styles.estadoDesc} style={{ margin: '0.5rem 0 0' }}>
+                Ninguna consulta coincide con el filtro.
+              </p>
+            ) : (
+              <ul className={styles.historialList}>
+                {historialFiltrado.map((h) => {
+                  const paso =
+                    h.status === 'closed' ? 'cerrada'
+                    : h.status === 'active' ? 'en_curso'
+                    : 'iniciada'
+                  return (
+                    <li key={h.id} className={styles.histItem}>
+                      <div className={styles.histInfo}>
+                        <span className={styles.histName}>{primerNombre(h.client_nombre) || 'Cliente'}</span>
+                        <span className={styles.histWith}>
+                          {h.profesional_nombre ? (
+                            <>
+                              con {primerNombre(h.profesional_nombre)}
+                              <span className={styles.histRol} data-rol={h.tipo_profesional}>
+                                {rotularProfesion(h.tipo_profesional)}
+                              </span>
+                            </>
+                          ) : (
+                            <>profesional por asignar</>
+                          )}
+                        </span>
+                      </div>
+                      <ConsultaProgreso
+                        paso={paso}
+                        resultado={h.resultado}
+                        tiempos={{ iniciada: h.created_at, en_curso: h.activo_at, cerrada: h.cerrada_at }}
+                      />
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
+          </div>
         </>
       ) : (
         <div className={styles.cardGlass}>
@@ -435,44 +663,201 @@ function StatTile({ label, value, tone }) {
   )
 }
 
+// Progreso de una consulta: Iniciada → En curso → Cerrada (+ resultado al cerrar).
+// Cada paso muestra su fecha y hora (tiempos), para trazabilidad.
+const PASOS_CONSULTA = [
+  { key: 'iniciada', label: 'Iniciada', tKey: 'iniciada' },
+  { key: 'en_curso', label: 'En curso', tKey: 'en_curso' },
+  { key: 'cerrada',  label: 'Cerrada',  tKey: 'cerrada' },
+]
+function ConsultaProgreso({ paso, resultado, tiempos = {} }) {
+  const activo = Math.max(0, PASOS_CONSULTA.findIndex(p => p.key === paso))
+  return (
+    <div className={styles.histProg}>
+      <div
+        className={styles.stepper}
+        role="progressbar"
+        aria-valuemin={1}
+        aria-valuemax={PASOS_CONSULTA.length}
+        aria-valuenow={activo + 1}
+        aria-label={`Progreso de la consulta: ${PASOS_CONSULTA[activo]?.label}`}
+      >
+        {PASOS_CONSULTA.map((p, i) => {
+          const state = i < activo ? 'done' : i === activo ? 'current' : 'todo'
+          const t = tiempos[p.tKey]
+          return (
+            <div key={p.key} className={styles.step} data-state={state}>
+              {i > 0 && <span className={styles.stepBar} data-state={i <= activo ? 'done' : 'todo'} aria-hidden="true" />}
+              <span className={styles.stepDot} aria-hidden="true">
+                {i < activo ? (
+                  <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
+                ) : (
+                  <span className={styles.stepInner} />
+                )}
+              </span>
+              <span className={styles.stepLabel}>{p.label}</span>
+              {t ? (
+                <span className={styles.stepWhen}>
+                  <span className={styles.stepWhenDate}>{fmtFecha(t)}</span>
+                  <span className={styles.stepWhenTime}>{fmtHora(t)}</span>
+                </span>
+              ) : (
+                <span className={styles.stepWhenEmpty}>—</span>
+              )}
+            </div>
+          )
+        })}
+      </div>
+      {paso === 'cerrada' && (
+        <span className={
+          resultado === 'exito' ? styles.histBadgeOk
+          : resultado === 'fracaso' ? styles.histBadgeBad
+          : styles.histBadgeNeutral
+        }>
+          {resultado === 'exito' ? 'Éxito' : resultado === 'fracaso' ? 'Fracaso' : 'Sin resultado'}
+        </span>
+      )}
+    </div>
+  )
+}
+
 /* ══════════════════════════════════════════════════════════════════
-   3. Cobros — gestor_cobros (RLS: solo los propios)
+   3. Cobros — gestor_cobros (RLS: solo los propios).
+   El gestor ve sus comisiones ganadas y puede SOLICITAR el pago
+   (pendiente → solicitado). El admin luego marca pagado (→ pagado).
    ══════════════════════════════════════════════════════════════════ */
+
+// Pasos del "cupón" de comisión: Disponible → Solicitado → Pagado.
+const PASOS_PAGO = [
+  { key: 'pendiente',  label: 'Disponible' },
+  { key: 'solicitado', label: 'Solicitado' },
+  { key: 'pagado',     label: 'Pagado' },
+]
+const idxEstado = (e) => Math.max(0, PASOS_PAGO.findIndex(p => p.key === e))
+
+// Mini-stepper del recorrido del pago para una comisión.
+function PagoProgreso({ estado }) {
+  const activo = idxEstado(estado)
+  // 'pagado' es el estado FINAL completado → el último paso también va en verde
+  // con su chulo (no queda como "en curso" con anillo dorado).
+  const terminal = estado === 'pagado'
+  return (
+    <div
+      className={styles.stepper}
+      role="progressbar"
+      aria-valuemin={1}
+      aria-valuemax={PASOS_PAGO.length}
+      aria-valuenow={activo + 1}
+      aria-label={`Progreso del pago: ${PASOS_PAGO[activo]?.label}`}
+    >
+      {PASOS_PAGO.map((p, i) => {
+        const done = i < activo || (i === activo && terminal)
+        const state = done ? 'done' : i === activo ? 'current' : 'todo'
+        return (
+          <div key={p.key} className={styles.step} data-state={state}>
+            {i > 0 && <span className={styles.stepBar} data-state={i <= activo ? 'done' : 'todo'} aria-hidden="true" />}
+            <span className={styles.stepDot} aria-hidden="true">
+              {done ? (
+                <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
+              ) : (
+                <span className={styles.stepInner} />
+              )}
+            </span>
+            <span className={styles.stepLabel}>{p.label}</span>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+// Pill de estado con los 3 tonos: ámbar (disponible) / azul (solicitado) / verde (pagado).
+function EstadoPill({ estado }) {
+  if (estado === 'pagado')     return <span className={styles.pillPagado}>Pagado</span>
+  if (estado === 'solicitado') return <span className={styles.pillSolicitado}>Solicitado</span>
+  return <span className={styles.pillDisponible}>Disponible</span>
+}
+
 function SeccionCobros({ aprobado, userId }) {
   const [cobros, setCobros] = useState([])
   const [estado, setEstado] = useState('loading') // loading | ready | error
+  const [pidiendo, setPidiendo] = useState(null)   // id del cobro en proceso de solicitud
+  const [aviso, setAviso] = useState(null)         // {tone:'ok'|'error', text}
+  // Filtro (código/nota + rango de fechas).
+  const [cQuery, setCQuery] = useState('')
+  const [cDesde, setCDesde] = useState('')
+  const [cHasta, setCHasta] = useState('')
+
+  async function cargar(silencioso = false) {
+    if (!aprobado || !userId) { setEstado('ready'); return }
+    if (!silencioso) setEstado('loading')
+    try {
+      const headers = await getAuthHeaders()
+      const res = await fetch(
+        `${SUPABASE_URL}/rest/v1/gestor_cobros?gestor_id=eq.${userId}&select=*&order=created_at.desc`,
+        { headers }
+      )
+      if (!res.ok) throw new Error('fetch')
+      const data = await res.json()
+      setCobros(Array.isArray(data) ? data : [])
+      setEstado('ready')
+    } catch {
+      setEstado('error')
+    }
+  }
 
   useEffect(() => {
-    if (!aprobado || !userId) { setEstado('ready'); return }
     let cancel = false
-    ;(async () => {
-      setEstado('loading')
-      try {
-        const headers = await getAuthHeaders()
-        const res = await fetch(
-          `${SUPABASE_URL}/rest/v1/gestor_cobros?gestor_id=eq.${userId}&select=*&order=created_at.desc`,
-          { headers }
-        )
-        if (!res.ok) throw new Error('fetch')
-        const data = await res.json()
-        if (!cancel) { setCobros(Array.isArray(data) ? data : []); setEstado('ready') }
-      } catch {
-        if (!cancel) setEstado('error')
-      }
-    })()
+    ;(async () => { if (!cancel) await cargar() })()
     return () => { cancel = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aprobado, userId])
 
-  const totalAcum   = cobros.reduce((s, c) => s + (Number(c.monto) || 0), 0)
-  const totalPend   = cobros.filter(c => c.estado !== 'pagado').reduce((s, c) => s + (Number(c.monto) || 0), 0)
-  const totalCasos  = cobros.reduce((s, c) => s + (Number(c.casos_exitosos) || 0), 0)
+  // Solicita el pago de una comisión propia (pendiente → solicitado).
+  async function solicitarPago(cobroId) {
+    setPidiendo(cobroId); setAviso(null)
+    // Optimista: la fila pasa a "solicitado" al instante.
+    setCobros(cs => cs.map(c => c.id === cobroId ? { ...c, estado: 'solicitado' } : c))
+    try {
+      const headers = await getAuthHeaders()
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/solicitar_pago_gestor`, {
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ p_cobro_id: cobroId }),
+      })
+      if (!res.ok) throw new Error('rpc')
+      const ok = await res.json()
+      if (ok === false) throw new Error('rechazado')
+      setAviso({ tone: 'ok', text: 'Solicitud enviada. El administrador revisará tu pago.' })
+      await cargar(true) // refresca fechas reales (solicitado_at)
+    } catch {
+      // Revertir el optimismo si la RPC falló.
+      setCobros(cs => cs.map(c => c.id === cobroId ? { ...c, estado: 'pendiente' } : c))
+      setAviso({ tone: 'error', text: 'No se pudo enviar la solicitud. Intenta de nuevo.' })
+    } finally {
+      setPidiendo(null)
+    }
+  }
+
+  const totalDisponible = cobros.filter(c => c.estado === 'pendiente').reduce((s, c) => s + (Number(c.monto) || 0), 0)
+  const totalProceso    = cobros.filter(c => c.estado === 'solicitado').reduce((s, c) => s + (Number(c.monto) || 0), 0)
+  const totalPagado     = cobros.filter(c => c.estado === 'pagado').reduce((s, c) => s + (Number(c.monto) || 0), 0)
+  const totalCasos      = cobros.reduce((s, c) => s + (Number(c.casos_exitosos) || 0), 0)
+
+  const cobrosFiltrados = cobros.filter(c => {
+    if (!enRango(c.created_at, cDesde, cHasta)) return false
+    const q = norm(cQuery)
+    if (!q) return true
+    return norm(`${c.codigo || ''} ${c.nota || ''}`).includes(q)
+  })
+  const hayFiltroCobros = cQuery || cDesde || cHasta
 
   return (
     <section className={styles.panel}>
       <div className={styles.panelHead}>
         <div>
-          <p className={styles.eyebrow}>Acumulado por casos exitosos</p>
-          <h1 className={styles.panelTitle}>Mis <em>cobros</em></h1>
+          <p className={styles.eyebrow}>Comisiones por casos exitosos</p>
+          <h1 className={styles.panelTitle}>Mis <em>Cobros</em></h1>
         </div>
       </div>
 
@@ -490,23 +875,34 @@ function SeccionCobros({ aprobado, userId }) {
         </div>
       ) : (
         <>
+          {/* Tiles resumen — numerales tabulares (Raleway) */}
           <div className={styles.statGrid}>
             <div className={styles.statTile} data-tone="gold">
-              <span className={styles.statValueMoney}>{fmtCOP(totalAcum)}</span>
-              <span className={styles.statLabel}>Total acumulado</span>
+              <span className={styles.moneyValue}>{fmtCOP(totalDisponible)}</span>
+              <span className={styles.statLabel}>Disponible para solicitar</span>
             </div>
             <div className={styles.statTile} data-tone="navy">
-              <span className={styles.statValueMoney}>{fmtCOP(totalPend)}</span>
-              <span className={styles.statLabel}>Pendiente por pagar</span>
+              <span className={styles.moneyValue}>{fmtCOP(totalProceso)}</span>
+              <span className={styles.statLabel}>En proceso</span>
             </div>
             <div className={styles.statTile} data-tone="ok">
-              <span className={styles.statValue}>{totalCasos}</span>
+              <span className={styles.moneyValue}>{fmtCOP(totalPagado)}</span>
+              <span className={styles.statLabel}>Pagado</span>
+            </div>
+            <div className={styles.statTile} data-tone="navy">
+              <span className={styles.numValue}>{totalCasos}</span>
               <span className={styles.statLabel}>Casos exitosos</span>
             </div>
           </div>
 
-          <div className={styles.cardGlass} style={{ marginTop: '1.25rem' }}>
-            {cobros.length === 0 ? (
+          {aviso && (
+            <p className={aviso.tone === 'ok' ? styles.msgSuccess : styles.msgError} style={{ marginTop: '1rem' }}>
+              {aviso.text}
+            </p>
+          )}
+
+          {cobros.length === 0 ? (
+            <div className={styles.cardGlass} style={{ marginTop: '1.25rem' }}>
               <div className={styles.estado}>
                 <span className={styles.estadoIcon} data-tone="empty" aria-hidden="true">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"
@@ -515,44 +911,110 @@ function SeccionCobros({ aprobado, userId }) {
                     <path d="M3 5v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-5" /><path d="M18 12a1 1 0 0 0 0 2h3v-2z" />
                   </svg>
                 </span>
-                <p className={styles.estadoTitle}>Aún no tienes cobros registrados</p>
+                <p className={styles.estadoTitle}>Aún no tienes comisiones</p>
                 <p className={styles.estadoDesc}>
-                  Cuando el administrador registre un cobro por tus casos exitosos, aparecerá aquí con su estado.
+                  Cuando el administrador registre una comisión por tus casos exitosos, aparecerá aquí.
+                  Podrás solicitar su pago con un solo toque y seguir su avance hasta que se acredite.
                 </p>
               </div>
-            ) : (
-              <div className={styles.tableWrap}>
-                <table className={styles.table}>
-                  <thead>
-                    <tr>
-                      <th>Fecha</th>
-                      <th>Código</th>
-                      <th className={styles.tRight}>Casos</th>
-                      <th className={styles.tRight}>Monto</th>
-                      <th>Estado</th>
-                      <th>Nota</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {cobros.map(c => (
-                      <tr key={c.id}>
-                        <td>{fmtFecha(c.created_at)}</td>
-                        <td className={styles.mono}>{c.codigo || '—'}</td>
-                        <td className={styles.tRight}>{c.casos_exitosos ?? 0}</td>
-                        <td className={`${styles.tRight} ${styles.mono}`}>{fmtCOP(c.monto)}</td>
-                        <td>
-                          <span className={c.estado === 'pagado' ? styles.chipPagado : styles.chipPendiente}>
-                            {c.estado === 'pagado' ? 'Pagado' : 'Pendiente'}
-                          </span>
-                        </td>
-                        <td className={styles.tNota}>{c.nota || '—'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+            </div>
+          ) : (
+            <>
+              <div className={styles.cobrosFilterWrap} style={{ marginTop: '1.25rem' }}>
+                <GestorFilterBar
+                  query={cQuery} onQuery={setCQuery}
+                  desde={cDesde} onDesde={setCDesde}
+                  hasta={cHasta} onHasta={setCHasta}
+                  placeholder="Buscar por código o nota…"
+                  onClear={() => { setCQuery(''); setCDesde(''); setCHasta('') }}
+                  hayFiltro={hayFiltroCobros}
+                />
               </div>
-            )}
-          </div>
+
+              {cobrosFiltrados.length === 0 ? (
+                <p className={styles.estadoDesc} style={{ margin: '1rem 0 0' }}>
+                  Ninguna comisión coincide con el filtro.
+                </p>
+              ) : (
+                <div className={styles.cuponList} style={{ marginTop: '1rem' }}>
+                  {cobrosFiltrados.map(c => (
+                    <article key={c.id} className={styles.cupon} data-estado={c.estado}>
+                      {/* Cabecera del cupón: código + monto + estado */}
+                      <div className={styles.cuponHead}>
+                        <div className={styles.cuponMeta}>
+                          <span className={styles.cuponCodigo}>{c.codigo || 'Comisión'}</span>
+                          <span className={styles.cuponFecha}>{fmtFechaHora(c.created_at)}</span>
+                          {(c.casos_exitosos ?? 0) > 0 && (
+                            <span className={styles.cuponCasos}>{c.casos_exitosos} caso{c.casos_exitosos === 1 ? '' : 's'}</span>
+                          )}
+                        </div>
+                        <div className={styles.cuponMontoWrap}>
+                          <span className={styles.cuponMonto}>{fmtCOP(c.monto)}</span>
+                          <EstadoPill estado={c.estado} />
+                        </div>
+                      </div>
+
+                      {c.nota && <p className={styles.cuponNota}>{c.nota}</p>}
+
+                      {/* Desglose transparente: cómo se calculó la comisión */}
+                      {c.total_consulta != null && (
+                        <div className={styles.desglose}>
+                          <div className={styles.desItem}>
+                            <span className={styles.desLabel}>Total de la consulta</span>
+                            <span className={styles.desVal}>{fmtCOP(c.total_consulta)}</span>
+                          </div>
+                          <div className={styles.desItem}>
+                            <span className={styles.desLabel}>
+                              Empresa{c.pct_empresa != null ? ` · ${c.pct_empresa}%` : ''}
+                            </span>
+                            <span className={styles.desVal}>
+                              {fmtCOP(c.monto_empresa != null
+                                ? c.monto_empresa
+                                : (c.total_consulta && c.pct_empresa ? Math.round(c.total_consulta * c.pct_empresa / 100) : 0))}
+                            </span>
+                          </div>
+                          <div className={`${styles.desItem} ${styles.desItemStrong}`}>
+                            <span className={styles.desLabel}>
+                              Tu comisión{c.pct_gestor != null ? ` · ${c.pct_gestor}%` : ''}
+                            </span>
+                            <span className={styles.desVal}>{fmtCOP(c.monto)}</span>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Recorrido del pago */}
+                      <PagoProgreso estado={c.estado} />
+
+                      {/* Acción / mensaje según estado (con fecha y hora de cada hito) */}
+                      <div className={styles.cuponFoot}>
+                        {c.estado === 'pendiente' && (
+                          <button
+                            type="button"
+                            className={styles.solicitarBtn}
+                            onClick={() => solicitarPago(c.id)}
+                            disabled={pidiendo === c.id}
+                          >
+                            <IconWallet />
+                            {pidiendo === c.id ? 'Enviando…' : 'Solicitar pago'}
+                          </button>
+                        )}
+                        {c.estado === 'solicitado' && (
+                          <p className={styles.cuponHint} data-tone="wait">
+                            Solicitado el {fmtFechaHora(c.solicitado_at || c.created_at)} — el pago se envía en 24-48h.
+                          </p>
+                        )}
+                        {c.estado === 'pagado' && (
+                          <p className={styles.cuponHint} data-tone="ok">
+                            Pagado el {fmtFechaHora(c.pagado_at || c.solicitado_at || c.created_at)}.
+                          </p>
+                        )}
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
         </>
       )}
     </section>
@@ -699,7 +1161,7 @@ function SeccionPerfil({ aprobado, profile, userId, email, onEliminada }) {
   return (
     <section className={pStyles.panel}>
       <div className={pStyles.panelHead}>
-        <h1 className={pStyles.panelTitle}>Mi <em>perfil</em></h1>
+        <h1 className={pStyles.panelTitle}>Mi <em>Perfil</em></h1>
         <span className={pStyles.status}>
           {aprobado ? '✦ Aprobado' : '◌ Pendiente de aprobación'}
         </span>

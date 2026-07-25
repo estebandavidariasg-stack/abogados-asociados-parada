@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from 'react'
+import { createPortal } from 'react-dom'
 import { supabase, getAuthHeaders } from '../../lib/supabase'
 import { IconCheck, IconX, IconQR } from '../shared/Icons'
 import SocialLinks from '../profile/SocialLinks'
@@ -397,7 +398,6 @@ export default function GestoresAdmin({ onChange }) {
                 const codeStr  = asignado?.codigo || null
                 const gRooms   = codeStr ? (roomsPorCodigo.get(codeStr) || []) : []
                 const usage    = gRooms.length
-                const isOpen   = expanded === g.id
                 return (
                   <GestorCard
                     key={g.id}
@@ -407,8 +407,7 @@ export default function GestoresAdmin({ onChange }) {
                     usage={usage}
                     rooms={gRooms}
                     cobros={cobrosDeGestor(g.id)}
-                    open={isOpen}
-                    onToggle={() => setExpanded(isOpen ? null : g.id)}
+                    onToggle={() => setExpanded(g.id)}
                     onAprobar={setAprobado}
                     onAsignar={asignarCodigo}
                     onMarcarResultado={marcarResultado}
@@ -421,6 +420,31 @@ export default function GestoresAdmin({ onChange }) {
           )}
         </section>
       )}
+
+      {/* Modal de detalle del gestor (perfil + trazabilidad + cobros) */}
+      {(() => {
+        if (!expanded) return null
+        const g = gestores.find(x => x.id === expanded)
+        if (!g || !g.aprobado) return null
+        const asignado = codigoDeGestor(g.id)
+        const codeStr = asignado?.codigo || null
+        const gRooms = codeStr ? (roomsPorCodigo.get(codeStr) || []) : []
+        return (
+          <GestorDetalleModal
+            gestor={g}
+            codeStr={codeStr}
+            usage={gRooms.length}
+            rooms={gRooms}
+            cobros={cobrosDeGestor(g.id)}
+            onClose={() => setExpanded(null)}
+            onMarcarResultado={marcarResultado}
+            onGuardarCobro={guardarCobro}
+            onMarcarPagado={marcarPagado}
+            onAprobar={setAprobado}
+          />
+        )
+      })()}
+
     </div>
   )
 }
@@ -430,7 +454,7 @@ export default function GestoresAdmin({ onChange }) {
    ══════════════════════════════════════════════════════════════════ */
 function GestorCard({
   gestor: g, asignado, codigos, usage, rooms, cobros,
-  open, onToggle, onAprobar, onAsignar, onMarcarResultado, onGuardarCobro, onMarcarPagado,
+  onToggle, onAprobar, onAsignar, onMarcarResultado, onGuardarCobro, onMarcarPagado,
 }) {
   const codeStr = asignado?.codigo || null
 
@@ -495,19 +519,57 @@ function GestorCard({
               <button
                 className={styles.btnExpand}
                 onClick={onToggle}
-                aria-expanded={open}
+                aria-haspopup="dialog"
               >
-                {open ? 'Ocultar detalle' : 'Ver detalle'}
-                <span className={`${styles.chev} ${open ? styles.chevOpen : ''}`} aria-hidden="true">▾</span>
+                Ver detalle
+                <span className={styles.chevR} aria-hidden="true">›</span>
               </button>
             </>
           )}
         </div>
       </div>
+    </div>
+  )
+}
 
-      {/* Panel expandible */}
-      {open && g.aprobado && (
-        <div className={styles.panel}>
+/* ── Modal de detalle del gestor (perfil + trazabilidad + cobros) ── */
+function GestorDetalleModal({
+  gestor: g, codeStr, usage, rooms, cobros,
+  onClose, onMarcarResultado, onGuardarCobro, onMarcarPagado, onAprobar,
+}) {
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', onKey)
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => { document.removeEventListener('keydown', onKey); document.body.style.overflow = prev }
+  }, [onClose])
+
+  return createPortal(
+    <div className={styles.modalBackdrop} onClick={onClose}>
+      <div
+        className={styles.modal}
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Detalle del gestor @${g.username || ''}`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <header className={styles.modalHead}>
+          <div className={styles.modalHeadInfo}>
+            <div className={styles.modalAvatar}>{(g.username?.[0] || 'G').toUpperCase()}</div>
+            <div>
+              <p className={styles.modalTitle}>@{g.username || '—'}</p>
+              <p className={styles.modalSub}>
+                {codeStr ? <>Código <strong>{codeStr}</strong></> : 'Sin código asignado'}
+              </p>
+            </div>
+          </div>
+          <button className={styles.modalClose} onClick={onClose} aria-label="Cerrar">
+            <IconX />
+          </button>
+        </header>
+
+        <div className={styles.modalBody}>
           <PerfilGestor gestor={g} />
           {codeStr ? (
             <>
@@ -521,17 +583,16 @@ function GestorCard({
             </div>
           )}
         </div>
-      )}
 
-      {/* Rechazar aprobación (siempre disponible para aprobados) */}
-      {open && g.aprobado && (
-        <div className={styles.panelFoot}>
-          <button className={styles.btnReject} onClick={() => onAprobar(g.id, false)}>
+        <footer className={styles.modalFoot}>
+          <button className={styles.btnReject} onClick={() => { onAprobar(g.id, false); onClose() }}>
             <IconX /> Quitar aprobación
           </button>
-        </div>
-      )}
-    </div>
+          <button className={styles.modalDone} onClick={onClose}>Cerrar</button>
+        </footer>
+      </div>
+    </div>,
+    document.body
   )
 }
 

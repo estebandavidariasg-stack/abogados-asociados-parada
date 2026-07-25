@@ -157,9 +157,8 @@
   cursor: pointer;
   border-radius: 4px;
   transition: background 0.3s, opacity 0.3s;
-  /* Los tres botones (disparador + ítems del dropdown) comparten este ancho,
-     así quedan idénticos y alineados (el más largo es "…CONTADOR"). */
-  min-width: 17rem;
+  /* Registro unificado en un solo botón: se ajusta a su contenido, igual que
+     "Iniciar sesión" (ya no comparte ancho con los antiguos 3 botones). */
   text-align: center;
 }
 

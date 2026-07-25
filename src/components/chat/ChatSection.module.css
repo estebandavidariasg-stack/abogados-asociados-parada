@@ -232,6 +232,14 @@
   min-height: 100px;
 }
 
+/* Ayuda bajo el campo opcional de red social en el panel de calificación. */
+.redSocialHelp {
+  color: var(--muted);
+  font-size: 0.72rem;
+  line-height: 1.5;
+  margin: 0;
+}
+
 .select {
   composes: input;
   cursor: pointer;
@@ -309,8 +317,10 @@
   color: var(--muted);
   cursor: pointer;
   font-size: 0.85rem;
-  padding: 0 0 20px 0;
-  display: block;
+  padding: 0;
+  margin: 0 0 16px 0;
+  align-self: flex-start;
+  display: inline-block;
   transition: color 0.2s;
 }
 
@@ -1548,6 +1558,14 @@
   flex-wrap: wrap;
 }
 
+/* Variante superior: las acciones de navegación (Volver / Salir) van arriba a
+   la izquierda del paso, no centradas al fondo. */
+.postChatActionsTop {
+  margin-top: 0;
+  margin-bottom: 20px;
+  justify-content: flex-start;
+}
+
 /* Overrides locales — `.btnOutline` y `.btnBack` se usan también en otros
    pasos donde se ven bien con su estilo "ligero". Aquí, en post-chat, son
    las acciones principales del usuario y necesitan más peso visual. */
@@ -1578,6 +1596,7 @@
   border: 1px solid rgba(13, 45, 94, 0.22);
   color: var(--muted, #6b7fa3);
   padding: 11px 26px;
+  margin: 0;
   font-weight: 500;
   font-size: 0.85rem;
   border-radius: 8px;

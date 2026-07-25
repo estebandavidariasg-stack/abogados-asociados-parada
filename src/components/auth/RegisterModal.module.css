@@ -1,0 +1,117 @@
+/* ── Selector de rol (segmented control) ─────────────────────────────── */
+.roleSelector {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.6rem;
+  margin-bottom: 1.5rem;
+}
+
+.roleBtn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0.9rem 0.4rem;
+  background: #f8f9fc;
+  border: 1.5px solid rgba(13, 45, 94, 0.15);
+  border-radius: 12px;
+  color: var(--navy-md, #4a6080);
+  font-family: 'Raleway', sans-serif;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s, color 0.2s, transform 0.2s;
+}
+.roleBtn:hover {
+  border-color: rgba(13, 45, 94, 0.4);
+  transform: translateY(-1px);
+}
+.roleBtn svg {
+  width: 22px;
+  height: 22px;
+  stroke: currentColor;
+}
+.roleBtnActive {
+  border-color: var(--gold, #c9a84c);
+  background: linear-gradient(135deg, rgba(201, 168, 76, 0.14), rgba(201, 168, 76, 0.05));
+  color: var(--navy, #0d2d5e);
+  box-shadow: 0 4px 14px rgba(201, 168, 76, 0.18);
+}
+
+/* ── Grid de áreas (checkboxes) ──────────────────────────────────────── */
+.areasBox {
+  max-height: 210px;
+  overflow-y: auto;
+  border: 1.5px solid rgba(13, 45, 94, 0.15);
+  border-radius: 10px;
+  padding: 0.75rem 0.9rem;
+  background: #f8f9fc;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 12px;
+}
+.areasBox::-webkit-scrollbar { width: 8px; }
+.areasBox::-webkit-scrollbar-track { background: transparent; }
+.areasBox::-webkit-scrollbar-thumb {
+  background: rgba(13, 45, 94, 0.2);
+  border-radius: 8px;
+}
+
+.areaItem {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  font-size: 0.75rem;
+  line-height: 1.35;
+  color: var(--navy, #0d2d5e);
+  cursor: pointer;
+}
+.areaCheck {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--gold, #c9a84c);
+  cursor: pointer;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.areasCount {
+  margin-top: 6px;
+  font-size: 0.68rem;
+  color: var(--muted, #6b7a90);
+  text-align: right;
+}
+
+/* ── Botón de subida de tarjeta ──────────────────────────────────────── */
+.uploadBtn {
+  width: 100%;
+  padding: 0.72rem 1rem;
+  background: #f8f9fc;
+  border: 1.5px dashed rgba(13, 45, 94, 0.3);
+  border-radius: 10px;
+  color: var(--navy-md, #4a6080);
+  font-family: 'Raleway', sans-serif;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+}
+.uploadBtn:hover { border-color: var(--gold, #c9a84c); background: #fff; }
+.uploadBtn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.fileName {
+  margin-top: 6px;
+  font-size: 0.72rem;
+  color: #1a8c4e;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  word-break: break-all;
+}
+
+@media (max-width: 480px) {
+  .areasBox { grid-template-columns: 1fr; }
+  .roleBtn { font-size: 0.66rem; padding: 0.75rem 0.3rem; }
+}

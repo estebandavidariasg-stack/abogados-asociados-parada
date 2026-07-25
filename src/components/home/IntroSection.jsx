@@ -27,15 +27,14 @@ export default function IntroSection({ onUnirse }) {
         </span>
 
         <h1 id="intro-heading" className={styles.heading}>
-          <em>Defendemos sus derechos,</em><br />
-          acompañamos sus decisiones.
+          <em>Conectamos personas</em> con las soluciones profesionales que necesitan.
         </h1>
 
         <div className={styles.divider} aria-hidden="true" />
 
         <p className={styles.subtitle}>
-          Asesoría jurídica y contable con presencia en Colombia y cobertura
-          internacional. Derecho civil, penal, laboral, comercial y más.
+          Conecta con profesionales verificados y de experiencia confiable, de
+          forma simple y sin barreras geográficas — en Colombia y el exterior.
         </p>
 
         <div className={styles.actions}>
@@ -51,7 +50,7 @@ export default function IntroSection({ onUnirse }) {
             onClick={onUnirse}
             className={styles.ctaSecondary}
           >
-            Únete a la firma <ArrowIcon />
+            Únete como profesional <ArrowIcon />
           </button>
         </div>
       </div>

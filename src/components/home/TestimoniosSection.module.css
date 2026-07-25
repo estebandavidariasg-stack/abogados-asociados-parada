@@ -222,6 +222,28 @@
   line-height: 1.3;
 }
 
+/* Red social del reseñador (cliente) — enlace sutil de transparencia.
+   Distinto del footer "Ver perfil" (que es del profesional). */
+.redSocial {
+  margin-top: 5px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: 'Raleway', sans-serif;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #5a6e90;
+  text-decoration: none;
+  transition: color 0.18s ease;
+}
+.redSocial:hover { color: var(--navy); }
+.redSocial svg { color: #9a7a2c; flex-shrink: 0; }
+.redSocial span {
+  border-bottom: 1px solid rgba(154, 122, 44, 0.35);
+  line-height: 1.1;
+}
+
 /* ── PROFESIONAL DE LA RESEÑA — banda de pie accionable (a quién es) ── */
 .profFooter {
   /* Sangra a los bordes de la tarjeta: se lee como pie de tarjeta,

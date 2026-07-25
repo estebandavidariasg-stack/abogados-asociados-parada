@@ -2,14 +2,12 @@ import { useEffect, useState, useRef } from 'react'
 import { useAuth } from '../../context/AuthContext'
 import styles from './Navbar.module.css'
 
-export default function Navbar({ onLogin, onRegister, onRegisterContador, onRegisterGestor }) {
+export default function Navbar({ onLogin, onRegister }) {
   const [scrolled, setScrolled]   = useState(false)
   const [menuOpen, setMenuOpen]   = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
-  const [registerOpen, setRegisterOpen] = useState(false)
   const { user, profile, signOut } = useAuth()
   const menuRef     = useRef(null)
-  const registerRef = useRef(null)
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 50)
@@ -20,15 +18,6 @@ export default function Navbar({ onLogin, onRegister, onRegisterContador, onRegi
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (menuRef.current && !menuRef.current.contains(e.target)) setMenuOpen(false)
-    }
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [])
-
-  // Click fuera cierra el dropdown de registro (necesario para tap en móvil)
-  useEffect(() => {
-    const handleClickOutside = (e) => {
-      if (registerRef.current && !registerRef.current.contains(e.target)) setRegisterOpen(false)
     }
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
@@ -65,15 +54,6 @@ export default function Navbar({ onLogin, onRegister, onRegisterContador, onRegi
         </picture>
       </a>
 
-      {/* Firm name — centered on desktop */}
-      <div className={`${styles.firmTitle} ${scrolled ? styles.firmTitleScrolled : ''}`}>
-        <span className={`${styles.firmName} ${scrolled ? styles.firmNameDark : ''}`}>
-          Parada
-        </span>
-        <span className={`${styles.firmHighlight} ${scrolled ? styles.firmHighlightDark : ''}`}>
-          Bridge
-        </span>
-      </div>
 
       {/* Desktop actions */}
       <div className={styles.actions}>
@@ -143,39 +123,12 @@ export default function Navbar({ onLogin, onRegister, onRegisterContador, onRegi
             >
               Iniciar sesión
             </button>
-            <div
-              className={styles.registerWrap}
-              ref={registerRef}
-              onMouseEnter={() => setRegisterOpen(true)}
-              onMouseLeave={() => setRegisterOpen(false)}
+            <button
+              className={`${styles.btnRegister} ${scrolled ? styles.btnRegisterDark : ''}`}
+              onClick={onRegister}
             >
-              <button
-                className={`${styles.btnRegister} ${scrolled ? styles.btnRegisterDark : ''}`}
-                onClick={onRegister}
-                aria-haspopup="true"
-                aria-expanded={registerOpen}
-              >
-                Registrarse como abogado
-              </button>
-              {registerOpen && (
-                <div className={styles.registerDropdownWrap}>
-                  <button
-                    type="button"
-                    className={`${styles.btnRegister} ${scrolled ? styles.btnRegisterDark : ''}`}
-                    onClick={() => { onRegisterContador?.(); setRegisterOpen(false) }}
-                  >
-                    Registrarse como contador
-                  </button>
-                  <button
-                    type="button"
-                    className={`${styles.btnRegister} ${styles.btnRegisterGestor}`}
-                    onClick={() => { onRegisterGestor?.(); setRegisterOpen(false) }}
-                  >
-                    Registrarse como gestor
-                  </button>
-                </div>
-              )}
-            </div>
+              Registrarse como profesional
+            </button>
           </>
         )}
       </div>
@@ -238,13 +191,7 @@ export default function Navbar({ onLogin, onRegister, onRegisterContador, onRegi
                 Iniciar sesión
               </button>
               <button className={styles.mobileItemGold} onClick={() => { onRegister?.(); setMobileOpen(false) }}>
-                Registrarse como Abogado
-              </button>
-              <button className={styles.mobileItemGold} onClick={() => { onRegisterContador?.(); setMobileOpen(false) }}>
-                Registrarse como Contador
-              </button>
-              <button className={`${styles.mobileItemGold} ${styles.mobileItemTeal}`} onClick={() => { onRegisterGestor?.(); setMobileOpen(false) }}>
-                Registrarse como Gestor
+                Registrarse como profesional
               </button>
             </>
           )}

@@ -40,6 +40,60 @@
   margin: 0;
 }
 
+/* ── Barra de filtros del sidebar (mismo lenguaje visual que el panel admin) ── */
+.filterBar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(13,45,94,0.08);
+  flex-shrink: 0;
+  background: #f5f7fb;
+}
+.searchBox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #ffffff;
+  border: 1px solid rgba(13,45,94,0.12);
+  border-radius: 9px;
+  padding: 0 10px;
+  height: 36px;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.searchBox:focus-within { border-color: #c9a84c; box-shadow: 0 0 0 3px rgba(201,168,76,0.16); }
+.searchIcon { color: #8791a5; display: inline-flex; flex-shrink: 0; }
+.searchInput {
+  border: none; background: transparent; outline: none; flex: 1; min-width: 0;
+  font-family: inherit; font-size: 0.82rem; color: #263149;
+}
+.searchInput::placeholder { color: #97a2b6; }
+.searchClear {
+  border: none; background: rgba(13,45,94,0.08); color: #55617a; cursor: pointer;
+  width: 20px; height: 20px; border-radius: 6px; flex-shrink: 0; line-height: 1;
+  display: inline-flex; align-items: center; justify-content: center; font-size: 0.72rem;
+}
+.searchClear:hover { background: rgba(13,45,94,0.16); color: #0d2d5e; }
+.dateRow { display: flex; align-items: flex-end; gap: 8px; flex-wrap: wrap; }
+.dateField { display: flex; flex-direction: column; gap: 3px; flex: 1 1 0; min-width: 96px; }
+.dateField > span {
+  font-size: 0.62rem; font-weight: 700; color: #6b7896;
+  text-transform: uppercase; letter-spacing: 0.04em; padding-left: 2px;
+}
+.dateInput {
+  border: 1px solid rgba(13,45,94,0.14); background: #fff; border-radius: 8px;
+  font-family: inherit; font-size: 0.76rem; color: #263149; padding: 6px 8px; height: 32px;
+  color-scheme: light; font-variant-numeric: tabular-nums; width: 100%;
+}
+.dateInput:focus { outline: none; border-color: #c9a84c; box-shadow: 0 0 0 3px rgba(201,168,76,0.16); }
+.clearAll {
+  border: none; background: transparent; color: #b23b3b; cursor: pointer;
+  font-family: inherit; font-size: 0.72rem; font-weight: 600;
+  padding: 6px 4px; text-decoration: underline; text-underline-offset: 2px; white-space: nowrap;
+}
+.clearAll:hover { color: #8f2f2f; }
+.itemFecha, .itemInicio, .itemUltimo { font-variant-numeric: tabular-nums; }
+
 .empty {
   color: #8a9ab5;
   font-size: 0.8rem;
@@ -133,10 +187,12 @@
   justify-content: space-between;
   gap: 12px;
   flex-shrink: 0;
+  flex-wrap: wrap;              /* la meta y las acciones bajan de línea antes de aplastarse */
 }
 
 .chatMeta {
   min-width: 0;
+  flex: 1 1 220px;             /* mantiene un ancho legible; empuja las acciones a otra fila si no caben */
 }
 
 .chatTitle {
@@ -1008,8 +1064,9 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  flex-shrink: 0;
-  flex-wrap: nowrap;
+  min-width: 0;               /* puede encoger para que su flex-wrap interno actúe */
+  flex-wrap: wrap;            /* los botones bajan de línea en vez de desbordar/cortarse */
+  justify-content: flex-end;
 }
 .btnVerificar {
   background: rgba(201, 168, 76, 0.12);

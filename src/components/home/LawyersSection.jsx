@@ -138,13 +138,13 @@ export default function LawyersSection() {
         viewport={VIEWPORT}
       >
         <motion.span className={styles.label} variants={eyebrowReveal}>
-          Nuestros Socios
+          Nuestra red de profesionales
         </motion.span>
         <motion.h2 className={styles.title} variants={fadeUp}>
-          Abogados y Contadores de <em>Excelencia</em>
+          Encuentra el profesional <em>adecuado</em> para tu caso
         </motion.h2>
         <motion.p className={styles.desc} variants={fadeUp}>
-          Profesionales del derecho y la contaduría, comprometidos con cada caso y con tus resultados.
+          Todos los profesionales que hacen parte de nuestra red han sido previamente verificados para ofrecer una experiencia basada en confianza, transparencia y calidad.
         </motion.p>
       </motion.div>
 

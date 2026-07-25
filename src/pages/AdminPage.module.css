@@ -457,7 +457,7 @@
    ══════════════════════════════════════════ */
 .stats {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 1rem;
   margin-bottom: 2rem;
 }
@@ -1618,13 +1618,19 @@
    RESPONSIVE
    ══════════════════════════════════════════ */
 @media (max-width: 1024px) {
-  .stats { grid-template-columns: repeat(2, 1fr); }
+  .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* Banda intermedia (shell + contenido): a ~720px, dentro del shell con riel,
+   dos columnas de stats aún aprietan → una sola columna. */
+@media (max-width: 720px) {
+  .stats { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 768px) {
   .page       { padding: 2rem 1.25rem 4rem; }
   .pageInner  { padding: 1.75rem 1.5rem 1.75rem; border-radius: 16px; }
-  .stats      { grid-template-columns: 1fr 1fr; }
+  /* .stats: la banda 720px (1 col) y 1024px (2 col) ya lo gestionan. */
   /* Tarjeta de profesional: avatar alineado al tope (no centrado contra la
      columna de info), y las acciones como un PIE separado por una línea. */
   .card       { flex-wrap: wrap; gap: 0.9rem 1.1rem; align-items: flex-start; }
@@ -1654,7 +1660,7 @@
 @media (max-width: 480px) {
   .page       { padding: 1.5rem 0.9rem 3rem; }
   .pageInner  { padding: 1.25rem 1rem 1.5rem; border-radius: 14px; }
-  .stats      { grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+  .stats      { grid-template-columns: 1fr; gap: 0.75rem; }
   .statNum    { font-size: 1.6rem; }
   .tab        { padding: 0.75rem 0.9rem; font-size: 0.6rem; }
   .title      { font-size: clamp(1.1rem, 4.5vw, 1.6rem); }
@@ -1827,8 +1833,11 @@
 
 .searchWrap {
   position: relative;
-  flex: 1 1 240px;
-  min-width: 200px;
+  /* flex-basis 220px + min-width:0 → cuando la fila aprieta (dentro del shell
+     con riel, ~800–1100px) el input se encoge y/o baja bajo los chips en vez
+     de desbordar. */
+  flex: 1 1 220px;
+  min-width: 0;
   max-width: 380px;
   display: flex;
   align-items: center;

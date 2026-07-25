@@ -13,8 +13,7 @@ import SubNav from '../components/layout/SubNav'
 // Modales de registro/login: solo se montan al hacer clic — lazy para que el
 // visitante público no descargue ~1.200 líneas de formularios + recaptcha.
 const AuthModal = lazy(() => import('../components/auth/AuthModal'))
-const RegisterContadorModal = lazy(() => import('../components/auth/RegisterContadorModal'))
-const RegisterGestorModal = lazy(() => import('../components/auth/RegisterGestorModal'))
+const RegisterModal = lazy(() => import('../components/auth/RegisterModal'))
 
 function ScrollProgress() {
   const { scrollYProgress } = useScroll()
@@ -76,21 +75,20 @@ function DeferredMap() {
 
 
 export default function HomePage() {
+  // 'login' → AuthModal (login). null cierra ambos.
   const [modal, setModal] = useState(null)
-  const [contadorOpen, setContadorOpen] = useState(false)
-  const [gestorOpen, setGestorOpen] = useState(false)
+  // Registro unificado (abogado / contador / gestor) en un solo modal.
+  const [registerOpen, setRegisterOpen] = useState(false)
 
   return (
     <>
       <ScrollProgress />
       <Navbar
         onLogin={() => setModal('login')}
-        onRegister={() => setModal('register')}
-        onRegisterContador={() => setContadorOpen(true)}
-        onRegisterGestor={() => setGestorOpen(true)}
+        onRegister={() => setRegisterOpen(true)}
       />
-      <SubNav onUnirse={() => setModal('register')} />
-      <IntroSection onUnirse={() => setModal('register')} />
+      <SubNav onUnirse={() => setRegisterOpen(true)} />
+      <IntroSection onUnirse={() => setRegisterOpen(true)} />
       <VideoCarousel/>
       <ChatSection />
       <LawyersSection />
@@ -101,9 +99,14 @@ export default function HomePage() {
       <Footer />
       <WhatsAppButton phone="573124086734" />
       <Suspense fallback={null}>
-        {modal && <AuthModal initialTab={modal} onClose={() => setModal(null)} />}
-        {contadorOpen && <RegisterContadorModal onClose={() => setContadorOpen(false)} />}
-        {gestorOpen && <RegisterGestorModal onClose={() => setGestorOpen(false)} />}
+        {modal && (
+          <AuthModal
+            initialTab={modal}
+            onClose={() => setModal(null)}
+            onRegister={() => { setModal(null); setRegisterOpen(true) }}
+          />
+        )}
+        {registerOpen && <RegisterModal onClose={() => setRegisterOpen(false)} />}
       </Suspense>
     </>
   )

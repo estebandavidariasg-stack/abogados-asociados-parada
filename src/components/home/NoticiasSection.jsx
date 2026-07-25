@@ -106,6 +106,10 @@ export default function NoticiasSection() {
   const sectionRef = useRef(null)
   const [noticias, setNoticias] = useState(FALLBACK_NOTICIAS)
   const [shouldFetch, setShouldFetch] = useState(false)
+  // Cambia a true cuando entran las noticias reales del feed. Se usa como `key`
+  // del grid para forzar su re-montaje y que la animación whileInView (once:true)
+  // vuelva a dispararse sobre las tarjetas nuevas (si no, quedan en opacity:0).
+  const [loaded, setLoaded] = useState(false)
 
   // Diferimos el fetch hasta que la sección se acerque al viewport.
   useEffect(() => {
@@ -143,7 +147,7 @@ export default function NoticiasSection() {
             link: it.link || '#',
           }
         })
-        if (mapped.length) setNoticias(mapped)
+        if (mapped.length) { setNoticias(mapped); setLoaded(true) }
       } catch {
         // Silencioso: nos quedamos con el respaldo curado.
       }
@@ -173,6 +177,7 @@ export default function NoticiasSection() {
       </motion.div>
 
       <motion.div
+        key={loaded ? 'live' : 'fallback'}
         className={styles.grid}
         variants={gridStagger}
         initial="hidden"

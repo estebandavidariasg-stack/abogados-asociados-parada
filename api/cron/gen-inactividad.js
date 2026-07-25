@@ -67,7 +67,11 @@ export function renderResenaEmail({ nombre, token }) {
        </table>
 
        <div>${emailButton('Escribir mi opinión', link())}</div>
-       <p style="margin:22px 0 0;font-size:12px;color:${C.muted};">Solo te tomará un minuto.</p>
+       <p style="margin:22px auto 0;max-width:420px;font-size:12.5px;line-height:1.7;color:${C.muted};">
+         Si quieres, deja el link de una red social (Instagram, Facebook…). Nos ayuda a mostrar en
+         nuestras reseñas que eres una persona real. Es opcional.
+       </p>
+       <p style="margin:10px 0 0;font-size:12px;color:${C.muted};">Solo te tomará un minuto.</p>
      </div>`
 
   return renderShell({

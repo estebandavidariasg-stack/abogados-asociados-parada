@@ -51,6 +51,15 @@ function formatSize(bytes) {
   return `${(bytes / 1048576).toFixed(1)} MB`
 }
 
+// Formatea un monto en pesos colombianos, sin decimales (ej: "$120.000").
+const copFmt = new Intl.NumberFormat('es-CO', {
+  style: 'currency', currency: 'COP', maximumFractionDigits: 0,
+})
+function formatCOP(monto) {
+  const n = Number(monto)
+  return Number.isFinite(n) ? copFmt.format(n) : ''
+}
+
 function isImage(name) {
   return /\.(jpe?g|png|webp|gif|bmp|svg)$/i.test(name || '')
 }
@@ -402,7 +411,7 @@ function PqrPanel({ onUnreadChange }) {
   )
 }
 
-const FIELDS = 'id, area_derecho, status, created_at, client_nombre, client_email, client_celular, client_cedula, codigo_referencia, tipo_profesional'
+const FIELDS = 'id, area_derecho, status, created_at, client_nombre, client_email, client_celular, client_cedula, codigo_referencia, tipo_profesional, pago_confirmado'
 
 export default function SuperAdminChatViewer({ initialRoomId = null }) {
   const [rooms, setRooms]       = useState([])
@@ -416,7 +425,7 @@ export default function SuperAdminChatViewer({ initialRoomId = null }) {
   const [filterArea, setFilterArea]     = useState('')
   const [search, setSearch]             = useState('')
   const [rolFilter, setRolFilter]       = useState('todos')  // 'todos'|'abogado'|'contador'
-  const [soloVerif, setSoloVerif]       = useState(false)    // filtro "Solo verificación"
+  const [verifFilter, setVerifFilter]   = useState('todos')  // 'todos' | 'pendientes' | 'verificadas'
   // Hash SHA-256 de lo que se está escribiendo en el buscador (cuando parece
   // una cédula) para poder matchear contra client_cedula (que está hasheado).
   const [searchHash, setSearchHash]     = useState('')
@@ -431,6 +440,20 @@ export default function SuperAdminChatViewer({ initialRoomId = null }) {
   const [sending, setSending]       = useState(false)
   const [sendStatus, setSendStatus] = useState('idle') // 'idle' | 'success' | 'error'
   const [confirmOpen, setConfirmOpen] = useState(false)
+  // Cobro al profesional (split empresa/gestor) — atado a la verificación.
+  const [pago, setPago]             = useState(null)     // fila de pagos_profesional | null
+  const [pagoLoading, setPagoLoading] = useState(false)  // cargando estado del cobro
+  const [pagoConfirmado, setPagoConfirmado] = useState(false) // luz verde (chat_rooms.pago_confirmado)
+  const [pagoGenerando, setPagoGenerando] = useState(false) // POST generar_cobro en curso
+  const [pagoOk, setPagoOk]         = useState(false)    // toast inline "✓ Cobro generado"
+  const [pagoError, setPagoError]   = useState('')       // mensaje de error inline (dismissible)
+  // Modal "Definir cobro" + sus campos (total / % empresa / % gestor).
+  const [cobroModalOpen, setCobroModalOpen] = useState(false)
+  const [cfgTotal,  setCfgTotal]   = useState('')        // Total de la consulta (COP)
+  const [cfgPctEmp, setCfgPctEmp]  = useState('')        // % empresa
+  const [cfgPctGes, setCfgPctGes]  = useState('')        // % gestor
+  // Defaults de plataforma_config (id=1) — se cargan una sola vez.
+  const [cfgDefaults, setCfgDefaults] = useState(null)
   // Tabs Chats / PQR
   const [view,            setView]            = useState('chats')   // 'chats' | 'pqr'
   const [pqrUnreadCount,  setPqrUnreadCount]  = useState(0)
@@ -482,6 +505,24 @@ export default function SuperAdminChatViewer({ initialRoomId = null }) {
     return () => { cancelled = true }
   }, [SUPABASE_URL])
 
+  // Defaults del cobro (plataforma_config id=1): default_total, pct_empresa,
+  // comision_gestor_pct. Se leen una vez para prefijar el modal "Definir cobro".
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const headers = await getAuthHeaders()
+        const res = await fetch(
+          `${SUPABASE_URL}/rest/v1/plataforma_config?id=eq.1&select=*`,
+          { headers }
+        )
+        const [row] = await res.json().catch(() => [])
+        if (!cancelled && row) setCfgDefaults(row)
+      } catch { /* si falla, el modal arranca con campos vacíos */ }
+    })()
+    return () => { cancelled = true }
+  }, [SUPABASE_URL])
+
   // Debounce: cuando el texto del buscador parece una cédula (solo dígitos,
   // ≥6), calculamos su hash SHA-256 para poder cruzarlo con client_cedula.
   useEffect(() => {
@@ -507,8 +548,10 @@ export default function SuperAdminChatViewer({ initialRoomId = null }) {
         (r.tipo_profesional || r._professionalRol) === rolFilter
       )
     }
-    // Solo salas con verificación pendiente.
-    if (soloVerif) list = list.filter(r => verifRooms.has(r.id))
+    // Filtro de verificación: pendientes (verif solicitada y sin pagar) o
+    // verificadas (el profesional ya pagó).
+    if (verifFilter === 'pendientes') list = list.filter(r => verifRooms.has(r.id) && !r.pago_confirmado)
+    else if (verifFilter === 'verificadas') list = list.filter(r => r.pago_confirmado)
     // Búsqueda unificada instantánea: nombre del cliente, nombre del
     // profesional asignado, código de referencia, área, y cédula (por hash
     // O por el número crudo que aparece en el primer mensaje / cache).
@@ -527,7 +570,7 @@ export default function SuperAdminChatViewer({ initialRoomId = null }) {
       )
     }
     setFiltered(list)
-  }, [rooms, filterStatus, filterArea, search, searchHash, rolFilter, soloVerif, verifRooms])
+  }, [rooms, filterStatus, filterArea, search, searchHash, rolFilter, verifFilter, verifRooms])
 
   useEffect(() => {
     if (!activeRoom) return
@@ -543,11 +586,126 @@ export default function SuperAdminChatViewer({ initialRoomId = null }) {
     return () => supabase.removeChannel(ch)
   }, [activeRoom])
 
+  // Al abrir/cambiar de sala, traemos el estado del cobro de esa consulta y
+  // limpiamos los avisos inline del cobro anterior.
+  useEffect(() => {
+    setPago(null); setPagoOk(false); setPagoError(''); setPagoConfirmado(false)
+    setCobroModalOpen(false)
+    if (!activeRoom) return
+    loadPago(activeRoom.id)
+  }, [activeRoom])
+
   useEffect(() => {
     if (messagesRef.current) {
       messagesRef.current.scrollTop = messagesRef.current.scrollHeight
     }
   }, [messages])
+
+  // Lee el cobro (si existe) de la sala y la luz verde (chat_rooms.pago_confirmado).
+  // El superadmin puede leer todos los pagos.
+  async function loadPago(rid) {
+    setPagoLoading(true)
+    try {
+      const headers = await getAuthHeaders()
+      const [pagoRes, roomRes] = await Promise.all([
+        fetch(
+          `${SUPABASE_URL}/rest/v1/pagos_profesional?room_id=eq.${rid}&select=id,estado,total_consulta,pct_empresa,pct_gestor,monto_empresa,comision_gestor,monto,pagado_at,gestor_id,codigo&order=created_at.desc`,
+          { headers }
+        ),
+        fetch(
+          `${SUPABASE_URL}/rest/v1/chat_rooms?id=eq.${rid}&select=pago_confirmado&limit=1`,
+          { headers }
+        ),
+      ])
+      const rows = await pagoRes.json().catch(() => [])
+      const [roomRow] = await roomRes.json().catch(() => [])
+      // Solo actualizamos si seguimos en la misma sala (evita carrera al cambiar rápido).
+      setActiveRoom(cur => {
+        if (cur?.id === rid) {
+          setPago(Array.isArray(rows) && rows.length ? rows[0] : null)
+          setPagoConfirmado(!!roomRow?.pago_confirmado)
+        }
+        return cur
+      })
+    } catch {
+      /* si falla la lectura, dejamos el botón disponible (el backend valida) */
+    } finally {
+      setPagoLoading(false)
+    }
+  }
+
+  // Abre el modal "Definir cobro" con los campos prefijados desde
+  // plataforma_config (id=1): default_total, pct_empresa, comision_gestor_pct.
+  function openCobroModal() {
+    if (!activeRoom) return
+    const d = cfgDefaults || {}
+    setCfgTotal (d.default_total != null ? String(d.default_total) : '')
+    setCfgPctEmp(d.pct_empresa   != null ? String(d.pct_empresa)   : '')
+    setCfgPctGes(d.comision_gestor_pct != null ? String(d.comision_gestor_pct) : '')
+    setPagoError(''); setPagoOk(false)
+    setCobroModalOpen(true)
+  }
+
+  // ¿La consulta trae gestor? Antes de crear el cobro lo inferimos del código de
+  // referencia de la sala; una vez creado, del propio pago (gestor_id / codigo).
+  const roomTraeGestor = !!(activeRoom?.codigo_referencia)
+
+  // Genera el cobro con el split (total, %empresa, %gestor) para la sala activa.
+  // Guarda contra doble envío y traduce los errores del backend a mensajes claros.
+  async function handleGenerarCobro() {
+    if (!activeRoom || pagoGenerando) return
+    const total = Number(cfgTotal)
+    const pctEmp = Number(cfgPctEmp)
+    const pctGes = Number(cfgPctGes)
+    if (!(total > 0)) { setPagoError('Ingresa un total válido para la consulta.'); return }
+    if (!(pctEmp >= 0) || !(pctGes >= 0)) { setPagoError('Los porcentajes no pueden ser negativos.'); return }
+    if (pctEmp + pctGes > 100) { setPagoError('La suma de % empresa y % gestor no puede superar 100%.'); return }
+    setPagoGenerando(true); setPagoOk(false); setPagoError('')
+    try {
+      const headers = await getAuthHeaders()
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/generar_cobro`, {
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          p_room_id: activeRoom.id,
+          p_total: total,
+          p_pct_empresa: pctEmp,
+          p_pct_gestor: pctGes,
+        }),
+      })
+      const json = await res.json().catch(() => null)
+      if (!res.ok) {
+        const code = json?.code
+        const msg  = String(json?.message || '')
+        let human
+        if (code === '23505' || /ya existe un cobro pendiente/i.test(msg)) {
+          human = 'Ya existe un cobro pendiente para esta consulta.'
+        } else if (code === '42501' || /no autorizado/i.test(msg)) {
+          human = 'No autorizado para generar este cobro.'
+        } else if (/sin profesional asignado|no tiene profesional asignado/i.test(msg)) {
+          human = 'La sala no tiene profesional asignado.'
+        } else {
+          human = msg || 'No se pudo generar el cobro. Intenta de nuevo.'
+        }
+        setPagoError(human)
+        // Si ya existía un cobro, refrescamos para mostrar su estado.
+        if (code === '23505' || /ya existe un cobro pendiente/i.test(msg)) {
+          setCobroModalOpen(false)
+          loadPago(activeRoom.id)
+        }
+        return
+      }
+      // Éxito: cerramos el modal, aviso inline y recarga del estado del cobro.
+      setCobroModalOpen(false)
+      setPagoOk(true)
+      loadPago(activeRoom.id)
+      setTimeout(() => setPagoOk(false), 4000)
+    } catch (err) {
+      setPagoError('Error de red al generar el cobro: ' + err.message)
+    } finally {
+      setPagoGenerando(false)
+    }
+  }
 
   async function loadRooms() {
     // Las 300 salas más recientes (antes: TODA la historia sin límite — el
@@ -991,16 +1149,32 @@ export default function SuperAdminChatViewer({ initialRoomId = null }) {
 
           <button
             type="button"
-            className={soloVerif ? styles.verifToggleActive : styles.verifToggle}
-            onClick={() => setSoloVerif(v => !v)}
-            aria-pressed={soloVerif}
-            title="Mostrar solo chats con verificación pendiente"
+            className={verifFilter === 'pendientes' ? styles.verifToggleActive : styles.verifToggle}
+            onClick={() => setVerifFilter(v => v === 'pendientes' ? 'todos' : 'pendientes')}
+            aria-pressed={verifFilter === 'pendientes'}
+            title="Mostrar solo consultas con verificación pendiente"
           >
             <IconVerif size={15} />
-            Solo verificación
-            {verifRooms.size > 0 && (
-              <span className={styles.verifCount}>{verifRooms.size}</span>
-            )}
+            Verificación pendiente
+            {(() => {
+              const n = rooms.filter(r => verifRooms.has(r.id) && !r.pago_confirmado).length
+              return n > 0 ? <span className={styles.verifCount}>{n}</span> : null
+            })()}
+          </button>
+
+          <button
+            type="button"
+            className={verifFilter === 'verificadas' ? styles.verifDoneToggleActive : styles.verifDoneToggle}
+            onClick={() => setVerifFilter(v => v === 'verificadas' ? 'todos' : 'verificadas')}
+            aria-pressed={verifFilter === 'verificadas'}
+            title="Mostrar solo consultas verificadas (el profesional ya pagó)"
+          >
+            <IconVerif size={15} />
+            Verificadas
+            {(() => {
+              const n = rooms.filter(r => r.pago_confirmado).length
+              return n > 0 ? <span className={styles.verifCount}>{n}</span> : null
+            })()}
           </button>
 
           <button className={styles.refreshBtn} onClick={loadRooms}>↺ Actualizar</button>
@@ -1035,7 +1209,10 @@ export default function SuperAdminChatViewer({ initialRoomId = null }) {
             </p>
           )}
           {filtered.map(room => {
-            const flagged = verifRooms.has(room.id)
+            // Si el profesional ya pagó, la consulta queda VERIFICADA; deja de
+            // estar "pendiente de verificación".
+            const paid = !!room.pago_confirmado
+            const flagged = verifRooms.has(room.id) && !paid
             return (
             <div key={room.id}
               className={`${activeRoom?.id === room.id
@@ -1049,7 +1226,12 @@ export default function SuperAdminChatViewer({ initialRoomId = null }) {
                   {STATUS_LABEL[room.status]}
                 </span>
               </div>
-              {flagged && (
+              {paid ? (
+                <span className={styles.verifChipDone} title="Consulta verificada — el profesional ya pagó">
+                  <IconVerif size={12} />
+                  Verificada
+                </span>
+              ) : flagged && (
                 <span className={styles.verifChip} title="Solicitud de verificación pendiente">
                   <IconVerif size={12} />
                   Verificación
@@ -1107,7 +1289,12 @@ export default function SuperAdminChatViewer({ initialRoomId = null }) {
                 </button>
                 <div className={styles.chatTitleRow}>
                   <p className={styles.chatTitle}>{activeRoom.area_derecho}</p>
-                  {verifRooms.has(activeRoom.id) && (
+                  {(activeRoom.pago_confirmado || pagoConfirmado) ? (
+                    <span className={styles.verifChipHeaderDone} title="Consulta verificada — el profesional ya pagó">
+                      <IconVerif size={14} />
+                      Verificada
+                    </span>
+                  ) : verifRooms.has(activeRoom.id) && (
                     <span className={styles.verifChipHeader} title="Solicitud de verificación pendiente">
                       <IconVerif size={14} />
                       Verificación pendiente
@@ -1137,6 +1324,97 @@ export default function SuperAdminChatViewer({ initialRoomId = null }) {
                 </div>
               </div>
               <div className={styles.headerActions}>
+                {/* ── Cobro al profesional (split empresa/gestor) — atado a la verificación ── */}
+                {pagoLoading ? (
+                  <span className={styles.cobroLoading}>Verificando cobro…</span>
+                ) : pago ? (
+                  <div className={styles.cobroResumenWrap}>
+                    <div className={styles.cobroChipRow}>
+                      {pago.estado === 'pagado' ? (
+                        <span className={`${styles.cobroChip} ${styles.cobroChipPagado}`}
+                          title="Cobro pagado por el profesional">
+                          <IconVerif size={13} />
+                          Pagado · {formatCOP(pago.monto)}
+                          {pago.pagado_at && (
+                            <span className={styles.cobroChipFecha}>
+                              · {new Date(pago.pagado_at).toLocaleDateString('es-CO', {
+                                day: '2-digit', month: 'short', year: 'numeric',
+                              })}
+                            </span>
+                          )}
+                        </span>
+                      ) : (
+                        <span className={`${styles.cobroChip} ${styles.cobroChipPendiente}`}
+                          title="Cobro pendiente de pago por el profesional">
+                          Cobro pendiente · {formatCOP(pago.monto)}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Aprobada — el profesional ya pagó */}
+                    {pagoConfirmado && (
+                      <span className={styles.luzVerde} title="El profesional confirmó el pago">
+                        <IconVerif size={14} />
+                        ✓ Aprobada — contacto y descargas habilitados
+                      </span>
+                    )}
+
+                    {/* Desglose del split */}
+                    <table className={styles.cobroTabla}>
+                      <tbody>
+                        <tr>
+                          <td className={styles.cobroTd}>Total de la consulta</td>
+                          <td className={styles.cobroTdNum}>{formatCOP(pago.total_consulta)}</td>
+                        </tr>
+                        <tr>
+                          <td className={styles.cobroTd}>Empresa ({pago.pct_empresa}%)</td>
+                          <td className={styles.cobroTdNum}>{formatCOP(pago.monto_empresa)}</td>
+                        </tr>
+                        <tr>
+                          <td className={styles.cobroTd}>
+                            Gestor ({pago.pct_gestor}%)
+                            {!pago.gestor_id && !pago.codigo && (
+                              <span className={styles.cobroSinGestor}> · sin gestor</span>
+                            )}
+                          </td>
+                          <td className={styles.cobroTdNum}>{formatCOP(pago.comision_gestor)}</td>
+                        </tr>
+                        <tr className={styles.cobroTrPaga}>
+                          <td className={styles.cobroTd}>El profesional paga</td>
+                          <td className={styles.cobroTdNum}>{formatCOP(pago.monto)}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    className={`${styles.btnCobro} ${verifRooms.has(activeRoom.id) ? styles.btnCobroDestacado : ''}`}
+                    onClick={openCobroModal}
+                    disabled={pagoGenerando}
+                    title={verifRooms.has(activeRoom.id)
+                      ? 'Consulta verificada — define el cobro de la consulta'
+                      : 'Definir el cobro de la consulta al profesional'}
+                  >
+                    {pagoOk ? '✓ Cobro generado' : 'Definir cobro'}
+                  </button>
+                )}
+                {/* Aviso de éxito cuando el chip aún no reflejó el nuevo cobro */}
+                {pagoOk && !pago && (
+                  <span className={styles.cobroSuccess}>✓ Cobro generado</span>
+                )}
+                {/* Error inline, dismissible */}
+                {pagoError && (
+                  <span className={styles.cobroError} role="alert">
+                    {pagoError}
+                    <button
+                      type="button"
+                      className={styles.cobroErrorClose}
+                      onClick={() => setPagoError('')}
+                      aria-label="Cerrar aviso"
+                    >✕</button>
+                  </span>
+                )}
                 <button
                   type="button"
                   className={`${styles.btnSendCard} ${sendStatus === 'success' ? styles.btnSendCardSuccess : ''} ${sendStatus === 'error' ? styles.btnSendCardError : ''}`}
@@ -1296,6 +1574,135 @@ export default function SuperAdminChatViewer({ initialRoomId = null }) {
           </div>
         )}
       </div>
+
+      {/* ── Modal "Definir cobro de la consulta" ──
+          Split empresa/gestor con cálculo en vivo. Portal a <body>. */}
+      {cobroModalOpen && activeRoom && createPortal(
+        (() => {
+          const total  = Number(cfgTotal)  || 0
+          const pctEmp = Number(cfgPctEmp) || 0
+          const pctGes = Number(cfgPctGes) || 0
+          const montoEmp = total * pctEmp / 100
+          const montoGes = roomTraeGestor ? (total * pctGes / 100) : 0
+          const pagaPro  = montoEmp + montoGes
+          const quedaPro = total - pagaPro
+          const sumaPct  = pctEmp + pctGes
+          const pctInvalido = sumaPct > 100
+          return (
+            <div
+              className={styles.confirmOverlay}
+              onClick={() => !pagoGenerando && setCobroModalOpen(false)}
+              role="dialog"
+              aria-modal="true"
+            >
+              <div
+                className={`${styles.confirmModal} ${styles.cobroModal}`}
+                onClick={e => e.stopPropagation()}
+              >
+                <h3 className={styles.confirmTitle}>Definir cobro de la consulta</h3>
+
+                <div className={styles.cobroForm}>
+                  <label className={styles.cobroField}>
+                    <span className={styles.cobroLabel}>Total de la consulta (COP)</span>
+                    <input
+                      type="number" min="0" step="1000" inputMode="numeric"
+                      className={styles.cobroInput}
+                      value={cfgTotal}
+                      onChange={e => setCfgTotal(e.target.value)}
+                      placeholder="0"
+                    />
+                  </label>
+                  <div className={styles.cobroPctRow}>
+                    <label className={styles.cobroField}>
+                      <span className={styles.cobroLabel}>% empresa</span>
+                      <input
+                        type="number" min="0" max="100" step="0.1" inputMode="decimal"
+                        className={styles.cobroInput}
+                        value={cfgPctEmp}
+                        onChange={e => setCfgPctEmp(e.target.value)}
+                        placeholder="0"
+                      />
+                    </label>
+                    <label className={styles.cobroField}>
+                      <span className={styles.cobroLabel}>% gestor</span>
+                      <input
+                        type="number" min="0" max="100" step="0.1" inputMode="decimal"
+                        className={styles.cobroInput}
+                        value={cfgPctGes}
+                        onChange={e => setCfgPctGes(e.target.value)}
+                        placeholder="0"
+                      />
+                    </label>
+                  </div>
+                </div>
+
+                {pctInvalido && (
+                  <p className={styles.cobroValidacion}>
+                    La suma de porcentajes ({sumaPct}%) no puede superar 100%.
+                  </p>
+                )}
+
+                {/* Desglose en vivo */}
+                <table className={styles.cobroTabla}>
+                  <tbody>
+                    <tr>
+                      <td className={styles.cobroTd}>Monto empresa ({pctEmp || 0}%)</td>
+                      <td className={styles.cobroTdNum}>{formatCOP(montoEmp)}</td>
+                    </tr>
+                    <tr>
+                      <td className={styles.cobroTd}>
+                        Monto gestor ({pctGes || 0}%)
+                        {!roomTraeGestor && (
+                          <span className={styles.cobroSinGestor}> · solo si la consulta trae gestor</span>
+                        )}
+                      </td>
+                      <td className={styles.cobroTdNum}>{formatCOP(montoGes)}</td>
+                    </tr>
+                    <tr className={styles.cobroTrPaga}>
+                      <td className={styles.cobroTd}>El profesional paga (empresa + gestor)</td>
+                      <td className={styles.cobroTdNum}>{formatCOP(pagaPro)}</td>
+                    </tr>
+                    <tr>
+                      <td className={styles.cobroTd}>El profesional se queda</td>
+                      <td className={styles.cobroTdNum}>{formatCOP(quedaPro)}</td>
+                    </tr>
+                  </tbody>
+                </table>
+
+                {!roomTraeGestor && (
+                  <p className={styles.cobroNota}>
+                    Esta consulta no proviene de un gestor: el monto gestor será $0.
+                  </p>
+                )}
+
+                {pagoError && (
+                  <p className={styles.cobroValidacion} role="alert">{pagoError}</p>
+                )}
+
+                <div className={styles.confirmActions}>
+                  <button
+                    type="button"
+                    className={styles.confirmCancel}
+                    onClick={() => setCobroModalOpen(false)}
+                    disabled={pagoGenerando}
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    className={styles.confirmConfirm}
+                    onClick={handleGenerarCobro}
+                    disabled={pagoGenerando || pctInvalido || !(total > 0)}
+                  >
+                    {pagoGenerando ? 'Generando…' : 'Confirmar cobro'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )
+        })(),
+        document.body
+      )}
 
       {/* ── Modal de confirmación: Enviar fichas de contacto ──
           Portal a <body>: así el position:fixed se ancla al viewport y no a

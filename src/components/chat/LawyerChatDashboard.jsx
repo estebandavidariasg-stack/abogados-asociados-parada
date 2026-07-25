@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react'
 import { supabase, getAuthHeaders } from '../../lib/supabase'
 
-// Modal de ubicar firma → PDF (lazy: pdf.js solo baja al usarlo).
+// Modal de ubicar firma â†’ PDF (lazy: pdf.js solo baja al usarlo).
 const UbicarFirma = lazy(() => import('../firma/UbicarFirma'))
 import { contieneContacto } from '../../lib/validaciones'
 import styles from './LawyerChatDashboard.module.css'
@@ -9,7 +9,7 @@ import AudioPlayer from './AudioPlayer'
 import { ChatImage, openChatFile } from '../../lib/chatFiles'
 import { IconPaperclip, IconMic, IconFirma } from '../shared/Icons'
 import { pedirIA } from '../../lib/aiClient'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
 import Markdown from '../shared/Markdown'
 import EnviarAFirmar from '../firma/EnviarAFirmar'
 import { firmantesPendientes } from '../../lib/firmaService'
@@ -21,7 +21,7 @@ function parseFirma(content) {
 function parseFirmaOk(content) {
   try { const o = JSON.parse(content); return o?.t === 'firma_ok' ? o : null } catch { return null }
 }
-// Texto de vista previa del último mensaje en el sidebar (evita mostrar el JSON
+// Texto de vista previa del Ãºltimo mensaje en el sidebar (evita mostrar el JSON
 // crudo de los mensajes de firma).
 function previewMsg(m) {
   if (m?.message_type === 'firma') return 'Documento para firmar'
@@ -34,7 +34,7 @@ function isImage(name) {
   return /\.(jpe?g|png|webp|gif|bmp|svg)$/i.test(name || '')
 }
 
-// Renderiza **negrillas** estilo markdown conservando los saltos de línea.
+// Renderiza **negrillas** estilo markdown conservando los saltos de lÃ­nea.
 function renderMensaje(text) {
   if (text == null) return text
   return String(text).split(/(\*\*[^*\n]+\*\*)/g).map((parte, i) => {
@@ -46,13 +46,13 @@ function renderMensaje(text) {
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
 
-/* ─────────────────────────────────────────────
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
    Formatear fecha para el sidebar
-   · Si es hoy → solo hora "14:32"
-   · Si es ayer → "Ayer"
-   · Si es esta semana → "lun", "mar"…
-   · Si es más antiguo → "12 ene"
-───────────────────────────────────────────── */
+   Â· Si es hoy â†’ solo hora "14:32"
+   Â· Si es ayer â†’ "Ayer"
+   Â· Si es esta semana â†’ "lun", "mar"â€¦
+   Â· Si es mÃ¡s antiguo â†’ "12 ene"
+â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 function fmtSidebar(ts) {
   if (!ts) return ''
   const d   = new Date(ts)
@@ -93,13 +93,34 @@ function formatSize(bytes) {
 const STATUS_LABEL = { waiting: 'En espera', active: 'Activo', closed: 'Cerrado' }
 const STATUS_COLOR = { waiting: '#e6a817', active: '#4caf50', closed: '#666' }
 
-/* ── Mapa de "última vez visto" por sala (estilo WhatsApp) ──────────────────
+// Normaliza texto para bÃºsqueda: sin tildes, minÃºsculas. AsÃ­ "MarÃ­a" matchea
+// con "maria" y "PeÃ±a" con "pena".
+function normaliza(s) {
+  return (s || '')
+    .toString()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .trim()
+}
+
+// Ãcono de lupa (buscador) â€” reutiliza el lenguaje visual del panel admin.
+function IconLupa() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" />
+      <path d="m20 20-3.2-3.2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+/* â”€â”€ Mapa de "Ãºltima vez visto" por sala (estilo WhatsApp) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
    Persistido en localStorage por usuario. Sin columna `seen_at` en la BD,
-   así que cada navegador lleva su propio estado — basta para el caso de uso
+   asÃ­ que cada navegador lleva su propio estado â€” basta para el caso de uso
    (un abogado revisando sus chats). Si en el futuro se necesita sync entre
    dispositivos, migrar a tabla en Supabase.
-   markSeen sólo avanza, nunca retrocede: evita que un fetch viejo pise un
-   mark más reciente cuando llegan datos fuera de orden. */
+   markSeen sÃ³lo avanza, nunca retrocede: evita que un fetch viejo pise un
+   mark mÃ¡s reciente cuando llegan datos fuera de orden. */
 function readSeen(uid) {
   if (!uid) return {}
   try { return JSON.parse(localStorage.getItem(`chat_seen_${uid}`) || '{}') }
@@ -118,6 +139,7 @@ function markSeen(uid, roomId, ts) {
 }
 
 export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false }) {
+  const prefersReducedMotion = useReducedMotion()
   const [rooms,       setRooms]       = useState([])
   const [activeRoom,  setActiveRoom]  = useState(null)
   const [messages,    setMessages]    = useState([])
@@ -130,9 +152,9 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
   const [sendingVerificar, setSendingVerificar] = useState(false)
   const [contactoBlocked, setContactoBlocked] = useState(false)
   const [canDownload, setCanDownload] = useState(canDownloadFiles)
-  // Salas a las que ya se les solicitó revisión en esta sesión. No hay
-  // columna en BD para persistirlo, así que es estado por-navegador: basta
-  // para evitar reenvíos accidentales y mostrar el tag "Revisión solicitada".
+  // Salas a las que ya se les solicitÃ³ revisiÃ³n en esta sesiÃ³n. No hay
+  // columna en BD para persistirlo, asÃ­ que es estado por-navegador: basta
+  // para evitar reenvÃ­os accidentales y mostrar el tag "RevisiÃ³n solicitada".
   const [verifiedRooms, setVerifiedRooms] = useState(() => new Set())
   const [rating,      setRating]      = useState(0)
   const [showRating,  setShowRating]  = useState(false)
@@ -142,12 +164,19 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
   const [iaTipo, setIaTipo]           = useState('resumen')
   const [iaCopiado, setIaCopiado]     = useState(false)
 
+  // â”€â”€ Filtros del sidebar (bÃºsqueda por nombre + rango de fechas) â”€â”€
+  // Estado en el componente padre â†’ los inputs se renderizan inline y no
+  // pierden el foco al teclear (no se remontan).
+  const [buscar,      setBuscar]      = useState('')
+  const [fechaDesde,  setFechaDesde]  = useState('')
+  const [fechaHasta,  setFechaHasta]  = useState('')
+
   const fileRef   = useRef(null)
   const mensajesRef = useRef(null)
   const lastCountRef = useRef(0)
   const pollRooms = useRef(null)
 
-  // ── Voz ──────────────────────────────────────────────────────────────────
+  // â”€â”€ Voz â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const [recording, setRecording]           = useState(false)
   const [recordingTime, setRecordingTime]   = useState(0)
   const [uploadingAudio, setUploadingAudio] = useState(false)
@@ -155,7 +184,7 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
   const audioChunksRef    = useRef([])
   const recordingTimerRef = useRef(null)
 
-  // ── Toast visual (reemplaza alert() del navegador al click de archivo) ──
+  // â”€â”€ Toast visual (reemplaza alert() del navegador al click de archivo) â”€â”€
   const [toast, setToast] = useState(null)
   useEffect(() => {
     if (!toast) return
@@ -163,9 +192,9 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
     return () => clearTimeout(t)
   }, [toast])
 
-  // Al desmontar con una grabación activa: libera el micrófono y el timer.
+  // Al desmontar con una grabaciÃ³n activa: libera el micrÃ³fono y el timer.
   // Sin esto el indicador de mic del navegador quedaba encendido y el interval
-  // seguía corriendo si el profesional navegaba a mitad de grabación.
+  // seguÃ­a corriendo si el profesional navegaba a mitad de grabaciÃ³n.
   useEffect(() => () => {
     clearInterval(recordingTimerRef.current)
     const r = mediaRecorderRef.current
@@ -175,7 +204,7 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
     }
   }, [])
 
-  // Polling del permiso de descarga — se actualiza sin recargar si el admin lo cambia
+  // Polling del permiso de descarga â€” se actualiza sin recargar si el admin lo cambia
   useEffect(() => {
     if (!lawyerId) return
     async function fetchPermiso() {
@@ -190,16 +219,16 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
       } catch { /* silencioso */ }
     }
     fetchPermiso()
-    // Pausar el polling cuando la pestaña está oculta: no malgastar queries
-    // contra la BD si el profesional no está mirando.
+    // Pausar el polling cuando la pestaÃ±a estÃ¡ oculta: no malgastar queries
+    // contra la BD si el profesional no estÃ¡ mirando.
     const interval = setInterval(() => { if (!document.hidden) fetchPermiso() }, 60_000)
     return () => clearInterval(interval)
   }, [lawyerId])
 
-  // ── Lightbox para imágenes (click en thumbnail = abrir fullscreen) ──
+  // â”€â”€ Lightbox para imÃ¡genes (click en thumbnail = abrir fullscreen) â”€â”€
   const [lightbox, setLightbox] = useState(null)
   const [firmaOpen, setFirmaOpen] = useState(false)
-  const [adjuntarMenu, setAdjuntarMenu] = useState(false)  // menú del clip
+  const [adjuntarMenu, setAdjuntarMenu] = useState(false)  // menÃº del clip
   const [dragging, setDragging] = useState(false)          // arrastrar-soltar
   const [ubicarFirma, setUbicarFirma] = useState(null)     // payload firma_ok para ubicar
 
@@ -253,12 +282,12 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
     return () => document.removeEventListener('keydown', onKey)
   }, [lightbox])
 
-  // ── Cerrar modales de confirmación con Escape ──
+  // â”€â”€ Cerrar modales de confirmaciÃ³n con Escape â”€â”€
   useEffect(() => {
     if (!confirmClose && !confirmVerificar && !showRating && !contactoBlocked) return
     const onKey = (e) => {
       if (e.key !== 'Escape') return
-      if (sendingVerificar || closing) return   // no cerrar a media petición
+      if (sendingVerificar || closing) return   // no cerrar a media peticiÃ³n
       setConfirmClose(false)
       setConfirmVerificar(false)
       setShowRating(false)
@@ -269,7 +298,7 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
     return () => document.removeEventListener('keydown', onKey)
   }, [confirmClose, confirmVerificar, showRating, contactoBlocked, sendingVerificar, closing])
 
-  /* ── Cargar salas ── */
+  /* â”€â”€ Cargar salas â”€â”€ */
   const fetchRooms = useCallback(async () => {
     if (!lawyerId) return
     try {
@@ -282,7 +311,7 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
     )
     const assignments = await aRes.json()
     // Respuesta de error (401 en el borde del refresh, 5xx): conservar el
-    // sidebar actual en vez de vaciarlo — solo un [] legítimo lo limpia.
+    // sidebar actual en vez de vaciarlo â€” solo un [] legÃ­timo lo limpia.
     if (!Array.isArray(assignments)) { setLoadingRooms(false); return }
     if (assignments.length === 0) {
       setRooms([])
@@ -290,11 +319,11 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
       return
     }
 
-    // 2. Obtener datos de esas salas — orden descendente por created_at.
-    //    Las asignaciones nunca se podan, así que el in.() se trocea en lotes
-    //    de 150 ids (una URL con cientos de UUIDs supera el límite del gateway
-    //    y el fetch falla entero) y el sidebar se acota a las 200 salas más
-    //    recientes — las más antiguas siguen en el Historial del admin.
+    // 2. Obtener datos de esas salas â€” orden descendente por created_at.
+    //    Las asignaciones nunca se podan, asÃ­ que el in.() se trocea en lotes
+    //    de 150 ids (una URL con cientos de UUIDs supera el lÃ­mite del gateway
+    //    y el fetch falla entero) y el sidebar se acota a las 200 salas mÃ¡s
+    //    recientes â€” las mÃ¡s antiguas siguen en el Historial del admin.
     const allIds = assignments.map(a => a.room_id)
     const idLotes = []
     for (let i = 0; i < allIds.length; i += 150) idLotes.push(allIds.slice(i, i + 150))
@@ -308,26 +337,26 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
     }))
     if (chunkResults.some(c => !Array.isArray(c))) { setLoadingRooms(false); return }
     // El cap de 200 NUNCA debe ocultar una sala abierta: se conservan TODAS
-    // las waiting/active (el trabajo abierto de un profesional está acotado
-    // por naturaleza) y se completa con las cerradas más recientes.
+    // las waiting/active (el trabajo abierto de un profesional estÃ¡ acotado
+    // por naturaleza) y se completa con las cerradas mÃ¡s recientes.
     const flat = chunkResults.flat()
     const abiertas = flat.filter(r => r.status !== 'closed')
     const cerradas = flat.filter(r => r.status === 'closed')
       .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
     const roomData = [...abiertas, ...cerradas].slice(0, Math.max(200, abiertas.length))
 
-    // 3. Últimos 50 mensajes por sala — uno solo bastaba para mostrar la
-    //    preview, pero también necesitamos contar cuántos del cliente quedaron
-    //    sin respuesta. Recorremos desc desde el último; paramos al ver un
+    // 3. Ãšltimos 50 mensajes por sala â€” uno solo bastaba para mostrar la
+    //    preview, pero tambiÃ©n necesitamos contar cuÃ¡ntos del cliente quedaron
+    //    sin respuesta. Recorremos desc desde el Ãºltimo; paramos al ver un
     //    mensaje del abogado y lo previo es el "unread" (mensajes que llegaron
-    //    desde la última vez que respondí). 50 cubre la gran mayoría de salas
+    //    desde la Ãºltima vez que respondÃ­). 50 cubre la gran mayorÃ­a de salas
     //    sin disparar latencia por payload.
     const seenMap    = readSeen(lawyerId)
     const lastMsgMap = {}
     const unreadMap  = {}
     // UNA sola query con los mensajes recientes de TODAS las salas. Antes era
-    // 1 query por sala → N+1 disparado cada 6s. Agrupamos en memoria y
-    // aplicamos el mismo algoritmo de no-leídos por sala. El tope global de
+    // 1 query por sala â†’ N+1 disparado cada 6s. Agrupamos en memoria y
+    // aplicamos el mismo algoritmo de no-leÃ­dos por sala. El tope global de
     // 1000 cubre de sobra la actividad reciente; una sala muy vieja sin
     // mensajes dentro de ese tope queda sin preview pero igual se lista.
     const recentIds = roomData.map(r => r.id).join(',')
@@ -348,7 +377,7 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
         const msgs = byRoom[room.id]
         if (!msgs || msgs.length === 0) continue
         lastMsgMap[room.id] = msgs[0]
-        // Cuenta msgs del cliente posteriores al último "visto"; el break en
+        // Cuenta msgs del cliente posteriores al Ãºltimo "visto"; el break en
         // 'lawyer' resetea el contador (cualquier respuesta nuestra lo limpia).
         const seenAt = seenMap[room.id] ? new Date(seenMap[room.id]).getTime() : 0
         let unread = 0
@@ -362,7 +391,7 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
       }
     }
 
-    // 4. Mezclar estado de asignación con datos de sala
+    // 4. Mezclar estado de asignaciÃ³n con datos de sala
     const enriched = roomData.map(room => {
       const assignment = assignments.find(a => a.room_id === room.id)
       return {
@@ -373,8 +402,8 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
       }
     })
 
-    // Orden puro por última actividad (mensaje más reciente, o creación si
-    // aún no hay mensajes). Sin agrupar por status — antes "waiting" caía
+    // Orden puro por Ãºltima actividad (mensaje mÃ¡s reciente, o creaciÃ³n si
+    // aÃºn no hay mensajes). Sin agrupar por status â€” antes "waiting" caÃ­a
     // debajo de todas las activas y obligaba a hacer scroll.
     enriched.sort((a, b) => {
       const ta = new Date(a.lastMsg?.created_at || a.created_at).getTime()
@@ -385,7 +414,7 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
     setRooms(enriched)
     setLoadingRooms(false)
     } catch (_) {
-      // Red caída a mitad del poll: conserva el sidebar visible; el próximo
+      // Red caÃ­da a mitad del poll: conserva el sidebar visible; el prÃ³ximo
       // tick (20s) o el visibilitychange reintentan.
       setLoadingRooms(false)
     }
@@ -393,9 +422,9 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
 
   useEffect(() => {
     fetchRooms()
-    // Sidebar por poll (lento, pausado con la pestaña oculta) + refresco al
-    // volver. La sala ABIERTA se actualiza al instante por Realtime; las demás
-    // (preview/badge) refrescan cada 20s — basta para chats que no miras.
+    // Sidebar por poll (lento, pausado con la pestaÃ±a oculta) + refresco al
+    // volver. La sala ABIERTA se actualiza al instante por Realtime; las demÃ¡s
+    // (preview/badge) refrescan cada 20s â€” basta para chats que no miras.
     pollRooms.current = setInterval(() => { if (!document.hidden) fetchRooms() }, 20000)
     const onVisible = () => { if (!document.hidden) fetchRooms() }
     document.addEventListener('visibilitychange', onVisible)
@@ -405,26 +434,26 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
     }
   }, [fetchRooms])
 
-  /* ── Cargar mensajes de la sala activa ── */
+  /* â”€â”€ Cargar mensajes de la sala activa â”€â”€ */
   const activeRoomIdRef = useRef(null)
   const fetchMessages = useCallback(async () => {
     const rid = activeRoomIdRef.current
     if (!rid) return
     try {
       const headers = await getAuthHeaders()
-      // Últimos 300 en vez del historial completo: en salas largas/reabiertas
-      // el historial entero se re-transfería tras cada envío. El índice
+      // Ãšltimos 300 en vez del historial completo: en salas largas/reabiertas
+      // el historial entero se re-transferÃ­a tras cada envÃ­o. El Ã­ndice
       // (room_id, created_at) sirve el desc+limit directo.
       const res = await fetch(
         `${SUPABASE_URL}/rest/v1/chat_messages?room_id=eq.${rid}&order=created_at.desc&limit=300&select=*`,
         { headers }
       )
       const data = await res.json()
-      // Respuesta tardía de una sala que ya no está abierta (cambio rápido de
+      // Respuesta tardÃ­a de una sala que ya no estÃ¡ abierta (cambio rÃ¡pido de
       // sala): descartar para no pintar mensajes bajo el encabezado equivocado.
       if (activeRoomIdRef.current !== rid) return
       if (Array.isArray(data)) setMessages(data.reverse())
-    } catch (_) { /* red caída: conserva lo visible; realtime/visibilitychange resincronizan */ }
+    } catch (_) { /* red caÃ­da: conserva lo visible; realtime/visibilitychange resincronizan */ }
   }, [])
 
   useEffect(() => {
@@ -433,8 +462,8 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
     if (!rid) return
     fetchMessages()   // historial al abrir la sala
     // Realtime: mensajes nuevos de ESTA sala (reemplaza el poll de 3s). Una
-    // sola suscripción y solo mientras hay un chat abierto → barata en cupo
-    // de Realtime. El status de la sala (cierre) también llega al instante.
+    // sola suscripciÃ³n y solo mientras hay un chat abierto â†’ barata en cupo
+    // de Realtime. El status de la sala (cierre) tambiÃ©n llega al instante.
     // Deps por ID (no por objeto): los UPDATE de chat_rooms mutan el objeto
     // activeRoom pero no deben destruir/recrear el WebSocket.
     let first = true
@@ -442,22 +471,22 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages', filter: `room_id=eq.${rid}` },
         p => {
           setMessages(prev => prev.find(m => m.id === p.new.id) ? prev : [...prev, p.new])
-          // Aviso flotante: el cliente terminó de firmar el documento.
+          // Aviso flotante: el cliente terminÃ³ de firmar el documento.
           if (p.new.message_type === 'firma_ok' && p.new.sender_type === 'client') {
-            setToast('✅ El cliente firmó el documento')
+            setToast('âœ… El cliente firmÃ³ el documento')
           }
         })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'chat_rooms', filter: `id=eq.${rid}` },
         p => setActiveRoom(prev => (prev && prev.id === p.new.id) ? { ...prev, ...p.new } : prev))
       .subscribe(st => {
-        // Tras una reconexión automática del WS, re-sincroniza lo perdido
+        // Tras una reconexiÃ³n automÃ¡tica del WS, re-sincroniza lo perdido
         // durante el corte (fetchMessages deduplica por id).
         if (st === 'SUBSCRIBED') {
           if (first) { first = false; return }
           fetchMessages()
         }
       })
-    // Red de seguridad ante hipos del WS: re-sincroniza al volver a la pestaña.
+    // Red de seguridad ante hipos del WS: re-sincroniza al volver a la pestaÃ±a.
     const onVisible = () => { if (!document.hidden) fetchMessages() }
     document.addEventListener('visibilitychange', onVisible)
     return () => {
@@ -466,7 +495,7 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
     }
   }, [activeRoom?.id, fetchMessages])
 
-  /* ── Scroll al fondo SOLO cuando el conteo cambia (no en cada poll) ── */
+  /* â”€â”€ Scroll al fondo SOLO cuando el conteo cambia (no en cada poll) â”€â”€ */
   useEffect(() => {
     if (messages.length === lastCountRef.current) return
     lastCountRef.current = messages.length
@@ -474,13 +503,13 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
     if (c) c.scrollTop = c.scrollHeight
   }, [messages])
 
-  /* ── Reset de contador al cambiar de sala ── */
+  /* â”€â”€ Reset de contador al cambiar de sala â”€â”€ */
   useEffect(() => {
     lastCountRef.current = 0
   }, [activeRoom?.id])
 
-  /* ── Mantén el "visto" al día mientras la sala está abierta ──────────────
-     Si llegan mensajes nuevos por polling mientras estás dentro, avanzan el
+  /* â”€â”€ MantÃ©n el "visto" al dÃ­a mientras la sala estÃ¡ abierta â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+     Si llegan mensajes nuevos por polling mientras estÃ¡s dentro, avanzan el
      timestamp visto. Al cambiar a otra sala y volver, el badge sigue en 0.
      Solo se "incrementa" cuando entren mensajes ya con la sala cerrada. */
   useEffect(() => {
@@ -489,12 +518,12 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
     if (latest) markSeen(lawyerId, activeRoom.id, latest.created_at)
   }, [messages, activeRoom?.id, lawyerId])
 
-  /* ── Seleccionar sala y marcar como activo si estaba en espera ── */
+  /* â”€â”€ Seleccionar sala y marcar como activo si estaba en espera â”€â”€ */
   async function selectRoom(room) {
-    // Marca como visto inmediatamente — el badge de "no leídos" desaparece
+    // Marca como visto inmediatamente â€” el badge de "no leÃ­dos" desaparece
     // al abrir y NO vuelve hasta que llegue un mensaje nuevo (como WhatsApp).
-    // Usamos el timestamp del último msg conocido si lo tenemos; el effect
-    // sobre `messages` lo refinará con el timestamp real más reciente.
+    // Usamos el timestamp del Ãºltimo msg conocido si lo tenemos; el effect
+    // sobre `messages` lo refinarÃ¡ con el timestamp real mÃ¡s reciente.
     markSeen(lawyerId, room.id, room.lastMsg?.created_at)
     setRooms(prev => prev.map(r => r.id === room.id ? { ...r, unreadCount: 0 } : r))
 
@@ -530,10 +559,10 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
     }
   }
 
-  /* ── Enviar mensaje ── */
+  /* â”€â”€ Enviar mensaje â”€â”€ */
   async function enviar() {
     if (!input.trim() || sending || !activeRoom) return
-    // ── Bloqueo de datos de contacto (teléfono / correo) ──
+    // â”€â”€ Bloqueo de datos de contacto (telÃ©fono / correo) â”€â”€
     if (contieneContacto(input.trim())) { setContactoBlocked(true); return }
     setSending(true)
     try {
@@ -549,19 +578,19 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
         }),
       })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      // Solo limpiar tras confirmar el insert — si falló, el texto se conserva
-      // para reintentar (antes se perdía en silencio).
+      // Solo limpiar tras confirmar el insert â€” si fallÃ³, el texto se conserva
+      // para reintentar (antes se perdÃ­a en silencio).
       setInput('')
       fetchMessages()
     } catch (_) {
-      setToast('No se pudo enviar el mensaje. Revisa tu conexión e intenta de nuevo.')
+      setToast('No se pudo enviar el mensaje. Revisa tu conexiÃ³n e intenta de nuevo.')
     } finally {
-      // Sin esto, un fallo de red dejaba el botón Enviar bloqueado para siempre.
+      // Sin esto, un fallo de red dejaba el botÃ³n Enviar bloqueado para siempre.
       setSending(false)
     }
   }
 
-  /* ── Subir archivo ── */
+  /* â”€â”€ Subir archivo â”€â”€ */
   async function handleFile(e) {
     const file = e.target.files?.[0]
     if (file) await subirArchivo(file)
@@ -589,7 +618,7 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
       )
       if (!upRes.ok) throw new Error('Error subiendo archivo')
 
-      // Generar URL firmada (7 días)
+      // Generar URL firmada (7 dÃ­as)
       const signRes = await fetch(
         `${SUPABASE_URL}/storage/v1/object/sign/chat-files/${path}`,
         {
@@ -622,7 +651,7 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
     }
   }
 
-  /* ── Grabación de voz (click toggle, igual que ChatSection) ─────────────── */
+  /* â”€â”€ GrabaciÃ³n de voz (click toggle, igual que ChatSection) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
   async function fixAudioDuration(blob) {
     return new Promise(resolve => {
       let done = false
@@ -632,7 +661,7 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
         try { URL.revokeObjectURL(audio.src) } catch {}
         resolve(blob)
       }
-      // Firefox a veces no dispara `timeupdate` tras el seek a 1e101 — timeout
+      // Firefox a veces no dispara `timeupdate` tras el seek a 1e101 â€” timeout
       // para no colgar el flujo de subida.
       const timer = setTimeout(finish, 1500)
 
@@ -682,7 +711,7 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
       setRecordingTime(0)
       recordingTimerRef.current = setInterval(() => setRecordingTime(t => t + 1), 1000)
     } catch (err) {
-      alert('No se pudo acceder al micrófono: ' + err.message)
+      alert('No se pudo acceder al micrÃ³fono: ' + err.message)
     }
   }
 
@@ -700,8 +729,8 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
       const ext  = mimeType.includes('ogg') ? 'ogg' : mimeType.includes('mp4') ? 'mp4' : 'webm'
       const path = `chats/${activeRoom.id}/audio_${Date.now()}.${ext}`
 
-      // Content-Type "limpio" — Firefox rechaza reproducir si lo guardamos
-      // con `audio/webm;codecs=opus` aunque el blob sí sea opus.
+      // Content-Type "limpio" â€” Firefox rechaza reproducir si lo guardamos
+      // con `audio/webm;codecs=opus` aunque el blob sÃ­ sea opus.
       const cleanMime = mimeType.split(';')[0] || 'audio/webm'
 
       // 1) Upload con JWT del usuario autenticado
@@ -718,7 +747,7 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
       }
 
       // 2) Insertar mensaje guardando el PATH (no signed URL).
-      //    AudioPlayer firma on-demand al reproducir → audio nunca expira.
+      //    AudioPlayer firma on-demand al reproducir â†’ audio nunca expira.
       const insHeaders = await getAuthHeaders()
       const insRes = await fetch(`${SUPABASE_URL}/rest/v1/chat_messages`, {
         method: 'POST',
@@ -746,7 +775,7 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
     }
   }
 
-  /* ── Cerrar sala (abogado) ── */
+  /* â”€â”€ Cerrar sala (abogado) â”€â”€ */
   async function closeRoom() {
     if (!activeRoom || closing) return
     setClosing(true)
@@ -759,7 +788,7 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
       })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
 
-      // Guardar calificación si la dio — best-effort: su fallo no debe
+      // Guardar calificaciÃ³n si la dio â€” best-effort: su fallo no debe
       // bloquear el cierre ya confirmado.
       if (rating > 0) {
         try {
@@ -775,7 +804,7 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
         } catch (_) { /* noop */ }
       }
 
-      // Programar el correo de reseña de la web (~5 min después, vía pg_cron) —
+      // Programar el correo de reseÃ±a de la web (~5 min despuÃ©s, vÃ­a pg_cron) â€”
       // best-effort: si falla, no bloquea el cierre. Requiere el correo del
       // cliente (capturado en el formulario de la consulta).
       if (activeRoom.client_email) {
@@ -799,38 +828,38 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
       setActiveRoom(null)
       fetchRooms()
     } catch (_) {
-      setToast('No se pudo cerrar la consulta. Revisa tu conexión e intenta de nuevo.')
+      setToast('No se pudo cerrar la consulta. Revisa tu conexiÃ³n e intenta de nuevo.')
     } finally {
-      // Sin esto, un fallo de red dejaba el botón atascado en "Cerrando…".
+      // Sin esto, un fallo de red dejaba el botÃ³n atascado en "Cerrandoâ€¦".
       setClosing(false)
     }
   }
 
-  /* ── Verificar: notificar al administrador para revisión de proceso ──
+  /* â”€â”€ Verificar: notificar al administrador para revisiÃ³n de proceso â”€â”€
      Inserta un mensaje en el canal interno (mensajes_internos) dirigido al
      superadmin. Reutiliza la infraestructura del chat interno: el admin lo
-     verá en AdminInternalChat como un mensaje del abogado. */
+     verÃ¡ en AdminInternalChat como un mensaje del abogado. */
   async function enviarVerificacion() {
     if (!activeRoom || sendingVerificar) return
     setSendingVerificar(true)
     try {
       // Endpoint seguro: valida server-side que soy el abogado asignado,
-      // registra la notificación para la campanita del admin, deja el mensaje
-      // en el chat interno y envía el correo. Ver api/verify-request.js.
+      // registra la notificaciÃ³n para la campanita del admin, deja el mensaje
+      // en el chat interno y envÃ­a el correo. Ver api/verify-request.js.
       const headers = await getAuthHeaders()
       const res = await fetch('/api/verify-request', {
         method: 'POST',
         headers,
         body: JSON.stringify({
           roomId:       activeRoom.id,
-          clientNombre: activeRoom.client_nombre || 'Anónimo',
+          clientNombre: activeRoom.client_nombre || 'AnÃ³nimo',
           area:         activeRoom.area_derecho || 'Consulta',
         }),
       })
       if (!res.ok) throw new Error('verify-request failed')
 
       setVerifiedRooms(prev => new Set(prev).add(activeRoom.id))
-      setToast('Solicitud de revisión enviada al administrador.')
+      setToast('Solicitud de revisiÃ³n enviada al administrador.')
     } catch (err) {
       setToast('No se pudo enviar la solicitud. Intenta de nuevo.')
     } finally {
@@ -846,41 +875,118 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
       .map(m => `${m.sender_type === 'client' ? 'Cliente' : 'Profesional'}: ${m.content || ''}`)
       .join('\n')
     const instruccion = tipo === 'analisis'
-      ? `Analiza este caso para el profesional (área, hechos, pretensión, riesgos, próximos pasos).\n\nTranscripción:\n${transcripcion}`
-      : `Resume esta consulta para el profesional en pocas líneas (área, hechos clave y qué busca el cliente).\n\nTranscripción:\n${transcripcion}`
+      ? `Analiza este caso para el profesional (Ã¡rea, hechos, pretensiÃ³n, riesgos, prÃ³ximos pasos).\n\nTranscripciÃ³n:\n${transcripcion}`
+      : `Resume esta consulta para el profesional en pocas lÃ­neas (Ã¡rea, hechos clave y quÃ© busca el cliente).\n\nTranscripciÃ³n:\n${transcripcion}`
     const { Authorization } = await getAuthHeaders()
     const { ok, data } = await pedirIA(
       { modo: 'abogado', mensajes: [{ role: 'user', content: instruccion }], roomId: activeRoom.id, accion: tipo },
       { authHeader: Authorization }
     )
-    setIaResultado(ok && data?.reply ? data.reply : (data?.mensaje || 'El asistente no está disponible ahora.'))
+    setIaResultado(ok && data?.reply ? data.reply : (data?.mensaje || 'El asistente no estÃ¡ disponible ahora.'))
     setIaCargando(false)
   }
 
   const hasVideos = activeRoom && messages.some(m => m.message_type === 'video_call')
 
+  // Luz verde: el pago de la consulta habilita descargas y datos de contacto,
+  // ademÃ¡s del permiso global por polÃ­ticas (profiles.puede_descargar_archivos).
+  const pagoConfirmado = !!activeRoom?.pago_confirmado
+  const puedeDescargarSala = canDownload || pagoConfirmado
+
+  // â”€â”€ Filtrado en cliente sobre las salas ya cargadas â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // Nombre (sin tildes/case-insensitive) + rango de fechas por Ãºltima actividad
+  // (o creaciÃ³n si aÃºn no hay mensajes) â€” el mismo timestamp que ordena la lista.
+  const buscarNorm = normaliza(buscar)
+  const desdeTs = fechaDesde ? new Date(`${fechaDesde}T00:00:00`).getTime() : null
+  const hastaTs = fechaHasta ? new Date(`${fechaHasta}T23:59:59.999`).getTime() : null
+  const filtroActivo = !!(buscar.trim() || fechaDesde || fechaHasta)
+  const filteredRooms = rooms.filter(room => {
+    if (buscarNorm && !normaliza(room.client_nombre).includes(buscarNorm)) return false
+    if (desdeTs || hastaTs) {
+      const ts = new Date(room.lastMsg?.created_at || room.created_at).getTime()
+      if (desdeTs && ts < desdeTs) return false
+      if (hastaTs && ts > hastaTs) return false
+    }
+    return true
+  })
+
   return (
     <div className={`${styles.dashboard} ${activeRoom ? styles.dashboardChatOpen : ''}`}>
 
-      {/* ── Sidebar de salas ── */}
+      {/* â”€â”€ Sidebar de salas â”€â”€ */}
       <div className={styles.sidebar}>
         <div className={styles.sidebarHeader}>
           <p className={styles.sidebarTitle}>Consultas activas</p>
           <p className={styles.sidebarSub}>Ordenadas por actividad reciente</p>
         </div>
 
+        {/* â”€â”€ Barra de filtros: buscar por cliente + rango de fechas â”€â”€ */}
+        <div className={styles.filterBar}>
+          <div className={styles.searchBox}>
+            <span className={styles.searchIcon}><IconLupa /></span>
+            <input
+              className={styles.searchInput}
+              type="text"
+              placeholder="Buscar por clienteâ€¦"
+              value={buscar}
+              onChange={e => setBuscar(e.target.value)}
+              aria-label="Buscar consulta por nombre del cliente"
+            />
+            {buscar && (
+              <button
+                type="button"
+                className={styles.searchClear}
+                onClick={() => setBuscar('')}
+                aria-label="Limpiar bÃºsqueda"
+              >âœ•</button>
+            )}
+          </div>
+          <div className={styles.dateRow}>
+            <label className={styles.dateField}>
+              <span>Desde</span>
+              <input
+                className={styles.dateInput}
+                type="date"
+                value={fechaDesde}
+                max={fechaHasta || undefined}
+                onChange={e => setFechaDesde(e.target.value)}
+              />
+            </label>
+            <label className={styles.dateField}>
+              <span>Hasta</span>
+              <input
+                className={styles.dateInput}
+                type="date"
+                value={fechaHasta}
+                min={fechaDesde || undefined}
+                onChange={e => setFechaHasta(e.target.value)}
+              />
+            </label>
+            {filtroActivo && (
+              <button
+                type="button"
+                className={styles.clearAll}
+                onClick={() => { setBuscar(''); setFechaDesde(''); setFechaHasta('') }}
+              >Limpiar</button>
+            )}
+          </div>
+        </div>
+
         <div>
-          {loadingRooms && <p className={styles.empty}>Cargando…</p>}
+          {loadingRooms && <p className={styles.empty}>Cargandoâ€¦</p>}
           {!loadingRooms && rooms.length === 0 && (
-            <p className={styles.sinSalas}>No tienes consultas asignadas aún.</p>
+            <p className={styles.sinSalas}>No tienes consultas asignadas aÃºn.</p>
+          )}
+          {!loadingRooms && rooms.length > 0 && filteredRooms.length === 0 && (
+            <p className={styles.sinSalas}>Ninguna consulta coincide con el filtro.</p>
           )}
 
-          {rooms.map(room => {
+          {filteredRooms.map(room => {
             const isActive = activeRoom?.id === room.id
             const lastTs   = room.lastMsg?.created_at || room.created_at
-            // Ocultamos el badge mientras la sala está abierta — sigue
+            // Ocultamos el badge mientras la sala estÃ¡ abierta â€” sigue
             // siendo el conteo correcto, pero distrae al estar viendo el
-            // chat. Se reseteará naturalmente al responder.
+            // chat. Se resetearÃ¡ naturalmente al responder.
             const showUnread = room.unreadCount > 0 && !isActive
 
             return (
@@ -889,22 +995,22 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
                 className={`${styles.roomRow} ${isActive ? styles.roomRowActive : ''} ${room.status === 'closed' ? styles.itemClosed : ''}`}
                 onClick={() => selectRoom(room)}
               >
-                {/* Ícono de área */}
-                <div className={styles.itemIcon}>⚖</div>
+                {/* Ãcono de Ã¡rea */}
+                <div className={styles.itemIcon}>âš–</div>
 
                 <div className={styles.itemInfo}>
-                  {/* Fila superior: NOMBRE del cliente + hora último mensaje */}
+                  {/* Fila superior: NOMBRE del cliente + hora Ãºltimo mensaje */}
                   <div className={styles.itemRow}>
-                    <span className={styles.itemNombre}>{room.client_nombre || 'Anónimo'}</span>
+                    <span className={styles.itemNombre}>{room.client_nombre || 'AnÃ³nimo'}</span>
                     <span className={styles.itemFecha}>{fmtSidebar(lastTs)}</span>
                   </div>
 
-                  {/* Fila media: último mensaje + badge unread + estado */}
+                  {/* Fila media: Ãºltimo mensaje + badge unread + estado */}
                   <div className={styles.itemRow}>
                     <span className={styles.itemUltimo}>
                       {room.lastMsg
                         ? room.lastMsg.sender_type === 'lawyer'
-                          ? `Tú: ${previewMsg(room.lastMsg)}`
+                          ? `TÃº: ${previewMsg(room.lastMsg)}`
                           : previewMsg(room.lastMsg)
                         : 'Nueva consulta'}
                     </span>
@@ -923,9 +1029,9 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
                     </span>
                   </div>
 
-                  {/* Fila inferior: área + fecha de inicio */}
+                  {/* Fila inferior: Ã¡rea + fecha de inicio */}
                   <div className={styles.itemInicio}>
-                    {room.area_derecho || 'Consulta'} · Inicio {fmtSidebar(room.created_at)}
+                    {room.area_derecho || 'Consulta'} Â· Inicio {fmtSidebar(room.created_at)}
                   </div>
                 </div>
               </button>
@@ -934,13 +1040,13 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
         </div>
       </div>
 
-      {/* ── Área de chat ── */}
+      {/* â”€â”€ Ãrea de chat â”€â”€ */}
       <div className={styles.main}>
         {!activeRoom ? (
           <div className={styles.placeholder}>
-            <span className={styles.placeholderIcon}>⚖</span>
+            <span className={styles.placeholderIcon}>âš–</span>
             <p className={styles.placeholderText}>Selecciona una consulta para responder</p>
-            <p className={styles.placeholderSub}>Los chats aparecen ordenados por más reciente</p>
+            <p className={styles.placeholderSub}>Los chats aparecen ordenados por mÃ¡s reciente</p>
           </div>
         ) : (
           <>
@@ -960,31 +1066,31 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
                 </button>
                 <p className={styles.chatTitle}>{activeRoom.area_derecho}</p>
                 <p className={styles.chatSubtitle}>
-                  Cliente · {activeRoom.client_nombre || 'Anónimo'}
-                  {activeRoom.ciudad ? ` · ${activeRoom.ciudad}` : ''}
+                  Cliente Â· {activeRoom.client_nombre || 'AnÃ³nimo'}
+                  {activeRoom.ciudad ? ` Â· ${activeRoom.ciudad}` : ''}
                   {activeRoom.created_at && (
-                    <span> · Inicio: {fmtHora(activeRoom.created_at)}</span>
+                    <span> Â· Inicio: {fmtHora(activeRoom.created_at)}</span>
                   )}
                 </p>
               </div>
 
-              {/* Acciones del header — solo cuando NO está el panel rating activo */}
+              {/* Acciones del header â€” solo cuando NO estÃ¡ el panel rating activo */}
               {activeRoom.status !== 'closed' && !showRating && (
                 <div className={styles.headerActions}>
                   {verifiedRooms.has(activeRoom.id)
-                    ? <span className={styles.verificadoTag}>✓ Revisión solicitada</span>
+                    ? <span className={styles.verificadoTag}>âœ“ RevisiÃ³n solicitada</span>
                     : <button
                         className={styles.btnVerificar}
                         onClick={() => setConfirmVerificar(true)}
-                        title="Notificar al administrador para revisión de proceso"
+                        title="Notificar al administrador para revisiÃ³n de proceso"
                       >
                         Verificar
                       </button>}
                   <button type="button" className={styles.btnVerificar} disabled={iaCargando} onClick={() => pedirResumenIA('resumen')}>
-                    {iaCargando ? '✨ Generando…' : '✨ Resumir con IA'}
+                    {iaCargando ? 'âœ¨ Generandoâ€¦' : 'âœ¨ Resumir con IA'}
                   </button>
                   <button type="button" className={styles.btnVerificar} disabled={iaCargando} onClick={() => pedirResumenIA('analisis')}>
-                    ✨ Analizar caso
+                    âœ¨ Analizar caso
                   </button>
                   <button className={styles.btnClose} onClick={() => setConfirmClose(true)}>
                     Finalizar consulta
@@ -993,10 +1099,54 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
               )}
             </div>
 
-            {/* Sala cerrada — banner */}
+            {/* Luz verde â€” pago confirmado habilita datos de contacto y descargas */}
+            {pagoConfirmado && (
+              <motion.div
+                initial={prefersReducedMotion ? false : { opacity: 0, y: -6 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.28, ease: 'easeOut' }}
+                role="status"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 10,
+                  padding: '10px 16px',
+                  background: 'linear-gradient(135deg, #f2f8f3 0%, #fbfdf9 100%)',
+                  borderTop: '1px solid rgba(46,125,76,0.2)',
+                  borderBottom: '1px solid rgba(46,125,76,0.2)',
+                  color: '#1f5e3c',
+                  fontSize: '0.86rem',
+                  lineHeight: 1.35,
+                }}
+              >
+                <span
+                  aria-hidden="true"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: 24,
+                    height: 24,
+                    borderRadius: '50%',
+                    background: 'linear-gradient(135deg, #2e9e5f 0%, #256a45 100%)',
+                    color: '#fff',
+                    fontWeight: 800,
+                    fontSize: 13,
+                    flexShrink: 0,
+                    boxShadow: '0 0 0 3px rgba(201,168,76,0.28)',
+                  }}
+                >âœ“</span>
+                <span>
+                  <strong style={{ color: '#0d2d5e' }}>Luz verde Â·</strong> Pago confirmado â€”
+                  datos de contacto y descarga de archivos habilitados.
+                </span>
+              </motion.div>
+            )}
+
+            {/* Sala cerrada â€” banner */}
             {activeRoom.status === 'closed' && (
               <div className={styles.closedBanner}>
-                Consulta finalizada · Solo lectura
+                Consulta finalizada Â· Solo lectura
               </div>
             )}
 
@@ -1012,11 +1162,11 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
                         <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: '#f2d580' }}>IA Parada Precise</span>
                         <strong style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: '1.2rem', fontWeight: 600 }}>
-                          {iaTipo === 'analisis' ? 'Análisis del caso' : 'Resumen de la consulta'}
+                          {iaTipo === 'analisis' ? 'AnÃ¡lisis del caso' : 'Resumen de la consulta'}
                         </strong>
                       </div>
                       <button type="button" onClick={() => setIaResultado(null)} disabled={iaCargando} aria-label="Cerrar"
-                        style={{ background: 'rgba(255,255,255,0.14)', border: 'none', color: '#fff', width: 32, height: 32, borderRadius: 8, cursor: iaCargando ? 'not-allowed' : 'pointer', fontSize: 16, lineHeight: 1, flexShrink: 0 }}>✕</button>
+                        style={{ background: 'rgba(255,255,255,0.14)', border: 'none', color: '#fff', width: 32, height: 32, borderRadius: 8, cursor: iaCargando ? 'not-allowed' : 'pointer', fontSize: 16, lineHeight: 1, flexShrink: 0 }}>âœ•</button>
                     </div>
                     <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: 18 }}>
                       {iaCargando ? (
@@ -1028,7 +1178,7 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
                               transition={{ duration: 1.1, repeat: Infinity, delay: i * 0.18 }}
                             />
                           ))}
-                          <span style={{ marginLeft: 6 }}>Generando…</span>
+                          <span style={{ marginLeft: 6 }}>Generandoâ€¦</span>
                         </div>
                       ) : <Markdown>{iaResultado}</Markdown>}
                     </div>
@@ -1036,7 +1186,7 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
                       <div style={{ padding: '12px 18px', borderTop: '1px solid #e1e8f2', display: 'flex', justifyContent: 'flex-end' }}>
                         <button type="button" onClick={() => { navigator.clipboard?.writeText(iaResultado); setIaCopiado(true); setTimeout(() => setIaCopiado(false), 1600) }}
                           style={{ background: 'linear-gradient(135deg,#f2d580,#c9a84c 55%,#9a7a2c)', color: '#0d2d5e', border: 'none', borderRadius: 8, padding: '8px 16px', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
-                          {iaCopiado ? 'Copiado ✓' : 'Copiar'}
+                          {iaCopiado ? 'Copiado âœ“' : 'Copiar'}
                         </button>
                       </div>
                     )}
@@ -1066,7 +1216,7 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
               )}
               {messages.length === 0 && (
                 <p className={styles.messagesEmpty}>
-                  No hay mensajes aún. Saluda al cliente para iniciar.
+                  No hay mensajes aÃºn. Saluda al cliente para iniciar.
                 </p>
               )}
               {messages.map((m, i) => {
@@ -1081,8 +1231,8 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
                   >
                     <div className={`${esMio ? styles.bubbleMine : styles.bubbleOther} ${isAudio ? styles.bubbleAudio : ''} ${isFirstClientMsg ? styles.bubbleFirst : ''} ${isImageMsg ? styles.bubbleImg : ''}`}>
                       {isAudio ? (
-                        // Color por rol: profesional (esMio) → player navy (theme light);
-                        // cliente → player dorado (theme dark).
+                        // Color por rol: profesional (esMio) â†’ player navy (theme light);
+                        // cliente â†’ player dorado (theme dark).
                         <AudioPlayer src={m.file_url} mine={true} theme={esMio ? 'light' : 'dark'} />
                       ) : (m.message_type === 'file' || m.file_url) ? (
                         isImage(m.file_name) ? (
@@ -1094,17 +1244,17 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
                             onOpen={setLightbox}
                             onBlocked={(e) => {
                               e.preventDefault()
-                              setToast('Por políticas de privacidad no puedes guardar esta imagen.')
+                              setToast('Por polÃ­ticas de privacidad no puedes guardar esta imagen.')
                             }}
                           />
                         ) : (
                           <button
                             className={styles.fileBtn}
-                            onClick={() => canDownload
+                            onClick={() => puedeDescargarSala
                               ? openChatFile(m.file_url)
-                              : setToast('Por políticas de privacidad no puedes descargar este archivo.')
+                              : setToast('Por polÃ­ticas de privacidad no puedes descargar este archivo.')
                             }
-                            title={canDownload ? 'Descargar archivo' : 'Archivo bloqueado por políticas de privacidad'}
+                            title={puedeDescargarSala ? 'Descargar archivo' : 'Archivo bloqueado por polÃ­ticas de privacidad'}
                           >
                             <IconPaperclip size={16} />
                             <span className={styles.fileName}>{m.file_name}</span>
@@ -1116,20 +1266,20 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
                           <span className={styles.firmaIcon}><IconFirma size={16} /></span>
                           <span className={`${styles.msgText} ${styles.firmaBody}`}>
                             <strong>Documento enviado para firma</strong>
-                            <span className={styles.firmaSub}>El cliente lo firmará desde el chat.</span>
+                            <span className={styles.firmaSub}>El cliente lo firmarÃ¡ desde el chat.</span>
                           </span>
                         </span>
                       ) : m.message_type === 'firma_ok' ? (
                         <span className={styles.firmaMsg}>
                           <span className={styles.firmaIcon}><IconFirma size={16} /></span>
                           <span className={`${styles.msgText} ${styles.firmaBody}`}>
-                            <strong>El cliente firmó el documento</strong>
+                            <strong>El cliente firmÃ³ el documento</strong>
                             <span className={styles.firmaDlRow}>
                               <button className={styles.firmaDlBtn} onClick={() => setUbicarFirma(parseFirmaOk(m.content))}>
                                 <IconFirma size={13} /> Ubicar firma y descargar PDF
                               </button>
                               <button className={styles.firmaDlBtnAlt} onClick={() => descargarCertificado(parseFirmaOk(m.content)?.solicitudId)}>
-                                ⬇ Certificado (PDF)
+                                â¬‡ Certificado (PDF)
                               </button>
                             </span>
                           </span>
@@ -1138,7 +1288,7 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
                         <p className={styles.msgText}>{renderMensaje(m.content)}</p>
                       )}
                       <p className={esMio ? styles.msgMetaMine : styles.msgMetaOther}>
-                        {esMio ? 'Tú' : 'Cliente'} · {fmtHora(m.created_at)}
+                        {esMio ? 'TÃº' : 'Cliente'} Â· {fmtHora(m.created_at)}
                       </p>
                     </div>
                   </div>
@@ -1146,7 +1296,7 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
               })}
             </div>
 
-            {/* Input — solo si la sala está abierta */}
+            {/* Input â€” solo si la sala estÃ¡ abierta */}
             {activeRoom.status !== 'closed' && (
               <div className={styles.inputBar}>
                 <div className={styles.attachWrap}>
@@ -1158,7 +1308,7 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
                     aria-haspopup="menu"
                     aria-expanded={adjuntarMenu}
                   >
-                    {uploading ? '…' : <IconPaperclip size={15} />}
+                    {uploading ? 'â€¦' : <IconPaperclip size={15} />}
                   </button>
                   {adjuntarMenu && (
                     <>
@@ -1195,7 +1345,7 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
                 <input
                   className={styles.chatInput}
                   type="text"
-                  placeholder="Responde al cliente…"
+                  placeholder="Responde al clienteâ€¦"
                   value={input}
                   onChange={e => setInput(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && !e.shiftKey && enviar()}
@@ -1213,7 +1363,7 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
         )}
       </div>
 
-      {/* ── Modal: ubicar la firma y descargar PDF ── */}
+      {/* â”€â”€ Modal: ubicar la firma y descargar PDF â”€â”€ */}
       {ubicarFirma && (
         <Suspense fallback={null}>
           <UbicarFirma
@@ -1226,7 +1376,7 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
         </Suspense>
       )}
 
-      {/* ── Modal: enviar documento a firmar (chat) ── */}
+      {/* â”€â”€ Modal: enviar documento a firmar (chat) â”€â”€ */}
       {firmaOpen && activeRoom && (
         <EnviarAFirmar
           modo="chat"
@@ -1242,7 +1392,7 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
         />
       )}
 
-      {/* ── Modal: datos de contacto bloqueados ── */}
+      {/* â”€â”€ Modal: datos de contacto bloqueados â”€â”€ */}
       {contactoBlocked && (
         <div
           className={styles.modalOverlay}
@@ -1260,8 +1410,8 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
             </div>
             <h3 id="modalContactoTitle" className={styles.modalTitle}>No puedes compartir datos de contacto</h3>
             <p className={styles.modalText}>
-              Por seguridad, no está permitido enviar números de teléfono ni correos
-              electrónicos dentro del chat. Continúa la conversación sin compartir
+              Por seguridad, no estÃ¡ permitido enviar nÃºmeros de telÃ©fono ni correos
+              electrÃ³nicos dentro del chat. ContinÃºa la conversaciÃ³n sin compartir
               datos de contacto.
             </p>
             <div className={styles.modalActions}>
@@ -1273,7 +1423,7 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
         </div>
       )}
 
-      {/* ── Modal: confirmar envío de notificación de revisión ── */}
+      {/* â”€â”€ Modal: confirmar envÃ­o de notificaciÃ³n de revisiÃ³n â”€â”€ */}
       {confirmVerificar && (
         <div
           className={styles.modalOverlay}
@@ -1289,10 +1439,10 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
                 <path d="m9 12 2 2 4-4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>
             </div>
-            <h3 id="modalVerificarTitle" className={styles.modalTitle}>Enviar notificación de revisión</h3>
+            <h3 id="modalVerificarTitle" className={styles.modalTitle}>Enviar notificaciÃ³n de revisiÃ³n</h3>
             <p className={styles.modalText}>
-              ¿Seguro que deseas enviar al administrador una notificación para que
-              revise este proceso? Quedará registrada en el canal interno.
+              Â¿Seguro que deseas enviar al administrador una notificaciÃ³n para que
+              revise este proceso? QuedarÃ¡ registrada en el canal interno.
             </p>
             <div className={styles.modalActions}>
               <button
@@ -1307,14 +1457,14 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
                 onClick={enviarVerificacion}
                 disabled={sendingVerificar}
               >
-                {sendingVerificar ? 'Enviando…' : 'Sí, enviar'}
+                {sendingVerificar ? 'Enviandoâ€¦' : 'SÃ­, enviar'}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* ── Modal: finalizar consulta (paso 1 confirmar → paso 2 calificar) ── */}
+      {/* â”€â”€ Modal: finalizar consulta (paso 1 confirmar â†’ paso 2 calificar) â”€â”€ */}
       {(confirmClose || showRating) && (
         <div
           className={styles.modalOverlay}
@@ -1330,7 +1480,7 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
         >
           <div className={styles.modalCard} onClick={e => e.stopPropagation()}>
             {!showRating ? (
-              /* Paso 1 — confirmar la finalización */
+              /* Paso 1 â€” confirmar la finalizaciÃ³n */
               <>
                 <div className={styles.modalIconRed}>
                   <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -1341,8 +1491,8 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
                 </div>
                 <h3 id="modalCloseTitle" className={styles.modalTitle}>Finalizar consulta</h3>
                 <p className={styles.modalText}>
-                  ¿Seguro que deseas finalizar esta consulta? El cliente ya no podrá
-                  enviar más mensajes. A continuación podrás calificar la atención.
+                  Â¿Seguro que deseas finalizar esta consulta? El cliente ya no podrÃ¡
+                  enviar mÃ¡s mensajes. A continuaciÃ³n podrÃ¡s calificar la atenciÃ³n.
                 </p>
                 <div className={styles.modalActions}>
                   <button className={styles.btnCancel} onClick={() => setConfirmClose(false)}>
@@ -1352,12 +1502,12 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
                     className={styles.btnConfirmDanger}
                     onClick={() => { setConfirmClose(false); setShowRating(true) }}
                   >
-                    Sí, finalizar
+                    SÃ­, finalizar
                   </button>
                 </div>
               </>
             ) : (
-              /* Paso 2 — calificar y cerrar */
+              /* Paso 2 â€” calificar y cerrar */
               <>
                 <div className={styles.modalIconGold}>
                   <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -1366,7 +1516,7 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
                 </div>
                 <h3 id="modalCloseTitle" className={styles.modalTitle}>Califica esta consulta</h3>
                 <p className={styles.modalText}>
-                  Antes de cerrar, califica la atención brindada en el chat (opcional).
+                  Antes de cerrar, califica la atenciÃ³n brindada en el chat (opcional).
                 </p>
                 <div className={styles.modalStars}>
                   {[1,2,3,4,5].map(n => (
@@ -1375,7 +1525,7 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
                       className={`${styles.star} ${rating >= n ? styles.starOn : ''}`}
                       onClick={() => setRating(n)}
                       aria-label={`${n} estrella${n === 1 ? '' : 's'}`}
-                    >★</button>
+                    >â˜…</button>
                   ))}
                 </div>
                 <div className={styles.modalActions}>
@@ -1391,7 +1541,7 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
                     onClick={closeRoom}
                     disabled={closing}
                   >
-                    {closing ? 'Cerrando…' : 'Confirmar cierre'}
+                    {closing ? 'Cerrandoâ€¦' : 'Confirmar cierre'}
                   </button>
                 </div>
               </>
@@ -1424,7 +1574,7 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
             onClick={() => setLightbox(null)}
             aria-label="Cerrar"
             type="button"
-          >×</button>
+          >Ã—</button>
         </div>
       )}
     </div>
