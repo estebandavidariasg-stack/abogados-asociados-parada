@@ -5,8 +5,23 @@
 //   POST { accion: 'publicar' }  -> el cliente publica su consulta (crea sala 'open' + intro)
 //   POST { accion: 'tomar', roomId } -> el profesional toma una solicitud (claim atómico, primero gana)
 import { SUPABASE_URL, serviceHeaders, getCallerProfile } from './_lib/adminAuth.js';
+import crypto from 'node:crypto';
 
 const cap = (s, n) => String(s || '').slice(0, n);
+
+// ── Emisión del JWT del cliente anónimo (fusionado aquí por el límite de 12
+//    funciones serverless de Vercel Hobby; antes era api/chat-token.js) ──
+const JWT_SECRET     = process.env.SUPABASE_JWT_SECRET;
+const PROJECT_REF    = (SUPABASE_URL?.match(/https?:\/\/([^.]+)\./) || [])[1] || '';
+const CHAT_TOKEN_TTL = 60 * 60 * 4; // 4 horas
+
+const b64url = (input) =>
+  Buffer.from(input).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+
+function signHS256(payload, secret) {
+  const data = `${b64url(JSON.stringify({ alg: 'HS256', typ: 'JWT' }))}.${b64url(JSON.stringify(payload))}`;
+  return `${data}.${b64url(crypto.createHmac('sha256', secret).update(data).digest())}`;
+}
 
 // Extrae la "Descripción del caso" del mensaje de intro y la recorta.
 function resumenDeMensaje(content) {
@@ -180,10 +195,28 @@ async function tomar(req, res) {
   res.status(200).json({ ok: true, roomId });
 }
 
+// ── POST chat_token: emite el JWT del cliente anónimo (claim client_token) ──
+// Con él, las políticas RLS "v2" acotan chat_rooms/chat_messages (REST y
+// Realtime) a SUS salas. role SIEMPRE 'anon' (no escala nada); lo único que
+// aporta el llamante es el hash, que no otorga más de lo que ya da conocer la
+// cédula. Firma HS256 con SUPABASE_JWT_SECRET (Legacy Secret del proyecto).
+async function chatToken(req, res) {
+  if (!JWT_SECRET) { res.status(500).json({ error: 'Configuración del servidor incompleta.' }); return; }
+  const cedulaHash = String((req.body || {}).cedulaHash || '');
+  // SHA-256 hex (64 chars): el claim solo puede ser un id de sala de cliente.
+  if (!/^[a-f0-9]{64}$/i.test(cedulaHash)) { res.status(400).json({ error: 'Identificador inválido.' }); return; }
+  const now = Math.floor(Date.now() / 1000);
+  const exp = now + CHAT_TOKEN_TTL;
+  const payload = { iss: 'supabase', role: 'anon', client_token: cedulaHash.toLowerCase(), iat: now, exp };
+  if (PROJECT_REF) payload.ref = PROJECT_REF;
+  res.status(200).json({ token: signHS256(payload, JWT_SECRET), exp });
+}
+
 export default async function handler(req, res) {
   if (req.method === 'GET') return listar(req, res);
   if (req.method === 'POST') {
     const accion = (req.body && req.body.accion) || '';
+    if (accion === 'chat_token') return chatToken(req, res);
     if (accion === 'publicar') return publicar(req, res);
     if (accion === 'tomar') return tomar(req, res);
     res.status(400).json({ error: 'Acción no soportada' });

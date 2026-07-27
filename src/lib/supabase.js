@@ -91,10 +91,10 @@ export async function ensureChatToken(cedulaHash) {
     const stored = localStorage.getItem('chat_client_jwt')
     if (stored && exp && now < exp - 600) return stored // aún válido → reusar
 
-    const res = await fetch('/api/chat-token', {
+    const res = await fetch('/api/solicitudes', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ cedulaHash }),
+      body: JSON.stringify({ accion: 'chat_token', cedulaHash }),
       signal: timeoutSignal(10000),
     })
     if (!res.ok) return null
