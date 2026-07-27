@@ -972,6 +972,7 @@ export default function ChatSection() {
   const [roomStatus, setRoomStatus] = useState('waiting')
   const [roomArea, setRoomArea]     = useState('')
   const [roomCodigo, setRoomCodigo] = useState('')          // ← código de referencia visible
+  const [profesionalNombre, setProfesionalNombre] = useState('') // nombre del profesional que tomó la consulta
   const [messages, setMessages]     = useState([])
   const [input, setInput]           = useState('')
   const [sending, setSending]       = useState(false)
@@ -1197,6 +1198,26 @@ export default function ChatSection() {
       })
     return () => supabase.removeChannel(ch)
   }, [roomId])
+
+  // Cuando la consulta pasa a 'active', resolvemos el nombre del profesional que
+  // la tomó (chat_room_lawyers → profiles) para mostrarlo en el header. Si no
+  // está activa, limpiamos el nombre (p.ej. al iniciar otra consulta).
+  useEffect(() => {
+    if (roomStatus !== 'active' || !roomId) { setProfesionalNombre(''); return }
+    let cancel = false
+    ;(async () => {
+      try {
+        const { data: asigs } = await supabase.from('chat_room_lawyers')
+          .select('lawyer_id').eq('room_id', roomId).limit(1)
+        const lid = asigs?.[0]?.lawyer_id
+        if (!lid) return
+        const { data: prof } = await supabase.from('profiles')
+          .select('nombre,apellido').eq('id', lid).single()
+        if (!cancel && prof) setProfesionalNombre(`${prof.nombre || ''} ${prof.apellido || ''}`.trim())
+      } catch { /* si falla, el header muestra "Chat activo" sin nombre */ }
+    })()
+    return () => { cancel = true }
+  }, [roomStatus, roomId])
 
   // Tras la cédula: si viene un profesional por deep-link (LawyerCard →
   // #chat?abogado=<id>&tipo=<rol>), lo buscamos en la lista pública (cacheada
@@ -1732,7 +1753,7 @@ export default function ChatSection() {
                     <p className={styles.chatTitle}>Consulta — {roomArea || form.areas.join(', ')}</p>
                     <p className={styles.chatStatus}>
                       {roomStatus === 'waiting' ? 'Esperando que un abogado se una…'
-                        : roomStatus === 'active' ? 'Chat activo'
+                        : roomStatus === 'active' ? (profesionalNombre ? `Chat activo · ${profesionalNombre}` : 'Chat activo')
                         : 'Consulta finalizada'}
                     </p>
                     {/* ── Código de referencia visible ── */}
