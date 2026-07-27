@@ -460,7 +460,7 @@ export default function RegisterModal({ onClose }) {
               letterSpacing: '0.06em', margin: '0 0 10px',
             }}>¡Registro completado!</h3>
             <p style={{
-              color: 'var(--navy, #0d2d5e)', fontSize: 14, lineHeight: 1.6,
+              color: 'var(--navy, #6d3c1b)', fontSize: 14, lineHeight: 1.6,
               margin: '0 0 22px', padding: '0 4px',
             }}>
               Tu cuenta está pendiente de aprobación por el administrador.
@@ -693,7 +693,7 @@ export default function RegisterModal({ onClose }) {
                   />
                   <div style={{
                     display: 'flex', justifyContent: 'space-between', gap: 8,
-                    marginTop: 4, fontSize: '0.68rem', color: 'var(--muted, #6b7a90)',
+                    marginTop: 4, fontSize: '0.68rem', color: 'var(--muted, #907c6b)',
                   }}>
                     <span>Nos ayuda a entender tu alcance como gestor.</span>
                     <span style={{ color: comunidad.length >= COMUNIDAD_MAX ? 'rgba(220,120,100,0.95)' : 'var(--gold-dk, #b8841c)' }}>

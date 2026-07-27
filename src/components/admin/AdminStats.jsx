@@ -175,19 +175,19 @@ export default function AdminStats({
                     <stop offset="100%" stopColor="#c9a84c" stopOpacity={0} />
                   </linearGradient>
                   <linearGradient id="gNavy" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#0d2d5e" stopOpacity={0.3} />
-                    <stop offset="100%" stopColor="#0d2d5e" stopOpacity={0} />
+                    <stop offset="0%" stopColor="#6d3c1b" stopOpacity={0.3} />
+                    <stop offset="100%" stopColor="#6d3c1b" stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(13,45,94,0.08)" vertical={false} />
-                <XAxis dataKey="mes" tick={{ fontSize: 12, fill: '#6b7896' }} axisLine={false} tickLine={false} />
-                <YAxis allowDecimals={false} tick={{ fontSize: 12, fill: '#6b7896' }} axisLine={false} tickLine={false} width={34} />
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(109,60,27,0.08)" vertical={false} />
+                <XAxis dataKey="mes" tick={{ fontSize: 12, fill: '#967f6b' }} axisLine={false} tickLine={false} />
+                <YAxis allowDecimals={false} tick={{ fontSize: 12, fill: '#967f6b' }} axisLine={false} tickLine={false} width={34} />
                 <Tooltip
-                  contentStyle={{ borderRadius: 10, border: '1px solid rgba(13,45,94,0.1)', fontSize: 13, fontFamily: 'Raleway, sans-serif' }}
-                  labelStyle={{ color: '#0d2d5e', fontWeight: 700 }}
+                  contentStyle={{ borderRadius: 10, border: '1px solid rgba(109,60,27,0.1)', fontSize: 13, fontFamily: 'Raleway, sans-serif' }}
+                  labelStyle={{ color: '#6d3c1b', fontWeight: 700 }}
                 />
                 <Area type="monotone" dataKey="Registros" stroke="#c9a84c" strokeWidth={2} fill="url(#gGold)" isAnimationActive={!reduce} />
-                <Area type="monotone" dataKey="Consultas" stroke="#0d2d5e" strokeWidth={2} fill="url(#gNavy)" isAnimationActive={!reduce} />
+                <Area type="monotone" dataKey="Consultas" stroke="#6d3c1b" strokeWidth={2} fill="url(#gNavy)" isAnimationActive={!reduce} />
               </AreaChart>
             </ResponsiveContainer>
           </div>

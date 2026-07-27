@@ -16,21 +16,21 @@
   font-family: 'Cinzel', serif;
   font-size: 1.05rem;
   font-weight: 700;
-  color: #0d2d5e;
+  color: #6d3c1b;
   margin: 0 0 4px;
   letter-spacing: 0.05em;
 }
 
 .pageSubtitle {
   font-size: 0.78rem;
-  color: #5a6e90;
+  color: #90735a;
   margin: 0;
 }
 
 .btnNew {
   padding: 10px 22px;
   background: linear-gradient(135deg, #f2d580, #c9a84c 55%, #9a7a2c);
-  color: #0d2d5e;
+  color: #6d3c1b;
   border: none;
   border-radius: 20px;
   font-weight: 700;
@@ -62,8 +62,8 @@
 
 /* ── Formulario ── */
 .form {
-  background: rgba(13,45,94,0.035);
-  border: 1px solid rgba(13,45,94,0.1);
+  background: rgba(109,60,27,0.035);
+  border: 1px solid rgba(109,60,27,0.1);
   border-radius: 10px;
   padding: 24px;
 }
@@ -100,16 +100,16 @@
   font-weight: 500;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: #5a6e90;
+  color: #90735a;
 }
 
 .req { color: #9a7a2c; }
 
 .input, .textarea {
   background: #fff;
-  border: 1px solid #cdd6e6;
+  border: 1px solid #e6d9cd;
   border-radius: 6px;
-  color: #13305f;
+  color: #5f3613;
   padding: 10px 14px;
   font-family: inherit;
   font-size: 0.85rem;
@@ -134,7 +134,7 @@
 .btnSave {
   padding: 11px 28px;
   background: linear-gradient(135deg, #f2d580, #c9a84c 55%, #9a7a2c);
-  color: #0d2d5e;
+  color: #6d3c1b;
   border: none;
   border-radius: 20px;
   font-weight: 700;
@@ -154,7 +154,7 @@
 }
 
 .empty {
-  color: #5a6e90;
+  color: #90735a;
   font-size: 0.85rem;
   text-align: center;
   padding: 40px 0;
@@ -162,20 +162,20 @@
 
 .codigoCard {
   background: #fff;
-  border: 1px solid rgba(13,45,94,0.1);
+  border: 1px solid rgba(109,60,27,0.1);
   border-radius: 10px;
   padding: 18px 20px;
   display: flex;
   align-items: flex-start;
   gap: 16px;
   flex-wrap: wrap;
-  box-shadow: 0 2px 10px rgba(13,45,94,0.08);
+  box-shadow: 0 2px 10px rgba(109,60,27,0.08);
   transition: border-color 0.2s, box-shadow 0.2s;
 }
 
 .codigoCard:hover {
   border-color: #c9a84c;
-  box-shadow: 0 4px 16px rgba(13,45,94,0.12);
+  box-shadow: 0 4px 16px rgba(109,60,27,0.12);
 }
 
 .codigoInactivo {
@@ -209,19 +209,19 @@
 .codigoNombre {
   font-size: 0.88rem;
   font-weight: 600;
-  color: #0d2d5e;
+  color: #6d3c1b;
   margin: 0;
 }
 
 .codigoMeta {
   font-size: 0.74rem;
-  color: #46546e;
+  color: #6e5946;
   margin: 0;
 }
 
 .codigoFecha {
   font-size: 0.7rem;
-  color: #5a6e90;
+  color: #90735a;
   margin: 4px 0 0;
 }
 
@@ -252,18 +252,18 @@
 .btnQR:hover { background: rgba(201,168,76,0.22); }
 
 .btnEdit {
-  background: rgba(13,45,94,0.05);
-  border: 1px solid rgba(13,45,94,0.15);
-  color: #13305f;
+  background: rgba(109,60,27,0.05);
+  border: 1px solid rgba(109,60,27,0.15);
+  color: #5f3613;
 }
-.btnEdit:hover { background: rgba(13,45,94,0.1); }
+.btnEdit:hover { background: rgba(109,60,27,0.1); }
 
 .btnDownload {
-  background: rgba(13,45,94,0.05);
-  border: 1px solid rgba(13,45,94,0.15);
-  color: #13305f;
+  background: rgba(109,60,27,0.05);
+  border: 1px solid rgba(109,60,27,0.15);
+  color: #5f3613;
 }
-.btnDownload:hover { background: rgba(13,45,94,0.1); }
+.btnDownload:hover { background: rgba(109,60,27,0.1); }
 
 .btnDeactivate {
   background: rgba(220,80,80,0.08);
@@ -287,14 +287,14 @@
   align-items: center;
   gap: 18px;
   padding-top: 24px;
-  border-top: 1px solid rgba(13,45,94,0.1);
+  border-top: 1px solid rgba(109,60,27,0.1);
   margin-top: 10px;
 }
 
 /* Tarjeta de preview — replica visual del PNG descargable */
 .qrCardPreview {
   width: 248px;
-  background: linear-gradient(170deg, #15376b 0%, #1d4d86 50%, #15376b 100%);
+  background: linear-gradient(170deg, #6b3d15 0%, #864e1d 50%, #6b3d15 100%);
   border: 1px solid rgba(201,168,76,0.3);
   border-radius: 14px;
   padding: 22px 18px 18px;
@@ -417,7 +417,7 @@
 
 .qrHint {
   font-size: 0.68rem;
-  color: #5a6e90;
+  color: #90735a;
   text-align: center;
   margin: 0;
   line-height: 1.6;
@@ -426,7 +426,7 @@
 .btnDownloadBig {
   padding: 12px 26px;
   background: linear-gradient(135deg, #f2d580, #c9a84c 55%, #9a7a2c);
-  color: #0d2d5e;
+  color: #6d3c1b;
   border: none;
   border-radius: 20px;
   font-weight: 700;
@@ -453,7 +453,7 @@
   position: fixed; inset: 0; z-index: 1200;
   display: grid; place-items: center;
   /* Fondo oscuro como el overlay de las tarjetas de profesional */
-  background: rgba(10, 28, 64, 0.55);
+  background: rgba(64, 35, 10, 0.55);
   backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
   padding: 1rem;
   animation: qrModalFade 0.18s ease;
@@ -463,9 +463,9 @@
 .modalCard {
   width: 100%; max-width: 560px; max-height: 90vh; overflow-y: auto;
   background: #fff;
-  border: 1px solid rgba(13, 45, 94, 0.1);
+  border: 1px solid rgba(109,60,27, 0.1);
   border-radius: 18px;
-  box-shadow: 0 24px 60px rgba(13, 45, 94, 0.3);
+  box-shadow: 0 24px 60px rgba(109,60,27, 0.3);
   padding: 22px 24px 24px;
   animation: qrModalPop 0.22s cubic-bezier(0.16, 1, 0.3, 1);
 }
@@ -483,36 +483,36 @@
 }
 .modalTitle {
   font-family: 'Cinzel', serif;
-  font-size: 1.15rem; font-weight: 700; color: #0d2d5e;
+  font-size: 1.15rem; font-weight: 700; color: #6d3c1b;
   margin: 0; letter-spacing: 0.02em;
 }
-.modalSub { font-size: 0.74rem; color: #5a6e90; margin: 4px 0 0; }
+.modalSub { font-size: 0.74rem; color: #90735a; margin: 4px 0 0; }
 .modalSub strong { color: #8a6a28; font-family: 'Courier New', monospace; letter-spacing: 0.05em; }
 
 .modalClose {
   flex-shrink: 0; width: 34px; height: 34px;
   display: inline-flex; align-items: center; justify-content: center;
-  background: rgba(13, 45, 94, 0.05);
-  border: 1px solid rgba(13, 45, 94, 0.14);
-  border-radius: 8px; color: #46546e; cursor: pointer; font-family: inherit;
+  background: rgba(109,60,27, 0.05);
+  border: 1px solid rgba(109,60,27, 0.14);
+  border-radius: 8px; color: #6e5946; cursor: pointer; font-family: inherit;
   transition: background 0.18s, color 0.18s, border-color 0.18s;
 }
 .modalClose:hover {
-  background: rgba(13, 45, 94, 0.1); color: #0d2d5e; border-color: rgba(13, 45, 94, 0.28);
+  background: rgba(109,60,27, 0.1); color: #6d3c1b; border-color: rgba(109,60,27, 0.28);
 }
 
 .modalActions {
   display: flex; justify-content: flex-end; gap: 10px;
   margin-top: 20px; padding-top: 16px;
-  border-top: 1px solid rgba(13, 45, 94, 0.08);
+  border-top: 1px solid rgba(109,60,27, 0.08);
 }
 .btnCancel {
   padding: 10px 18px; border-radius: 14px;
-  background: none; border: 1px solid rgba(13, 45, 94, 0.2); color: #1a5276;
+  background: none; border: 1px solid rgba(109,60,27, 0.2); color: #8a4e26;
   font-family: inherit; font-size: 0.82rem; font-weight: 600; cursor: pointer;
   transition: background 0.18s, border-color 0.18s, color 0.18s;
 }
-.btnCancel:hover { background: rgba(13, 45, 94, 0.05); border-color: #1a5276; color: #0d2d5e; }
+.btnCancel:hover { background: rgba(109,60,27, 0.05); border-color: #8a4e26; color: #6d3c1b; }
 /* ─────────────────────────────────────────────────────────────────────────
    Código oficial de la plataforma — tarjeta navy destacada arriba de la lista.
    ───────────────────────────────────────────────────────────────────────── */
@@ -524,10 +524,10 @@
   margin-bottom: 26px;
   background:
     radial-gradient(ellipse at 12% 0%, rgba(201,168,76,0.16) 0%, transparent 55%),
-    linear-gradient(155deg, #15376b 0%, #0d2d5e 55%, #081f44 100%);
+    linear-gradient(155deg, #6b3d15 0%, #6d3c1b 55%, #442408 100%);
   border: 1px solid rgba(201,168,76,0.55);
   box-shadow:
-    0 12px 30px rgba(13,45,94,0.28),
+    0 12px 30px rgba(109,60,27,0.28),
     0 0 0 1px rgba(201,168,76,0.14),
     inset 0 1px 0 rgba(255,255,255,0.08);
 }
@@ -545,7 +545,7 @@
   font-weight: 700;
   letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: #0d2d5e;
+  color: #6d3c1b;
   background: linear-gradient(135deg, #f2d580, #c9a84c 55%, #9a7a2c);
   border-radius: 999px;
   padding: 4px 12px;
@@ -609,7 +609,7 @@
 .platActions .btnEdit {
   background: rgba(255,255,255,0.95);
   border-color: rgba(201,168,76,0.5);
-  color: #0d2d5e;
+  color: #6d3c1b;
 }
 .platActions .btnDownload:hover,
 .platActions .btnEdit:hover { background: #ffffff; }
@@ -619,7 +619,7 @@
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: rgba(13,45,94,0.5);
+  color: rgba(109,60,27,0.5);
   margin: 0 0 12px;
 }
 

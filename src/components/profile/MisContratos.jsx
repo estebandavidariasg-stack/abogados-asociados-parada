@@ -361,7 +361,7 @@ export default function MisContratos({ abogadoId, isSuperAdmin = false }) {
               <div className={styles.dropZone} onClick={() => fileRef.current?.click()}>
                 {archivo ? (
                   <div className={styles.archivoSel}>
-                    <span style={{ color: '#0d2d5e' }}><IconDoc size={30} /></span>
+                    <span style={{ color: '#6d3c1b' }}><IconDoc size={30} /></span>
                     <div>
                       <p className={styles.archNombre}>{archivo.name}</p>
                       <p className={styles.archSize}>{fmtBytes(archivo.size)}</p>
@@ -459,7 +459,7 @@ export default function MisContratos({ abogadoId, isSuperAdmin = false }) {
         <div className={styles.lista}>
           {contratosFiltrados.map(c => (
             <div key={c.id} className={styles.contratoCard}>
-              <span className={styles.contratoIcono} style={{ color: '#0d2d5e' }}><IconDoc size={20} /></span>
+              <span className={styles.contratoIcono} style={{ color: '#6d3c1b' }}><IconDoc size={20} /></span>
               <div className={styles.contratoInfo}>
                 <p className={styles.contratoNombre}>{c.nombre_archivo}</p>
                 {c.descripcion && <p className={styles.contratoDesc}>{c.descripcion}</p>}

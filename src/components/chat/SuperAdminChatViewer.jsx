@@ -152,7 +152,7 @@ function StarDisplay({ rating }) {
     <div style={{ display: 'flex', gap: 3 }}>
       {[1,2,3,4,5].map(s => (
         <span key={s} style={{
-          color: s <= Math.round(rating) ? 'var(--gold)' : 'rgba(13,45,94,0.15)',
+          color: s <= Math.round(rating) ? 'var(--gold)' : 'rgba(109,60,27,0.15)',
           fontSize: '1rem'
         }}>★</span>
       ))}
@@ -166,7 +166,7 @@ function StarDisplay({ rating }) {
    sin un fetch separado.
 ───────────────────────────────────────────────────────────────────────── */
 const PQR_TIPOS = {
-  peticion: { label: 'Petición', color: '#3a78d4', bg: 'rgba(58,120,212,0.10)' },
+  peticion: { label: 'Petición', color: '#d4823a', bg: 'rgba(212, 130, 58,0.10)' },
   queja:    { label: 'Queja',    color: '#d68c2a', bg: 'rgba(214,140,42,0.10)' },
   reclamo:  { label: 'Reclamo',  color: '#c0392b', bg: 'rgba(192,57,43,0.10)' },
 }

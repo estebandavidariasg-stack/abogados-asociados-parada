@@ -1,6 +1,6 @@
 import nodemailer from 'nodemailer'
 import { renderEmailHtml, renderShell, infoBox, emailButton, em, C, FONT_SERIF } from './_lib/emailTemplate.js'
-import { getCallerProfile } from './_lib/adminAuth.js'
+import { getCallerProfile, lawyerAssignedToRoom } from './_lib/adminAuth.js'
 
 const ADMIN_NOTIFY_EMAIL = process.env.ADMIN_NOTIFY_EMAIL || 'abogadosyasociados.parada@gmail.com'
 
@@ -20,7 +20,7 @@ const transporter = nodemailer.createTransport({
   },
 })
 
-const SITE_BASE = 'https://abogadosparada.com'
+const SITE_BASE = 'https://paradabridge.com'
 
 const SUPABASE_URL =
   process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL
@@ -52,6 +52,31 @@ async function resolveProfessionalEmail(lawyerId) {
   }
 }
 
+// Lee nombre del cliente y área desde la sala (service role). Se usa para que
+// las notificaciones al profesional muestren datos REALES de la BD y no lo que
+// venga en el body (que en el flujo anónimo no es de confianza).
+async function resolveRoomInfo(roomId) {
+  if (!roomId || !SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return null
+  try {
+    const url =
+      `${SUPABASE_URL}/rest/v1/chat_rooms` +
+      `?id=eq.${encodeURIComponent(roomId)}` +
+      `&select=client_nombre,area_derecho&limit=1`
+    const res = await fetch(url, {
+      headers: {
+        apikey:        SUPABASE_SERVICE_ROLE_KEY,
+        Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+      },
+    })
+    if (!res.ok) return null
+    const rows = await res.json()
+    return Array.isArray(rows) && rows[0] ? rows[0] : null
+  } catch (err) {
+    console.error('[notify] resolveRoomInfo failed:', err)
+    return null
+  }
+}
+
 // CTA URL builder ──────────────────────────────────────────────────────────
 function buildCtaUrl(recipientRole, codigoReferencia) {
   switch (recipientRole) {
@@ -74,8 +99,8 @@ function emailAbogado({ nombreAbogado, nombreCliente, area, ctaUrl }) {
     subject: subjectLine,
     html: renderEmailHtml({
       subjectLine,
-      greetingHtml: `Estimado/a <strong style="color:#0d2d5e;font-weight:700;">${esc(nombreAbogado)}</strong>,`,
-      bodyHtml: `Tienes una nueva consulta pendiente por parte de <strong style="color:#0d2d5e;font-weight:700;">${esc(nombreCliente)}</strong> en el área de <strong style="color:#0d2d5e;font-weight:700;">${esc(area)}</strong>. Ingresa a la plataforma para atenderla a la brevedad posible.`,
+      greetingHtml: `Estimado/a <strong style="color:#6d3c1b;font-weight:700;">${esc(nombreAbogado)}</strong>,`,
+      bodyHtml: `Tienes una nueva consulta pendiente por parte de <strong style="color:#6d3c1b;font-weight:700;">${esc(nombreCliente)}</strong> en el área de <strong style="color:#6d3c1b;font-weight:700;">${esc(area)}</strong>. Ingresa a la plataforma para atenderla a la brevedad posible.`,
       ctaLabel: 'Ver consulta',
       ctaUrl,
     }),
@@ -93,10 +118,10 @@ function emailInactividad({ nombreAbogado, nombreCliente, area, createdAt, ctaUr
     subject: subjectLine,
     html: renderEmailHtml({
       subjectLine,
-      greetingHtml: `Estimado/a <strong style="color:#0d2d5e;font-weight:700;">${esc(nombreAbogado)}</strong>,`,
+      greetingHtml: `Estimado/a <strong style="color:#6d3c1b;font-weight:700;">${esc(nombreAbogado)}</strong>,`,
       bodyHtml:
-        `Tienes una consulta de <strong style="color:#0d2d5e;font-weight:700;">${esc(nombreCliente)}</strong>` +
-        (area ? ` en el área de <strong style="color:#0d2d5e;font-weight:700;">${esc(area)}</strong>` : '') +
+        `Tienes una consulta de <strong style="color:#6d3c1b;font-weight:700;">${esc(nombreCliente)}</strong>` +
+        (area ? ` en el área de <strong style="color:#6d3c1b;font-weight:700;">${esc(area)}</strong>` : '') +
         (fechaCreacion ? ` (abierta el ${fechaCreacion})` : '') +
         ` sin actividad por más de 24 horas. ` +
         `El equipo administrativo te solicita ingresar a la plataforma y dar respuesta lo antes posible. ` +
@@ -115,9 +140,9 @@ function emailAprobado({ nombreAbogado, rol, ctaUrl }) {
     html: renderEmailHtml({
       subjectLine,
       preheader: 'Ya apareces en la plataforma. Ingresa para empezar.',
-      greetingHtml: `Estimado/a <strong style="color:#0d2d5e;font-weight:700;">${esc(nombreAbogado)}</strong>,`,
+      greetingHtml: `Estimado/a <strong style="color:#6d3c1b;font-weight:700;">${esc(nombreAbogado)}</strong>,`,
       bodyHtml:
-        `Tu cuenta como <strong style="color:#0d2d5e;font-weight:700;">${rolLabel}</strong> en Parada Bridge ya fue aprobada. ` +
+        `Tu cuenta como <strong style="color:#6d3c1b;font-weight:700;">${rolLabel}</strong> en Parada Bridge ya fue aprobada. ` +
         `Desde ahora apareces en la plataforma y los clientes pueden encontrarte y escribirte. ` +
         `Ingresa para completar tu perfil y empezar a atender consultas.`,
       ctaLabel: 'Ingresar a mi cuenta',
@@ -134,9 +159,9 @@ function emailRechazado({ nombreAbogado, rol, ctaUrl }) {
     html: renderEmailHtml({
       subjectLine,
       preheader: 'Información sobre tu solicitud de registro.',
-      greetingHtml: `Estimado/a <strong style="color:#0d2d5e;font-weight:700;">${esc(nombreAbogado)}</strong>,`,
+      greetingHtml: `Estimado/a <strong style="color:#6d3c1b;font-weight:700;">${esc(nombreAbogado)}</strong>,`,
       bodyHtml:
-        `Revisamos tu solicitud de registro como <strong style="color:#0d2d5e;font-weight:700;">${rolLabel}</strong> en Parada Bridge y, por ahora, no fue aprobada. ` +
+        `Revisamos tu solicitud de registro como <strong style="color:#6d3c1b;font-weight:700;">${rolLabel}</strong> en Parada Bridge y, por ahora, no fue aprobada. ` +
         `Si consideras que se trata de un error o deseas enviar información adicional, puedes escribirnos por los canales oficiales que encuentras en nuestro sitio.`,
       ctaLabel: 'Visitar el sitio',
       ctaUrl,
@@ -153,7 +178,7 @@ function emailPqr({ tipo, clientNombre, clientEmail, codigoReferencia, mensaje, 
      <p style="margin:0 0 12px;font-size:14px;color:${C.navy};font-weight:600;">${esc(value) || '—'}</p>`
   const inner =
     `<p style="margin:0 0 22px;font-size:15px;line-height:1.7;color:${C.body};text-align:center;">
-       Un cliente envió una <strong style="color:#0d2d5e;font-weight:700;">${tipoLabel.toLowerCase()}</strong> desde la plataforma.
+       Un cliente envió una <strong style="color:#6d3c1b;font-weight:700;">${tipoLabel.toLowerCase()}</strong> desde la plataforma.
      </p>
      ${infoBox(
        campo('Cliente', clientNombre) +
@@ -358,32 +383,37 @@ export default async function handler(req, res) {
     // endpoint sin auth como relay de correo hacia direcciones arbitrarias,
     // arriesgando la suspensión de la cuenta Gmail de la firma.)
     if (type === 'new_consultation') {
-      const { lawyerId, nombreAbogado, nombreCliente, area } = data
+      const { lawyerId, roomId } = data || {}
 
-      if (!lawyerId) {
-        return res.status(400).json({ error: 'Falta lawyerId.' })
+      if (!lawyerId || !roomId) {
+        return res.status(400).json({ error: 'Faltan lawyerId o roomId.' })
       }
-      let toEmail  = null
-      let toNombre = nombreAbogado || null
+      // Este aviso lo dispara el flujo ANÓNIMO del cliente, así que no hay
+      // sesión que validar. En su lugar exigimos que el profesional esté
+      // REALMENTE asignado a esa sala; si no, no enviamos nada. Así el endpoint
+      // no puede usarse como relay para spamear a cualquier profesional: solo
+      // avisa a alguien que en efecto tiene asignada la consulta indicada.
+      if (!(await lawyerAssignedToRoom(lawyerId, roomId))) {
+        return res.status(403).json({ error: 'El profesional no está asignado a esa sala.' })
+      }
       const pro = await resolveProfessionalEmail(lawyerId)
-      if (pro?.email) {
-        toEmail = pro.email
-        if (!toNombre && pro.nombre) toNombre = `${pro.nombre} ${pro.apellido || ''}`.trim()
-      }
-      if (!toEmail) {
+      if (!pro?.email) {
         return res.status(400).json({ error: 'No se pudo resolver el correo del profesional.' })
       }
+      // Nombre del cliente y área desde la BD (no del body): el contenido del
+      // correo refleja la sala real, no texto arbitrario del que llama.
+      const room = await resolveRoomInfo(roomId)
 
       const { subject, html } = emailAbogado({
-        nombreAbogado: toNombre || 'profesional',
-        nombreCliente,
-        area,
+        nombreAbogado: `${pro.nombre || ''} ${pro.apellido || ''}`.trim() || 'profesional',
+        nombreCliente: room?.client_nombre || 'un cliente',
+        area:          room?.area_derecho || '',
         ctaUrl,
       })
 
       await transporter.sendMail({
         from: `"Parada Bridge" <${process.env.GMAIL_USER}>`,
-        to: toEmail,
+        to: pro.email,
         subject,
         html,
       })
@@ -396,6 +426,13 @@ export default async function handler(req, res) {
     // cuando un chat lleva +24h sin actividad. Resuelve el correo del
     // profesional con service role (no se expone en el cliente).
     if (type === 'chat_inactivity') {
+      // Acción de admin (tab Alertas): envía correo al profesional Y sella
+      // notificado_at (ancla la barrera de 4h). Debe exigir superadmin — antes
+      // era invocable sin auth, permitiendo manipular el reloj de reasignación.
+      const caller = await getCallerProfile(req)
+      if (caller?.rol !== 'superadmin') {
+        return res.status(401).json({ error: 'No autorizado.' })
+      }
       const { lawyerId, roomId, clientNombre, area, createdAt } = data || {}
       if (!lawyerId) {
         return res.status(400).json({ error: 'Falta lawyerId.' })

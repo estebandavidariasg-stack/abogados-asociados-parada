@@ -14,9 +14,9 @@
   gap: 6px;
   padding: 0.9rem 0.4rem;
   background: #f8f9fc;
-  border: 1.5px solid rgba(13, 45, 94, 0.15);
+  border: 1.5px solid rgba(109,60,27, 0.15);
   border-radius: 12px;
-  color: var(--navy-md, #4a6080);
+  color: var(--navy-md, #6f5c48);
   font-family: 'Raleway', sans-serif;
   font-size: 0.72rem;
   font-weight: 700;
@@ -25,7 +25,7 @@
   transition: border-color 0.2s, background 0.2s, color 0.2s, transform 0.2s;
 }
 .roleBtn:hover {
-  border-color: rgba(13, 45, 94, 0.4);
+  border-color: rgba(109,60,27, 0.4);
   transform: translateY(-1px);
 }
 .roleBtn svg {
@@ -36,7 +36,7 @@
 .roleBtnActive {
   border-color: var(--gold, #c9a84c);
   background: linear-gradient(135deg, rgba(201, 168, 76, 0.14), rgba(201, 168, 76, 0.05));
-  color: var(--navy, #0d2d5e);
+  color: var(--navy, #6d3c1b);
   box-shadow: 0 4px 14px rgba(201, 168, 76, 0.18);
 }
 
@@ -44,7 +44,7 @@
 .areasBox {
   max-height: 210px;
   overflow-y: auto;
-  border: 1.5px solid rgba(13, 45, 94, 0.15);
+  border: 1.5px solid rgba(109,60,27, 0.15);
   border-radius: 10px;
   padding: 0.75rem 0.9rem;
   background: #f8f9fc;
@@ -55,7 +55,7 @@
 .areasBox::-webkit-scrollbar { width: 8px; }
 .areasBox::-webkit-scrollbar-track { background: transparent; }
 .areasBox::-webkit-scrollbar-thumb {
-  background: rgba(13, 45, 94, 0.2);
+  background: rgba(109,60,27, 0.2);
   border-radius: 8px;
 }
 
@@ -65,7 +65,7 @@
   gap: 7px;
   font-size: 0.75rem;
   line-height: 1.35;
-  color: var(--navy, #0d2d5e);
+  color: var(--navy, #6d3c1b);
   cursor: pointer;
 }
 .areaCheck {
@@ -80,7 +80,7 @@
 .areasCount {
   margin-top: 6px;
   font-size: 0.68rem;
-  color: var(--muted, #6b7a90);
+  color: var(--muted, #907c6b);
   text-align: right;
 }
 
@@ -89,9 +89,9 @@
   width: 100%;
   padding: 0.72rem 1rem;
   background: #f8f9fc;
-  border: 1.5px dashed rgba(13, 45, 94, 0.3);
+  border: 1.5px dashed rgba(109,60,27, 0.3);
   border-radius: 10px;
-  color: var(--navy-md, #4a6080);
+  color: var(--navy-md, #6f5c48);
   font-family: 'Raleway', sans-serif;
   font-size: 0.8rem;
   font-weight: 600;

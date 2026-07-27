@@ -1,7 +1,7 @@
 /* ── INTRO HERO (above the fold) ────────────────────────────────
    Fondo cálido claro (ivory) para abrir liviano. Texto navy para
    máxima legibilidad. La franja inferior se funde al navy del
-   <Hero> que viene debajo (#06102a) para una transición continua. */
+   <Hero> que viene debajo (#2a1706) para una transición continua. */
 
 .section {
   position: relative;
@@ -24,7 +24,7 @@
   font-family: 'Cinzel', serif;
   font-size: 32vw;
   font-weight: 700;
-  color: rgba(13, 45, 94, 0.045);
+  color: rgba(109,60,27, 0.045);
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
@@ -91,7 +91,7 @@
   font-weight: 400;
   font-size: clamp(2.6rem, 6vw, 5rem);
   line-height: 1.1;
-  color: #0a1628;
+  color: #28180a;
   margin: 0 0 1.8rem;
   letter-spacing: -0.01em;
   animation: introFadeUp 0.9s ease 0.1s both;
@@ -136,7 +136,7 @@
   font-size: clamp(1rem, 1.3vw, 1.15rem);
   font-weight: 400;
   line-height: 1.75;
-  color: rgba(13, 22, 40, 0.72);
+  color: rgba(40, 26, 13, 0.72);
   max-width: 640px;
   margin: 0 0 2.8rem;
   animation: introFadeUp 1s ease 0.2s both;
@@ -183,7 +183,7 @@
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, transparent 55%),
     linear-gradient(135deg, #f5cb5c 0%, #e3a82a 45%, #c08713 100%);
-  color: #0a1628;
+  color: #28180a;
   font-weight: 800;
   border: 1px solid rgba(140, 94, 14, 0.55);
   box-shadow:
@@ -208,13 +208,13 @@
 .ctaSecondary {
   composes: ctaBase;
   background: transparent;
-  color: var(--navy, #0d2d5e);
-  border-color: rgba(13, 45, 94, 0.45);
+  color: var(--navy, #6d3c1b);
+  border-color: rgba(109,60,27, 0.45);
 }
 
 .ctaSecondary:hover {
-  background: rgba(13, 45, 94, 0.06);
-  border-color: var(--navy, #0d2d5e);
+  background: rgba(109,60,27, 0.06);
+  border-color: var(--navy, #6d3c1b);
   transform: translateY(-2px);
 }
 

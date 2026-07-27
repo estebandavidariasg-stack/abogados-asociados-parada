@@ -2,23 +2,27 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 /* ── VARIABLES ─────────────────────────────────────────── */
+/* Rebrand Parada Bridge (2026-07): la marca pasó de azul+dorado a café+dorado.
+   Los nombres --navy / --black son LEGADOS (se conservan para no reescribir
+   ~600 usos en los .module.css); su valor real hoy es café. El dorado se
+   mantiene como acento. Diseño anterior: rama backup/diseno-navy-gold-2026-07-27. */
 :root {
-  --navy:     #0d2d5e;
-  --navy-md:  #1a5276;
-  --navy-lt:  #2a6496;
-  --surface:  #e8f2fc;
-  --surface2: #f0f6fc;
+  --navy:     #362415;   /* espresso — oscuro primario (ink, paneles, botones): profundo y elegante, no lodoso */
+  --navy-md:  #6d3c1b;   /* café medio — acento secundario / hover cálido */
+  --navy-lt:  #8a4e26;   /* café claro */
+  --surface:  #f7f1e8;
+  --surface2: #fdfbf7;
   --gold:     #C9A84C;
   --gold-lt:  #E8C96A;
   --gold-dk:  #8A6A28;
-  --ivory:    #faf7f2;
-  --muted:    #4a6080;
-  --border:   rgba(13, 45, 94, 0.15);
+  --ivory:    #fdfbf8;
+  --muted:    #6f5c48;
+  --border:   rgba(109,60,27, 0.15);
 
   /* aliases para no romper module.css que usen los nombres viejos */
-  --black:    #0d2d5e;
-  --dark:     #1a5276;
-  --cream:    #faf7f2;
+  --black:    #1d1d1b;
+  --dark:     #6d3c1b;
+  --cream:    #fdfbf8;
 }
 
 /* ── BASE ───────────────────────────────────────────────── */
@@ -28,7 +32,10 @@ html {
 }
 
 body {
-  background: var(--ivory);
+  /* Degradado blanco→crema muy suave (fijo al viewport) para aligerar el café
+     y dar aire; las secciones opacas se apoyan encima. */
+  background: linear-gradient(157deg, #ffffff 0%, #fdfbf7 42%, #f7f1e8 100%);
+  background-attachment: fixed;
   color: var(--navy);
   font-family: 'Raleway', sans-serif;
   font-weight: 400;
@@ -70,7 +77,7 @@ body {
 }
 
 .btn-ghost:hover {
-  background: rgba(13, 45, 94, 0.08);
+  background: rgba(109,60,27, 0.08);
   border-color: var(--navy);
   color: var(--navy);
 }

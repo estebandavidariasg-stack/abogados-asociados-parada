@@ -16,17 +16,17 @@
   position: relative;
   /* Degradado suave: blanco → tenue tinte dorado de marca. */
   background: linear-gradient(145deg, #ffffff 0%, #ffffff 45%, #faf6ec 100%);
-  border: 1px solid rgba(13, 45, 94, 0.1);
+  border: 1px solid rgba(109,60,27, 0.1);
   border-radius: 16px;
   padding: 1.35rem 1.4rem 1.4rem;
   overflow: hidden;
-  box-shadow: 0 1px 2px rgba(13, 45, 94, 0.04), 0 14px 34px -26px rgba(13, 45, 94, 0.5);
+  box-shadow: 0 1px 2px rgba(109,60,27, 0.04), 0 14px 34px -26px rgba(109,60,27, 0.5);
   transition: transform 0.22s ease-out, box-shadow 0.22s ease-out, border-color 0.22s;
 }
 .card:hover {
   transform: translateY(-3px);
   border-color: rgba(201, 168, 76, 0.34);
-  box-shadow: 0 1px 2px rgba(13, 45, 94, 0.05), 0 22px 44px -22px rgba(13, 45, 94, 0.55);
+  box-shadow: 0 1px 2px rgba(109,60,27, 0.05), 0 22px 44px -22px rgba(109,60,27, 0.55);
 }
 
 .num {
@@ -37,7 +37,7 @@
   font-size: 2.85rem;
   font-weight: 700;
   line-height: 1;
-  color: #0d2d5e;
+  color: #6d3c1b;
   margin: 0.15rem 0 0.6rem;
 }
 
@@ -50,7 +50,7 @@
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: #56617a;
+  color: #7a6756;
   line-height: 1.45;
 }
 .sub {
@@ -60,7 +60,7 @@
   font-weight: 500;
   letter-spacing: 0.02em;
   text-transform: none;
-  color: #8a94a8;
+  color: #a8988a;
 }
 
 /* Tonos semánticos: el número y el degradado toman el color del estado. */
@@ -80,10 +80,10 @@
 /* ── Gráfica histórica ── */
 .chartCard {
   background: #fff;
-  border: 1px solid rgba(13, 45, 94, 0.09);
+  border: 1px solid rgba(109,60,27, 0.09);
   border-radius: 14px;
   padding: 1.1rem 1.2rem 0.8rem;
-  box-shadow: 0 10px 30px -24px rgba(13, 45, 94, 0.4);
+  box-shadow: 0 10px 30px -24px rgba(109,60,27, 0.4);
 }
 .chartHead {
   display: flex;
@@ -99,7 +99,7 @@
   font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: #0d2d5e;
+  color: #6d3c1b;
   margin: 0;
 }
 .legend {
@@ -113,7 +113,7 @@
   font-family: 'Raleway', sans-serif;
   font-size: 0.74rem;
   font-weight: 600;
-  color: #56617a;
+  color: #7a6756;
 }
 .dotGold, .dotNavy {
   width: 10px;
@@ -122,7 +122,7 @@
   display: inline-block;
 }
 .dotGold { background: #c9a84c; }
-.dotNavy { background: #0d2d5e; }
+.dotNavy { background: #6d3c1b; }
 
 .chartBody {
   width: 100%;

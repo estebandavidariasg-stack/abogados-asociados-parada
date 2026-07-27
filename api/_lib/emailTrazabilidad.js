@@ -6,7 +6,7 @@
 
 import { renderShell, emailButton, em, C, FONT_SANS } from './emailTemplate.js'
 
-const APP_URL = process.env.VITE_APP_URL || 'https://abogadosparada.com'
+const APP_URL = process.env.VITE_APP_URL || 'https://paradabridge.com'
 
 function esc(s) {
   return String(s == null ? '' : s)
@@ -19,9 +19,9 @@ function barra(pasoActual) {
   const idx = { inicio: 0, en_curso: 1, cierre: 2 }[pasoActual] ?? 0
   const celdas = pasos.map((label, i) => {
     const activo = i <= idx
-    const bg = activo ? C.gold : '#e3ebf6'
-    const num = activo ? C.navy : '#9fb0c8'
-    const fg = activo ? C.navy : '#9fb0c8'
+    const bg = activo ? C.gold : '#f6ece3'
+    const num = activo ? C.navy : '#c8b29f'
+    const fg = activo ? C.navy : '#c8b29f'
     return `
       <td align="center" width="33%" valign="top" style="padding:0 3px;">
         <div style="width:34px;height:34px;line-height:34px;margin:0 auto 9px;border-radius:50%;background-color:${bg};color:${num};font-family:${FONT_SANS};font-size:15px;font-weight:700;">${i + 1}</div>

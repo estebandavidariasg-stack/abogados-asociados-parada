@@ -69,7 +69,7 @@ const ACTIVIDAD  = [
   { mes: 'Sep', v: 88 }, { mes: 'Oct', v: 102 }, { mes: 'Nov', v: 114 }, { mes: 'Dic', v: 131 },
 ]
 
-const NAVY = '#0d2d5e'
+const NAVY = '#6d3c1b'
 const GOLD = '#c9a84c'
 const barColor = (i) => i === 0 ? GOLD : `rgba(13,45,94,${Math.max(0.45, 0.82 - i * 0.09)})`
 
@@ -363,15 +363,15 @@ export default function MapSection() {
           <ChartCard title="Profesionales por área">
             <ResponsiveContainer width="100%" height={232}>
               <BarChart data={areaData} margin={{ top: 22, right: 8, left: 8, bottom: 8 }} barCategoryGap="38%">
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(13,45,94,0.07)" vertical={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(109,60,27,0.07)" vertical={false} />
                 <XAxis
                   dataKey="name"
                   tickFormatter={n => { const s = String(n).replace(/^Derecho\s+/i, ''); return s.length > 12 ? s.slice(0, 11) + '…' : s }}
                   interval={0} angle={-28} textAnchor="end" height={60}
-                  tick={{ fontSize: 10, fill: '#7a8fad' }} tickLine={false} axisLine={false}
+                  tick={{ fontSize: 10, fill: '#ad927a' }} tickLine={false} axisLine={false}
                 />
                 <YAxis hide width={0} allowDecimals={false} />
-                <Tooltip content={<ChartTip />} cursor={{ fill: 'rgba(13,45,94,0.04)' }} />
+                <Tooltip content={<ChartTip />} cursor={{ fill: 'rgba(109,60,27,0.04)' }} />
                 <Bar dataKey="value" radius={[6, 6, 0, 0]} isAnimationActive animationDuration={900} maxBarSize={40}>
                   {areaData.map((e, i) => (
                     <Cell key={i} fill={barColor(i)} />
@@ -400,9 +400,9 @@ export default function MapSection() {
                 <XAxis type="number" hide allowDecimals={false} />
                 <YAxis
                   type="category" dataKey="name" width={100}
-                  tick={{ fontSize: 11, fill: '#4a5568' }} tickLine={false} axisLine={false}
+                  tick={{ fontSize: 11, fill: '#68584a' }} tickLine={false} axisLine={false}
                 />
-                <Tooltip content={<ChartTip />} cursor={{ fill: 'rgba(13,45,94,0.04)' }} />
+                <Tooltip content={<ChartTip />} cursor={{ fill: 'rgba(109,60,27,0.04)' }} />
                 <Bar dataKey="value" radius={[0, 6, 6, 0]} fill="url(#hBarGrad)" barSize={24} maxBarSize={28}
                   isAnimationActive animationDuration={900} />
               </BarChart>
@@ -420,10 +420,10 @@ export default function MapSection() {
                     <stop offset="100%" stopColor={NAVY} stopOpacity={0}   />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(13,45,94,0.07)" vertical={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(109,60,27,0.07)" vertical={false} />
                 <XAxis
                   dataKey="mes" interval={1}
-                  tick={{ fontSize: 10, fill: '#7a8fad' }} tickLine={false} axisLine={false}
+                  tick={{ fontSize: 10, fill: '#ad927a' }} tickLine={false} axisLine={false}
                 />
                 <YAxis hide allowDecimals={false} />
                 <Tooltip content={<ChartTip />} />

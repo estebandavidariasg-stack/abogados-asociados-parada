@@ -362,12 +362,14 @@ export default function AdminPage() {
     }
     setNotifEstado(s => ({ ...s, [room.id]: 'sending' }))
     try {
+      // El endpoint exige superadmin → mandamos el token del admin autenticado.
+      const authHeaders = await getAuthHeaders()
       // Una llamada por abogado asignado (típicamente 1-3, no merece batching)
       const results = await Promise.all(
         room.lawyer_ids.map(lawyerId =>
           fetch('/api/notify', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: authHeaders,
             body: JSON.stringify({
               type: 'chat_inactivity',
               recipientRole: 'lawyer',
@@ -737,7 +739,7 @@ export default function AdminPage() {
         <aside className={styles.sidebar}>
           <div className={styles.sidebarInner}>
             <div className={styles.sideBrand}>
-              <span className={styles.brandMark}>AAP</span>
+              <span className={styles.brandMark}>PB</span>
               <div className={styles.brandText}>
                 <strong>Administración</strong>
                 <small className={styles.brandRole}>Superadmin</small>

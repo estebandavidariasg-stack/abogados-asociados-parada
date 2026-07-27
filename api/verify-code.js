@@ -22,17 +22,74 @@
      · SUPABASE_SERVICE_ROLE_KEY
 ──────────────────────────────────────────────────────────────────────── */
 
+import crypto from 'node:crypto'
+
 const SUPABASE_URL =
   process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
 
 const INVALID_MSG = 'Código inválido o expirado'
 
+// Anti fuerza-bruta: máximo de intentos FALLIDOS por correo dentro de la
+// ventana. Sin esto, el OTP de 6 dígitos (10^6) es brute-forceable durante su
+// tiempo de validez. Solo cuentan las fallas: un usuario que acierta no suma.
+const ATTEMPT_WINDOW_MS   = 10 * 60 * 1000
+const MAX_FAILED_ATTEMPTS = 6
+
+const svcHeaders = () => ({
+  apikey:        SUPABASE_SERVICE_ROLE_KEY,
+  Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+})
+
+// Hash de la IP del cliente (no guardamos IP en claro). Reutiliza AI_IP_SALT
+// si está configurado, como el resto del proyecto.
+function clientIpHash(req) {
+  const xff = req.headers['x-forwarded-for']
+  const ip  = (Array.isArray(xff) ? xff[0] : String(xff || '')).split(',')[0].trim()
+              || req.headers['x-real-ip'] || ''
+  if (!ip) return null
+  return crypto.createHash('sha256').update((process.env.AI_IP_SALT || '') + ip).digest('hex')
+}
+
+// Cuenta intentos fallidos recientes para un correo. Fail-open: si la tabla no
+// existe o la consulta falla, devolvemos 0 (no bloqueamos a usuarios legítimos).
+async function countRecentFailures(email) {
+  const since = new Date(Date.now() - ATTEMPT_WINDOW_MS).toISOString()
+  const url =
+    `${SUPABASE_URL}/rest/v1/verify_code_attempts` +
+    `?email=eq.${encodeURIComponent(email)}` +
+    `&created_at=gt.${encodeURIComponent(since)}` +
+    `&select=id&limit=${MAX_FAILED_ATTEMPTS + 1}`
+  try {
+    const res = await fetch(url, { headers: svcHeaders() })
+    if (!res.ok) return 0
+    const rows = await res.json()
+    return Array.isArray(rows) ? rows.length : 0
+  } catch { return 0 }
+}
+
+// Registra un intento FALLIDO (no-fatal: si falla, solo perdemos un punto).
+async function recordFailure(email, ipHash) {
+  try {
+    await fetch(`${SUPABASE_URL}/rest/v1/verify_code_attempts`, {
+      method: 'POST',
+      headers: { ...svcHeaders(), 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+      body: JSON.stringify({ email, ip_hash: ipHash }),
+    })
+  } catch (err) {
+    console.error('[verify-code] recordFailure failed:', err)
+  }
+}
+
 export default async function handler(req, res) {
   // CORS — restringido a dominios oficiales (ver send-verification-code.js
   // para el rationale: evita que terceros disparen verificaciones desde
   // los navegadores de sus visitantes).
   const ALLOWED = new Set([
+    'https://paradabridge.com',
+    'https://www.paradabridge.com',
+    'https://abogadosparada.com',
+    'https://www.abogadosparada.com',
     'https://abogadosyasociadosparada.com',
     'https://www.abogadosyasociadosparada.com',
     'https://paradayasociados.co',
@@ -70,8 +127,15 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: INVALID_MSG })
   }
 
-  const email = rawEmail.toLowerCase()
-  const now   = new Date().toISOString()
+  const email  = rawEmail.toLowerCase()
+  const now    = new Date().toISOString()
+  const ipHash = clientIpHash(req)
+
+  // Bloqueo por fuerza-bruta ANTES de tocar la tabla de códigos: si ya hubo
+  // demasiadas fallas recientes para este correo, cortamos aquí.
+  if (await countRecentFailures(email) >= MAX_FAILED_ATTEMPTS) {
+    return res.status(429).json({ error: 'Demasiados intentos. Solicita un código nuevo.' })
+  }
 
   // ── PATCH atómico: filtros (email, code, used=false, expires_at>now)
   //    en la URL. PostgREST lo ejecuta como un único UPDATE...WHERE en
@@ -106,6 +170,9 @@ export default async function handler(req, res) {
 
     const rows = await patchRes.json()
     if (!Array.isArray(rows) || rows.length === 0) {
+      // Código incorrecto/expirado: registramos la falla para el contador
+      // anti fuerza-bruta y devolvemos el mensaje genérico.
+      await recordFailure(email, ipHash)
       return res.status(400).json({ error: INVALID_MSG })
     }
 

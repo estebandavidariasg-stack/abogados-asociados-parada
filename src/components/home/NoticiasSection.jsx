@@ -205,7 +205,7 @@ export default function NoticiasSection() {
                   onError={(e) => { e.currentTarget.style.display = 'none' }}
                 />
               ) : (
-                <span className={styles.mediaFallback} aria-hidden="true">AAP</span>
+                <span className={styles.mediaFallback} aria-hidden="true">PB</span>
               )}
             </div>
             <div className={styles.body}>

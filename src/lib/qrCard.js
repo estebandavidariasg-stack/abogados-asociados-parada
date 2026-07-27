@@ -11,7 +11,7 @@
    oficial), por eso el `target` es explícito.
    ───────────────────────────────────────────────────────────────────────── */
 
-const APP_URL = 'https://abogadosparada.com'
+const APP_URL = 'https://paradabridge.com'
 
 // Deep-link al chat con el código prellenado (códigos de comisionista/gestor).
 export function chatUrlFor(codigo) {
@@ -57,9 +57,9 @@ export async function downloadQRCard({
 
   // Fondo degradado navy (tono de marca).
   const bg = ctx.createLinearGradient(0, 0, 0, H)
-  bg.addColorStop(0,   '#15376b')
-  bg.addColorStop(0.5, '#1d4d86')
-  bg.addColorStop(1,   '#15376b')
+  bg.addColorStop(0,   '#6b3d15')
+  bg.addColorStop(0.5, '#864e1d')
+  bg.addColorStop(1,   '#6b3d15')
   ctx.fillStyle = bg
   ctx.fillRect(0, 0, W, H)
 
@@ -181,11 +181,11 @@ export async function downloadQRCard({
   // URL de marca.
   ctx.fillStyle = 'rgba(232,201,106,0.85)'
   ctx.font = '600 12px sans-serif'
-  ctx.fillText('abogadosparada.com', W/2, 806)
+  ctx.fillText('paradabridge.com', W/2, 806)
 
   // Descargar.
   const link = document.createElement('a')
-  link.download = filename || `Tarjeta_AAP_${codigo}.png`
+  link.download = filename || `Tarjeta_PB_${codigo}.png`
   link.href = canvas.toDataURL('image/png')
   link.click()
 }

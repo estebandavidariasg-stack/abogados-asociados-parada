@@ -8,7 +8,7 @@ import { getQRUrl, downloadQRCard, chatUrlFor } from '../../lib/qrCard'
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
-const APP_URL      = 'https://abogadosparada.com'
+const APP_URL      = 'https://paradabridge.com'
 
 function generarCodigo() {
   // 32 caracteres (sin I/O para no confundir) → 256 % 32 === 0, así que
@@ -16,7 +16,7 @@ function generarCodigo() {
   // para que el código no sea predecible.
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
   const bytes = crypto.getRandomValues(new Uint8Array(6))
-  let code = 'AAP-'
+  let code = 'PB-'
   for (let i = 0; i < 6; i++) code += chars[bytes[i] % chars.length]
   return code
 }
@@ -26,7 +26,7 @@ function downloadComisionista(codigo, nombre, apellido) {
   return downloadQRCard({
     target: chatUrlFor(codigo),
     codigo, nombre, apellido,
-    filename: `Tarjeta_AAP_${codigo}.png`,
+    filename: `Tarjeta_PB_${codigo}.png`,
   })
 }
 
@@ -45,7 +45,7 @@ export default function CodigosReferencia() {
   const [plataforma, setPlataforma]   = useState(null)
   const [platModalOpen, setPlatModalOpen] = useState(false)
   const [platDestino, setPlatDestino] = useState(APP_URL)
-  const [platCodigo, setPlatCodigo]   = useState('AAP-OFICIAL')
+  const [platCodigo, setPlatCodigo]   = useState('PB-OFICIAL')
   const [platSaving, setPlatSaving]   = useState(false)
 
   const FORM_VACIO = { nombre: '', apellido: '', cedula: '', correo: '', cuentas_bancarias: '', entidad: '' }
@@ -76,7 +76,7 @@ export default function CodigosReferencia() {
     // Separa el código oficial de la plataforma del resto (comisionistas).
     const plat = filas.find(c => c.es_plataforma) || null
     setPlataforma(plat)
-    if (plat) { setPlatDestino(plat.destino_url || APP_URL); setPlatCodigo(plat.codigo || 'AAP-OFICIAL') }
+    if (plat) { setPlatDestino(plat.destino_url || APP_URL); setPlatCodigo(plat.codigo || 'PB-OFICIAL') }
     setCodigos(filas.filter(c => !c.es_plataforma))
     setLoading(false)
   }
@@ -90,7 +90,7 @@ export default function CodigosReferencia() {
     setPlatSaving(true); setError(''); setSuccess('')
     try {
       const headers = await getAuthHeaders()
-      const codigo = (platCodigo.trim().toUpperCase() || 'AAP-OFICIAL')
+      const codigo = (platCodigo.trim().toUpperCase() || 'PB-OFICIAL')
       if (plataforma) {
         const res = await fetch(`${SUPABASE_URL}/rest/v1/codigos_referencia?id=eq.${plataforma.id}`, {
           method: 'PATCH',
@@ -122,11 +122,11 @@ export default function CodigosReferencia() {
   function downloadPlataforma() {
     return downloadQRCard({
       target: platDestino || APP_URL,
-      codigo: platCodigo || 'AAP-OFICIAL',
+      codigo: platCodigo || 'PB-OFICIAL',
       nombre: 'Plataforma oficial', apellido: '',
       subtitulo: 'Sitio oficial', etiqueta: 'CÓDIGO OFICIAL DE LA PLATAFORMA',
       instruccion: 'Escanea para visitar nuestro sitio oficial',
-      filename: 'Tarjeta_AAP_Oficial.png',
+      filename: 'Tarjeta_PB_Oficial.png',
     })
   }
 
@@ -285,7 +285,7 @@ export default function CodigosReferencia() {
               <p className={styles.platDesc}>
                 Este QR redirige directamente a nuestra página. Compártelo en material impreso o digital.
               </p>
-              <p className={styles.platCodigo}>{platCodigo || 'AAP-OFICIAL'}</p>
+              <p className={styles.platCodigo}>{platCodigo || 'PB-OFICIAL'}</p>
               <a className={styles.platUrl} href={platDestino || APP_URL} target="_blank" rel="noopener noreferrer">
                 {(platDestino || APP_URL).replace(/^https?:\/\//, '')}
               </a>
@@ -304,7 +304,7 @@ export default function CodigosReferencia() {
                 style={{ display:'inline-flex', alignItems:'center', gap:'6px' }}
                 onClick={() => {
                   setPlatDestino(plataforma?.destino_url || APP_URL)
-                  setPlatCodigo(plataforma?.codigo || 'AAP-OFICIAL')
+                  setPlatCodigo(plataforma?.codigo || 'PB-OFICIAL')
                   setError(''); setSuccess('')
                   setPlatModalOpen(true)
                 }}
@@ -408,7 +408,7 @@ export default function CodigosReferencia() {
 
                     <div className={styles.qrCardName}>{c.nombre} {c.apellido}</div>
                     <div className={styles.qrCardRole}>Comisionista Autorizado</div>
-                    <div className={styles.qrCardUrl}>abogadosparada.com</div>
+                    <div className={styles.qrCardUrl}>paradabridge.com</div>
                   </div>
 
                   <button
@@ -510,14 +510,14 @@ export default function CodigosReferencia() {
                   <label className={styles.label}>Código (etiqueta)</label>
                   <input className={styles.input} value={platCodigo}
                     onChange={e => setPlatCodigo(e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, ''))}
-                    placeholder="AAP-OFICIAL" maxLength={16}
+                    placeholder="PB-OFICIAL" maxLength={16}
                     style={{ letterSpacing:'2px', fontWeight:600 }} />
                 </div>
                 <div className={`${styles.field} ${styles.fullWidth}`}>
                   <label className={styles.label}>Destino del QR <span className={styles.req}>*</span></label>
                   <input className={styles.input} type="url" value={platDestino}
                     onChange={e => setPlatDestino(e.target.value)}
-                    placeholder="https://abogadosparada.com" />
+                    placeholder="https://paradabridge.com" />
                 </div>
               </div>
               <div className={styles.modalActions}>

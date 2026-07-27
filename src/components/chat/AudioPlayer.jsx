@@ -210,10 +210,10 @@ export default function AudioPlayer({ src, mine, theme = 'dark' }) {
                     height: `${h}%`,
                     background: filled
                       ? (light
-                          ? (mine ? 'rgba(255,255,255,0.9)' : 'var(--navy, #0d2d5e)')
+                          ? (mine ? 'rgba(255,255,255,0.9)' : 'var(--navy, #6d3c1b)')
                           : (mine ? 'rgba(0,0,0,0.5)' : 'var(--gold)'))
                       : (light
-                          ? (mine ? 'rgba(255,255,255,0.4)' : 'rgba(13,45,94,0.28)')
+                          ? (mine ? 'rgba(255,255,255,0.4)' : 'rgba(109,60,27,0.28)')
                           : (mine ? 'rgba(0,0,0,0.2)' : 'rgba(201,168,76,0.25)'))
                   }}
                 />

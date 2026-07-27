@@ -59,7 +59,7 @@
 .link {
   appearance: none;
   background: transparent;
-  border: 1px solid rgba(13, 45, 94, 0.18);
+  border: 1px solid rgba(109,60,27, 0.18);
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
   border-radius: 999px;
@@ -71,7 +71,7 @@
   font-weight: 600;
   letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: rgba(13, 45, 94, 0.52);
+  color: rgba(109,60,27, 0.52);
 
   display: flex;
   align-items: center;
@@ -84,37 +84,37 @@
 }
 
 .link:hover {
-  background: rgba(13, 45, 94, 0.06);
-  border-color: rgba(13, 45, 94, 0.30);
-  color: var(--navy, #0d2d5e);
+  background: rgba(109,60,27, 0.06);
+  border-color: rgba(109,60,27, 0.30);
+  color: var(--navy, #6d3c1b);
 }
 
 /* ── Active: borde navy + fondo sutil ───────────────────── */
 .link.active {
-  background: rgba(13, 45, 94, 0.08);
-  border-color: rgba(13, 45, 94, 0.35);
-  color: var(--navy, #0d2d5e);
+  background: rgba(109,60,27, 0.08);
+  border-color: rgba(109,60,27, 0.35);
+  color: var(--navy, #6d3c1b);
 }
 
 /* ── CTA "Iniciar consulta" — píldora dorada, acción no selección ── */
 .linkCta {
   background: var(--gold, #C9A84C);
   border-color: var(--gold, #C9A84C);
-  color: var(--navy, #0d2d5e);
+  color: var(--navy, #6d3c1b);
   font-weight: 700;
 }
 
 .linkCta:hover {
   background: var(--gold-lt, #E8C96A);
   border-color: var(--gold-lt, #E8C96A);
-  color: var(--navy, #0d2d5e);
+  color: var(--navy, #6d3c1b);
   box-shadow: 0 2px 14px rgba(201, 168, 76, 0.40);
 }
 
 .linkCta.active {
   background: var(--gold, #C9A84C);
   border-color: var(--gold, #C9A84C);
-  color: var(--navy, #0d2d5e);
+  color: var(--navy, #6d3c1b);
 }
 
 /* ── Scrolled: los pills flotan sobre secciones → necesitan fondo propio ── */
@@ -127,26 +127,26 @@
   -webkit-backdrop-filter: blur(14px) saturate(130%);
   border-color: rgba(255, 255, 255, 0.55);
   box-shadow:
-    0 2px 12px rgba(13, 45, 94, 0.10),
+    0 2px 12px rgba(109,60,27, 0.10),
     inset 0 1px 0 rgba(255, 255, 255, 0.90);
-  color: rgba(13, 45, 94, 0.68);
+  color: rgba(109,60,27, 0.68);
 }
 
 .subnavScrolled .link:hover {
   background: rgba(255, 255, 255, 0.96);
-  border-color: rgba(13, 45, 94, 0.20);
-  color: var(--navy, #0d2d5e);
+  border-color: rgba(109,60,27, 0.20);
+  color: var(--navy, #6d3c1b);
   box-shadow:
-    0 3px 16px rgba(13, 45, 94, 0.13),
+    0 3px 16px rgba(109,60,27, 0.13),
     inset 0 1px 0 rgba(255, 255, 255, 1);
 }
 
 .subnavScrolled .link.active {
   background: rgba(255, 255, 255, 0.96);
-  border-color: rgba(13, 45, 94, 0.26);
-  color: var(--navy, #0d2d5e);
+  border-color: rgba(109,60,27, 0.26);
+  color: var(--navy, #6d3c1b);
   box-shadow:
-    0 2px 12px rgba(13, 45, 94, 0.10),
+    0 2px 12px rgba(109,60,27, 0.10),
     inset 0 1px 0 rgba(255, 255, 255, 1);
 }
 

@@ -4,8 +4,8 @@
 
 /* ── Tarjeta en el grid ─────────────────────── */
 .card {
-  background: linear-gradient(145deg, #f0f5ff 0%, #e8effc 100%);
-  border: 1px solid rgba(13, 45, 94, 0.12);
+  background: linear-gradient(145deg, #fff7f0 0%, #fcf1e8 100%);
+  border: 1px solid rgba(109,60,27, 0.12);
   border-top: 3px solid rgba(201, 168, 76, 0.45);
   border-radius: 16px;
   padding: 2rem 1.5rem 1.5rem;
@@ -21,8 +21,8 @@
   position: relative;
   overflow: hidden;
   box-shadow:
-    0 2px 12px rgba(13, 45, 94, 0.08),
-    0 1px 3px  rgba(13, 45, 94, 0.05);
+    0 2px 12px rgba(109,60,27, 0.08),
+    0 1px 3px  rgba(109,60,27, 0.05);
 }
 
 /* Brillo sutil en la esquina superior */
@@ -39,8 +39,8 @@
   transform: translateY(-8px);
   border-top-color: var(--gold, #C9A84C);
   box-shadow:
-    0 16px 48px rgba(13, 45, 94, 0.14),
-    0 4px 12px  rgba(13, 45, 94, 0.08),
+    0 16px 48px rgba(109,60,27, 0.14),
+    0 4px 12px  rgba(109,60,27, 0.08),
     0 0 0 1px   rgba(201, 168, 76, 0.18);
 }
 
@@ -49,7 +49,7 @@
   width: 96px;
   height: 96px;
   border-radius: 50%;
-  background: linear-gradient(145deg, #eef2fb, #dde6f5);
+  background: linear-gradient(145deg, #fbf4ee, #f5e8dd);
   border: 2px solid rgba(201, 168, 76, 0.3);
   display: flex;
   align-items: center;
@@ -58,12 +58,12 @@
   position: relative;
   overflow: hidden;
   transition: border-color 0.35s, box-shadow 0.35s;
-  box-shadow: 0 4px 16px rgba(13, 45, 94, 0.1);
+  box-shadow: 0 4px 16px rgba(109,60,27, 0.1);
 }
 
 .card:hover .photoWrap {
   border-color: var(--gold, #C9A84C);
-  box-shadow: 0 0 0 4px rgba(201, 168, 76, 0.12), 0 4px 16px rgba(13, 45, 94, 0.12);
+  box-shadow: 0 0 0 4px rgba(201, 168, 76, 0.12), 0 4px 16px rgba(109,60,27, 0.12);
 }
 
 .photo {
@@ -77,7 +77,7 @@
   font-family: 'Cinzel', serif;
   font-size: 1.8rem;
   font-weight: 700;
-  color: #0d2d5e;
+  color: #6d3c1b;
 }
 
 .photoGlow {
@@ -120,20 +120,20 @@
   font-family: 'Cinzel', serif;
   font-size: 1rem;
   font-weight: 600;
-  color: #0d2d5e;
+  color: #6d3c1b;
   margin: 0;
   line-height: 1.3;
 }
 
 .location {
   font-size: 0.76rem;
-  color: #6b7fa3;
+  color: #a3856b;
   margin: 2px 0 0;
 }
 
 .subtitle {
   font-size: 0.72rem;
-  color: #9aaac0;
+  color: #c0ac9a;
   margin: 2px 0 0;
   font-style: italic;
 }
@@ -170,7 +170,7 @@
   position: fixed;
   inset: 0;
   z-index: 9999;
-  background: rgba(13, 45, 94, 0.38);
+  background: rgba(109,60,27, 0.38);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   display: flex;
@@ -187,7 +187,7 @@
 
 .modal {
   background: #ffffff;
-  border: 1px solid rgba(13, 45, 94, 0.1);
+  border: 1px solid rgba(109,60,27, 0.1);
   border-radius: 20px;
   padding: 2.5rem 2rem 2rem;
   max-width: 520px;
@@ -197,8 +197,8 @@
   position: relative;
   animation: slideUp 0.32s cubic-bezier(0.16, 1, 0.3, 1);
   box-shadow:
-    0 32px 80px rgba(13, 45, 94, 0.18),
-    0 4px 16px  rgba(13, 45, 94, 0.08);
+    0 32px 80px rgba(109,60,27, 0.18),
+    0 4px 16px  rgba(109,60,27, 0.08);
 }
 
 @keyframes slideUp {
@@ -208,7 +208,7 @@
 
 .modal::-webkit-scrollbar { width: 4px; }
 .modal::-webkit-scrollbar-track { background: transparent; }
-.modal::-webkit-scrollbar-thumb { background: rgba(13,45,94,0.12); border-radius: 4px; }
+.modal::-webkit-scrollbar-thumb { background: rgba(109,60,27,0.12); border-radius: 4px; }
 
 /* ── Cerrar ──────────────────────────────────── */
 .closeBtn {
@@ -216,9 +216,9 @@
   top: 16px; right: 16px;
   width: 34px; height: 34px;
   border-radius: 50%;
-  background: rgba(13,45,94,0.05);
-  border: 1px solid rgba(13,45,94,0.1);
-  color: #7a8fad;
+  background: rgba(109,60,27,0.05);
+  border: 1px solid rgba(109,60,27,0.1);
+  color: #ad927a;
   font-size: 0.85rem;
   cursor: pointer;
   transition: all 0.25s;
@@ -243,14 +243,14 @@
 .modalPhotoWrap {
   width: 84px; height: 84px;
   border-radius: 50%;
-  background: linear-gradient(145deg, #eef2fb, #dde6f5);
+  background: linear-gradient(145deg, #fbf4ee, #f5e8dd);
   border: 2px solid rgba(201,168,76,0.3);
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
   overflow: hidden;
-  box-shadow: 0 4px 14px rgba(13,45,94,0.1);
+  box-shadow: 0 4px 14px rgba(109,60,27,0.1);
 }
 
 .modalPhoto {
@@ -263,7 +263,7 @@
   font-family: 'Cinzel', serif;
   font-size: 1.7rem;
   font-weight: 700;
-  color: #0d2d5e;
+  color: #6d3c1b;
 }
 
 .modalHeaderText {
@@ -289,21 +289,21 @@
   font-family: 'Cinzel', serif;
   font-size: 1.25rem;
   font-weight: 700;
-  color: #0d2d5e;
+  color: #6d3c1b;
   margin: 0;
   line-height: 1.2;
 }
 
 .modalLocation {
   font-size: 0.8rem;
-  color: #7a8fad;
+  color: #ad927a;
   margin: 0;
 }
 
 /* ── Divider ─────────────────────────────────── */
 .modalDivider {
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(13,45,94,0.1), transparent);
+  background: linear-gradient(90deg, transparent, rgba(109,60,27,0.1), transparent);
   margin: 0 0 1.5rem;
 }
 
@@ -312,8 +312,8 @@
   position: relative;
   margin: 0 0 1.5rem;
   padding: 1.15rem 1.25rem 1.1rem;
-  background: linear-gradient(145deg, #f4f7fd 0%, #eef3fb 100%);
-  border: 1px solid rgba(13, 45, 94, 0.1);
+  background: linear-gradient(145deg, #fdf8f4 0%, #fbf4ee 100%);
+  border: 1px solid rgba(109,60,27, 0.1);
   border-left: 3px solid var(--gold, #c9a84c);
   border-radius: 12px;
 }
@@ -345,7 +345,7 @@
   font-size: 0.62rem;
   text-transform: uppercase;
   letter-spacing: 0.18em;
-  color: #5a6f96;
+  color: #96765a;
   font-weight: 600;
 }
 
@@ -359,7 +359,7 @@
 .resenaTexto {
   font-size: 0.9rem;
   line-height: 1.75;
-  color: #33456b;
+  color: #6b4d33;
   margin: 0;
   font-style: italic;
   /* Comentario íntegro: sin recorte de líneas. */
@@ -370,16 +370,16 @@
 .resenaAutor {
   margin: 0.7rem 0 0;
   font-size: 0.78rem;
-  color: #6b7fa3;
+  color: #a3856b;
 }
 
 .resenaAutorNombre {
   font-weight: 700;
-  color: #0d2d5e;
+  color: #6d3c1b;
 }
 
 .resenaAutorRol {
-  color: #7a8fad;
+  color: #ad927a;
 }
 
 /* ── Secciones ───────────────────────────────── */
@@ -390,7 +390,7 @@
   font-size: 0.68rem;
   text-transform: uppercase;
   letter-spacing: 0.2em;
-  color: #5a6f96;
+  color: #96765a;
   margin: 0 0 0.65rem;
   font-weight: 600;
 }
@@ -398,7 +398,7 @@
 .modalDesc {
   font-size: 0.88rem;
   line-height: 1.8;
-  color: #5a6f96;
+  color: #96765a;
   margin: 0;
 }
 
@@ -429,14 +429,14 @@
   font-size: 0.58rem;
   text-transform: uppercase;
   letter-spacing: 0.15em;
-  color: #9aaac0;
+  color: #c0ac9a;
   margin-bottom: 2px;
 }
 
 .infoValue {
   display: block;
   font-size: 0.86rem;
-  color: #0d2d5e;
+  color: #6d3c1b;
   word-break: break-word;
   font-weight: 500;
   line-height: 1.5;
@@ -473,10 +473,10 @@
 .modalVideo {
   width: 100%;
   border-radius: 12px;
-  border: 1px solid rgba(13,45,94,0.1);
+  border: 1px solid rgba(109,60,27,0.1);
   max-height: 380px;
   object-fit: contain;
-  background: #f4f7fb;
+  background: #fbf7f4;
 }
 
 /* ── Responsive ──────────────────────────────── */
@@ -512,9 +512,9 @@
 }
 
 .rolPillAbogado {
-  background: rgba(13, 45, 94, 0.1);
-  color: var(--navy, #0d2d5e);
-  border: 1px solid rgba(13, 45, 94, 0.22);
+  background: rgba(109,60,27, 0.1);
+  color: var(--navy, #6d3c1b);
+  border: 1px solid rgba(109,60,27, 0.22);
 }
 
 .rolPillContador {

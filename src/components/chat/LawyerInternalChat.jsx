@@ -444,7 +444,7 @@ export default function LawyerInternalChat({ miId }) {
         <div className={styles.headAvatar}>A</div>
         <div>
           <p className={styles.headNombre}>
-            Administración · AAP
+            Administración · Parada Bridge
             {noLeidos > 0 && <span className={styles.badge}>{noLeidos}</span>}
           </p>
           <p className={styles.headSub}>Canal privado · Solo visible para ti y el administrador</p>
@@ -458,7 +458,7 @@ export default function LawyerInternalChat({ miId }) {
           <div className={styles.vacio}>
             <span className={styles.vacioIcon}>💬</span>
             <p>No hay mensajes aún.</p>
-            <p>Escribe al administrador de AAP para iniciar la conversación.</p>
+            <p>Escribe al administrador de Parada Bridge para iniciar la conversación.</p>
           </div>
         )}
         {messages.map(m => {

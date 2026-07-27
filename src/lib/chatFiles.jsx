@@ -104,7 +104,7 @@ export function ChatImage({ src, alt, btnClassName, imgClassName, onOpen, onBloc
         style={{
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           minWidth: 160, minHeight: 90, padding: '18px 14px',
-          background: 'rgba(13,45,94,0.05)', color: '#8a9ab5',
+          background: 'rgba(109,60,27,0.05)', color: '#b59e8a',
           fontSize: '0.78rem', textAlign: 'center', borderRadius: 12,
         }}
       >
@@ -137,7 +137,7 @@ export function ChatImage({ src, alt, btnClassName, imgClassName, onOpen, onBloc
         <div
           className={imgClassName}
           aria-hidden="true"
-          style={{ minWidth: 160, minHeight: 120, background: 'rgba(13,45,94,0.06)', borderRadius: 12 }}
+          style={{ minWidth: 160, minHeight: 120, background: 'rgba(109,60,27,0.06)', borderRadius: 12 }}
         />
       )}
     </button>

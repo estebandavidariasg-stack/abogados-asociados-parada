@@ -20,11 +20,11 @@ export const FONT_SERIF = "'Cinzel', Georgia, 'Times New Roman', serif"
 export const FONT_SANS  = "'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif"
 
 export const C = {
-  navy:     '#0d2d5e',
+  navy:     '#6d3c1b',
   goldText: '#9a7a2c', // dorado legible sobre fondo claro
   gold:     '#c9a84c', // dorado brillante: solo fondos/bordes/acentos
-  body:     '#41506b',
-  muted:    '#5f6e8a',
+  body:     '#6b5541',
+  muted:    '#8a735f',
 }
 
 // Énfasis dentro del cuerpo: navy en negrita (el dorado no contrasta sobre blanco).
@@ -47,7 +47,7 @@ export function emailButton(label, url) {
 export function infoBox(innerHtml) {
   return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0;">
   <tr>
-    <td style="background-color:#f4f8fd;border:1px solid #dbe6f4;border-radius:12px;padding:18px 20px;font-family:${FONT_SANS};">
+    <td style="background-color:#fdf8f4;border:1px solid #f4e7db;border-radius:12px;padding:18px 20px;font-family:${FONT_SANS};">
       ${innerHtml}
     </td>
   </tr>
@@ -58,7 +58,7 @@ export function infoBox(innerHtml) {
 export function codeBox(code) {
   return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:24px 0;">
   <tr>
-    <td align="center" style="background-color:#f1f6fc;border:2px solid ${C.gold};border-radius:12px;padding:22px 16px;">
+    <td align="center" style="background-color:#fcf6f1;border:2px solid ${C.gold};border-radius:12px;padding:22px 16px;">
       <div style="font-family:${FONT_SERIF};font-size:40px;font-weight:700;color:${C.navy};letter-spacing:12px;line-height:1;">${code}</div>
     </td>
   </tr>
@@ -95,11 +95,11 @@ export function renderShell({ subjectLine, preheader, innerHtml }) {
     <tr>
       <td align="center" style="padding:32px 16px;">
         <!--[if mso]><table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0"><tr><td><![endif]-->
-        <table role="presentation" class="aap-container" width="600" cellpadding="0" cellspacing="0" border="0" style="width:600px;max-width:600px;background-color:#ffffff;border-radius:16px;overflow:hidden;border:1px solid #e1e9f4;box-shadow:0 6px 24px rgba(13,45,94,0.08);">
+        <table role="presentation" class="aap-container" width="600" cellpadding="0" cellspacing="0" border="0" style="width:600px;max-width:600px;background-color:#ffffff;border-radius:16px;overflow:hidden;border:1px solid #f4eae1;box-shadow:0 6px 24px rgba(109,60,27,0.08);">
 
           <!-- Encabezado: degradado azul claro -> blanco -->
           <tr>
-            <td align="center" bgcolor="#e9f1fc" style="background-color:#e9f1fc;background:linear-gradient(180deg,#d4e4f7 0%,#e9f1fc 58%,#ffffff 100%);padding:38px 32px 30px;">
+            <td align="center" bgcolor="#fcf2e9" style="background-color:#fcf2e9;background:linear-gradient(180deg,#f7e4d4 0%,#fcf2e9 58%,#ffffff 100%);padding:38px 32px 30px;">
               <div style="font-family:${FONT_SERIF};font-size:21px;font-weight:700;letter-spacing:0.16em;text-transform:uppercase;color:${C.navy};line-height:1.35;">
                 Parada <span style="color:${C.goldText};">Bridge</span>
               </div>
@@ -118,7 +118,7 @@ export function renderShell({ subjectLine, preheader, innerHtml }) {
           </tr>
 
           <!-- Divisor -->
-          <tr><td class="aap-pad" style="padding:0 40px;"><div style="border-top:1px solid #e6edf6;font-size:0;line-height:0;">&nbsp;</div></td></tr>
+          <tr><td class="aap-pad" style="padding:0 40px;"><div style="border-top:1px solid #f6ede6;font-size:0;line-height:0;">&nbsp;</div></td></tr>
 
           <!-- Pie -->
           <tr>
@@ -127,7 +127,7 @@ export function renderShell({ subjectLine, preheader, innerHtml }) {
                 Mensaje automático de Parada Bridge. Por favor, no respondas a este correo.
               </div>
               <div style="font-size:11.5px;line-height:1.7;margin-top:6px;">
-                <a href="https://abogadosparada.com" target="_blank" style="color:${C.goldText};font-weight:600;">abogadosparada.com</a>
+                <a href="https://paradabridge.com" target="_blank" style="color:${C.goldText};font-weight:600;">paradabridge.com</a>
               </div>
             </td>
           </tr>

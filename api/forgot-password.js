@@ -1,4 +1,5 @@
 import nodemailer from 'nodemailer'
+import crypto from 'node:crypto'
 import { renderShell, emailButton, infoBox, em, C } from './_lib/emailTemplate.js'
 
 /* ────────────────────────────────────────────────────────────────────────
@@ -26,7 +27,7 @@ const SUPABASE_URL =
   process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
 
-const DEFAULT_REDIRECT = 'https://abogadosparada.com/nueva-contrasena'
+const DEFAULT_REDIRECT = 'https://paradabridge.com/nueva-contrasena'
 
 /* ── Verificación de reCAPTCHA contra Google ──────────────────────────────
    Sin esto, un atacante hace flooding de correos de recuperación a víctimas
@@ -64,12 +65,26 @@ async function verifyRecaptcha(token) {
    atacado (señal de que existe / es interesante). */
 const RL_WINDOW_MS = 15 * 60 * 1000
 const RL_MAX       = 3
+// Límite por IP (además del de email): evita que un atacante rote entre muchos
+// correos desde una sola IP sin tocar el límite por correo. Más holgado porque
+// una IP compartida (oficina/NAT) puede tener varios usuarios legítimos.
+const RL_IP_MAX    = 20
 
 const adminHeaders = () => ({
   apikey:        SUPABASE_SERVICE_ROLE_KEY,
   Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
   'Content-Type':'application/json',
 })
+
+// Hash de la IP del cliente (no guardamos IP en claro). Reutiliza AI_IP_SALT
+// si está configurado, como el resto del proyecto.
+function clientIpHash(req) {
+  const xff = req.headers['x-forwarded-for']
+  const ip  = (Array.isArray(xff) ? xff[0] : String(xff || '')).split(',')[0].trim()
+              || req.headers['x-real-ip'] || ''
+  if (!ip) return null
+  return crypto.createHash('sha256').update((process.env.AI_IP_SALT || '') + ip).digest('hex')
+}
 
 async function isRateLimited(email) {
   const since = new Date(Date.now() - RL_WINDOW_MS).toISOString()
@@ -94,12 +109,36 @@ async function isRateLimited(email) {
   }
 }
 
-async function recordAttempt(email) {
+// Igual que isRateLimited pero por IP. Fail-open: si no hay IP o no se puede
+// contar, no bloqueamos.
+async function isRateLimitedByIp(ipHash) {
+  if (!ipHash) return false
+  const since = new Date(Date.now() - RL_WINDOW_MS).toISOString()
+  const url   =
+    `${SUPABASE_URL}/rest/v1/forgot_password_attempts` +
+    `?ip_hash=eq.${encodeURIComponent(ipHash)}` +
+    `&created_at=gt.${encodeURIComponent(since)}` +
+    `&select=id&limit=${RL_IP_MAX + 1}`
+  try {
+    const res = await fetch(url, { headers: adminHeaders() })
+    if (!res.ok) {
+      console.error('[forgot-password] rate-limit-by-ip count failed:', res.status)
+      return false
+    }
+    const rows = await res.json()
+    return Array.isArray(rows) && rows.length >= RL_IP_MAX
+  } catch (err) {
+    console.error('[forgot-password] rate-limit-by-ip count error:', err)
+    return false
+  }
+}
+
+async function recordAttempt(email, ipHash) {
   try {
     await fetch(`${SUPABASE_URL}/rest/v1/forgot_password_attempts`, {
       method: 'POST',
       headers: { ...adminHeaders(), Prefer: 'return=minimal' },
-      body:    JSON.stringify({ email }),
+      body:    JSON.stringify({ email, ip_hash: ipHash }),
     })
   } catch (err) {
     // No-fatal — si esto falla, simplemente perdemos un punto del conteo.
@@ -171,8 +210,9 @@ export default async function handler(req, res) {
   // Registramos el intento ANTES de chequear el límite — así el conteo
   // incluye intentos rate-limited (no solo los que pasaron). Esto evita
   // que un atacante mande 1000 requests y solo cuenten los primeros 3.
-  await recordAttempt(normalizedEmail)
-  if (await isRateLimited(normalizedEmail)) {
+  const ipHash = clientIpHash(req)
+  await recordAttempt(normalizedEmail, ipHash)
+  if (await isRateLimited(normalizedEmail) || await isRateLimitedByIp(ipHash)) {
     // Silencio — no enviamos correo, pero respondemos 200 para no enumerar
     // (no revelamos que este email está bajo ataque).
     console.warn('[forgot-password] rate-limit hit for', normalizedEmail)

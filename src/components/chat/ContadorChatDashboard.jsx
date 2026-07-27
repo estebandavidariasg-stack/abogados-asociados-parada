@@ -1143,7 +1143,7 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
                   }}
                 >âœ“</span>
                 <span>
-                  <strong style={{ color: '#0d2d5e' }}>Luz verde Â·</strong> Pago confirmado â€”
+                  <strong style={{ color: '#6d3c1b' }}>Luz verde Â·</strong> Pago confirmado â€”
                   datos de contacto y descarga de archivos habilitados.
                 </span>
               </motion.div>
@@ -1161,9 +1161,9 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
                     initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }}
                     transition={{ type: 'spring', stiffness: 320, damping: 34 }}
                     role="dialog" aria-label="Resultado de IA Parada Precise"
-                    style={{ position: 'fixed', top: 0, right: 0, bottom: 0, width: 'min(460px, 92vw)', background: '#fff', zIndex: 1001, display: 'flex', flexDirection: 'column', boxShadow: '-12px 0 40px rgba(13,45,94,0.25)' }}
+                    style={{ position: 'fixed', top: 0, right: 0, bottom: 0, width: 'min(460px, 92vw)', background: '#fff', zIndex: 1001, display: 'flex', flexDirection: 'column', boxShadow: '-12px 0 40px rgba(109,60,27,0.25)' }}
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '16px 18px', background: 'linear-gradient(135deg,#15376b,#0d2d5e)', color: '#fff' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '16px 18px', background: 'linear-gradient(135deg,#6b3d15,#6d3c1b)', color: '#fff' }}>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
                         <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: '#f2d580' }}>IA Parada Precise</span>
                         <strong style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: '1.2rem', fontWeight: 600 }}>
@@ -1175,10 +1175,10 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
                     </div>
                     <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: 18 }}>
                       {iaCargando ? (
-                        <div style={{ display: 'flex', gap: 6, alignItems: 'center', color: '#6b7689', fontSize: 13 }}>
+                        <div style={{ display: 'flex', gap: 6, alignItems: 'center', color: '#89796b', fontSize: 13 }}>
                           {[0, 1, 2].map(i => (
                             <motion.span key={i}
-                              style={{ width: 8, height: 8, borderRadius: '50%', background: '#9aa8c0', display: 'inline-block' }}
+                              style={{ width: 8, height: 8, borderRadius: '50%', background: '#c0ac9a', display: 'inline-block' }}
                               animate={{ opacity: [0.3, 1, 0.3], y: [0, -3, 0] }}
                               transition={{ duration: 1.1, repeat: Infinity, delay: i * 0.18 }}
                             />
@@ -1188,9 +1188,9 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
                       ) : <Markdown>{iaResultado}</Markdown>}
                     </div>
                     {!iaCargando && iaResultado && (
-                      <div style={{ padding: '12px 18px', borderTop: '1px solid #e1e8f2', display: 'flex', justifyContent: 'flex-end' }}>
+                      <div style={{ padding: '12px 18px', borderTop: '1px solid #f2e9e1', display: 'flex', justifyContent: 'flex-end' }}>
                         <button type="button" onClick={() => { navigator.clipboard?.writeText(iaResultado); setIaCopiado(true); setTimeout(() => setIaCopiado(false), 1600) }}
-                          style={{ background: 'linear-gradient(135deg,#f2d580,#c9a84c 55%,#9a7a2c)', color: '#0d2d5e', border: 'none', borderRadius: 8, padding: '8px 16px', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
+                          style={{ background: 'linear-gradient(135deg,#f2d580,#c9a84c 55%,#9a7a2c)', color: '#6d3c1b', border: 'none', borderRadius: 8, padding: '8px 16px', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
                           {iaCopiado ? 'Copiado âœ“' : 'Copiar'}
                         </button>
                       </div>

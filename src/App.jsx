@@ -17,7 +17,7 @@ function RouteFallback() {
   return (
     <div style={{
       minHeight: '100vh', display: 'flex', alignItems: 'center',
-      justifyContent: 'center', background: '#0d2d5e',
+      justifyContent: 'center', background: '#6d3c1b',
       color: '#c9a84c', fontFamily: "'Cinzel', serif", letterSpacing: '0.1em',
     }}>
       Cargando…

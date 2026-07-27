@@ -244,7 +244,7 @@ export default function MisPagos({ userId }) {
           <h3 className={styles.emptyTitle}>No tienes pagos pendientes</h3>
           <p className={styles.emptyNote}>
             Los cobros aparecerán aquí automáticamente después de que una consulta
-            sea verificada por el equipo de AAP.
+            sea verificada por el equipo de Parada Bridge.
           </p>
         </div>
       )}

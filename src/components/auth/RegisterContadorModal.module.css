@@ -17,7 +17,7 @@
   position: fixed;
   inset: 0;
   z-index: 500;
-  background: rgba(13, 45, 94, 0.45);
+  background: rgba(109,60,27, 0.45);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   display: flex;
@@ -32,7 +32,7 @@
 /* ── MODAL ───────────────────────────────────────────────── */
 .modal {
   background: #ffffff;
-  border: 1px solid rgba(13, 45, 94, 0.1);
+  border: 1px solid rgba(109,60,27, 0.1);
   border-radius: 20px;
   width: 100%;
   max-width: 480px;
@@ -42,7 +42,7 @@
   position: relative;
   animation: slideUp 0.32s cubic-bezier(0.16, 1, 0.3, 1);
   box-shadow:
-    0 32px 80px rgba(13, 45, 94, 0.2),
+    0 32px 80px rgba(109,60,27, 0.2),
     0 0 0 1px rgba(255, 255, 255, 0.8);
 }
 
@@ -56,7 +56,7 @@
   position: absolute;
   top: 1.1rem;
   right: 1.3rem;
-  background: rgba(13, 45, 94, 0.06);
+  background: rgba(109,60,27, 0.06);
   border: none;
   color: var(--muted);
   cursor: pointer;
@@ -68,7 +68,7 @@
   height: 32px;
   border-radius: 50%;
 }
-.close:hover { background: rgba(13, 45, 94, 0.12); color: var(--navy); }
+.close:hover { background: rgba(109,60,27, 0.12); color: var(--navy); }
 
 /* ── HEADER ──────────────────────────────────────────────── */
 .eyebrow {
@@ -94,7 +94,7 @@
 /* ── TABS (login / registrarse) ──────────────────────────── */
 .tabs {
   display: flex;
-  border-bottom: 1px solid rgba(13, 45, 94, 0.1);
+  border-bottom: 1px solid rgba(109,60,27, 0.1);
   margin-bottom: 1.6rem;
 }
 
@@ -103,7 +103,7 @@
   background: none;
   border: none;
   border-bottom: 2px solid transparent;
-  color: rgba(13, 45, 94, 0.4);
+  color: rgba(109,60,27, 0.4);
   font-family: 'Raleway', sans-serif;
   font-size: 0.7rem;
   font-weight: 600;
@@ -155,7 +155,7 @@
   font-size: 0.6rem;
   font-weight: 500;
   letter-spacing: 0.1em;
-  color: rgba(74, 96, 128, 0.6);
+  color: rgba(111,92,72, 0.6);
   margin-left: 6px;
   text-transform: none;
 }
@@ -163,7 +163,7 @@
 .input {
   width: 100%;
   background: #f8f9fc;
-  border: 1.5px solid rgba(13, 45, 94, 0.15);
+  border: 1.5px solid rgba(109,60,27, 0.15);
   border-radius: 10px;
   color: var(--navy);
   padding: 0.78rem 1rem;
@@ -177,9 +177,9 @@
 .input:focus {
   border-color: var(--reg-accent, var(--navy-md));
   background: #ffffff;
-  box-shadow: 0 0 0 3px var(--reg-focus, rgba(13, 45, 94, 0.07));
+  box-shadow: 0 0 0 3px var(--reg-focus, rgba(109,60,27, 0.07));
 }
-.input::placeholder { color: rgba(74, 96, 128, 0.45); }
+.input::placeholder { color: rgba(111,92,72, 0.45); }
 
 /* ── ESPECIALIDADES — checkbox grid 2 columnas ───────────── */
 .especialidadesGrid {
@@ -187,7 +187,7 @@
   grid-template-columns: 1fr 1fr;
   gap: 8px 14px;
   background: #f8f9fc;
-  border: 1.5px solid rgba(13, 45, 94, 0.15);
+  border: 1.5px solid rgba(109,60,27, 0.15);
   border-radius: 10px;
   padding: 12px 14px;
 }
@@ -319,8 +319,8 @@
   list-style: none;
   margin: 6px 0 0;
   padding: 10px 12px;
-  background: rgba(13, 45, 94, 0.04);
-  border: 1px solid rgba(13, 45, 94, 0.08);
+  background: rgba(109,60,27, 0.04);
+  border: 1px solid rgba(109,60,27, 0.08);
   border-radius: 8px;
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -335,7 +335,7 @@
   transition: color 0.25s;
 }
 .pwItemOk      { color: rgba(46, 204, 113, 0.95); }
-.pwItemPending { color: rgba(13, 45, 94, 0.4); }
+.pwItemPending { color: rgba(109,60,27, 0.4); }
 .pwIcon {
   font-size: 0.65rem;
   font-weight: 700;
@@ -379,7 +379,7 @@
 .gestorSection {
   margin: 6px 0 2px;
   padding-top: 16px;
-  border-top: 1px solid rgba(13, 45, 94, 0.10);
+  border-top: 1px solid rgba(109,60,27, 0.10);
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -400,13 +400,13 @@
   gap: 10px;
   padding: 12px 14px;
   background: #f8f9fc;
-  border: 1.5px solid rgba(13, 45, 94, 0.12);
+  border: 1.5px solid rgba(109,60,27, 0.12);
   border-radius: 10px;
   cursor: pointer;
   transition: border-color 0.2s ease, background 0.2s ease;
   user-select: none;
 }
-.toggleRow:hover { border-color: var(--reg-accent, rgba(13, 45, 94, 0.3)); }
+.toggleRow:hover { border-color: var(--reg-accent, rgba(109,60,27, 0.3)); }
 .toggleRow[data-on="true"] {
   border-color: var(--reg-accent, #c9a84c);
   background: var(--reg-tint, rgba(201, 168, 76, 0.07));

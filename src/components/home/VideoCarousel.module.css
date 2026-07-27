@@ -87,13 +87,13 @@
   font-size: 0.82rem;
   cursor: pointer;
   letter-spacing: 0.5px;
-  box-shadow: 0 4px 20px rgba(13,45,94,0.25);
+  box-shadow: 0 4px 20px rgba(109,60,27,0.25);
   transition: transform 0.2s, box-shadow 0.2s;
   font-family: inherit;
 }
 .fab:hover {
   transform: scale(1.05);
-  box-shadow: 0 6px 28px rgba(13,45,94,0.4);
+  box-shadow: 0 6px 28px rgba(109,60,27,0.4);
 }
 
 /* En móvil el FAB absoluto caía sobre el título centrado. Lo ponemos en flujo,
@@ -146,11 +146,11 @@
 }
 
 .toolAdd {
-  background: rgba(13,45,94,0.08);
+  background: rgba(109,60,27,0.08);
   color: var(--navy);
-  border: 1px solid rgba(13,45,94,0.2);
+  border: 1px solid rgba(109,60,27,0.2);
 }
-.toolAdd:hover { background: rgba(13,45,94,0.14); }
+.toolAdd:hover { background: rgba(109,60,27,0.14); }
 
 .toolSave {
   background: var(--gold);
@@ -160,11 +160,11 @@
 .toolSave:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .toolCancel {
-  background: rgba(13,45,94,0.05);
+  background: rgba(109,60,27,0.05);
   color: var(--muted);
-  border: 1px solid rgba(13,45,94,0.12);
+  border: 1px solid rgba(109,60,27,0.12);
 }
-.toolCancel:hover { background: rgba(13,45,94,0.1); }
+.toolCancel:hover { background: rgba(109,60,27,0.1); }
 
 /* ── SAVING OVERLAY ───────────────────────────────────── */
 .savingOverlay {
@@ -205,9 +205,9 @@
 
 .slideActive {
   box-shadow:
-    0 0 0 1px rgba(13,45,94,0.4),
-    0 0 0 5px rgba(13,45,94,0.08),
-    0 30px 80px rgba(13,45,94,0.25);
+    0 0 0 1px rgba(109,60,27,0.4),
+    0 0 0 5px rgba(109,60,27,0.08),
+    0 30px 80px rgba(109,60,27,0.25);
 }
 
 .video {
@@ -224,8 +224,8 @@
 .emptySlide {
   width: 100%;
   height: 100%;
-  background: rgba(13,45,94,0.04);
-  border: 1px dashed rgba(13,45,94,0.2);
+  background: rgba(109,60,27,0.04);
+  border: 1px dashed rgba(109,60,27,0.2);
   border-radius: 6px;
   display: flex;
   align-items: center;
@@ -242,7 +242,7 @@
   align-items: center;
   justify-content: center;
   border-radius: 6px;
-  background: rgba(13,45,94,0.15);
+  background: rgba(109,60,27,0.15);
 }
 
 .playIcon {
@@ -262,7 +262,7 @@
 .editOverlay {
   position: absolute;
   inset: 0;
-  background: rgba(13,45,94,0.55);
+  background: rgba(109,60,27,0.55);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -273,7 +273,7 @@
   z-index: 5;
   transition: background 0.3s;
 }
-.editOverlay:hover { background: rgba(13,45,94,0.72); }
+.editOverlay:hover { background: rgba(109,60,27,0.72); }
 
 .editIcon {
   width: 50px;
@@ -302,7 +302,7 @@
   width: 30px;
   height: 30px;
   border-radius: 8px;
-  background: rgba(13, 27, 42, 0.78);
+  background: rgba(42, 27, 13, 0.78);
   color: rgba(255, 255, 255, 0.92);
   border: 1px solid rgba(255, 255, 255, 0.18);
   cursor: pointer;
@@ -350,7 +350,7 @@
 .dot {
   width: 28px;
   height: 2px;
-  background: rgba(13,45,94,0.18);
+  background: rgba(109,60,27,0.18);
   border: none;
   cursor: pointer;
   transition: background 0.4s, width 0.4s;

@@ -1,7 +1,7 @@
 
 import { useState, useEffect, useRef, lazy, Suspense } from 'react'
 import { motion, useInView, useReducedMotion } from 'framer-motion'
-import { supabase } from '../../lib/supabase'
+import { supabase, ensureChatToken } from '../../lib/supabase'
 import styles from './ChatSection.module.css'
 import AudioPlayer from './AudioPlayer'
 import TriagePanel from './TriagePanel'
@@ -97,15 +97,15 @@ const AAP_CARD_STYLES = `
     text-align: center;
     background:
       radial-gradient(ellipse at 50% 0%, rgba(255, 255, 255, 0.07) 0%, transparent 60%),
-      linear-gradient(165deg, #15376b 0%, #0d2d5e 50%, #081f44 100%);
+      linear-gradient(165deg, #6b3d15 0%, #6d3c1b 50%, #442408 100%);
     border: 1px solid rgba(201, 168, 76, 0.38);
     border-radius: 18px;
     padding: 32px 18px 26px;
     overflow: visible;
     box-shadow:
       0 1px 2px rgba(0, 0, 0, 0.22),
-      0 12px 28px rgba(13, 45, 94, 0.30),
-      0 30px 60px rgba(13, 45, 94, 0.32),
+      0 12px 28px rgba(109,60,27, 0.30),
+      0 30px 60px rgba(109,60,27, 0.32),
       0 0 0 1px rgba(201, 168, 76, 0.14),
       0 0 42px rgba(201, 168, 76, 0.16),
       inset 0 1px 0 rgba(255, 255, 255, 0.10);
@@ -120,8 +120,8 @@ const AAP_CARD_STYLES = `
     border-color: rgba(201, 168, 76, 0.85);
     box-shadow:
       0 2px 4px rgba(0, 0, 0, 0.30),
-      0 24px 48px rgba(13, 45, 94, 0.40),
-      0 56px 110px rgba(13, 45, 94, 0.45),
+      0 24px 48px rgba(109,60,27, 0.40),
+      0 56px 110px rgba(109,60,27, 0.45),
       0 0 0 5px rgba(201, 168, 76, 0.20),
       0 0 70px rgba(201, 168, 76, 0.34),
       inset 0 1px 0 rgba(255, 255, 255, 0.18);
@@ -143,7 +143,7 @@ const AAP_CARD_STYLES = `
       0 4px 16px rgba(201, 168, 76, 0.45),
       inset 0 1px 0 rgba(255, 255, 255, 0.65),
       inset 0 -1px 0 rgba(0, 0, 0, 0.18);
-    color: #0d2d5e;
+    color: #6d3c1b;
     margin: 0 auto 18px;
     display: flex;
     align-items: center;
@@ -192,13 +192,13 @@ const AAP_CARD_STYLES = `
   .aap-card-form,
   .aap-card-rating {
     background: linear-gradient(180deg, #ffffff 0%, #fbf9ef 100%);
-    border: 1px solid rgba(13, 45, 94, 0.10);
+    border: 1px solid rgba(109,60,27, 0.10);
     border-radius: 18px;
     padding: 40px 36px 32px;
     box-shadow:
-      0 1px 3px rgba(13, 45, 94, 0.05),
-      0 12px 28px rgba(13, 45, 94, 0.08),
-      0 28px 64px rgba(13, 45, 94, 0.10),
+      0 1px 3px rgba(109,60,27, 0.05),
+      0 12px 28px rgba(109,60,27, 0.08),
+      0 28px 64px rgba(109,60,27, 0.10),
       inset 0 1px 0 rgba(255, 255, 255, 0.9);
     transition:
       box-shadow 360ms cubic-bezier(0.2, 0.8, 0.2, 1),
@@ -207,11 +207,11 @@ const AAP_CARD_STYLES = `
   }
   .aap-card-cedula:hover,
   .aap-card-rating:hover {
-    border-color: rgba(13, 45, 94, 0.16);
+    border-color: rgba(109,60,27, 0.16);
     box-shadow:
-      0 2px 4px rgba(13, 45, 94, 0.06),
-      0 16px 36px rgba(13, 45, 94, 0.10),
-      0 36px 72px rgba(13, 45, 94, 0.12),
+      0 2px 4px rgba(109,60,27, 0.06),
+      0 16px 36px rgba(109,60,27, 0.10),
+      0 36px 72px rgba(109,60,27, 0.12),
       inset 0 1px 0 rgba(255, 255, 255, 0.95);
   }
   /* Title — centered, larger, with centered gold rule beneath */
@@ -219,7 +219,7 @@ const AAP_CARD_STYLES = `
   .aap-card-rating > p:first-of-type {
     font-size: 1.45rem;
     letter-spacing: 0.05em;
-    color: #0d2d5e;
+    color: #6d3c1b;
     margin: 0;
     text-align: center;
   }
@@ -242,7 +242,7 @@ const AAP_CARD_STYLES = `
   .aap-card-cedula > p:nth-of-type(2),
   .aap-card-rating > p:nth-of-type(2) {
     font-size: 0.95rem;
-    color: #3d4a60;
+    color: #604d3d;
     line-height: 1.65;
     margin: 0 0 28px;
     text-align: center;
@@ -251,13 +251,13 @@ const AAP_CARD_STYLES = `
   /* ─── Tipo selector (Abogado / Contador) ──────────────────── */
   .aap-card-tipo {
     background: linear-gradient(180deg, #ffffff 0%, #fafaf2 100%);
-    border: 1px solid rgba(13, 45, 94, 0.10);
+    border: 1px solid rgba(109,60,27, 0.10);
     border-radius: 14px;
     padding: 24px 18px;
     overflow: hidden;
     box-shadow:
-      0 1px 2px rgba(13, 45, 94, 0.05),
-      0 4px 12px rgba(13, 45, 94, 0.07);
+      0 1px 2px rgba(109,60,27, 0.05),
+      0 4px 12px rgba(109,60,27, 0.07);
     transition:
       transform 240ms cubic-bezier(0.2, 0.8, 0.2, 1),
       border-color 240ms ease,
@@ -272,14 +272,14 @@ const AAP_CARD_STYLES = `
     transform: translateY(-3px);
     border-color: rgba(201, 168, 76, 0.45);
     box-shadow:
-      0 2px 6px rgba(13, 45, 94, 0.08),
-      0 14px 30px rgba(13, 45, 94, 0.12);
+      0 2px 6px rgba(109,60,27, 0.08),
+      0 14px 30px rgba(109,60,27, 0.12);
   }
   .aap-card-tipo[data-selected="true"] {
     background: linear-gradient(180deg, rgba(201, 168, 76, 0.14) 0%, rgba(201, 168, 76, 0.03) 100%);
     border-color: rgba(201, 168, 76, 0.70);
     box-shadow:
-      0 2px 6px rgba(13, 45, 94, 0.06),
+      0 2px 6px rgba(109,60,27, 0.06),
       0 14px 36px rgba(201, 168, 76, 0.24),
       inset 0 1px 0 rgba(255, 255, 255, 0.7);
   }
@@ -297,19 +297,19 @@ const AAP_CARD_STYLES = `
     transform: translateY(-3px);
     border-color: rgba(201, 168, 76, 0.85);
     box-shadow:
-      0 2px 8px rgba(13, 45, 94, 0.08),
+      0 2px 8px rgba(109,60,27, 0.08),
       0 16px 40px rgba(201, 168, 76, 0.30);
   }
 
   /* ─── Lawyer / Contador list cards ────────────────────────── */
   .aap-card-lawyer {
     background: linear-gradient(180deg, #ffffff 0%, #fcfbf4 100%);
-    border: 1px solid rgba(13, 45, 94, 0.09);
+    border: 1px solid rgba(109,60,27, 0.09);
     border-radius: 14px;
     padding: 18px 20px;
     box-shadow:
-      0 1px 2px rgba(13, 45, 94, 0.04),
-      0 4px 10px rgba(13, 45, 94, 0.06);
+      0 1px 2px rgba(109,60,27, 0.04),
+      0 4px 10px rgba(109,60,27, 0.06);
     transition:
       transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
       border-color 220ms ease,
@@ -329,28 +329,28 @@ const AAP_CARD_STYLES = `
     transform: translateY(-2px);
     border-color: rgba(201, 168, 76, 0.38);
     box-shadow:
-      0 2px 4px rgba(13, 45, 94, 0.05),
-      0 12px 28px rgba(13, 45, 94, 0.12);
+      0 2px 4px rgba(109,60,27, 0.05),
+      0 12px 28px rgba(109,60,27, 0.12);
   }
   .aap-card-lawyer[data-selected="true"] {
     background: linear-gradient(180deg, rgba(201, 168, 76, 0.10) 0%, rgba(201, 168, 76, 0.02) 100%);
     border-color: rgba(201, 168, 76, 0.65);
     box-shadow:
-      0 2px 4px rgba(13, 45, 94, 0.05),
+      0 2px 4px rgba(109,60,27, 0.05),
       0 10px 24px rgba(201, 168, 76, 0.20);
   }
   .aap-card-lawyer[data-selected="true"]:hover {
     transform: translateY(-2px);
     border-color: rgba(201, 168, 76, 0.85);
     box-shadow:
-      0 2px 6px rgba(13, 45, 94, 0.07),
+      0 2px 6px rgba(109,60,27, 0.07),
       0 14px 32px rgba(201, 168, 76, 0.26);
   }
   /* Avatar — gold ring on hover/selected for a premium touch */
   .aap-card-lawyer img {
-    box-shadow: 0 2px 8px rgba(13, 45, 94, 0.14);
+    box-shadow: 0 2px 8px rgba(109,60,27, 0.14);
     border: 2px solid #ffffff;
-    outline: 1px solid rgba(13, 45, 94, 0.10);
+    outline: 1px solid rgba(109,60,27, 0.10);
     transition: outline-color 220ms ease, box-shadow 220ms ease;
   }
   .aap-card-lawyer:hover img {
@@ -364,13 +364,13 @@ const AAP_CARD_STYLES = `
   /* ─── PQR feedback card ───────────────────────────────────── */
   .aap-card-pqr {
     background: linear-gradient(180deg, #ffffff 0%, #fbfaf3 100%);
-    border: 1px solid rgba(13, 45, 94, 0.10);
+    border: 1px solid rgba(109,60,27, 0.10);
     border-left: 4px solid rgba(201, 168, 76, 0.80);
     border-radius: 14px;
     padding: 26px 26px 24px;
     box-shadow:
-      0 1px 3px rgba(13, 45, 94, 0.05),
-      0 8px 22px rgba(13, 45, 94, 0.08);
+      0 1px 3px rgba(109,60,27, 0.05),
+      0 8px 22px rgba(109,60,27, 0.08);
     transition:
       box-shadow 280ms cubic-bezier(0.2, 0.8, 0.2, 1),
       border-color 280ms ease;
@@ -379,8 +379,8 @@ const AAP_CARD_STYLES = `
   .aap-card-pqr:hover {
     border-left-color: rgba(201, 168, 76, 0.95);
     box-shadow:
-      0 2px 4px rgba(13, 45, 94, 0.06),
-      0 14px 30px rgba(13, 45, 94, 0.12);
+      0 2px 4px rgba(109,60,27, 0.06),
+      0 14px 30px rgba(109,60,27, 0.12);
   }
 
   /* ─── Tablets / narrow desktop — moderate the outward push so the
@@ -521,6 +521,39 @@ async function hashCedula(cedula) {
 const ANON_ROOM_COLS =
   'id,area_derecho,status,codigo_referencia,tipo_profesional,created_at,updated_at,client_token,client_cedula'
 
+// ── Acceso del cliente a sus salas ─────────────────────────────────────────
+// El cliente consulta chat_rooms con su JWT (claim client_token, ver
+// ensureChatToken): las políticas RLS v2 acotan las filas a SUS salas. El
+// filtro .eq('client_cedula', hash) queda redundante pero inofensivo.
+async function fetchMisSalas(hash) {
+  const { data } = await supabase.from('chat_rooms')
+    .select(ANON_ROOM_COLS).eq('client_cedula', hash).order('created_at', { ascending: false })
+  return data || []
+}
+
+// Estado de una sala del cliente (acotada por RLS con el JWT del cliente).
+async function fetchEstadoSala(hash, roomId) {
+  const { data } = await supabase.from('chat_rooms').select('status').eq('id', roomId).maybeSingle()
+  return data?.status || null
+}
+
+// Crea la sala del cliente. Mantiene el manejo de colisión de codigo_referencia
+// (UNIQUE legacy). Devuelve { room, error }.
+async function crearSalaCliente(hash, baseRoom, codigoRef) {
+  let { data: inserted, error } = await supabase.from('chat_rooms')
+    .insert({ ...baseRoom, codigo_referencia: codigoRef })
+    .select(ANON_ROOM_COLS).single()
+  if (error?.code === '23505') {
+    console.warn('[crearSalaCliente] codigo_referencia colisiona con UNIQUE — reintentando sin él')
+    const retry = await supabase.from('chat_rooms')
+      .insert({ ...baseRoom, codigo_referencia: null })
+      .select(ANON_ROOM_COLS).single()
+    inserted = retry.data
+    error    = retry.error
+  }
+  return { room: inserted, error }
+}
+
 function formatSize(bytes) {
   if (!bytes) return ''
   if (bytes < 1024) return `${bytes} B`
@@ -534,16 +567,16 @@ function limpiarCosto(v) {
   return String(v || '').replace(/[,;.\s]*orientativ[oa][\s\S]*$/i, '').trim() || String(v || '')
 }
 
-async function notificarAbogado({ lawyerId, nombreAbogado, nombreCliente, area }) {
-  // Pasa lawyerId — el endpoint resolverá el email server-side con service
-  // role. Antes mandábamos el email desde el front, lo que requería que el
-  // browser descargara la lista de correos de todos los profesionales
-  // aprobados (leak de datos personales).
+async function notificarAbogado({ lawyerId, roomId }) {
+  // Pasa lawyerId + roomId. El endpoint resuelve server-side el email, el
+  // nombre del cliente y el área DESDE la sala (no confía en datos del body) y
+  // verifica que el profesional esté asignado a esa sala antes de enviar el
+  // correo — así no se puede usar como relay para spamear a cualquiera.
   try {
     await fetch('/api/notify', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type: 'new_consultation', data: { lawyerId, nombreAbogado, nombreCliente, area } }),
+      body: JSON.stringify({ type: 'new_consultation', data: { lawyerId, roomId } }),
     })
   } catch (err) { console.error('Error notificando abogado:', err) }
 }
@@ -747,6 +780,9 @@ function RatingPanel({ roomId, onDone }) {
             p_rating: pRating,
             p_texto: comentario.trim() || null,
             p_red_social: redSocial.trim() || null,
+            // Prueba de que es el cliente de esta sala (mismo hash que se guardó
+            // como client_token al crear la sala). La función lo exige ahora.
+            p_client_token: localStorage.getItem('chat_cedula_hash'),
           }),
         })
       }
@@ -847,7 +883,10 @@ function StepCedula({ onNew, onResume }) {
     localStorage.setItem('chat_cedula_raw', rawCedula)
     if (codigo.trim()) localStorage.setItem('chat_codigo_ref', codigo.trim().toUpperCase())
     else localStorage.removeItem('chat_codigo_ref')
-    const { data: rooms } = await supabase.from('chat_rooms').select(ANON_ROOM_COLS).eq('client_cedula', hash).order('created_at', { ascending: false })
+    // Emite el JWT del cliente (claim client_token) para acotar chat_rooms/
+    // chat_messages por RLS. Best-effort: si falla, sigue con la anon key.
+    await ensureChatToken(hash)
+    const rooms = await fetchMisSalas(hash)
     const existing = rooms?.find(r => r.status === 'waiting' || r.status === 'active')
     if (existing) onResume(existing)
     else onNew(abogadoURL ? { abogadoId: abogadoURL, tipo: tipoURL } : null)
@@ -867,13 +906,13 @@ function StepCedula({ onNew, onResume }) {
       <div className={styles.field}>
         <label className={styles.label}>
           Código de referencia
-          <span style={{ color:'rgba(13,45,94,0.45)', fontWeight:400, marginLeft:8 }}>(opcional)</span>
+          <span style={{ color:'rgba(109,60,27,0.45)', fontWeight:400, marginLeft:8 }}>(opcional)</span>
         </label>
         <input className={styles.input} value={codigo}
           onChange={e => setCodigo(e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g,''))}
           onKeyDown={e => e.key==='Enter' && handleSubmit()}
-          placeholder="Ej: AAP-A3KX72" maxLength={10} style={{ letterSpacing:'2px', fontWeight:600 }} />
-        <p style={{ fontSize:'0.75rem', color:'rgba(13,45,94,0.55)', marginTop:8, marginBottom:0 }}>
+          placeholder="Ej: PB-A3KX72" maxLength={10} style={{ letterSpacing:'2px', fontWeight:600 }} />
+        <p style={{ fontSize:'0.75rem', color:'rgba(109,60,27,0.55)', marginTop:8, marginBottom:0 }}>
           Si un asesor te dio un código, ingrésalo aquí.
         </p>
       </div>
@@ -881,7 +920,7 @@ function StepCedula({ onNew, onResume }) {
       {/* Aceptación de términos y política de privacidad */}
       <label style={{
         display:'flex', alignItems:'flex-start', gap:10, marginTop:20,
-        cursor:'pointer', fontSize:'0.82rem', lineHeight:1.5, color:'#3d4a63',
+        cursor:'pointer', fontSize:'0.82rem', lineHeight:1.5, color:'#634f3d',
       }}>
         <input
           type="checkbox"
@@ -891,9 +930,9 @@ function StepCedula({ onNew, onResume }) {
         />
         <span>
           Acepto los{' '}
-          <a href="/terminos" target="_blank" rel="noopener noreferrer" style={{ color:'#0d2d5e', fontWeight:700 }}>términos y condiciones</a>
+          <a href="/terminos" target="_blank" rel="noopener noreferrer" style={{ color:'#6d3c1b', fontWeight:700 }}>términos y condiciones</a>
           {' '}y la{' '}
-          <a href="/privacidad" target="_blank" rel="noopener noreferrer" style={{ color:'#0d2d5e', fontWeight:700 }}>política de privacidad</a>.
+          <a href="/privacidad" target="_blank" rel="noopener noreferrer" style={{ color:'#6d3c1b', fontWeight:700 }}>política de privacidad</a>.
         </span>
       </label>
 
@@ -1134,10 +1173,10 @@ export default function ChatSection() {
         if (st !== 'SUBSCRIBED') return
         if (firstSub) { firstSub = false; return }
         loadMessages(roomId)
-        supabase.from('chat_rooms').select('status').eq('id', roomId).maybeSingle().then(({ data }) => {
-          if (data?.status) {
-            setRoomStatus(data.status)
-            if (data.status === 'active') setStep(s => s === 'esperando' ? 'chat' : s)
+        fetchEstadoSala(localStorage.getItem('chat_cedula_hash'), roomId).then(status => {
+          if (status) {
+            setRoomStatus(status)
+            if (status === 'active') setStep(s => s === 'esperando' ? 'chat' : s)
           }
         })
       })
@@ -1309,8 +1348,7 @@ export default function ChatSection() {
     const ubicacionTxt = barrio ? `${ciudad} - ${barrio}, ${departamento}` : `${ciudad}, ${departamento}`
 
     // Reutilizar room existente waiting/active si ya hay uno (evita 409 por UNIQUE)
-    const { data: existingRooms } = await supabase.from('chat_rooms')
-      .select(ANON_ROOM_COLS).eq('client_cedula', hash).order('created_at', { ascending: false })
+    const existingRooms = await fetchMisSalas(hash)
     let room = existingRooms?.find(r => r.status === 'waiting' || r.status === 'active') || null
 
     if (!room) {
@@ -1326,24 +1364,9 @@ export default function ChatSection() {
         status:           'waiting',
       }
 
-      let { data: inserted, error } = await supabase.from('chat_rooms')
-        .insert({ ...baseRoom, codigo_referencia: codigoRef })
-        .select(ANON_ROOM_COLS).single()
-
-      // Fallback: si el codigo_referencia colisiona con un UNIQUE legacy
-      // (consulta anterior cerrada, o el mismo código usado por otro
-      // cliente), reintenta sin él. El UNIQUE no tiene sentido aquí —
-      // un AAP-XXXXXX es de referencia, debe poder reusarse. Lo correcto
-      // es soltar la constraint en BD; este fallback evita bloquear al
-      // usuario mientras tanto.
-      if (error?.code === '23505') {
-        console.warn('[startChat] codigo_referencia colisiona con UNIQUE — reintentando sin él')
-        const retry = await supabase.from('chat_rooms')
-          .insert({ ...baseRoom, codigo_referencia: null })
-          .select(ANON_ROOM_COLS).single()
-        inserted = retry.data
-        error    = retry.error
-      }
+      // Crea la sala vía RPC crear_sala (o INSERT directo como fallback). El
+      // manejo de colisión de codigo_referencia (UNIQUE legacy) va dentro.
+      const { room: inserted, error } = await crearSalaCliente(hash, baseRoom, codigoRef)
 
       if (error || !inserted) {
         console.error('[startChat] Error insertando chat_rooms:', error)
@@ -1384,12 +1407,7 @@ export default function ChatSection() {
     for (const abogado of todosAbogados.filter(l => picked.includes(l.id))) {
       // El email lo resuelve /api/notify server-side a partir del lawyerId,
       // así el browser nunca descarga correos de profesionales.
-      await notificarAbogado({
-        lawyerId:      abogado.id,
-        nombreAbogado: `${abogado.nombre} ${abogado.apellido}`,
-        nombreCliente: `${nombre} ${apellido}`,
-        area:          areas.join(', '),
-      })
+      await notificarAbogado({ lawyerId: abogado.id, roomId: room.id })
     }
     setRoomId(room.id); setRoomStatus(room.status || 'waiting'); setRoomArea(areas.join(', '))
     setRoomCodigo(codigoRef || ''); setPicked([])
@@ -1714,15 +1732,15 @@ export default function ChatSection() {
 
                 {/* Aviso legal de valores orientativos (debajo del encabezado azul) */}
                 <div style={{
-                  padding:'8px 16px', background:'rgba(13,45,94,0.05)',
-                  borderBottom:'1px solid rgba(13,45,94,0.08)',
-                  fontSize:'0.72rem', lineHeight:1.5, color:'#3d4a63',
+                  padding:'8px 16px', background:'rgba(109,60,27,0.05)',
+                  borderBottom:'1px solid rgba(109,60,27,0.08)',
+                  fontSize:'0.72rem', lineHeight:1.5, color:'#634f3d',
                 }}>
-                  <strong style={{ color:'#0d2d5e' }}>Valores orientativos:</strong>{' '}
+                  <strong style={{ color:'#6d3c1b' }}>Valores orientativos:</strong>{' '}
                   en Colombia los honorarios profesionales son de libre acuerdo entre las partes
                   (no existe una tarifa oficial obligatoria). El profesional confirma el valor final
                   antes de iniciar. Ver{' '}
-                  <a href="/terminos" target="_blank" rel="noopener noreferrer" style={{ color:'#0d2d5e', fontWeight:700 }}>términos</a>.
+                  <a href="/terminos" target="_blank" rel="noopener noreferrer" style={{ color:'#6d3c1b', fontWeight:700 }}>términos</a>.
                 </div>
 
                 <div
@@ -2267,7 +2285,7 @@ export default function ChatSection() {
             <div className={styles.field}>
               <label className={styles.label}>
                 {form.tipo_profesional === 'contador' ? 'Especialidad' : 'Área del caso'} <span className={styles.required}>*</span>
-                {!areasBloqueadas && <span style={{ color:'rgba(13,45,94,0.45)', fontWeight:400, marginLeft:8 }}>(mínimo 1, máximo 3)</span>}
+                {!areasBloqueadas && <span style={{ color:'rgba(109,60,27,0.45)', fontWeight:400, marginLeft:8 }}>(mínimo 1, máximo 3)</span>}
               </label>
               {areasBloqueadas ? (
                 <div className={styles.areasLocked} aria-readonly="true">
@@ -2395,14 +2413,14 @@ export default function ChatSection() {
           </div>
           <div className={styles.closedBanner}>
             <strong>Tu consulta anterior fue cerrada.</strong>
-            Gracias por usar AAP. Si quieres, déjanos un comentario antes de continuar.
+            Gracias por usar Parada Bridge. Si quieres, déjanos un comentario antes de continuar.
           </div>
 
           {!pqrYaExiste && (
             <div className={`${styles.pqrCard} aap-card-pqr`}>
               <p className={styles.pqrTitle}>¿Tienes algún comentario sobre tu experiencia?</p>
               <p className={styles.pqrSubtitle}>
-                Tu mensaje llega directamente al equipo de AAP. Es opcional.
+                Tu mensaje llega directamente al equipo de Parada Bridge. Es opcional.
               </p>
 
               {pqrSent ? (

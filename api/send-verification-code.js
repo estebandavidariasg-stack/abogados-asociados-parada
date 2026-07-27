@@ -191,6 +191,8 @@ export default async function handler(req, res) {
   // cualquier sitio web podría disparar envíos de OTP usando el navegador
   // de sus visitantes (spam de correos a víctimas arbitrarias).
   const ALLOWED = new Set([
+    'https://paradabridge.com',
+    'https://www.paradabridge.com',
     'https://abogadosparada.com',
     'https://www.abogadosparada.com',
     'https://abogadosyasociadosparada.com',

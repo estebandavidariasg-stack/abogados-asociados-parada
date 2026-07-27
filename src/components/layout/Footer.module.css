@@ -15,8 +15,8 @@
   width: 1000px;
   height: 500px;
   background: radial-gradient(ellipse at center,
-    rgba(13, 45, 120, 0.20) 0%,
-    rgba(13, 80, 180, 0.1) 40%,
+    rgba(120, 63, 13, 0.20) 0%,
+    rgba(180, 91, 13, 0.1) 40%,
     transparent 70%);
   pointer-events: none;
   z-index: 0;
@@ -31,7 +31,7 @@
   gap: 5rem;
   align-items: start;
   padding-bottom: 3.5rem;
-  border-bottom: 1px solid rgba(13, 45, 94, 0.10);
+  border-bottom: 1px solid rgba(109,60,27, 0.10);
 }
 
 /* ── COLUMNA BRAND ────────────────────────────────────────────── */
@@ -56,7 +56,7 @@
   font-family: 'Raleway', sans-serif;
   font-size: 0.78rem;
   font-weight: 400;
-  color: #4a5568;
+  color: #68584a;
   line-height: 1.9;
   max-width: 260px;
 }
@@ -93,7 +93,7 @@
 }
 
 .contactItem:hover {
-  background: rgba(13, 45, 94, 0.04);
+  background: rgba(109,60,27, 0.04);
 }
 
 .contactIcon {
@@ -122,7 +122,7 @@
 .contactLabel {
   font-family: 'Raleway', sans-serif;
   font-size: 0.68rem;
-  color: #718096;
+  color: #968271;
   font-weight: 400;
 }
 
@@ -130,7 +130,7 @@
   font-family: 'Raleway', sans-serif;
   font-size: 0.82rem;
   font-weight: 700;
-  color: #0d2d5e;
+  color: #6d3c1b;
   text-decoration: underline;
   text-underline-offset: 3px;
   text-decoration-color: rgba(201, 168, 76, 0.5);
@@ -139,7 +139,7 @@
 .contactSub {
   font-family: 'Raleway', sans-serif;
   font-size: 0.67rem;
-  color: #a0aec0;
+  color: #c0afa0;
   font-weight: 300;
 }
 
@@ -157,11 +157,11 @@
   width: 48px;
   height: 48px;
   border-radius: 50%;
-  border: 1.5px solid rgba(13, 45, 94, 0.18);
+  border: 1.5px solid rgba(109,60,27, 0.18);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #4a5568;
+  color: #68584a;
   text-decoration: none;
   transition: border-color 0.25s, color 0.25s, background 0.25s, transform 0.25s;
 }
@@ -172,9 +172,9 @@
 }
 
 .socialBtn:hover {
-  border-color: #0d2d5e;
-  color: #0d2d5e;
-  background: rgba(13, 45, 94, 0.06);
+  border-color: #6d3c1b;
+  color: #6d3c1b;
+  background: rgba(109,60,27, 0.06);
   transform: translateY(-2px);
 }
 
@@ -203,7 +203,7 @@
 }
 .bigText {
   color: var(--navy);
-  filter: drop-shadow(0 2px 16px rgba(13, 45, 94, 0.14));
+  filter: drop-shadow(0 2px 16px rgba(109,60,27, 0.14));
 }
 .bigTextGold {
   color: var(--gold);
@@ -219,11 +219,11 @@
   justify-content: center;
   gap: 0.8rem;
   padding: 1.2rem 0 1.5rem;
-  border-top: 1px solid rgba(13, 45, 94, 0.08);
+  border-top: 1px solid rgba(109,60,27, 0.08);
   font-family: 'Raleway', sans-serif;
   font-size: 0.68rem;
   font-weight: 400;
-  color: #a0aec0;
+  color: #c0afa0;
   letter-spacing: 0.05em;
 }
 

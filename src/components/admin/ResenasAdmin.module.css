@@ -4,17 +4,17 @@
   display: flex; align-items: flex-start; justify-content: space-between;
   gap: 14px; flex-wrap: wrap;
 }
-.title { font-family: 'Cinzel', serif; font-size: 1.05rem; font-weight: 700; color: #0d2d5e; margin: 0 0 4px; letter-spacing: 0.03em; }
-.sub { font-size: 0.78rem; color: #6b7fa3; margin: 0; }
+.title { font-family: 'Cinzel', serif; font-size: 1.05rem; font-weight: 700; color: #6d3c1b; margin: 0 0 4px; letter-spacing: 0.03em; }
+.sub { font-size: 0.78rem; color: #a3856b; margin: 0; }
 
-.tabs { display: flex; gap: 4px; border-bottom: 1px solid rgba(13,45,94,0.12); }
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid rgba(109,60,27,0.12); }
 .tab {
   padding: 7px 13px 9px; background: none; border: none; cursor: pointer;
-  font-family: inherit; font-size: 0.78rem; font-weight: 700; color: #6b7fa3;
+  font-family: inherit; font-size: 0.78rem; font-weight: 700; color: #a3856b;
   border-bottom: 2px solid transparent; margin-bottom: -1px; transition: color 0.2s, border-color 0.2s;
 }
-.tab:hover { color: #0d2d5e; }
-.tabOn { color: #0d2d5e; border-bottom-color: #c9a84c; }
+.tab:hover { color: #6d3c1b; }
+.tabOn { color: #6d3c1b; border-bottom-color: #c9a84c; }
 
 /* Barra de filtros: chips de profesión + búsqueda por profesional */
 .filterBar {
@@ -24,7 +24,7 @@
 /* Chips de profesión (Todos / Abogados / Contadores) */
 .profesionChips { display: flex; gap: 8px; flex-wrap: wrap; }
 .profesionChip {
-  background: transparent; border: 1px solid rgba(13,45,94,0.22); color: #0d2d5e;
+  background: transparent; border: 1px solid rgba(109,60,27,0.22); color: #6d3c1b;
   padding: 7px 16px; border-radius: 999px;
   font-family: 'Cinzel', serif; font-size: 0.72rem; letter-spacing: 0.06em;
   cursor: pointer; min-height: 34px; white-space: nowrap;
@@ -32,7 +32,7 @@
 }
 .profesionChip:hover { background: rgba(201,168,76,0.06); }
 .profesionChipActive {
-  background: #c9a84c; border-color: #c9a84c; color: #0d2d5e; font-weight: 700;
+  background: #c9a84c; border-color: #c9a84c; color: #6d3c1b; font-weight: 700;
 }
 .profesionChipActive:hover { background: #d8bd72; }
 
@@ -42,14 +42,14 @@
   max-width: 420px; flex: 1 1 260px; min-width: 220px;
 }
 .searchIcon {
-  position: absolute; left: 12px; font-size: 1rem; color: #8a93a5; pointer-events: none;
+  position: absolute; left: 12px; font-size: 1rem; color: #a5978a; pointer-events: none;
 }
 .searchInput {
-  width: 100%; font-family: inherit; font-size: 0.82rem; color: #26324a;
-  padding: 9px 34px 9px 32px; border: 1px solid rgba(13,45,94,0.18); border-radius: 10px;
+  width: 100%; font-family: inherit; font-size: 0.82rem; color: #4a3726;
+  padding: 9px 34px 9px 32px; border: 1px solid rgba(109,60,27,0.18); border-radius: 10px;
   background: #fff; transition: border-color 0.2s, box-shadow 0.2s;
 }
-.searchInput::placeholder { color: #9aa4b8; }
+.searchInput::placeholder { color: #b8a89a; }
 .searchInput:focus {
   outline: none; border-color: #c9a84c; box-shadow: 0 0 0 3px rgba(201,168,76,0.14);
 }
@@ -58,12 +58,12 @@
   position: absolute; right: 8px; width: 20px; height: 20px; line-height: 1;
   display: flex; align-items: center; justify-content: center;
   border: none; border-radius: 50%; cursor: pointer; font-size: 1.05rem;
-  color: #6b7fa3; background: rgba(13,45,94,0.06); transition: background 0.18s, color 0.18s;
+  color: #a3856b; background: rgba(109,60,27,0.06); transition: background 0.18s, color 0.18s;
 }
-.clearBtn:hover { background: rgba(13,45,94,0.14); color: #0d2d5e; }
+.clearBtn:hover { background: rgba(109,60,27,0.14); color: #6d3c1b; }
 
-.muted { font-size: 0.85rem; color: #6b7fa3; }
-.empty { text-align: center; padding: 3rem 1rem; color: #6b7fa3; }
+.muted { font-size: 0.85rem; color: #a3856b; }
+.empty { text-align: center; padding: 3rem 1rem; color: #a3856b; }
 .emptyIcon { display: block; font-size: 2.4rem; color: rgba(201,168,76,0.5); margin-bottom: 0.5rem; }
 
 .list {
@@ -71,29 +71,29 @@
   display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px;
 }
 .card {
-  background: #fff; border: 1px solid rgba(13,45,94,0.12); border-radius: 14px;
+  background: #fff; border: 1px solid rgba(109,60,27,0.12); border-radius: 14px;
   padding: 16px 18px; display: flex; flex-direction: column; gap: 8px;
-  box-shadow: 0 6px 18px -12px rgba(13,45,94,0.4);
+  box-shadow: 0 6px 18px -12px rgba(109,60,27,0.4);
 }
 .cardTop { display: flex; align-items: center; gap: 10px; }
 .stars { font-size: 0.95rem; letter-spacing: 1px; }
 .starOn { color: #c9a84c; }
-.starOff { color: rgba(13,45,94,0.16); }
+.starOff { color: rgba(109,60,27,0.16); }
 .badge {
   font-size: 0.64rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
-  color: #0d2d5e; background: #e8c96a; padding: 2px 8px; border-radius: 999px;
+  color: #6d3c1b; background: #e8c96a; padding: 2px 8px; border-radius: 999px;
 }
-.fecha { margin-left: auto; font-size: 0.72rem; color: #8a93a5; }
+.fecha { margin-left: auto; font-size: 0.72rem; color: #a5978a; }
 
-.texto { font-size: 0.9rem; line-height: 1.5; color: #26324a; margin: 0; }
-.meta { font-size: 0.78rem; color: #5f6e8a; margin: 0; }
-.meta strong { color: #0d2d5e; }
+.texto { font-size: 0.9rem; line-height: 1.5; color: #4a3726; margin: 0; }
+.meta { font-size: 0.78rem; color: #8a735f; margin: 0; }
+.meta strong { color: #6d3c1b; }
 
 .redSocial {
   align-self: flex-start;
   display: inline-flex; align-items: center; gap: 5px;
   font-size: 0.72rem; font-weight: 700; letter-spacing: 0.01em;
-  color: #0d2d5e; text-decoration: none;
+  color: #6d3c1b; text-decoration: none;
   padding: 4px 10px; border-radius: 999px;
   background: rgba(201,168,76,0.12); border: 1px solid rgba(201,168,76,0.45);
   max-width: 100%;
@@ -104,17 +104,17 @@
 
 .prof {
   display: flex; align-items: center; flex-wrap: wrap; gap: 6px;
-  font-size: 0.76rem; color: #5f6e8a; margin: 0;
-  padding-top: 8px; border-top: 1px dashed rgba(13,45,94,0.1);
+  font-size: 0.76rem; color: #8a735f; margin: 0;
+  padding-top: 8px; border-top: 1px dashed rgba(109,60,27,0.1);
 }
-.profLabel { color: #8a93a5; text-transform: uppercase; letter-spacing: 0.04em; font-size: 0.66rem; font-weight: 700; }
-.profNombre { color: #0d2d5e; font-weight: 700; }
+.profLabel { color: #a5978a; text-transform: uppercase; letter-spacing: 0.04em; font-size: 0.66rem; font-weight: 700; }
+.profNombre { color: #6d3c1b; font-weight: 700; }
 .rolBadge {
   font-size: 0.62rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
-  color: #0d2d5e; background: rgba(13,45,94,0.08); border: 1px solid rgba(13,45,94,0.16);
+  color: #6d3c1b; background: rgba(109,60,27,0.08); border: 1px solid rgba(109,60,27,0.16);
   padding: 1px 7px; border-radius: 999px;
 }
-.profNone { color: #a0a9bb; font-style: italic; }
+.profNone { color: #bbada0; font-style: italic; }
 
 .acciones { display: flex; gap: 8px; margin-top: 6px; flex-wrap: wrap; }
 .btnAprobar, .btnQuitar, .btnEliminar {
@@ -123,8 +123,8 @@
 }
 .btnAprobar { color: #fff; background: #1f7a4d; border: 1px solid #1f7a4d; }
 .btnAprobar:hover:not(:disabled) { background: #176038; transform: translateY(-1px); }
-.btnQuitar { color: #0d2d5e; background: rgba(13,45,94,0.06); border: 1px solid rgba(13,45,94,0.2); }
-.btnQuitar:hover:not(:disabled) { background: rgba(13,45,94,0.12); }
+.btnQuitar { color: #6d3c1b; background: rgba(109,60,27,0.06); border: 1px solid rgba(109,60,27,0.2); }
+.btnQuitar:hover:not(:disabled) { background: rgba(109,60,27,0.12); }
 .btnEliminar { color: #9a2b2b; background: rgba(154,43,43,0.08); border: 1px solid rgba(154,43,43,0.25); }
 .btnEliminar:hover:not(:disabled) { background: rgba(154,43,43,0.16); }
 .btnAprobar:disabled, .btnQuitar:disabled, .btnEliminar:disabled { opacity: 0.5; cursor: not-allowed; }

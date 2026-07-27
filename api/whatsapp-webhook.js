@@ -265,15 +265,26 @@ export default async function handler(req, res) {
 
   // ── 2) POST: mensajes entrantes ──
   if (req.method === 'POST') {
-    // Verificación de origen opt-in: con WHATSAPP_ENFORCE_TOKEN=1, el POST
-    // exige ?token=<WHATSAPP_VERIFY_TOKEN> en la URL. Sin ella, cualquiera
-    // que descubra la ruta puede insertar casos con service-role y disparar
-    // envíos salientes a números arbitrarios (spam desde el número de la
-    // firma → Meta degrada/bloquea el canal).
-    // ⚠️ Orden de activación: PRIMERO cambiar la URL del webhook en el panel
-    // de Meta a /api/whatsapp-webhook?token=<WHATSAPP_VERIFY_TOKEN> (el GET
-    // del handshake ya la valida), DESPUÉS poner WHATSAPP_ENFORCE_TOKEN=1.
-    if (process.env.WHATSAPP_ENFORCE_TOKEN === '1') {
+    // ── Autenticación FAIL-CLOSED del POST ──
+    // NO procesamos ningún POST sin verificar el origen. Se acepta por:
+    //   • Firma HMAC de Meta  (WHATSAPP_APP_SECRET)      ← recomendado
+    //   • Token en la URL      (WHATSAPP_ENFORCE_TOKEN=1) ← alternativa
+    // Si NO hay ningún mecanismo configurado, se rechaza: antes un despliegue
+    // sin estas vars dejaba el endpoint totalmente abierto (escrituras con
+    // service-role + envíos salientes de WhatsApp a números arbitrarios).
+    // ⚠️ Para activar HMAC: pon WHATSAPP_APP_SECRET = App Secret de tu app de
+    // Meta. Para el token: cambia la URL del webhook en Meta a
+    // /api/whatsapp-webhook?token=<WHATSAPP_VERIFY_TOKEN> y pon
+    // WHATSAPP_ENFORCE_TOKEN=1.
+    const appSecret    = process.env.WHATSAPP_APP_SECRET
+    const enforceToken = process.env.WHATSAPP_ENFORCE_TOKEN === '1'
+    if (!appSecret && !enforceToken) {
+      console.error('[wa-webhook] POST rechazado: configura WHATSAPP_APP_SECRET (firma HMAC) o WHATSAPP_ENFORCE_TOKEN=1.')
+      return res.status(401).end()
+    }
+
+    // Token en la URL (si está activado).
+    if (enforceToken) {
       if (!WHATSAPP_VERIFY_TOKEN || req.query?.token !== WHATSAPP_VERIFY_TOKEN) {
         return res.status(403).end()
       }
@@ -287,11 +298,8 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true })
     }
 
-    // Verificación de firma HMAC (opt-in): si WHATSAPP_APP_SECRET está definido,
-    // exigimos que X-Hub-Signature-256 coincida con el HMAC-SHA256 del cuerpo
-    // crudo, calculado con el App Secret de Meta. Comparación en tiempo
-    // constante. Sin el secreto se conserva el comportamiento actual.
-    const appSecret = process.env.WHATSAPP_APP_SECRET
+    // Firma HMAC de Meta (X-Hub-Signature-256) contra el cuerpo crudo, en
+    // tiempo constante. Es el mecanismo recomendado.
     if (appSecret) {
       const recibida = String(req.headers['x-hub-signature-256'] || '')
       const esperada =

@@ -116,7 +116,7 @@ export default async function handler(req, res) {
   // 7) Avisar por correo al abogado nuevo (best-effort: no bloquea la reasignación).
   if (nuevo.email) {
     try {
-      const base = process.env.VITE_APP_URL || 'https://abogadosparada.com'
+      const base = process.env.VITE_APP_URL || 'https://paradabridge.com'
       await sendReassignEmail({
         email: nuevo.email,
         nombreAbogado: `${nuevo.nombre || ''} ${nuevo.apellido || ''}`.trim() || 'profesional',

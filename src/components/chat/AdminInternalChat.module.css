@@ -8,36 +8,36 @@
   background: rgba(255, 255, 255, 0.78);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(13, 45, 94, 0.12);
-  box-shadow: 0 10px 30px rgba(13, 45, 94, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  border: 1px solid rgba(109,60,27, 0.12);
+  box-shadow: 0 10px 30px rgba(109,60,27, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.6);
 }
 
 /* ── Sidebar ── */
 .sidebar {
   width: 230px;
   flex-shrink: 0;
-  border-right: 1px solid rgba(13, 45, 94, 0.1);
+  border-right: 1px solid rgba(109,60,27, 0.1);
   display: flex;
   flex-direction: column;
-  background: linear-gradient(160deg, #eef3fb, #e9f0fa);
+  background: linear-gradient(160deg, #fbf4ee, #faf1e9);
 }
 
 .sidebarHead {
   padding: 16px 16px 12px;
-  border-bottom: 1px solid rgba(13, 45, 94, 0.1);
+  border-bottom: 1px solid rgba(109,60,27, 0.1);
   flex-shrink: 0;
 }
 .sidebarTitulo {
   font-family: 'Cinzel', serif;
   font-size: 0.78rem;
   font-weight: 700;
-  color: #0d2d5e;
+  color: #6d3c1b;
   margin: 0 0 2px;
   letter-spacing: 0.04em;
 }
 .sidebarSub {
   font-size: 0.6rem;
-  color: #5a6e90;
+  color: #90735a;
   margin: 0;
 }
 
@@ -45,7 +45,7 @@
    Look unificado del panel admin: navy/dorado, redondeado, chip activo dorado. */
 .filterBar {
   padding: 10px 12px;
-  border-bottom: 1px solid rgba(13, 45, 94, 0.1);
+  border-bottom: 1px solid rgba(109,60,27, 0.1);
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -63,26 +63,26 @@
   letter-spacing: 0.03em;
   padding: 5px 11px;
   border-radius: 999px;
-  border: 1px solid rgba(13, 45, 94, 0.22);
+  border: 1px solid rgba(109,60,27, 0.22);
   background: rgba(255, 255, 255, 0.75);
-  color: #46546e;
+  color: #6e5946;
   cursor: pointer;
   white-space: nowrap;
   transition: background 0.16s, color 0.16s, border-color 0.16s, box-shadow 0.16s;
 }
 .rolChip:hover {
   border-color: rgba(201, 168, 76, 0.5);
-  color: #0d2d5e;
+  color: #6d3c1b;
 }
 .rolChipActive {
-  background: linear-gradient(135deg, #15376b 0%, #0d2d5e 100%);
-  border-color: #0d2d5e;
+  background: linear-gradient(135deg, #6b3d15 0%, #6d3c1b 100%);
+  border-color: #6d3c1b;
   color: #f5edd4;
-  box-shadow: 0 2px 8px rgba(13, 45, 94, 0.22);
+  box-shadow: 0 2px 8px rgba(109,60,27, 0.22);
 }
 .rolChipActive:hover {
   color: #f5edd4;
-  border-color: #0d2d5e;
+  border-color: #6d3c1b;
 }
 
 /* Input de búsqueda con icono lupa a la izquierda y botón limpiar a la derecha. */
@@ -94,16 +94,16 @@
 .searchIcon {
   position: absolute;
   left: 10px;
-  color: #7d8bab;
+  color: #ab927d;
   pointer-events: none;
 }
 .searchInput {
   width: 100%;
   box-sizing: border-box;
   background: #fff;
-  border: 1px solid #cdd6e6;
+  border: 1px solid #e6d9cd;
   border-radius: 999px;
-  color: #13305f;
+  color: #5f3613;
   padding: 8px 30px 8px 32px;
   font-size: 0.72rem;
   font-family: 'Raleway', sans-serif;
@@ -114,7 +114,7 @@
   border-color: var(--gold, #c9a84c);
   box-shadow: 0 0 0 3px rgba(201, 168, 76, 0.15);
 }
-.searchInput::placeholder { color: #94a3b8; }
+.searchInput::placeholder { color: #b8a594; }
 /* Oculta la 'x' nativa del type=search para usar la nuestra (on-brand). */
 .searchInput::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; }
 
@@ -128,8 +128,8 @@
   justify-content: center;
   border: none;
   border-radius: 50%;
-  background: rgba(13, 45, 94, 0.08);
-  color: #46546e;
+  background: rgba(109,60,27, 0.08);
+  color: #6e5946;
   cursor: pointer;
   padding: 0;
   transition: background 0.16s, color 0.16s;
@@ -143,14 +143,14 @@
   flex: 1;
   overflow-y: auto;
   scrollbar-width: thin;
-  scrollbar-color: rgba(13, 45, 94, 0.18) transparent;
+  scrollbar-color: rgba(109,60,27, 0.18) transparent;
 }
 .lista::-webkit-scrollbar { width: 4px; }
-.lista::-webkit-scrollbar-thumb { background: rgba(13, 45, 94, 0.18); border-radius: 4px; }
+.lista::-webkit-scrollbar-thumb { background: rgba(109,60,27, 0.18); border-radius: 4px; }
 
 .cargando {
   font-size: 0.74rem;
-  color: #5a6e90;
+  color: #90735a;
   text-align: center;
   padding: 20px 16px;
 }
@@ -163,13 +163,13 @@
   padding: 11px 14px;
   background: none;
   border: none;
-  border-bottom: 1px solid rgba(13, 45, 94, 0.07);
+  border-bottom: 1px solid rgba(109,60,27, 0.07);
   cursor: pointer;
   text-align: left;
   transition: background 0.15s;
   position: relative;
 }
-.item:hover { background: rgba(13, 45, 94, 0.05); }
+.item:hover { background: rgba(109,60,27, 0.05); }
 .itemActive {
   background: rgba(201, 168, 76, 0.14) !important;
   border-left: 2px solid #c9a84c;
@@ -202,7 +202,7 @@
   font-size: 0.82rem;
   font-weight: 700;
   letter-spacing: 0.02em;
-  color: #0d2d5e;
+  color: #6d3c1b;
   margin: 0;
   white-space: nowrap;
   overflow: hidden;
@@ -210,7 +210,7 @@
 }
 .itemCiudad {
   font-size: 0.6rem;
-  color: #5a6e90;
+  color: #90735a;
   margin: 4px 0 0;
   display: flex;
   align-items: center;
@@ -223,7 +223,7 @@
 
 .badge {
   background: #c9a84c;
-  color: #0d2d5e;
+  color: #6d3c1b;
   font-size: 0.58rem;
   font-weight: 800;
   border-radius: 50%;
@@ -258,13 +258,13 @@
 .placeholderIcon { font-size: 2.6rem; opacity: 0.35; }
 .placeholderTxt {
   font-size: 0.84rem;
-  color: #46546e;
+  color: #6e5946;
   margin: 0;
   text-align: center;
 }
 .placeholderSub {
   font-size: 0.68rem;
-  color: #5a6e90;
+  color: #90735a;
   margin: 0;
   text-align: center;
 }
@@ -276,7 +276,7 @@
   gap: 12px;
   padding: 14px 18px;
   border-bottom: 1px solid rgba(201, 168, 76, 0.35);
-  background: linear-gradient(135deg, #15376b 0%, #0d2d5e 100%);
+  background: linear-gradient(135deg, #6b3d15 0%, #6d3c1b 100%);
   flex-shrink: 0;
 }
 
@@ -307,7 +307,7 @@
   justify-content: center;
   font-family: 'Cinzel', serif;
   font-size: 0.72rem;
-  color: #0d2d5e;
+  color: #6d3c1b;
   flex-shrink: 0;
   overflow: hidden;
 }
@@ -339,17 +339,17 @@
   flex-direction: column;
   gap: 10px;
   scrollbar-width: thin;
-  scrollbar-color: rgba(13, 45, 94, 0.18) transparent;
+  scrollbar-color: rgba(109,60,27, 0.18) transparent;
 }
 .mensajes::-webkit-scrollbar { width: 4px; }
 .mensajes::-webkit-scrollbar-thumb {
-  background: rgba(13, 45, 94, 0.18);
+  background: rgba(109,60,27, 0.18);
   border-radius: 4px;
 }
 
 .sinMsgs {
   font-size: 0.74rem;
-  color: #5a6e90;
+  color: #90735a;
   text-align: center;
   margin: auto;
   font-style: italic;
@@ -377,13 +377,13 @@
    el PROFESIONAL (.suya) es navy. Coherente con LawyerInternalChat. */
 .mia .burbujaTexto {
   background: #fffdf6;
-  color: #13305f;
+  color: #5f3613;
   border: 1px solid rgba(201, 168, 76, 0.45);
   border-bottom-right-radius: 4px;
 }
 .suya .burbujaTexto {
-  background: linear-gradient(135deg, #15376b 0%, #0d2d5e 100%);
-  border: 1px solid rgba(13, 45, 94, 0.2);
+  background: linear-gradient(135deg, #6b3d15 0%, #6d3c1b 100%);
+  border: 1px solid rgba(109,60,27, 0.2);
   color: #ffffff;
   border-bottom-left-radius: 4px;
   font-weight: 500;
@@ -398,7 +398,7 @@
 
 .burbujaHora {
   font-size: 0.58rem;
-  color: #8a93a5;
+  color: #a5978a;
   padding: 0 4px;
 }
 
@@ -407,16 +407,16 @@
   display: flex;
   gap: 8px;
   padding: 12px 16px;
-  border-top: 1px solid rgba(13, 45, 94, 0.1);
+  border-top: 1px solid rgba(109,60,27, 0.1);
   background: rgba(255, 255, 255, 0.55);
   flex-shrink: 0;
 }
 .inputMsg {
   flex: 1;
   background: #fff;
-  border: 1px solid #cdd6e6;
+  border: 1px solid #e6d9cd;
   border-radius: 20px;
-  color: #13305f;
+  color: #5f3613;
   padding: 10px 18px;
   font-size: 0.82rem;
   font-family: inherit;
@@ -427,7 +427,7 @@
   border-color: var(--gold, #c9a84c);
   box-shadow: 0 0 0 3px rgba(201, 168, 76, 0.15);
 }
-.inputMsg::placeholder { color: #94a3b8; }
+.inputMsg::placeholder { color: #b8a594; }
 
 .btnEnviar {
   width: 40px;
@@ -435,7 +435,7 @@
   border-radius: 50%;
   background: linear-gradient(135deg, #f2d580 0%, #c9a84c 50%, #9a7a2c 100%);
   border: none;
-  color: #0d2d5e;
+  color: #6d3c1b;
   font-size: 1rem;
   font-weight: 700;
   cursor: pointer;
@@ -461,9 +461,9 @@
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  background: rgba(13, 45, 94, 0.05);
-  border: 1px solid rgba(13, 45, 94, 0.14);
-  color: #46546e;
+  background: rgba(109,60,27, 0.05);
+  border: 1px solid rgba(109,60,27, 0.14);
+  color: #6e5946;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -494,7 +494,7 @@
   background: #fffdf6;
   border: 1px solid rgba(201, 168, 76, 0.45);
   border-radius: 10px;
-  color: #13305f;
+  color: #5f3613;
   cursor: pointer;
   font-family: inherit;
   font-size: 0.86rem;
@@ -518,12 +518,12 @@
 /* Override para burbuja del profesional (.suya): chip navy solido con texto
    blanco e icono dorado, espejando el gradient de .suya .burbujaTexto. */
 .suya .fileBtn {
-  background: linear-gradient(135deg, #15376b 0%, #0d2d5e 100%);
-  border: 1px solid rgba(13, 45, 94, 0.3);
+  background: linear-gradient(135deg, #6b3d15 0%, #6d3c1b 100%);
+  border: 1px solid rgba(109,60,27, 0.3);
   color: #ffffff;
 }
 .suya .fileBtn:hover {
-  background: linear-gradient(135deg, #1a4080 0%, #123a73 100%);
+  background: linear-gradient(135deg, #804a1a 0%, #733f12 100%);
   border-color: rgba(201, 168, 76, 0.5);
 }
 .suya .fileBtn svg {
@@ -545,7 +545,7 @@
 .fileSize {
   flex-shrink: 0;
   font-size: 0.72rem;
-  color: #6b7fa3;
+  color: #a3856b;
   font-weight: 500;
   letter-spacing: 0.02em;
 }
@@ -561,12 +561,12 @@
   border-radius: 12px;
   overflow: hidden;
   line-height: 0;
-  box-shadow: 0 2px 8px rgba(13, 45, 94, 0.18);
+  box-shadow: 0 2px 8px rgba(109,60,27, 0.18);
   transition: transform 0.2s, box-shadow 0.2s;
 }
 .imgBtn:hover {
   transform: translateY(-1px);
-  box-shadow: 0 6px 20px rgba(13, 45, 94, 0.28);
+  box-shadow: 0 6px 20px rgba(109,60,27, 0.28);
 }
 .imgBtn:disabled { cursor: default; }
 .imgPreview {
@@ -654,7 +654,7 @@
     min-width: 0;
     max-width: none;
     padding: 11px 14px;
-    border: 1px solid rgba(13, 45, 94, 0.1);
+    border: 1px solid rgba(109,60,27, 0.1);
     border-radius: 12px;
     background: rgba(255, 255, 255, 0.7);
     align-items: center;
@@ -681,7 +681,7 @@
     overflow: hidden;
   }
   .chatArea {
-    border: 1px solid rgba(13, 45, 94, 0.1);
+    border: 1px solid rgba(109,60,27, 0.1);
     border-radius: 14px;
     overflow: hidden;
   }
@@ -723,8 +723,8 @@
    texto navy/dorado mantenga contraste en ambos fondos. */
 .rolPillAbogado {
   background: rgba(255, 255, 255, 0.9);
-  color: #13305f;
-  border: 1px solid rgba(13, 45, 94, 0.2);
+  color: #5f3613;
+  border: 1px solid rgba(109,60,27, 0.2);
 }
 
 .rolPillContador {
@@ -735,7 +735,7 @@
 
 /* Gestor: navy suave para distinguirlo de abogado (blanco) y contador (dorado). */
 .rolPillGestor {
-  background: rgba(19, 48, 95, 0.9);
+  background: rgba(95, 54, 19, 0.9);
   color: #f5edd4;
-  border: 1px solid rgba(13, 45, 94, 0.5);
+  border: 1px solid rgba(109,60,27, 0.5);
 }

@@ -3,12 +3,26 @@ const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || ''
 // En local puede no existir .env. Mantener valores vacios evita una pantalla
 // blanca por errores de inicializacion; las vistas usan datos por defecto.
 
+// Token de autorización para los requests (REST y Realtime), en prioridad:
+//   1. Sesión de usuario real (profesional/admin) → sb_token.
+//   2. Cliente anónimo del chat → JWT con claim `client_token` (acota
+//      chat_rooms/chat_messages por RLS). Ver ensureChatToken() + /api/chat-token.
+//   3. Si no hay ninguno → la anon key pública (comportamiento de siempre).
+function anonAuthToken() {
+  const userTok = localStorage.getItem('sb_token')
+  if (userTok) return userTok
+  const clientTok = localStorage.getItem('chat_client_jwt')
+  const exp = parseInt(localStorage.getItem('chat_client_jwt_exp') || '0')
+  const now = Math.floor(Date.now() / 1000)
+  if (clientTok && exp && now < exp) return clientTok
+  return SUPABASE_KEY
+}
+
 function getHeaders() {
-  const token = localStorage.getItem('sb_token')
   return {
     'Content-Type': 'application/json',
     'apikey': SUPABASE_KEY,
-    'Authorization': `Bearer ${token || SUPABASE_KEY}`,
+    'Authorization': `Bearer ${anonAuthToken()}`,
   }
 }
 
@@ -59,6 +73,52 @@ export async function getAuthHeaders() {
     await refreshSession()
   }
   return getHeaders()
+}
+
+// Emite (o reutiliza) el JWT del cliente anónimo del chat, con claim
+// `client_token` = hash de la cédula. Con él, las políticas RLS v2 acotan
+// chat_rooms/chat_messages (REST y Realtime) a las salas de ese cliente.
+//
+// BLINDAJE: antes de confiar en el token, verifica que Supabase lo ACEPTA. Si
+// el secreto/claims no cuadran (o el endpoint falla), NO lo guarda y devuelve
+// null → el cliente sigue con la anon key (comportamiento actual, sin romper).
+// Idempotente: reutiliza el token guardado mientras sea válido.
+export async function ensureChatToken(cedulaHash) {
+  if (!cedulaHash) return null
+  try {
+    const now    = Math.floor(Date.now() / 1000)
+    const exp    = parseInt(localStorage.getItem('chat_client_jwt_exp') || '0')
+    const stored = localStorage.getItem('chat_client_jwt')
+    if (stored && exp && now < exp - 600) return stored // aún válido → reusar
+
+    const res = await fetch('/api/chat-token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cedulaHash }),
+      signal: timeoutSignal(10000),
+    })
+    if (!res.ok) return null
+    const data = await res.json()
+    if (!data?.token) return null
+
+    // Validación: ¿Supabase acepta este token? (firma/claims correctos)
+    const test = await fetch(`${SUPABASE_URL}/rest/v1/chat_rooms?select=id&limit=1`, {
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${data.token}` },
+      signal: timeoutSignal(10000),
+    })
+    if (test.status === 401 || test.status === 403) {
+      console.warn('[chat-token] token rechazado por Supabase; se usa la anon key')
+      localStorage.removeItem('chat_client_jwt')
+      localStorage.removeItem('chat_client_jwt_exp')
+      return null
+    }
+
+    localStorage.setItem('chat_client_jwt', data.token)
+    localStorage.setItem('chat_client_jwt_exp', String(data.exp || (now + 3600)))
+    return data.token
+  } catch {
+    return null
+  }
 }
 
 // ── Query builder encadenable ─────────────────────────────────────────────
@@ -175,7 +235,7 @@ class RealtimeChannel {
       try { this.ws.onclose = null; this.ws.close() } catch (_) { /* noop */ }
       this.ws = null
     }
-    const token = localStorage.getItem('sb_token') || SUPABASE_KEY
+    const token = anonAuthToken()
     this._joinToken = token
     this.ws = new WebSocket(`${WS_URL}/realtime/v1/websocket?apikey=${SUPABASE_KEY}&vsn=1.0.0`)
     const hasBroadcast = Object.keys(this.bcHandlers).length > 0
@@ -390,6 +450,10 @@ export const supabase = {
       localStorage.removeItem('sb_refresh_token')
       localStorage.removeItem('sb_token_exp')
       localStorage.removeItem('sb_user')
+      // Limpia también el JWT del cliente anónimo del chat, por si el mismo
+      // navegador se usó como cliente antes de loguearse como profesional.
+      localStorage.removeItem('chat_client_jwt')
+      localStorage.removeItem('chat_client_jwt_exp')
       return { error: null }
     },
 

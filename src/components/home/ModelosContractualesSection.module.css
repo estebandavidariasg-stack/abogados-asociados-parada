@@ -137,7 +137,7 @@
   align-items: center;
   gap: 16px;
   background: var(--ivory);
-  border: 1px solid rgba(13, 45, 94, 0.08);
+  border: 1px solid rgba(109,60,27, 0.08);
   border-radius: 10px;
   padding: 14px 18px;
   transition: box-shadow 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
@@ -157,7 +157,7 @@
   align-items: center;
   justify-content: center;
   background: #ffffff;
-  border: 1px solid rgba(13, 45, 94, 0.1);
+  border: 1px solid rgba(109,60,27, 0.1);
   border-radius: 8px;
 }
 .rowIcon svg { width: 26px; height: 26px; }
@@ -217,7 +217,7 @@
   align-items: center;
   gap: 6px;
   background: transparent;
-  border: 1px solid rgba(13, 45, 94, 0.25);
+  border: 1px solid rgba(109,60,27, 0.25);
   color: var(--navy);
   border-radius: 6px;
   padding: 9px 14px;
@@ -230,7 +230,7 @@
   white-space: nowrap;
   transition: background 0.2s, border-color 0.2s, color 0.2s;
 }
-.rowPreview:hover { background: rgba(13, 45, 94, 0.05); border-color: var(--navy); }
+.rowPreview:hover { background: rgba(109,60,27, 0.05); border-color: var(--navy); }
 .rowPreview svg { flex-shrink: 0; }
 
 .rowDownload {
@@ -279,7 +279,7 @@
 /* Skeleton de fila (listado cargando) */
 .rowSkeleton {
   height: 72px;
-  border: 1px solid rgba(13, 45, 94, 0.08);
+  border: 1px solid rgba(109,60,27, 0.08);
   border-radius: 10px;
   background: linear-gradient(90deg, var(--ivory) 0%, #f0e8d6 50%, var(--ivory) 100%);
   background-size: 200% 100%;
@@ -464,7 +464,7 @@
 .modalOverlay {
   position: fixed;
   inset: 0;
-  background: rgba(13, 45, 94, 0.55);
+  background: rgba(109,60,27, 0.55);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -486,7 +486,7 @@
   max-width: 480px;
   max-height: 90vh;
   overflow-y: auto;
-  box-shadow: 0 20px 60px rgba(13, 45, 94, 0.3);
+  box-shadow: 0 20px 60px rgba(109,60,27, 0.3);
   border-top: 4px solid var(--gold);
   animation: modalSlideUp 0.22s ease;
   box-sizing: border-box;
@@ -529,7 +529,7 @@
 .modalTextarea {
   width: 100%;
   background: #fff;
-  border: 1px solid rgba(13, 45, 94, 0.18);
+  border: 1px solid rgba(109,60,27, 0.18);
   border-radius: 6px;
   padding: 10px 12px;
   font-size: 0.88rem;
@@ -565,7 +565,7 @@
   align-items: center;
   justify-content: center;
   padding: 14px 12px;
-  border: 1px dashed rgba(13, 45, 94, 0.3);
+  border: 1px dashed rgba(109,60,27, 0.3);
   border-radius: 6px;
   text-align: center;
   font-size: 0.85rem;
@@ -630,10 +630,10 @@
 }
 .modalCancel {
   background: transparent;
-  border-color: rgba(13, 45, 94, 0.25);
+  border-color: rgba(109,60,27, 0.25);
   color: var(--navy);
 }
-.modalCancel:hover { background: rgba(13, 45, 94, 0.05); }
+.modalCancel:hover { background: rgba(109,60,27, 0.05); }
 
 .modalSubmit {
   background: var(--gold);
@@ -676,7 +676,7 @@
 .spinner {
   width: 14px;
   height: 14px;
-  border: 2px solid rgba(13, 45, 94, 0.2);
+  border: 2px solid rgba(109,60,27, 0.2);
   border-top-color: var(--navy);
   border-radius: 50%;
   animation: spin 0.7s linear infinite;
@@ -700,7 +700,7 @@
 .previewOverlay {
   position: fixed;
   inset: 0;
-  background: rgba(13, 45, 94, 0.75);
+  background: rgba(109,60,27, 0.75);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -718,7 +718,7 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  box-shadow: 0 20px 60px rgba(13, 45, 94, 0.4);
+  box-shadow: 0 20px 60px rgba(109,60,27, 0.4);
   border-top: 4px solid var(--gold);
   animation: modalSlideUp 0.22s ease;
 }
@@ -728,7 +728,7 @@
   justify-content: space-between;
   gap: 12px;
   padding: 16px 22px;
-  border-bottom: 1px solid rgba(13, 45, 94, 0.1);
+  border-bottom: 1px solid rgba(109,60,27, 0.1);
   background: var(--ivory);
 }
 .previewHeadInfo {
@@ -752,7 +752,7 @@
   width: 32px;
   height: 32px;
   background: transparent;
-  border: 1px solid rgba(13, 45, 94, 0.2);
+  border: 1px solid rgba(109,60,27, 0.2);
   border-radius: 50%;
   color: var(--navy);
   font-size: 13px;
@@ -807,7 +807,7 @@
   flex: 1;
   width: 100%;
   overflow: auto;
-  background: #e9ecf1;
+  background: #f1ede9;
 }
 
 .previewErrorBox {
@@ -832,7 +832,7 @@
   justify-content: space-between;
   gap: 12px;
   padding: 12px 22px;
-  border-top: 1px solid rgba(13, 45, 94, 0.1);
+  border-top: 1px solid rgba(109,60,27, 0.1);
   background: var(--ivory);
   flex-wrap: wrap;
 }

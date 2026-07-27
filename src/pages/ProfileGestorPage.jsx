@@ -162,7 +162,7 @@ export default function ProfileGestorPage() {
       nombre: profile?.username ? `@${profile.username}` : 'Gestor',
       apellido: '',
       subtitulo: 'Gestor Autorizado',
-      filename: `Tarjeta_AAP_${codigo.codigo}.png`,
+      filename: `Tarjeta_PB_${codigo.codigo}.png`,
     })
   }
 
@@ -183,7 +183,7 @@ export default function ProfileGestorPage() {
         <aside className={styles.sidebar}>
           <div className={styles.sidebarInner}>
             <div className={styles.sideBrand}>
-              <span className={styles.brandMark}>AAP</span>
+              <span className={styles.brandMark}>PB</span>
               <div className={styles.brandText}>
                 <strong>{profile?.username ? `@${profile.username}` : 'Gestor'}</strong>
                 <small className={aprobado ? styles.badgeOk : styles.badgePend}>
@@ -436,7 +436,7 @@ function SeccionEstadisticas({ aprobado, codigo }) {
     { key: 'exitos',   label: 'Éxitos',   value: stats.exitos,   color: '#1f7a4d' },
     { key: 'fracasos', label: 'Fracasos', value: stats.fracasos, color: '#a23b3b' },
     { key: 'en_curso', label: 'En curso', value: stats.en_curso, color: '#c9a84c' },
-    { key: 'otras',    label: 'Sin resultado', value: Math.max(0, stats.total - stats.exitos - stats.fracasos - stats.en_curso), color: '#9fb0c8' },
+    { key: 'otras',    label: 'Sin resultado', value: Math.max(0, stats.total - stats.exitos - stats.fracasos - stats.en_curso), color: '#c8b29f' },
   ].filter(d => d.value > 0) : []
 
   return (
@@ -549,7 +549,7 @@ function SeccionEstadisticas({ aprobado, codigo }) {
                       </Pie>
                       <Tooltip
                         formatter={(value, name) => [`${value} consulta${value === 1 ? '' : 's'}`, name]}
-                        contentStyle={{ borderRadius: 10, border: '1px solid rgba(13,45,94,0.1)', fontSize: 13, fontFamily: 'Raleway, sans-serif' }}
+                        contentStyle={{ borderRadius: 10, border: '1px solid rgba(109,60,27,0.1)', fontSize: 13, fontFamily: 'Raleway, sans-serif' }}
                       />
                     </PieChart>
                   </ResponsiveContainer>

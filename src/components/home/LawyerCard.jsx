@@ -13,12 +13,12 @@ function StarDisplay({ rating, total, dark = false }) {
       <div style={{ display: 'flex', gap: 2 }}>
         {[1,2,3,4,5].map(s => (
           <span key={s} style={{
-            color: s <= Math.round(rating) ? 'var(--gold)' : (dark ? 'rgba(13,45,94,0.18)' : 'rgba(255,255,255,0.2)'),
+            color: s <= Math.round(rating) ? 'var(--gold)' : (dark ? 'rgba(109,60,27,0.18)' : 'rgba(255,255,255,0.2)'),
             fontSize: '0.85rem'
           }}>★</span>
         ))}
       </div>
-      <span style={{ color: dark ? '#4a6080' : 'rgba(255,255,255,0.6)', fontSize: '0.73rem', fontWeight: 600 }}>
+      <span style={{ color: dark ? '#6f5c48' : 'rgba(255,255,255,0.6)', fontSize: '0.73rem', fontWeight: 600 }}>
         {rating} ({total})
       </span>
     </div>
@@ -238,7 +238,7 @@ export default function LawyerCard({
                       {[1,2,3,4,5].map(s => (
                         <span
                           key={s}
-                          style={{ color: s <= Math.round(resena.rating) ? 'var(--gold)' : 'rgba(13,45,94,0.18)' }}
+                          style={{ color: s <= Math.round(resena.rating) ? 'var(--gold)' : 'rgba(109,60,27,0.18)' }}
                         >★</span>
                       ))}
                     </span>

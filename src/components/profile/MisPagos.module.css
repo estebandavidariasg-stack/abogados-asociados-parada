@@ -1,5 +1,5 @@
 /* MisPagos — sección de pagos del profesional.
-   Paleta AAP: navy #0d2d5e + oro #c9a84c. Formal, elegante, responsive. */
+   Paleta AAP: navy #6d3c1b + oro #c9a84c. Formal, elegante, responsive. */
 
 .wrap {
   display: flex;
@@ -20,7 +20,7 @@
   gap: 0.35rem;
   padding: 1.1rem 1.25rem;
   border-radius: 14px;
-  border: 1px solid rgba(13, 45, 94, 0.1);
+  border: 1px solid rgba(109,60,27, 0.1);
   background: #fff;
 }
 
@@ -38,14 +38,14 @@
   font-size: 0.82rem;
   font-weight: 600;
   letter-spacing: 0.02em;
-  color: #5b6675;
+  color: #75675b;
   text-transform: uppercase;
 }
 
 .summaryValue {
   font-size: 1.5rem;
   font-weight: 700;
-  color: #0d2d5e;
+  color: #6d3c1b;
   line-height: 1.1;
 }
 
@@ -61,15 +61,15 @@
   gap: 14px;
   padding: 14px 16px;
   border-radius: 14px;
-  border: 1px solid rgba(13, 45, 94, 0.08);
+  border: 1px solid rgba(109,60,27, 0.08);
   background: #fff;
 }
 
 .presets { display: inline-flex; flex-wrap: wrap; gap: 6px; }
 .presetBtn {
-  border: 1px solid rgba(13, 45, 94, 0.14);
-  background: #f4f7fc;
-  color: #55617a;
+  border: 1px solid rgba(109,60,27, 0.14);
+  background: #fcf8f4;
+  color: #7a6655;
   cursor: pointer;
   font-family: inherit;
   font-size: 0.76rem;
@@ -78,27 +78,27 @@
   border-radius: 8px;
   transition: all 0.15s ease;
 }
-.presetBtn:hover { background: #e9eff8; color: #0d2d5e; border-color: rgba(13, 45, 94, 0.28); }
-.presetActive { background: #0d2d5e; border-color: #0d2d5e; color: #fff; }
-.presetActive:hover { background: #0a2450; border-color: #0a2450; color: #fff; }
+.presetBtn:hover { background: #f8f0e9; color: #6d3c1b; border-color: rgba(109,60,27, 0.28); }
+.presetActive { background: #6d3c1b; border-color: #6d3c1b; color: #fff; }
+.presetActive:hover { background: #502b0a; border-color: #502b0a; color: #fff; }
 
 .dateGroup { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; }
 .dateField { display: flex; flex-direction: column; gap: 3px; }
 .dateField > span {
   font-size: 0.68rem;
   font-weight: 700;
-  color: #6b7896;
+  color: #967f6b;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   padding-left: 2px;
 }
 .dateInput {
-  border: 1px solid rgba(13, 45, 94, 0.14);
+  border: 1px solid rgba(109,60,27, 0.14);
   background: #fff;
   border-radius: 9px;
   font-family: inherit;
   font-size: 0.82rem;
-  color: #263149;
+  color: #493626;
   padding: 7px 10px;
   height: 36px;
   color-scheme: light;
@@ -120,7 +120,7 @@
 .clearAll:hover { color: #8f2f2f; }
 
 /* ── Mensajes / estados simples ── */
-.muted { color: #6a7480; font-size: 0.95rem; }
+.muted { color: #80746a; font-size: 0.95rem; }
 .errorLine { color: #b3261e; font-size: 0.95rem; }
 
 /* ── Empty state ── */
@@ -131,7 +131,7 @@
   text-align: center;
   gap: 0.6rem;
   padding: 2.5rem 1.5rem;
-  border: 1px dashed rgba(13, 45, 94, 0.2);
+  border: 1px dashed rgba(109,60,27, 0.2);
   border-radius: 16px;
   background: #fbfcfe;
 }
@@ -150,14 +150,14 @@
 .emptyTitle {
   margin: 0;
   font-size: 1.15rem;
-  color: #0d2d5e;
+  color: #6d3c1b;
   font-weight: 700;
 }
 
 .emptyNote {
   margin: 0;
   max-width: 42ch;
-  color: #6a7480;
+  color: #80746a;
   font-size: 0.92rem;
   line-height: 1.5;
 }
@@ -178,14 +178,14 @@
   gap: 0.85rem;
   padding: 1.1rem 1.25rem;
   border-radius: 14px;
-  border: 1px solid rgba(13, 45, 94, 0.1);
+  border: 1px solid rgba(109,60,27, 0.1);
   background: #fff;
-  box-shadow: 0 1px 2px rgba(13, 45, 94, 0.04);
+  box-shadow: 0 1px 2px rgba(109,60,27, 0.04);
   transition: box-shadow 0.2s ease, transform 0.2s ease;
 }
 
 .card:hover {
-  box-shadow: 0 6px 18px rgba(13, 45, 94, 0.08);
+  box-shadow: 0 6px 18px rgba(109,60,27, 0.08);
   transform: translateY(-1px);
 }
 
@@ -206,13 +206,13 @@
 .monto {
   font-size: 1.25rem;
   font-weight: 700;
-  color: #0d2d5e;
+  color: #6d3c1b;
   font-variant-numeric: tabular-nums;
 }
 
 .fecha {
   font-size: 0.82rem;
-  color: #7b8592;
+  color: #92867b;
   font-variant-numeric: tabular-nums;
 }
 
@@ -225,8 +225,8 @@
   gap: 0.75rem;
   padding: 0.85rem 1.1rem;
   border-radius: 12px;
-  background: rgba(13, 45, 94, 0.035);
-  border: 1px solid rgba(13, 45, 94, 0.08);
+  background: rgba(109,60,27, 0.035);
+  border: 1px solid rgba(109,60,27, 0.08);
 }
 
 .bdStat {
@@ -236,7 +236,7 @@
   padding: 0.6rem 0.75rem;
   border-radius: 10px;
   background: #fff;
-  border: 1px solid rgba(13, 45, 94, 0.07);
+  border: 1px solid rgba(109,60,27, 0.07);
 }
 
 .bdStatLabel {
@@ -244,13 +244,13 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.03em;
-  color: #7b8592;
+  color: #92867b;
 }
 
 .bdStatValue {
   font-size: 1.05rem;
   font-weight: 700;
-  color: #0d2d5e;
+  color: #6d3c1b;
   font-variant-numeric: tabular-nums;
 }
 
@@ -321,13 +321,13 @@
   font-size: 0.88rem;
   font-weight: 700;
   color: #fff;
-  background: #0d2d5e;
-  box-shadow: 0 2px 8px rgba(13, 45, 94, 0.25);
+  background: #6d3c1b;
+  box-shadow: 0 2px 8px rgba(109,60,27, 0.25);
   transition: background 0.2s ease, transform 0.15s ease;
 }
 
 .payBtn:hover {
-  background: #123a78;
+  background: #784212;
   transform: translateY(-1px);
 }
 
@@ -342,7 +342,7 @@
   align-items: center;
   justify-content: center;
   padding: 1rem;
-  background: rgba(9, 24, 48, 0.55);
+  background: rgba(48, 27, 9, 0.55);
   backdrop-filter: blur(3px);
   animation: fadeIn 0.2s ease;
 }
@@ -353,7 +353,7 @@
   background: #fff;
   border-radius: 18px;
   padding: 1.5rem;
-  box-shadow: 0 24px 60px rgba(9, 24, 48, 0.35);
+  box-shadow: 0 24px 60px rgba(48, 27, 9, 0.35);
   border-top: 4px solid #c9a84c;
   animation: pop 0.22s ease;
 }
@@ -380,7 +380,7 @@
   font-size: 0.8rem;
   letter-spacing: 0.06em;
   color: #fff;
-  background: #0d2d5e;
+  background: #6d3c1b;
   padding: 0.3rem 0.55rem;
   border-radius: 8px;
 }
@@ -388,7 +388,7 @@
 .modalTitle {
   margin: 0;
   font-size: 1.15rem;
-  color: #0d2d5e;
+  color: #6d3c1b;
   font-weight: 700;
 }
 
@@ -398,10 +398,10 @@
   cursor: pointer;
   font-size: 1.6rem;
   line-height: 1;
-  color: #8a94a2;
+  color: #a2958a;
   padding: 0 0.25rem;
 }
-.closeBtn:hover { color: #0d2d5e; }
+.closeBtn:hover { color: #6d3c1b; }
 
 .amountBox {
   display: flex;
@@ -411,7 +411,7 @@
   padding: 0.9rem 1.1rem;
   margin-bottom: 1.1rem;
   border-radius: 12px;
-  background: linear-gradient(135deg, #0d2d5e 0%, #16407e 100%);
+  background: linear-gradient(135deg, #6d3c1b 0%, #7e4716 100%);
   color: #fff;
 }
 
@@ -443,17 +443,17 @@
 .label {
   font-size: 0.85rem;
   font-weight: 600;
-  color: #3a4552;
+  color: #52453a;
 }
 
 .select {
   width: 100%;
   padding: 0.65rem 0.8rem;
   border-radius: 10px;
-  border: 1px solid rgba(13, 45, 94, 0.22);
+  border: 1px solid rgba(109,60,27, 0.22);
   background: #fff;
   font-size: 0.95rem;
-  color: #1a2534;
+  color: #34261a;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
@@ -471,7 +471,7 @@
   border-radius: 12px;
   font-size: 1rem;
   font-weight: 700;
-  color: #0d2d5e;
+  color: #6d3c1b;
   background: linear-gradient(135deg, #d8bd63 0%, #c9a84c 100%);
   box-shadow: 0 4px 14px rgba(201, 168, 76, 0.4);
   transition: transform 0.15s ease, box-shadow 0.2s ease;
@@ -497,7 +497,7 @@
   gap: 0.4rem;
   margin: 0.2rem 0 0;
   font-size: 0.78rem;
-  color: #7b8592;
+  color: #92867b;
 }
 
 /* ── Estados procesando / aprobado ── */
@@ -514,7 +514,7 @@
   margin: 0.3rem 0 0;
   font-size: 1.05rem;
   font-weight: 700;
-  color: #0d2d5e;
+  color: #6d3c1b;
 }
 
 .stateTextOk {
@@ -527,15 +527,15 @@
 .stateSub {
   margin: 0;
   font-size: 0.85rem;
-  color: #7b8592;
+  color: #92867b;
 }
 
 .spinner {
   width: 42px;
   height: 42px;
   border-radius: 50%;
-  border: 4px solid rgba(13, 45, 94, 0.15);
-  border-top-color: #0d2d5e;
+  border: 4px solid rgba(109,60,27, 0.15);
+  border-top-color: #6d3c1b;
   animation: spin 0.8s linear infinite;
 }
 

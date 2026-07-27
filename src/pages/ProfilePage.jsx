@@ -414,7 +414,7 @@ export default function ProfilePage() {
             <div className={styles.sideBrand}>
               {(fotoPreview || fotoUrl || profile?.foto_url)
                 ? <img className={styles.brandAvatar} src={fotoPreview || fotoUrl || profile?.foto_url} alt="Tu foto de perfil" />
-                : <span className={styles.brandMark}>AAP</span>}
+                : <span className={styles.brandMark}>PB</span>}
               <div className={styles.brandText}>
                 <strong>{[profile?.nombre, profile?.apellido].filter(Boolean).join(' ') || 'Profesional'}</strong>
                 <small className={profile?.aprobado ? styles.badgeOk : styles.badgePend}>
@@ -752,7 +752,7 @@ export default function ProfilePage() {
         <section className={styles.panel}>
           <div className={styles.panelHead}>
             <h1 className={styles.panelTitle}>Canal Interno · <em>Administración</em></h1>
-            <span className={styles.panelSub}>Comunicación directa y privada con el equipo de AAP.</span>
+            <span className={styles.panelSub}>Comunicación directa y privada con el equipo de Parada Bridge.</span>
           </div>
           <LawyerInternalChat miId={user?.id} />
         </section>

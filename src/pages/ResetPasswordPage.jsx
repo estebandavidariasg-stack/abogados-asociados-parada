@@ -166,7 +166,7 @@ export default function ResetPasswordPage() {
                       <div
                         key={lvl}
                         className={styles.strengthBar}
-                        style={{ background: strength.level >= lvl ? strength.color : 'rgba(13,45,94,0.1)' }}
+                        style={{ background: strength.level >= lvl ? strength.color : 'rgba(109,60,27,0.1)' }}
                       />
                     ))}
                   </div>

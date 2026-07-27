@@ -8,7 +8,7 @@
                               con la traza de cada firmante y el hash del doc.
      · hashDocumento()      — SHA-256 del PDF (prueba de integridad).
 
-   Todo el color/tipografía sigue la marca AAP (navy + dorado). Sin marca de agua.
+   Todo el color/tipografía sigue la marca Parada Bridge (café + dorado). Sin marca de agua.
    Ver docs/superpowers/specs/2026-07-10-firma-electronica-design.md
    ───────────────────────────────────────────────────────────────────────── */
 import { PDFDocument, StandardFonts, rgb, degrees } from 'pdf-lib'

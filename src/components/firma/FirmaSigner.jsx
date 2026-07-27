@@ -329,7 +329,7 @@ function SignaturePad({ onChange }) {
       ctx.lineWidth = 2.4
       ctx.lineCap = 'round'
       ctx.lineJoin = 'round'
-      ctx.strokeStyle = '#0d2d5e'
+      ctx.strokeStyle = '#6d3c1b'
     }
 
     // Medir DESPUÉS de que el modal termine su animación de ancho/entrada.

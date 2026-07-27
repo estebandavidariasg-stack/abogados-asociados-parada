@@ -30,4 +30,4 @@ Disallow: /perfil
 Disallow: /perfil-contador
 Disallow: /nueva-contrasena
 
-Sitemap: https://abogadosyasociadosparada.com/sitemap.xml
+Sitemap: https://paradabridge.com/sitemap.xml

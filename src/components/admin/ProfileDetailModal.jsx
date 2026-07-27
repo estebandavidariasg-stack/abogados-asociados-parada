@@ -13,7 +13,7 @@ function StarDisplay({ rating, total }) {
       <div style={{ display: 'flex', gap: 2 }}>
         {[1,2,3,4,5].map(s => (
           <span key={s} style={{
-            color: s <= Math.round(rating) ? 'var(--gold)' : 'rgba(13,45,94,0.18)',
+            color: s <= Math.round(rating) ? 'var(--gold)' : 'rgba(109,60,27,0.18)',
             fontSize: '0.85rem',
           }}>★</span>
         ))}

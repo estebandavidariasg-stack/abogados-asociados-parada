@@ -122,18 +122,18 @@ function construirDocumento(innerHTML) {
   return `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Documento — Parada Bridge</title>
 <style>
   @page { margin: 2.5cm; }
-  body { font-family: 'Calibri','Segoe UI',Arial,sans-serif; color:#1f2d44; line-height:1.6; font-size:12pt; margin:0; }
+  body { font-family: 'Calibri','Segoe UI',Arial,sans-serif; color:#44301f; line-height:1.6; font-size:12pt; margin:0; }
   .doc-head { border-bottom: 2px solid #c9a84c; padding-bottom: 10px; margin-bottom: 24px; }
-  .doc-firm { font-family:'Georgia','Times New Roman',serif; font-size:19pt; font-weight:700; color:#0d2d5e; margin:0; letter-spacing:.3px; }
-  .doc-meta { font-size:9.5pt; color:#6b7689; margin:4px 0 0; }
-  h1,h2,h3,h4 { font-family:'Georgia','Times New Roman',serif; color:#0d2d5e; line-height:1.25; }
+  .doc-firm { font-family:'Georgia','Times New Roman',serif; font-size:19pt; font-weight:700; color:#6d3c1b; margin:0; letter-spacing:.3px; }
+  .doc-meta { font-size:9.5pt; color:#89796b; margin:4px 0 0; }
+  h1,h2,h3,h4 { font-family:'Georgia','Times New Roman',serif; color:#6d3c1b; line-height:1.25; }
   h1{font-size:16pt} h2{font-size:14pt} h3{font-size:12.5pt}
   p,li{font-size:12pt}
   ul,ol{padding-left:1.2cm}
-  table{border-collapse:collapse;width:100%;margin:10px 0} th,td{border:1px solid #cdd6e6;padding:6px 9px;text-align:left} th{background:#f1f4fa;color:#0d2d5e}
-  blockquote{border-left:3px solid #c9a84c;margin:0;padding-left:14px;color:#46546e}
-  code{background:#f1f4fa;padding:1px 4px;border-radius:3px;font-family:Consolas,monospace;font-size:11pt}
-  .doc-foot{margin-top:30px;border-top:1px solid #e2e8f3;padding-top:10px;font-size:9pt;color:#8a93a6;font-style:italic}
+  table{border-collapse:collapse;width:100%;margin:10px 0} th,td{border:1px solid #e6d9cd;padding:6px 9px;text-align:left} th{background:#faf5f1;color:#6d3c1b}
+  blockquote{border-left:3px solid #c9a84c;margin:0;padding-left:14px;color:#6e5946}
+  code{background:#faf5f1;padding:1px 4px;border-radius:3px;font-family:Consolas,monospace;font-size:11pt}
+  .doc-foot{margin-top:30px;border-top:1px solid #f3eae2;padding-top:10px;font-size:9pt;color:#a6978a;font-style:italic}
 </style></head>
 <body>
   <div class="doc-head">
@@ -729,7 +729,7 @@ export default function AsistenteIA() {
           )}
           {busy && (<div className={styles.thinking} aria-label="Generando respuesta"><span /><span /><span /></div>)}
           {busy && progreso && (
-            <div style={{ fontSize: '0.78rem', color: '#6b7fa3', marginTop: 6, fontFamily: 'Raleway, sans-serif' }}>{progreso}</div>
+            <div style={{ fontSize: '0.78rem', color: '#a3856b', marginTop: 6, fontFamily: 'Raleway, sans-serif' }}>{progreso}</div>
           )}
         </div>
       </div>
@@ -748,15 +748,15 @@ export default function AsistenteIA() {
         <div style={{
           position: 'fixed', inset: 0, zIndex: 1000,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          padding: '1.2rem', background: 'rgba(9, 24, 48, 0.62)',
+          padding: '1.2rem', background: 'rgba(48, 27, 9, 0.62)',
           backdropFilter: 'blur(3px)',
         }}>
           <div style={{
             width: 'min(520px, 100%)', background: '#fff', borderRadius: 18,
-            boxShadow: '0 30px 80px -30px rgba(9,24,48,0.6)', overflow: 'hidden',
+            boxShadow: '0 30px 80px -30px rgba(48, 27, 9,0.6)', overflow: 'hidden',
             fontFamily: "'Raleway', sans-serif",
           }}>
-            <div style={{ background: 'linear-gradient(160deg, #0d2d5e 0%, #1a3f7a 100%)', color: '#fff', padding: '1.9rem 1.8rem', textAlign: 'center' }}>
+            <div style={{ background: 'linear-gradient(160deg, #6d3c1b 0%, #7a471a 100%)', color: '#fff', padding: '1.9rem 1.8rem', textAlign: 'center' }}>
               <div style={{
                 width: 52, height: 52, borderRadius: 14, margin: '0 auto 14px',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -776,17 +776,17 @@ export default function AsistenteIA() {
             </div>
 
             <div style={{ padding: '1.6rem 1.8rem' }}>
-              <p style={{ margin: '0 0 1rem', fontSize: '0.92rem', lineHeight: 1.7, color: '#33415c' }}>
+              <p style={{ margin: '0 0 1rem', fontSize: '0.92rem', lineHeight: 1.7, color: '#5c4633' }}>
                 Esta herramienta es un <strong>apoyo para tu ejercicio profesional</strong>: te ayuda a
                 redactar borradores, resumir y analizar casos. <strong>No sustituye tu criterio.</strong>
               </p>
-              <ul style={{ margin: '0 0 1.2rem', paddingLeft: '1.1rem', fontSize: '0.87rem', lineHeight: 1.7, color: '#3d4a63' }}>
+              <ul style={{ margin: '0 0 1.2rem', paddingLeft: '1.1rem', fontSize: '0.87rem', lineHeight: 1.7, color: '#634f3d' }}>
                 <li>Todo lo que genera es un <strong>borrador que debes revisar</strong> antes de usarlo o presentarlo.</li>
                 <li>La IA puede cometer errores; verifica normas, cifras y jurisprudencia.</li>
                 <li>Eres responsable del contenido final conforme a tus deberes profesionales.</li>
               </ul>
 
-              <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', fontSize: '0.85rem', lineHeight: 1.55, color: '#33415c', marginBottom: '1.3rem' }}>
+              <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', fontSize: '0.85rem', lineHeight: 1.55, color: '#5c4633', marginBottom: '1.3rem' }}>
                 <input
                   type="checkbox"
                   checked={aceptaCheck}
@@ -795,9 +795,9 @@ export default function AsistenteIA() {
                 />
                 <span>
                   He leído y acepto los{' '}
-                  <a href="/terminos" target="_blank" rel="noopener noreferrer" style={{ color: '#0d2d5e', fontWeight: 700 }}>términos y condiciones</a>
+                  <a href="/terminos" target="_blank" rel="noopener noreferrer" style={{ color: '#6d3c1b', fontWeight: 700 }}>términos y condiciones</a>
                   {' '}y la{' '}
-                  <a href="/privacidad" target="_blank" rel="noopener noreferrer" style={{ color: '#0d2d5e', fontWeight: 700 }}>política de privacidad</a>
+                  <a href="/privacidad" target="_blank" rel="noopener noreferrer" style={{ color: '#6d3c1b', fontWeight: 700 }}>política de privacidad</a>
                   {' '}del uso de esta herramienta.
                 </span>
               </label>
@@ -810,8 +810,8 @@ export default function AsistenteIA() {
                   width: '100%', padding: '0.85rem 1rem', borderRadius: 12, border: 'none',
                   fontFamily: "'Raleway', sans-serif", fontSize: '0.92rem', fontWeight: 700,
                   cursor: aceptaCheck ? 'pointer' : 'not-allowed',
-                  color: aceptaCheck ? '#0d2d5e' : '#8a97ab',
-                  background: aceptaCheck ? 'linear-gradient(135deg, #e8c96a, #c9a84c)' : '#e8ecf3',
+                  color: aceptaCheck ? '#6d3c1b' : '#ab998a',
+                  background: aceptaCheck ? 'linear-gradient(135deg, #e8c96a, #c9a84c)' : '#f3ede8',
                   transition: 'opacity 0.2s',
                 }}
               >

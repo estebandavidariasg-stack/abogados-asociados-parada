@@ -30,7 +30,7 @@ const VERIFY_STYLES = `
     text-align: center;
   }
   .aap-verify-subtitle {
-    color: #3d4a60;
+    color: #604d3d;
     font-size: 14px;
     line-height: 1.55;
     margin: 0 0 24px;
@@ -61,7 +61,7 @@ const VERIFY_STYLES = `
     font-size: 24px;
     font-weight: bold;
     color: #c9a84c;
-    background-color: #0d1b2a;
+    background-color: #2a1b0d;
     border: 2px solid rgba(201, 168, 76, 0.4);
     border-radius: 6px;
     outline: none;
@@ -89,7 +89,7 @@ const VERIFY_STYLES = `
     min-height: 44px;
     padding: 12px 20px;
     background-color: #c9a84c;
-    color: #0d1b2a;
+    color: #2a1b0d;
     border: none;
     border-radius: 8px;
     font-family: Georgia, 'Times New Roman', serif;

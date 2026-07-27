@@ -89,7 +89,7 @@ export default function FirmaClienteChat({ firma, roomId, onClose, onDone }) {
   if (!bytes) {
     return createPortal(
       <div style={overlay}>
-        <div style={card}><span style={{ color: '#4a6080' }}>Cargando documento…</span></div>
+        <div style={card}><span style={{ color: '#6f5c48' }}>Cargando documento…</span></div>
       </div>,
       document.body
     )
@@ -104,6 +104,6 @@ export default function FirmaClienteChat({ firma, roomId, onClose, onDone }) {
   )
 }
 
-const overlay = { position: 'fixed', inset: 0, zIndex: 10001, display: 'grid', placeItems: 'center', background: 'rgba(8,24,51,0.55)', backdropFilter: 'blur(4px)' }
-const card = { background: '#faf7f2', borderRadius: 14, padding: '1.6rem', display: 'grid', gap: '1rem', placeItems: 'center', boxShadow: '0 24px 70px -20px rgba(8,24,51,0.55)' }
-const btn = { padding: '0.55rem 1.3rem', border: 'none', borderRadius: 9, background: '#0d2d5e', color: '#fff', fontWeight: 700, cursor: 'pointer' }
+const overlay = { position: 'fixed', inset: 0, zIndex: 10001, display: 'grid', placeItems: 'center', background: 'rgba(51, 28, 8,0.55)', backdropFilter: 'blur(4px)' }
+const card = { background: '#faf7f2', borderRadius: 14, padding: '1.6rem', display: 'grid', gap: '1rem', placeItems: 'center', boxShadow: '0 24px 70px -20px rgba(51, 28, 8,0.55)' }
+const btn = { padding: '0.55rem 1.3rem', border: 'none', borderRadius: 9, background: '#6d3c1b', color: '#fff', fontWeight: 700, cursor: 'pointer' }
