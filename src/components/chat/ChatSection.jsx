@@ -1033,8 +1033,10 @@ export default function ChatSection() {
   // refs para evitar stale closures en callbacks de realtime
   const formRef    = useRef(form)
   const roomAreaRef = useRef(roomArea)
+  const roomStatusRef = useRef(roomStatus)
   useEffect(() => { formRef.current = form }, [form])
   useEffect(() => { roomAreaRef.current = roomArea }, [roomArea])
+  useEffect(() => { roomStatusRef.current = roomStatus }, [roomStatus])
 
   const fileRef     = useRef(null)
   const messagesRef = useRef(null)
@@ -1134,6 +1136,19 @@ export default function ChatSection() {
       .on('postgres_changes', { event:'INSERT', schema:'public', table:'chat_messages', filter:`room_id=eq.${roomId}` },
         p => {
           setMessages(prev => prev.find(m => m.id===p.new.id) ? prev : [...prev, p.new])
+          // Si llega un mensaje y la sala todavía no está activa, re-chequear el
+          // estado: cubre el caso de que se haya perdido el evento UPDATE de
+          // chat_rooms (corte de red / ventana sin realtime) cuando un
+          // profesional tomó la consulta. Así el header deja de decir
+          // "esperando" y el cliente entra al chat aunque falte ese evento.
+          if (roomStatusRef.current !== 'active' && roomStatusRef.current !== 'closed') {
+            fetchEstadoSala(localStorage.getItem('chat_cedula_hash'), roomId).then(status => {
+              if (status) {
+                setRoomStatus(status)
+                if (status === 'active') setStep(s => s === 'esperando' ? 'chat' : s)
+              }
+            })
+          }
         })
       .on('postgres_changes', { event:'UPDATE', schema:'public', table:'chat_rooms', filter:`id=eq.${roomId}` },
         async p => {

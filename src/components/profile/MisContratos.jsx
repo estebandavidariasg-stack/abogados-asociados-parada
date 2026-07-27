@@ -6,7 +6,7 @@ import EnviarAFirmar from '../firma/EnviarAFirmar'
 import { IconFirma, IconDoc, IconFolder, IconUpload, IconDownload } from '../shared/Icons'
 import styles from './MisContratos.module.css'
 
-// Papelera clara (estilo Lucide trash-2) â€” mÃ¡s legible que el icono base
+// Papelera clara (estilo Lucide trash-2) — más legible que el icono base
 const IconTrash = (p) => (
   <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"
     strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...p}>
@@ -31,20 +31,20 @@ function fmtBytes(b) {
   if (b < 1048576) return `${(b / 1024).toFixed(1)} KB`
   return `${(b / 1048576).toFixed(1)} MB`
 }
-// Fecha + hora EXACTA (ej: "22 jul 2026, 3:45 p. m.") â€” helper compartido con
+// Fecha + hora EXACTA (ej: "22 jul 2026, 3:45 p. m.") — helper compartido con
 // el resto de pantallas para que todas las fechas coincidan. El equipo necesita
-// saber exactamente cuÃ¡ndo se subiÃ³ el archivo y cuÃ¡ndo llegÃ³ el firmado.
+// saber exactamente cuándo se subió el archivo y cuándo llegó el firmado.
 const fmtFechaHora = (iso) => {
-  if (!iso) return 'â€”'
+  if (!iso) return '—'
   try {
     return new Date(iso).toLocaleString('es-CO', {
       day: '2-digit', month: 'short', year: 'numeric',
       hour: '2-digit', minute: '2-digit', hour12: true,
     })
-  } catch { return 'â€”' }
+  } catch { return '—' }
 }
 
-// Normaliza texto para bÃºsqueda: sin tildes, minÃºsculas.
+// Normaliza texto para búsqueda: sin tildes, minúsculas.
 function normaliza(s) {
   return (s || '')
     .toString()
@@ -54,7 +54,7 @@ function normaliza(s) {
     .trim()
 }
 
-// Ãcono de lupa (buscador) â€” reutiliza el lenguaje visual del panel admin.
+// Ícono de lupa (buscador) — reutiliza el lenguaje visual del panel admin.
 function IconLupa() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -64,8 +64,8 @@ function IconLupa() {
   )
 }
 
-// Momento en que se recibiÃ³ la evidencia firmada: el Ãºltimo firmante que firmÃ³
-// (o, si aÃºn no consta, la fecha de creaciÃ³n de la solicitud).
+// Momento en que se recibió la evidencia firmada: el último firmante que firmó
+// (o, si aún no consta, la fecha de creación de la solicitud).
 function fechaFirmado(s) {
   const firmados = (s?.firmas_firmantes || [])
     .map(f => f?.firmado_at)
@@ -85,12 +85,12 @@ export default function MisContratos({ abogadoId, isSuperAdmin = false }) {
   const [descripcion, setDescripcion] = useState('')
   const fileRef = useRef()
 
-  // â”€â”€ Filtros (nombre/descripciÃ³n + rango de fechas) â”€â”€
+  // ── Filtros (nombre/descripción + rango de fechas) ──
   const [buscar,     setBuscar]     = useState('')
   const [fechaDesde, setFechaDesde] = useState('')
   const [fechaHasta, setFechaHasta] = useState('')
 
-  // â”€â”€ Firma electrÃ³nica â”€â”€
+  // ── Firma electrónica ──
   const [tab, setTab]               = useState('subidos') // subidos | clientes
   const [evidencia, setEvidencia]   = useState({ clientes: [], administracion: [] })
   const [enviarFirma, setEnviarFirma] = useState(null)     // contrato a firmar | {} nuevo
@@ -101,11 +101,11 @@ export default function MisContratos({ abogadoId, isSuperAdmin = false }) {
     try {
       const headers = await getAuthHeaders()
       setEvidencia(await listarEvidencia(abogadoId, headers))
-    } catch { /* tablas de firma aÃºn no aplicadas: secciÃ³n vacÃ­a */ }
+    } catch { /* tablas de firma aún no aplicadas: sección vacía */ }
   }
 
   // Abre el documento firmado ya compuesto (evidencia con la firma ubicada)
-  // en una pestaÃ±a nueva, mintando una URL firmada fresca del bucket privado.
+  // en una pestaña nueva, mintando una URL firmada fresca del bucket privado.
   async function verDocumento(s) {
     try {
       const headers = await getAuthHeaders()
@@ -171,14 +171,14 @@ export default function MisContratos({ abogadoId, isSuperAdmin = false }) {
       const ext  = archivo.name.split('.').pop()
       const path = `${abogadoId}/${Date.now()}.${ext}`
 
-      // 1 â€” subir al storage
+      // 1 — subir al storage
       const upRes = await fetch(
         `${SUPABASE_URL}/storage/v1/object/contratos/${path}`,
         { method: 'POST', headers: { ...headers, 'Content-Type': archivo.type }, body: archivo }
       )
       if (!upRes.ok) throw new Error('Error subiendo el archivo')
 
-      // 2 â€” guardar registro
+      // 2 — guardar registro
       const insRes = await fetch(`${SUPABASE_URL}/rest/v1/contratos`, {
         method: 'POST',
         headers: { ...headers, Prefer: 'return=representation' },
@@ -217,7 +217,7 @@ export default function MisContratos({ abogadoId, isSuperAdmin = false }) {
 
   async function eliminar(id, path) {
     if (!isSuperAdmin) return
-    if (!window.confirm('Â¿Eliminar este contrato?')) return
+    if (!window.confirm('¿Eliminar este contrato?')) return
     const headers = await getAuthHeaders()
     await fetch(`${SUPABASE_URL}/storage/v1/object/contratos/${path}`,
       { method: 'DELETE', headers })
@@ -226,8 +226,8 @@ export default function MisContratos({ abogadoId, isSuperAdmin = false }) {
     cargar()
   }
 
-  // â”€â”€ Filtrado en cliente de los contratos subidos â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  // Busca en nombre de archivo Y descripciÃ³n (sin tildes/case-insensitive) y
+  // ── Filtrado en cliente de los contratos subidos ────────────────────────
+  // Busca en nombre de archivo Y descripción (sin tildes/case-insensitive) y
   // acota por rango de fechas de subida (created_at).
   const buscarNorm = normaliza(buscar)
   const desdeTs = fechaDesde ? new Date(`${fechaDesde}T00:00:00`).getTime() : null
@@ -255,8 +255,8 @@ export default function MisContratos({ abogadoId, isSuperAdmin = false }) {
           <h3 className={styles.titulo}>Mis Contratos</h3>
           <p className={styles.subtitulo}>
             {isSuperAdmin
-              ? 'Contratos del abogado â€” ambos pueden ver y descargar.'
-              : 'Sube tus contratos. El administrador tambiÃ©n puede verlos y descargarlos.'}
+              ? 'Contratos del abogado — ambos pueden ver y descargar.'
+              : 'Sube tus contratos. El administrador también puede verlos y descargarlos.'}
           </p>
         </div>
         <div className={styles.topActions}>
@@ -269,7 +269,7 @@ export default function MisContratos({ abogadoId, isSuperAdmin = false }) {
         </div>
       </div>
 
-      {/* PestaÃ±as: subidos / evidencia firmada por contraparte */}
+      {/* Pestañas: subidos / evidencia firmada por contraparte */}
       <div className={styles.tabs} role="tablist">
         {[
           ['subidos', 'Subidos'],
@@ -290,7 +290,7 @@ export default function MisContratos({ abogadoId, isSuperAdmin = false }) {
       {error   && <div className={styles.msgError}>{error}</div>}
       {success && <div className={styles.msgOk}>{success}</div>}
 
-      {/* Barra de filtros â€” solo en la pestaÃ±a de subidos con contratos cargados */}
+      {/* Barra de filtros — solo en la pestaña de subidos con contratos cargados */}
       {tab === 'subidos' && !loading && contratos.length > 0 && (
         <div className={styles.filterBar}>
           <div className={styles.searchBox}>
@@ -298,18 +298,18 @@ export default function MisContratos({ abogadoId, isSuperAdmin = false }) {
             <input
               className={styles.searchInput}
               type="text"
-              placeholder="Buscar por nombre o descripciÃ³nâ€¦"
+              placeholder="Buscar por nombre o descripción…"
               value={buscar}
               onChange={e => setBuscar(e.target.value)}
-              aria-label="Buscar contrato por nombre o descripciÃ³n"
+              aria-label="Buscar contrato por nombre o descripción"
             />
             {buscar && (
               <button
                 type="button"
                 className={styles.searchClear}
                 onClick={() => setBuscar('')}
-                aria-label="Limpiar bÃºsqueda"
-              >âœ•</button>
+                aria-label="Limpiar búsqueda"
+              >✕</button>
             )}
           </div>
           <div className={styles.dateRow}>
@@ -354,7 +354,7 @@ export default function MisContratos({ abogadoId, isSuperAdmin = false }) {
                 className={styles.modalClose}
                 onClick={() => !uploading && setShowForm(false)}
                 aria-label="Cerrar"
-              >âœ•</button>
+              >✕</button>
             </div>
             {error && <div className={styles.msgError}>{error}</div>}
             <form className={styles.form} onSubmit={handleUpload}>
@@ -371,7 +371,7 @@ export default function MisContratos({ abogadoId, isSuperAdmin = false }) {
                   <div className={styles.dropPlaceholder}>
                     <span style={{ color: '#c9a84c' }}><IconUpload size={30} /></span>
                     <p className={styles.dropTexto}>Haz clic para seleccionar archivo</p>
-                    <p className={styles.dropSub}>PDF, DOC, DOCX â€” mÃ¡x. 10 MB</p>
+                    <p className={styles.dropSub}>PDF, DOC, DOCX — máx. 10 MB</p>
                   </div>
                 )}
               </div>
@@ -382,13 +382,13 @@ export default function MisContratos({ abogadoId, isSuperAdmin = false }) {
               />
               <input
                 className={styles.inputDesc}
-                placeholder="DescripciÃ³n opcional (ej: Contrato honorarios â€” Juan PÃ©rez)"
+                placeholder="Descripción opcional (ej: Contrato honorarios — Juan Pérez)"
                 value={descripcion}
                 onChange={e => setDescripcion(e.target.value)}
               />
               <button className={styles.btnConfirmar} type="submit" disabled={uploading}
                 style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7 }}>
-                {uploading ? 'Subiendoâ€¦' : <><IconUpload size={14} /> Confirmar subida</>}
+                {uploading ? 'Subiendo…' : <><IconUpload size={14} /> Confirmar subida</>}
               </button>
             </form>
           </div>
@@ -401,8 +401,8 @@ export default function MisContratos({ abogadoId, isSuperAdmin = false }) {
         evidencia.clientes.length === 0 ? (
           <div className={styles.emptyState}>
             <span className={styles.emptyFirmaIcon}><IconFirma size={44} /></span>
-            <p className={styles.emptyTxt}>AÃºn no hay documentos firmados con clientes</p>
-            <p className={styles.emptySub}>Los documentos firmados quedarÃ¡n aquÃ­ como evidencia</p>
+            <p className={styles.emptyTxt}>Aún no hay documentos firmados con clientes</p>
+            <p className={styles.emptySub}>Los documentos firmados quedarán aquí como evidencia</p>
           </div>
         ) : (
           <div className={styles.lista}>
@@ -442,18 +442,18 @@ export default function MisContratos({ abogadoId, isSuperAdmin = false }) {
 
       {/* Lista de subidos */}
       {tab === 'subidos' && (loading ? (
-        <p className={styles.empty}>Cargando contratosâ€¦</p>
+        <p className={styles.empty}>Cargando contratos…</p>
       ) : contratos.length === 0 ? (
         <div className={styles.emptyState}>
           <span style={{ color: '#c9a84c' }}><IconFolder size={40} /></span>
-          <p className={styles.emptyTxt}>No hay contratos subidos aÃºn</p>
-          <p className={styles.emptySub}>Los contratos aparecerÃ¡n aquÃ­ una vez subidos</p>
+          <p className={styles.emptyTxt}>No hay contratos subidos aún</p>
+          <p className={styles.emptySub}>Los contratos aparecerán aquí una vez subidos</p>
         </div>
       ) : contratosFiltrados.length === 0 ? (
         <div className={styles.emptyState}>
           <span style={{ color: '#c9a84c' }}><IconFolder size={40} /></span>
-          <p className={styles.emptyTxt}>NingÃºn contrato coincide con el filtro</p>
-          <p className={styles.emptySub}>Ajusta la bÃºsqueda o el rango de fechas</p>
+          <p className={styles.emptyTxt}>Ningún contrato coincide con el filtro</p>
+          <p className={styles.emptySub}>Ajusta la búsqueda o el rango de fechas</p>
         </div>
       ) : (
         <div className={styles.lista}>
@@ -464,7 +464,7 @@ export default function MisContratos({ abogadoId, isSuperAdmin = false }) {
                 <p className={styles.contratoNombre}>{c.nombre_archivo}</p>
                 {c.descripcion && <p className={styles.contratoDesc}>{c.descripcion}</p>}
                 <p className={styles.contratoMeta}>
-                  Subido: {fmtFechaHora(c.created_at)}{c.size_bytes ? ` Â· ${fmtBytes(c.size_bytes)}` : ''}
+                  Subido: {fmtFechaHora(c.created_at)}{c.size_bytes ? ` · ${fmtBytes(c.size_bytes)}` : ''}
                 </p>
               </div>
               <div className={styles.contratoAcciones}>
