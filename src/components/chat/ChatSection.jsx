@@ -1219,6 +1219,38 @@ export default function ChatSection() {
     return () => { cancel = true }
   }, [roomStatus, roomId])
 
+  // ── Fallback por sondeo (además del Realtime) ──────────────────────────────
+  // Mientras la consulta está en curso, consultamos estado + mensajes nuevos
+  // cada 5 s (por REST, acotado por el JWT del cliente). Garantiza que el cliente
+  // reciba actualizaciones aunque el Realtime no entregue bajo RLS estricta.
+  // Sin este colchón, la Fase 3 podía dejar el chat "sordo". Se pausa con la
+  // pestaña oculta para no gastar recursos.
+  useEffect(() => {
+    if (!roomId || roomStatus === 'closed') return
+    const hash = localStorage.getItem('chat_cedula_hash')
+    let stop = false
+    async function tick() {
+      if (document.hidden) return
+      const status = await fetchEstadoSala(hash, roomId)
+      if (stop) return
+      if (status) {
+        setRoomStatus(status)
+        if (status === 'active') setStep(s => s === 'esperando' ? 'chat' : s)
+      }
+      const { data } = await supabase.from('chat_messages').select('*')
+        .eq('room_id', roomId).order('created_at', { ascending: false }).limit(50)
+      if (stop || !Array.isArray(data) || !data.length) return
+      const recientes = data.reverse()
+      setMessages(prev => {
+        const ids = new Set(prev.map(m => m.id))
+        const nuevos = recientes.filter(m => !ids.has(m.id))
+        return nuevos.length ? [...prev, ...nuevos] : prev
+      })
+    }
+    const id = setInterval(tick, 5000)
+    return () => { stop = true; clearInterval(id) }
+  }, [roomId, roomStatus])
+
   // Tras la cédula: si viene un profesional por deep-link (LawyerCard →
   // #chat?abogado=<id>&tipo=<rol>), lo buscamos en la lista pública (cacheada
   // en el CDN, misma data del home) y saltamos al formulario con él bloqueado.
