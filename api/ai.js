@@ -21,7 +21,7 @@ function clientIp(req) {
 
 async function getSesion(id) {
   if (!id) return null;
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/ai_sesiones?id=eq.${id}&select=*&limit=1`, { headers: serviceHeaders() });
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/ai_sesiones?id=eq.${encodeURIComponent(id)}&select=*&limit=1`, { headers: serviceHeaders() });
   const rows = await res.json();
   return Array.isArray(rows) ? rows[0] : null;
 }
@@ -47,7 +47,7 @@ async function crearSesion(ipHash, tipo) {
 }
 
 async function actualizarSesion(id, patch) {
-  await fetch(`${SUPABASE_URL}/rest/v1/ai_sesiones?id=eq.${id}`, {
+  await fetch(`${SUPABASE_URL}/rest/v1/ai_sesiones?id=eq.${encodeURIComponent(id)}`, {
     method: 'PATCH',
     headers: serviceHeaders(),
     body: JSON.stringify(patch),
@@ -197,7 +197,7 @@ const SYSTEM_TRAMO =
 async function usosSalaHoy(roomId) {
   const hoy = new Date().toISOString().slice(0, 10);
   try {
-    const r = await fetch(`${SUPABASE_URL}/rest/v1/ai_uso_salas?room_id=eq.${roomId}&fecha=eq.${hoy}&select=usos&limit=1`, { headers: serviceHeaders() });
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/ai_uso_salas?room_id=eq.${encodeURIComponent(roomId)}&fecha=eq.${hoy}&select=usos&limit=1`, { headers: serviceHeaders() });
     if (!r.ok) return null;
     const rows = await r.json();
     if (!Array.isArray(rows)) return null;
@@ -208,10 +208,10 @@ async function usosSalaHoy(roomId) {
 async function registrarUsoSala(roomId, profesionalId) {
   const hoy = new Date().toISOString().slice(0, 10);
   try {
-    const r = await fetch(`${SUPABASE_URL}/rest/v1/ai_uso_salas?room_id=eq.${roomId}&fecha=eq.${hoy}&select=usos`, { headers: serviceHeaders() });
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/ai_uso_salas?room_id=eq.${encodeURIComponent(roomId)}&fecha=eq.${hoy}&select=usos`, { headers: serviceHeaders() });
     const rows = await r.json();
     if (Array.isArray(rows) && rows.length) {
-      await fetch(`${SUPABASE_URL}/rest/v1/ai_uso_salas?room_id=eq.${roomId}&fecha=eq.${hoy}`, {
+      await fetch(`${SUPABASE_URL}/rest/v1/ai_uso_salas?room_id=eq.${encodeURIComponent(roomId)}&fecha=eq.${hoy}`, {
         method: 'PATCH', headers: serviceHeaders(), body: JSON.stringify({ usos: (rows[0].usos || 0) + 1 }),
       });
     } else {
