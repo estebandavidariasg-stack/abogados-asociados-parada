@@ -382,6 +382,146 @@
   color: #ad927a;
 }
 
+/* ── Estrellas clicables → comentarios ─── */
+.ratingBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.25rem 0.55rem 0.25rem 0.25rem;
+  margin-left: -0.25rem;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.25s ease;
+}
+.ratingBtn:hover { background: rgba(201,168,76,0.12); }
+.ratingBtn:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.ratingHint {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-family: 'Raleway', sans-serif;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--gold-dk, #8a6a28);
+  white-space: nowrap;
+}
+.ratingChevron {
+  display: inline-block;
+  transition: transform 0.3s cubic-bezier(0.16,1,0.3,1);
+}
+.ratingChevronUp { transform: rotate(180deg); }
+
+.reviewsPanel {
+  margin: 0.4rem 0 1.5rem;
+  animation: reviewsIn 0.4s cubic-bezier(0.16,1,0.3,1);
+}
+@keyframes reviewsIn {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Título de sección (mismo tratamiento Cinzel del resto del modal) */
+.reviewsTitle {
+  font-family: 'Cinzel', serif;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  color: #96765a;
+  font-weight: 600;
+  margin: 0 0 0.85rem;
+}
+
+.reviewsState {
+  margin: 0;
+  padding: 0.9rem 0.2rem;
+  text-align: center;
+  font-family: 'Raleway', sans-serif;
+  font-size: 0.86rem;
+  color: #96765a;
+}
+
+/* Estado vacío — centrado, coherente, explica el caso */
+.reviewsEmpty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0.5rem;
+  padding: 1.5rem 1.25rem;
+  background: linear-gradient(145deg, #fdf8f4 0%, #fbf4ee 100%);
+  border: 1px solid rgba(109,60,27,0.1);
+  border-radius: 14px;
+  color: rgba(150,118,90,0.75);
+}
+.reviewsEmptyTitle {
+  margin: 0;
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: #6d3c1b;
+  line-height: 1.2;
+}
+.reviewsEmptyHint {
+  margin: 0;
+  max-width: 34ch;
+  font-family: 'Raleway', sans-serif;
+  font-size: 0.82rem;
+  line-height: 1.6;
+  color: #96765a;
+}
+
+.reviewsList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  max-height: 340px;
+  overflow-y: auto;
+  padding-right: 0.35rem;
+}
+.reviewItem {
+  padding: 0.9rem 1rem;
+  background: linear-gradient(145deg, #fdf8f4 0%, #fbf4ee 100%);
+  border: 1px solid rgba(109,60,27,0.1);
+  border-radius: 12px;
+}
+.reviewTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 0.45rem;
+}
+.reviewStars { display: inline-flex; gap: 2px; font-size: 0.82rem; line-height: 1; }
+.reviewDate {
+  font-family: 'Raleway', sans-serif;
+  font-size: 0.72rem;
+  color: #a3856b;
+}
+.reviewText {
+  margin: 0;
+  font-family: 'Raleway', sans-serif;
+  font-size: 0.88rem;
+  line-height: 1.7;
+  color: #6b4d33;
+  word-break: break-word;
+  white-space: pre-line;
+}
+.reviewAuthor {
+  margin: 0.55rem 0 0;
+  font-family: 'Raleway', sans-serif;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #b09577;
+}
+
 /* ── Secciones ───────────────────────────────── */
 .modalSection { margin-bottom: 1.5rem; }
 

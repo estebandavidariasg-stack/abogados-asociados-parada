@@ -2,6 +2,7 @@ import Navbar from '../components/layout/Navbar'
 import IntroSection from '../components/home/IntroSection'
 import LawyersSection from '../components/home/LawyersSection'
 import TestimoniosSection from '../components/home/TestimoniosSection'
+import RankingSection from '../components/home/RankingSection'
 import NoticiasSection from '../components/home/NoticiasSection'
 import ChatSection from '../components/chat/ChatSection'
 import Footer from '../components/layout/Footer'
@@ -92,6 +93,7 @@ export default function HomePage() {
       <VideoCarousel/>
       <ChatSection />
       <LawyersSection />
+      <RankingSection />
       <TestimoniosSection />
       <ModelosContractualesSection />
       <NoticiasSection />

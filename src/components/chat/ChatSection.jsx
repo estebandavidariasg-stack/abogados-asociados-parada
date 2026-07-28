@@ -1031,10 +1031,13 @@ export default function ChatSection() {
   const audioChunksRef    = useRef([])
   const recordingTimerRef = useRef(null)
 
-  // refs para evitar stale closures en callbacks de realtime
+  // refs para evitar stale closures en callbacks del sondeo
   const formRef    = useRef(form)
   const roomAreaRef = useRef(roomArea)
   const roomStatusRef = useRef(roomStatus)
+  // Evita procesar el cierre de la sala más de una vez (el sondeo puede ver
+  // 'closed' en varios ticks antes de detenerse).
+  const closedHandledRef = useRef(false)
   useEffect(() => { formRef.current = form }, [form])
   useEffect(() => { roomAreaRef.current = roomArea }, [roomArea])
   useEffect(() => { roomStatusRef.current = roomStatus }, [roomStatus])
@@ -1129,74 +1132,34 @@ export default function ChatSection() {
     }
   }
 
+  // Maneja el cierre de la sala (por el profesional o el admin): guarda el
+  // roomId cerrado, excluye a los profesionales que ya atendieron y arranca el
+  // flujo de cierre (rating → PQR → elegir otro). Idempotente vía closedHandledRef.
+  async function handleRoomClosed(rid) {
+    if (closedHandledRef.current) return
+    closedHandledRef.current = true
+    setClosedRoomId(rid)
+    const { data: assignments } = await supabase
+      .from('chat_room_lawyers').select('lawyer_id').eq('room_id', rid)
+    const excluded = (assignments || []).map(a => a.lawyer_id)
+    setExcludedLawyerIds(excluded)
+    const areas = formRef.current.areas.length > 0
+      ? formRef.current.areas
+      : roomAreaRef.current.split(', ').map(a => a.trim()).filter(Boolean)
+    const dept = formRef.current.departamento || ''
+    if (areas.length > 0) {
+      const rol = formRef.current.tipo_profesional || 'abogado'
+      await fetchLawyers(areas, dept, excluded, rol)
+    }
+    // Flujo de cierre: 1° rating → 2° PQR → 3° opción de elegir otro.
+    setStep('rating')
+  }
+
+  // Al entrar a una sala nueva, reinicia el guardia de cierre y carga el historial.
   useEffect(() => {
     if (!roomId) return
+    closedHandledRef.current = false
     loadMessages(roomId)
-    let firstSub = true
-    const ch = supabase.channel(`rc:${roomId}`)
-      .on('postgres_changes', { event:'INSERT', schema:'public', table:'chat_messages', filter:`room_id=eq.${roomId}` },
-        p => {
-          setMessages(prev => prev.find(m => m.id===p.new.id) ? prev : [...prev, p.new])
-          // Si llega un mensaje y la sala todavía no está activa, re-chequear el
-          // estado: cubre el caso de que se haya perdido el evento UPDATE de
-          // chat_rooms (corte de red / ventana sin realtime) cuando un
-          // profesional tomó la consulta. Así el header deja de decir
-          // "esperando" y el cliente entra al chat aunque falte ese evento.
-          if (roomStatusRef.current !== 'active' && roomStatusRef.current !== 'closed') {
-            fetchEstadoSala(localStorage.getItem('chat_cedula_hash'), roomId).then(status => {
-              if (status) {
-                setRoomStatus(status)
-                if (status === 'active') setStep(s => s === 'esperando' ? 'chat' : s)
-              }
-            })
-          }
-        })
-      .on('postgres_changes', { event:'UPDATE', schema:'public', table:'chat_rooms', filter:`id=eq.${roomId}` },
-        async p => {
-          setRoomStatus(p.new.status)
-          // Solicitud abierta tomada por un profesional → entra al chat.
-          if (p.new.status === 'active') {
-            setStep(s => s === 'esperando' ? 'chat' : s)
-          }
-          if (p.new.status === 'closed') {
-            // Guardar roomId cerrado para rating posterior
-            setClosedRoomId(p.new.id)
-            // Obtener abogados del chat cerrado para excluirlos
-            const { data: assignments } = await supabase
-              .from('chat_room_lawyers').select('lawyer_id').eq('room_id', p.new.id)
-            const excluded = (assignments || []).map(a => a.lawyer_id)
-            setExcludedLawyerIds(excluded)
-            // Obtener áreas actuales
-            const areas = formRef.current.areas.length > 0
-              ? formRef.current.areas
-              : roomAreaRef.current.split(', ').map(a => a.trim()).filter(Boolean)
-            const dept = formRef.current.departamento || ''
-            // Buscar profesionales disponibles excluyendo los del chat cerrado
-            if (areas.length > 0) {
-              const rol = formRef.current.tipo_profesional || 'abogado'
-              // Reutiliza fetchLawyers: mismo filtrado + lista cacheada (CDN).
-              await fetchLawyers(areas, dept, excluded, rol)
-            }
-            // Flujo de cierre: 1° rating → 2° PQR → 3° opción de elegir otro.
-            setStep('rating')
-          }
-        })
-      .subscribe(st => {
-        // Tras una reconexión automática del WS (corte de red del cliente):
-        // recuperar los mensajes perdidos y re-chequear el estado de la sala —
-        // sin esto, un cliente en "esperando" nunca se enteraba de que un
-        // profesional tomó su caso durante el corte.
-        if (st !== 'SUBSCRIBED') return
-        if (firstSub) { firstSub = false; return }
-        loadMessages(roomId)
-        fetchEstadoSala(localStorage.getItem('chat_cedula_hash'), roomId).then(status => {
-          if (status) {
-            setRoomStatus(status)
-            if (status === 'active') setStep(s => s === 'esperando' ? 'chat' : s)
-          }
-        })
-      })
-    return () => supabase.removeChannel(ch)
   }, [roomId])
 
   // Cuando la consulta pasa a 'active', resolvemos el nombre del profesional que
@@ -1219,12 +1182,14 @@ export default function ChatSection() {
     return () => { cancel = true }
   }, [roomStatus, roomId])
 
-  // ── Fallback por sondeo (además del Realtime) ──────────────────────────────
-  // Mientras la consulta está en curso, consultamos estado + mensajes nuevos
-  // cada 5 s (por REST, acotado por el JWT del cliente). Garantiza que el cliente
-  // reciba actualizaciones aunque el Realtime no entregue bajo RLS estricta.
-  // Sin este colchón, la Fase 3 podía dejar el chat "sordo". Se pausa con la
-  // pestaña oculta para no gastar recursos.
+  // ── Transporte del chat del cliente: SONDEO (no WebSocket) ────────────────
+  // El cliente anónimo no usa Realtime: bajo la RLS con claim de JWT el canal
+  // postgres_changes no entrega de forma fiable (y ensuciaba la consola con
+  // errores de WebSocket). En su lugar sondeamos por REST (acotado por el JWT
+  // del cliente) cada 3 s: estado de la sala + mensajes nuevos + detección de
+  // cierre. Se pausa con la pestaña oculta para no gastar recursos. Los
+  // profesionales sí conservan su Realtime propio (autenticado) para ver al
+  // instante lo que envía el cliente.
   useEffect(() => {
     if (!roomId || roomStatus === 'closed') return
     const hash = localStorage.getItem('chat_cedula_hash')
@@ -1236,6 +1201,7 @@ export default function ChatSection() {
       if (status) {
         setRoomStatus(status)
         if (status === 'active') setStep(s => s === 'esperando' ? 'chat' : s)
+        if (status === 'closed') { await handleRoomClosed(roomId); return }
       }
       const { data } = await supabase.from('chat_messages').select('*')
         .eq('room_id', roomId).order('created_at', { ascending: false }).limit(50)
@@ -1247,7 +1213,8 @@ export default function ChatSection() {
         return nuevos.length ? [...prev, ...nuevos] : prev
       })
     }
-    const id = setInterval(tick, 5000)
+    tick()  // primer sondeo inmediato (no esperar 3 s)
+    const id = setInterval(tick, 3000)
     return () => { stop = true; clearInterval(id) }
   }, [roomId, roomStatus])
 
