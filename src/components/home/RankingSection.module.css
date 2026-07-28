@@ -1,0 +1,291 @@
+.section {
+  position: relative;
+  padding: clamp(3.5rem, 7vw, 6rem) clamp(1rem, 5vw, 3rem);
+  background:
+    radial-gradient(ellipse 70% 55% at 50% 0%, rgba(201,168,76,0.09), transparent 68%),
+    var(--surface2);
+  overflow: hidden;
+}
+
+/* ── Encabezado (tipografía del sitio: Cormorant + Raleway) ── */
+.header {
+  max-width: 640px;
+  margin: 0 auto clamp(2.5rem, 5vw, 3.75rem);
+  text-align: center;
+}
+.eyebrow {
+  display: inline-block;
+  font-family: 'Raleway', sans-serif;
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.35em;
+  text-transform: uppercase;
+  color: var(--gold);
+  margin-bottom: 1.2rem;
+}
+.heading {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: clamp(2rem, 4vw, 3.5rem);
+  font-weight: 300;
+  line-height: 1.2;
+  color: var(--navy);
+  text-wrap: balance;
+  margin: 0 0 1rem;
+}
+.heading em { font-style: italic; color: var(--gold); }
+.desc {
+  font-family: 'Raleway', sans-serif;
+  font-size: 0.9rem;
+  font-weight: 300;
+  line-height: 1.8;
+  color: var(--muted);
+  max-width: 480px;
+  margin: 0 auto;
+  text-wrap: pretty;
+}
+
+/* ── Podio ── */
+.podium {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: clamp(0.4rem, 2.5vw, 1.6rem);
+  max-width: 720px;
+  margin: 0 auto;
+}
+.column {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: clamp(94px, 25vw, 132px);
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: var(--navy);
+  transition: transform 0.4s cubic-bezier(0.16,1,0.3,1);
+}
+.column:hover { transform: translateY(-5px); }
+.column:focus-visible { outline: 2px solid var(--gold); outline-offset: 4px; border-radius: 14px; }
+
+/* Corona / medalla */
+.badge {
+  height: clamp(26px, 6vw, 34px);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  margin-bottom: 0.35rem;
+}
+.badgeIcon {
+  width: clamp(24px, 6vw, 34px);
+  height: clamp(24px, 6vw, 34px);
+  color: var(--gold);
+  filter: drop-shadow(0 3px 6px rgba(201,168,76,0.5));
+}
+.badgeMedal {
+  width: clamp(20px, 5vw, 26px);
+  height: clamp(20px, 5vw, 26px);
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-family: 'Cormorant Garamond', serif;
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: #fff;
+}
+.second .badgeMedal { background: #b7b0a1; }
+.third  .badgeMedal { background: #bd7f43; }
+
+/* Avatar */
+.avatarWrap {
+  border-radius: 50%;
+  padding: 3px;
+  display: grid;
+  place-items: center;
+  background: var(--surface);
+}
+.first  .avatarWrap { box-shadow: 0 0 0 2px var(--gold),   0 12px 26px -12px rgba(201,168,76,0.65); }
+.second .avatarWrap { box-shadow: 0 0 0 2px #b7b0a1,        0 10px 22px -14px rgba(54,36,21,0.4); }
+.third  .avatarWrap { box-shadow: 0 0 0 2px #bd7f43,        0 10px 22px -14px rgba(54,36,21,0.4); }
+.avatar, .avatarInitials {
+  border-radius: 50%;
+  object-fit: cover;
+  display: grid;
+  place-items: center;
+}
+.first  .avatar, .first  .avatarInitials { width: clamp(70px, 17vw, 100px); height: clamp(70px, 17vw, 100px); }
+.second .avatar, .second .avatarInitials,
+.third  .avatar, .third  .avatarInitials { width: clamp(54px, 13vw, 76px);  height: clamp(54px, 13vw, 76px); }
+.avatarInitials {
+  font-family: 'Cormorant Garamond', serif;
+  font-weight: 600;
+  font-size: 1.6rem;
+  color: var(--navy-md);
+  background: linear-gradient(140deg, #efe6d6, #e5d6bf);
+}
+
+/* Nombre / área */
+.name {
+  margin-top: 0.7rem;
+  max-width: 100%;
+  font-family: 'Raleway', sans-serif;
+  font-weight: 600;
+  font-size: clamp(0.84rem, 2.1vw, 1.02rem);
+  line-height: 1.25;
+  color: var(--navy);
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.area {
+  max-width: 100%;
+  margin-top: 0.15rem;
+  font-family: 'Raleway', sans-serif;
+  font-size: 0.72rem;
+  color: var(--muted);
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Puntaje */
+.scoreLine {
+  display: flex;
+  align-items: baseline;
+  gap: 0.45rem;
+  margin-top: 0.5rem;
+}
+.scoreNum {
+  font-family: 'Cormorant Garamond', serif;
+  font-weight: 600;
+  font-size: clamp(1.5rem, 3.6vw, 2.2rem);
+  line-height: 1;
+  color: var(--navy);
+  font-variant-numeric: tabular-nums;
+}
+.count {
+  margin-top: 0.15rem;
+  font-family: 'Raleway', sans-serif;
+  font-size: 0.68rem;
+  color: #9a835f;
+}
+
+/* Bloque del podio */
+.block {
+  margin-top: 0.85rem;
+  width: 100%;
+  border-radius: 12px 12px 0 0;
+  transform-origin: bottom;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 0.5rem;
+  background: linear-gradient(180deg, #3d2917 0%, #2a1b0f 100%);
+  box-shadow: inset 0 2px 0 rgba(255,255,255,0.04);
+  border-top: 3px solid transparent;
+}
+.first  .block { height: clamp(92px, 20vw, 132px); border-top-color: var(--gold-lt); box-shadow: inset 0 2px 0 rgba(232,201,106,0.5), 0 -14px 30px -22px rgba(201,168,76,0.7); }
+.second .block { height: clamp(70px, 15vw, 100px); border-top-color: #c3bdb0; }
+.third  .block { height: clamp(54px, 11vw, 80px);  border-top-color: #bd7f43; }
+.blockRank {
+  font-family: 'Cormorant Garamond', serif;
+  font-weight: 600;
+  font-size: clamp(1.6rem, 4.4vw, 2.6rem);
+  line-height: 1;
+}
+.first  .blockRank { color: var(--gold-lt); }
+.second .blockRank { color: #d9d3c6; }
+.third  .blockRank { color: #d99a5e; }
+
+/* ── Estrellas ── */
+.stars { display: inline-flex; gap: 1px; font-size: 0.72rem; line-height: 1; }
+.starOn  { color: var(--gold); }
+.starOff { color: rgba(109,60,27,0.2); }
+
+/* ── Puestos 4–5 ── */
+.list {
+  list-style: none;
+  max-width: 560px;
+  margin: clamp(1.6rem, 3vw, 2.4rem) auto 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+.row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: clamp(0.7rem, 2vw, 1.1rem);
+  padding: 0.7rem clamp(0.85rem, 2vw, 1.2rem);
+  border: 1px solid rgba(109,60,27,0.12);
+  border-radius: 14px;
+  background: var(--cream);
+  cursor: pointer;
+  text-align: left;
+  transition: transform 0.35s cubic-bezier(0.16,1,0.3,1), border-color 0.35s ease, box-shadow 0.35s ease;
+}
+.row:hover, .row:focus-visible {
+  transform: translateX(4px);
+  border-color: rgba(201,168,76,0.5);
+  box-shadow: 0 12px 26px -18px rgba(54,36,21,0.4);
+}
+.row:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.rowRank {
+  flex-shrink: 0;
+  width: 26px;
+  text-align: center;
+  font-family: 'Cormorant Garamond', serif;
+  font-weight: 600;
+  font-size: 1.4rem;
+  color: var(--gold-dk);
+  font-variant-numeric: tabular-nums;
+}
+.rowAvatar {
+  flex-shrink: 0;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  background: var(--surface);
+  box-shadow: 0 0 0 1.5px rgba(201,168,76,0.28);
+}
+.rowAvatarImg { width: 100%; height: 100%; object-fit: cover; }
+.rowAvatarInitials { font-family: 'Cormorant Garamond', serif; font-weight: 600; font-size: 1.05rem; color: var(--navy-md); }
+.rowMain { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.1rem; }
+.rowName {
+  font-family: 'Raleway', sans-serif;
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--navy);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.rowArea {
+  font-family: 'Raleway', sans-serif;
+  font-size: 0.75rem;
+  color: var(--muted);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.rowScore { flex-shrink: 0; display: flex; flex-direction: column; align-items: flex-end; gap: 0.15rem; }
+.rowScoreNum {
+  font-family: 'Cormorant Garamond', serif;
+  font-weight: 600;
+  font-size: 1.35rem;
+  line-height: 1;
+  color: var(--navy);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 400px) {
+  .area, .count { display: none; }
+  .rowRank { width: 20px; font-size: 1.2rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .column, .row { transition: none; }
+}

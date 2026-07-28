@@ -44,6 +44,19 @@ const CONNECTIONS = [
   { from: 2, to: 11, delay: 3.0 },
 ]
 
+// Clientes (puntos AZULES) que se conectan con los hubs de profesionales
+// (dorados). Ilustrativos: comunican "los clientes llegan a los profesionales".
+// `to` = índice del hub profesional en CITIES con el que enlaza cada cliente.
+const CLIENTS = [
+  { id: 0, name: 'Medellín',     coords: [-75.56,   6.25], to: 0, delay: 0.3 },
+  { id: 1, name: 'Cali',         coords: [-76.53,   3.45], to: 0, delay: 1.1 },
+  { id: 2, name: 'Barranquilla', coords: [-74.80,  10.96], to: 0, delay: 1.9 },
+  { id: 3, name: 'Guadalajara',  coords: [-103.35, 20.67], to: 1, delay: 0.7 },
+  { id: 4, name: 'Barcelona',    coords: [  2.17,  41.39], to: 4, delay: 1.5 },
+  { id: 5, name: 'Córdoba',      coords: [-64.18, -31.42], to: 7, delay: 2.3 },
+  { id: 6, name: 'Houston',      coords: [-95.37,  29.76], to: 2, delay: 2.7 },
+]
+
 function curvePath(x1, y1, x2, y2) {
   const dx = x2 - x1, dy = y2 - y1
   const dist = Math.sqrt(dx * dx + dy * dy) || 1
@@ -106,6 +119,9 @@ export default function MapSection() {
   const [bordersPath, setBordersPath] = useState(null)   // fronteras internas tenues
   const [projected,   setProjected]   = useState([])
   const [paths,       setPaths]       = useState([])
+  const [clientPts,   setClientPts]   = useState([])   // puntos de clientes (azul)
+  const [clientPaths, setClientPaths] = useState([])   // arcos cliente → profesional
+  const [reduceMotion, setReduceMotion] = useState(false)
   const [loading,     setLoading]     = useState(true)
 
   const [roleData,    setRoleData]    = useState(PH_ROLES)
@@ -143,6 +159,17 @@ export default function MapSection() {
         setPaths(CONNECTIONS.map((c, i) => {
           const a = pts[c.from], b = pts[c.to]
           return { ...c, i, path: curvePath(a.x, a.y, b.x, b.y) }
+        }))
+
+        // Clientes (azul) + su arco hacia el hub profesional asignado.
+        const cpts = CLIENTS.map(c => {
+          const [x, y] = projection(c.coords) || [0, 0]
+          return { ...c, x, y }
+        })
+        setClientPts(cpts)
+        setClientPaths(cpts.map((c, i) => {
+          const hub = pts[c.to]
+          return { ...c, i, path: curvePath(c.x, c.y, hub.x, hub.y) }
         }))
       } catch { /* sin mapa → la sección sigue mostrando gráficas */ }
       finally { if (!cancel) setLoading(false) }
@@ -207,6 +234,16 @@ export default function MapSection() {
     return () => { clearInterval(up); clearInterval(fluct) }
   }, [])
 
+  // Respeta prefers-reduced-motion para las partículas SMIL (<animateMotion>),
+  // que el CSS de reduced-motion no puede desactivar.
+  useEffect(() => {
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)')
+    const apply = () => setReduceMotion(!!mq.matches)
+    apply()
+    mq.addEventListener?.('change', apply)
+    return () => mq.removeEventListener?.('change', apply)
+  }, [])
+
   // Reveal
   useEffect(() => {
     const obs = new IntersectionObserver(
@@ -250,6 +287,17 @@ export default function MapSection() {
                 <stop offset="0%"   stopColor="#C9A84C" stopOpacity="0.55" />
                 <stop offset="100%" stopColor="#C9A84C" stopOpacity="0"    />
               </radialGradient>
+              {/* Azul de clientes — misma mecánica que el dorado */}
+              <linearGradient id="lineGradBlue" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%"   stopColor="#3d8fd4" stopOpacity="0"    />
+                <stop offset="45%"  stopColor="#3d8fd4" stopOpacity="0.85" />
+                <stop offset="55%"  stopColor="#7fbce8" stopOpacity="1"    />
+                <stop offset="100%" stopColor="#3d8fd4" stopOpacity="0"    />
+              </linearGradient>
+              <radialGradient id="dotGlowBlue">
+                <stop offset="0%"   stopColor="#4a9fe0" stopOpacity="0.5" />
+                <stop offset="100%" stopColor="#4a9fe0" stopOpacity="0"   />
+              </radialGradient>
               <filter id="softGlow" x="-50%" y="-50%" width="200%" height="200%">
                 <feGaussianBlur stdDeviation="2" result="blur" />
                 <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
@@ -284,19 +332,39 @@ export default function MapSection() {
               <path key={`base-${c.i}`} d={c.path} fill="none" stroke="rgba(201,168,76,0.12)" strokeWidth="0.8" />
             ))}
 
-            {/* Arcos animados + partícula */}
+            {/* Arcos animados + partícula (profesionales, dorado) */}
             {!loading && paths.map(c => (
               <g key={`anim-${c.i}`}>
                 <path
                   d={c.path} fill="none" stroke="url(#lineGrad)" strokeWidth="1.4"
                   className={styles.line} style={{ animationDelay: `${c.delay}s` }}
                 />
-                <circle r="2.5" fill="#e8c96a" opacity="0.92" filter="url(#softGlow)">
-                  <animateMotion dur="4.5s" repeatCount="indefinite" begin={`${c.delay}s`} path={c.path} />
-                </circle>
-                <circle r="1.1" fill="#ffffff" opacity="0.65">
-                  <animateMotion dur="4.5s" repeatCount="indefinite" begin={`${c.delay + 0.05}s`} path={c.path} />
-                </circle>
+                {!reduceMotion && (
+                  <>
+                    <circle r="2.5" fill="#e8c96a" opacity="0.92" filter="url(#softGlow)">
+                      <animateMotion dur="4.5s" repeatCount="indefinite" begin={`${c.delay}s`} path={c.path} />
+                    </circle>
+                    <circle r="1.1" fill="#ffffff" opacity="0.65">
+                      <animateMotion dur="4.5s" repeatCount="indefinite" begin={`${c.delay + 0.05}s`} path={c.path} />
+                    </circle>
+                  </>
+                )}
+              </g>
+            ))}
+
+            {/* Conexiones cliente → profesional (azul), misma mecánica */}
+            {!loading && clientPaths.map(c => (
+              <path key={`cbase-${c.i}`} d={c.path} fill="none" stroke="rgba(61,143,212,0.14)" strokeWidth="0.8" />
+            ))}
+            {!loading && clientPaths.map(c => (
+              <g key={`canim-${c.i}`}>
+                <path d={c.path} fill="none" stroke="url(#lineGradBlue)" strokeWidth="1.3"
+                  className={styles.line} style={{ animationDelay: `${c.delay}s` }} />
+                {!reduceMotion && (
+                  <circle r="2.2" fill="#7fbce8" opacity="0.9" filter="url(#softGlow)">
+                    <animateMotion dur="4.5s" repeatCount="indefinite" begin={`${c.delay}s`} path={c.path} />
+                  </circle>
+                )}
               </g>
             ))}
 
@@ -316,6 +384,17 @@ export default function MapSection() {
                   fill={p.main ? '#e8c96a' : '#C9A84C'}
                   filter={p.main ? 'url(#strongGlow)' : 'url(#softGlow)'} />
                 <circle cx={p.x} cy={p.y} r={p.main ? 2 : 1.1} fill="#ffffff" opacity={p.main ? 1 : 0.7} />
+              </g>
+            ))}
+
+            {/* Puntos de clientes (azules) — más pequeños que los profesionales */}
+            {!loading && clientPts.map(c => (
+              <g key={`cpt-${c.id}`}>
+                <circle cx={c.x} cy={c.y} r="8"
+                  fill="url(#dotGlowBlue)" className={styles.pulse}
+                  style={{ animationDelay: `${c.id * 0.3 + 0.15}s` }} />
+                <circle cx={c.x} cy={c.y} r="2.4" fill="#4a9fe0" filter="url(#softGlow)" />
+                <circle cx={c.x} cy={c.y} r="1" fill="#dbeeff" opacity="0.9" />
               </g>
             ))}
           </svg>

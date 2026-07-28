@@ -1,21 +1,21 @@
 import { useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { headerStagger, eyebrowReveal, fadeUp, gridStagger, cardReveal, VIEWPORT } from '../../lib/motionVariants'
+import { useAuth } from '../../context/AuthContext'
+import { supabase } from '../../lib/supabase'
+import { compressImage } from '../../utils/compressMedia'
 import styles from './NoticiasSection.module.css'
 
-/* ── Fuente de noticias (sin API key) ──────────────────────────────────────
-   Google News RSS (búsqueda de temas jurídicos/contables de Colombia) leído a
-   través del proxy público rss2json, que convierte el feed a JSON y evita los
-   problemas de CORS del RSS crudo. Si algo falla (proxy caído, cuota, red), se
-   usa el arreglo curado de abajo para que la sección NUNCA quede vacía. */
-const GOOGLE_NEWS_RSS =
-  'https://news.google.com/rss/search?q=(abogados%20OR%20contadores%20OR%20leyes%20OR%20DIAN%20OR%20jur%C3%ADdico)%20Colombia&hl=es-419&gl=CO&ceid=CO:es-419'
-const RSS_TO_JSON =
-  'https://api.rss2json.com/v1/api.json?rss_url=' + encodeURIComponent(GOOGLE_NEWS_RSS)
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
+const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
 
-const MAX_ITEMS = 6
+/* ── Noticias gestionadas por el superadministrador ────────────────────────
+   Las noticias viven en la tabla `noticias` (Supabase) y el superadmin las
+   administra en línea desde el propio home (igual que el carrusel de videos).
+   Lectura pública con la anon key (RLS deja ver solo `activo = true`). Si la
+   tabla todavía no tiene noticias, se muestra un respaldo curado para que la
+   sección nunca quede vacía. */
 
-// Respaldo curado — titulares reales de fuentes oficiales y de prensa colombiana.
 const FALLBACK_NOTICIAS = [
   {
     title: 'DIAN publica el calendario tributario y novedades para las declaraciones de renta',
@@ -41,59 +41,7 @@ const FALLBACK_NOTICIAS = [
     image: 'https://images.unsplash.com/photo-1521737604893-d14cc237f11d?w=640&q=70&auto=format&fit=crop',
     link: 'https://www.mintrabajo.gov.co/',
   },
-  {
-    title: 'Nuevas Normas Internacionales de Información Financiera (NIIF) para pymes',
-    source: 'Consejo Técnico de la Contaduría',
-    date: '',
-    excerpt: 'Los contadores públicos se preparan para actualizar sus procesos ante los ajustes normativos en materia de información financiera.',
-    image: 'https://images.unsplash.com/photo-1450101499163-c8848c66ca85?w=640&q=70&auto=format&fit=crop',
-    link: 'https://www.ctcp.gov.co/',
-  },
-  {
-    title: 'Superintendencia de Sociedades emite lineamientos de gobierno corporativo',
-    source: 'Supersociedades',
-    date: '',
-    excerpt: 'Recomendaciones sobre transparencia, prevención del riesgo y cumplimiento para las empresas colombianas.',
-    image: 'https://images.unsplash.com/photo-1507679799987-c73779587ccf?w=640&q=70&auto=format&fit=crop',
-    link: 'https://www.supersociedades.gov.co/',
-  },
-  {
-    title: 'Rama Judicial avanza en la digitalización de expedientes y audiencias virtuales',
-    source: 'Rama Judicial',
-    date: '',
-    excerpt: 'El expediente electrónico y las audiencias en línea agilizan procesos y amplían el acceso a la justicia en el país.',
-    image: 'https://images.unsplash.com/photo-1436450412740-6b988f486c6b?w=640&q=70&auto=format&fit=crop',
-    link: 'https://www.ramajudicial.gov.co/',
-  },
 ]
-
-// Quita etiquetas HTML y entidades comunes de las descripciones del RSS.
-function stripHtml(html = '') {
-  const sinTags = html.replace(/<[^>]*>/g, ' ')
-  return sinTags
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/\s+/g, ' ')
-    .trim()
-}
-
-function acortar(texto = '', max = 140) {
-  if (texto.length <= max) return texto
-  return texto.slice(0, max).replace(/\s+\S*$/, '') + '…'
-}
-
-// Google News antepone "Fuente" con " - " al final del título; lo separamos.
-function partirTitulo(titulo = '') {
-  const idx = titulo.lastIndexOf(' - ')
-  if (idx > 0 && idx > titulo.length - 45) {
-    return { title: titulo.slice(0, idx).trim(), source: titulo.slice(idx + 3).trim() }
-  }
-  return { title: titulo.trim(), source: '' }
-}
 
 function formatearFecha(iso) {
   if (!iso) return ''
@@ -102,59 +50,169 @@ function formatearFecha(iso) {
   return d.toLocaleDateString('es-CO', { day: 'numeric', month: 'long', year: 'numeric' })
 }
 
+// Fila de BD → forma que consume la tarjeta.
+function mapRow(r) {
+  return {
+    id: r.id,
+    title: r.titulo || '',
+    source: r.fuente || '',
+    date: formatearFecha(r.fecha),
+    excerpt: r.resumen || '',
+    image: r.imagen_url || '',
+    link: r.url || '',
+  }
+}
+
 export default function NoticiasSection() {
+  const { profile } = useAuth()
+  const isSuperAdmin = profile?.rol === 'superadmin'
+
   const sectionRef = useRef(null)
-  const [noticias, setNoticias] = useState(FALLBACK_NOTICIAS)
-  const [shouldFetch, setShouldFetch] = useState(false)
-  // Cambia a true cuando entran las noticias reales del feed. Se usa como `key`
-  // del grid para forzar su re-montaje y que la animación whileInView (once:true)
-  // vuelva a dispararse sobre las tarjetas nuevas (si no, quedan en opacity:0).
-  const [loaded, setLoaded] = useState(false)
+  const fileInputRef = useRef(null)
+  const uploadTargetRef = useRef(null)
 
-  // Diferimos el fetch hasta que la sección se acerque al viewport.
-  useEffect(() => {
-    const el = sectionRef.current
-    if (!el) return
-    if (!('IntersectionObserver' in window)) { setShouldFetch(true); return }
-    const io = new IntersectionObserver(
-      (entries) => { if (entries.some(e => e.isIntersecting)) { setShouldFetch(true); io.disconnect() } },
-      { rootMargin: '450px 0px', threshold: 0.01 }
-    )
-    io.observe(el)
-    return () => io.disconnect()
-  }, [])
+  const [rows, setRows]         = useState([])      // filas crudas de la BD
+  const [loaded, setLoaded]     = useState(false)
+  const [editing, setEditing]   = useState(false)
+  const [editRows, setEditRows] = useState([])      // copias editables
+  const [saving, setSaving]     = useState(false)
+  const [uploading, setUploading] = useState(null)  // índice en subida
 
-  // Un solo fetch, cacheado en estado — no se repite en cada render.
-  useEffect(() => {
-    if (!shouldFetch) return
-    let cancelled = false
-    async function cargar() {
-      try {
-        const res = await fetch(RSS_TO_JSON)
-        if (!res.ok) return
-        const json = await res.json()
-        if (cancelled) return
-        const items = Array.isArray(json?.items) ? json.items : []
-        if (!items.length) return
-        const mapped = items.slice(0, MAX_ITEMS).map((it) => {
-          const { title, source } = partirTitulo(it.title || '')
-          return {
-            title: title || 'Noticia',
-            source: source || json?.feed?.title || 'Google News',
-            date: formatearFecha(it.pubDate),
-            excerpt: acortar(stripHtml(it.description || it.content || '')),
-            image: it.thumbnail || it.enclosure?.link || '',
-            link: it.link || '#',
-          }
-        })
-        if (mapped.length) { setNoticias(mapped); setLoaded(true) }
-      } catch {
-        // Silencioso: nos quedamos con el respaldo curado.
-      }
+  // Carga las noticias reales (lectura pública con anon key).
+  async function fetchNoticias() {
+    try {
+      const res = await fetch(
+        `${SUPABASE_URL}/rest/v1/noticias?select=*&order=orden.asc&activo=eq.true`,
+        { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } }
+      )
+      if (!res.ok) return
+      const data = await res.json()
+      if (Array.isArray(data)) { setRows(data); setLoaded(true) }
+    } catch { /* sin noticias en BD → se usa el respaldo curado */ }
+  }
+
+  useEffect(() => { fetchNoticias() }, [])
+
+  // Lista pública: noticias reales o, si aún no hay, el respaldo curado.
+  const noticias = rows.length ? rows.map(mapRow) : FALLBACK_NOTICIAS
+
+  /* ── Edición (superadmin) ── */
+  function enterEdit() {
+    setEditRows(rows.map(r => ({ ...r })))
+    setEditing(true)
+  }
+  function cancelEdit() {
+    setEditing(false)
+    setEditRows([])
+  }
+  function addNoticia() {
+    setEditRows(prev => [...prev, {
+      titulo: '', resumen: '', fuente: '', fecha: '', url: '', imagen_url: '', activo: true, _isNew: true,
+    }])
+  }
+  function updateField(i, campo, valor) {
+    setEditRows(prev => prev.map((r, idx) => idx === i ? { ...r, [campo]: valor } : r))
+  }
+
+  async function removeNoticia(index) {
+    const removed = editRows[index]
+    if (!confirm('¿Eliminar esta noticia?')) return
+    setEditRows(prev => prev.filter((_, i) => i !== index))
+    if (removed.id) {
+      const { data } = await supabase.auth.getSession()
+      const token = data?.session?.access_token
+      fetch(`${SUPABASE_URL}/rest/v1/noticias?id=eq.${encodeURIComponent(removed.id)}`, {
+        method: 'DELETE',
+        headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${token}` },
+      })
     }
-    cargar()
-    return () => { cancelled = true }
-  }, [shouldFetch])
+  }
+
+  /* ── Subida de imagen (comprimida) al bucket `noticias` ── */
+  function triggerUpload(index) {
+    uploadTargetRef.current = index
+    fileInputRef.current?.click()
+  }
+
+  async function handleImageUpload(e) {
+    const rawFile = e.target.files?.[0]
+    if (!rawFile) return
+    const index = uploadTargetRef.current
+    setUploading(index)
+    try {
+      const file = await compressImage(rawFile)
+      const { data } = await supabase.auth.getSession()
+      const token = data?.session?.access_token
+      const ext = (file.type.split('/')[1] || 'jpg').replace('jpeg', 'jpg')
+      const path = `noticias/${Date.now()}.${ext}`
+      const res = await fetch(
+        `${SUPABASE_URL}/storage/v1/object/noticias/${path}`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            apikey: SUPABASE_KEY,
+            'x-upsert': 'true',
+            'Content-Type': file.type || 'image/jpeg',
+          },
+          body: file,
+        }
+      )
+      if (!res.ok) throw new Error('No se pudo subir la imagen. Verifica que el bucket "noticias" exista.')
+      const url = `${SUPABASE_URL}/storage/v1/object/public/noticias/${path}`
+      updateField(index, 'imagen_url', url)
+    } catch (err) {
+      alert(err.message || 'Error subiendo la imagen')
+    } finally {
+      setUploading(null)
+      e.target.value = ''
+    }
+  }
+
+  async function saveAll() {
+    setSaving(true)
+    try {
+      const { data } = await supabase.auth.getSession()
+      const token = data?.session?.access_token
+      const headers = {
+        'Content-Type': 'application/json',
+        apikey: SUPABASE_KEY,
+        Authorization: `Bearer ${token}`,
+      }
+      for (let i = 0; i < editRows.length; i++) {
+        const r = editRows[i]
+        if (!r.titulo?.trim()) continue
+        const payload = {
+          titulo:     r.titulo.trim(),
+          resumen:    r.resumen?.trim() || null,
+          fuente:     r.fuente?.trim() || null,
+          fecha:      r.fecha || null,
+          url:        r.url?.trim() || null,
+          imagen_url: r.imagen_url || null,
+          orden:      i,
+          activo:     true,
+        }
+        if (r.id && !r._isNew) {
+          await fetch(`${SUPABASE_URL}/rest/v1/noticias?id=eq.${encodeURIComponent(r.id)}`, {
+            method: 'PATCH', headers, body: JSON.stringify(payload),
+          })
+        } else {
+          await fetch(`${SUPABASE_URL}/rest/v1/noticias`, {
+            method: 'POST',
+            headers: { ...headers, Prefer: 'return=representation' },
+            body: JSON.stringify(payload),
+          })
+        }
+      }
+      await fetchNoticias()
+      setEditing(false)
+      setEditRows([])
+    } catch (err) {
+      alert('Error guardando: ' + err.message)
+    } finally {
+      setSaving(false)
+    }
+  }
 
   return (
     <section className={styles.section} id="noticias" ref={sectionRef}>
@@ -172,54 +230,146 @@ export default function NoticiasSection() {
           Noticias <em>Jurídicas y Contables</em>
         </motion.h2>
         <motion.p className={styles.desc} variants={fadeUp}>
-          Novedades sobre abogacía, contaduría, leyes y normatividad colombiana, actualizadas para mantenerte al día.
+          Novedades sobre abogacía, contaduría, leyes y normatividad colombiana, seleccionadas por nuestro equipo.
         </motion.p>
       </motion.div>
 
-      <motion.div
-        key={loaded ? 'live' : 'fallback'}
-        className={styles.grid}
-        variants={gridStagger}
-        initial="hidden"
-        whileInView="visible"
-        viewport={VIEWPORT}
-      >
-        {noticias.map((n, i) => (
-          <motion.a
-            key={`${n.link}-${i}`}
-            className={styles.card}
-            href={n.link}
-            target="_blank"
-            rel="noopener noreferrer"
-            variants={cardReveal}
-          >
-            <div className={styles.media}>
-              {n.image ? (
-                <img
-                  src={n.image}
-                  alt=""
-                  className={styles.image}
-                  loading="lazy"
-                  decoding="async"
-                  draggable="false"
-                  onError={(e) => { e.currentTarget.style.display = 'none' }}
+      {/* Control de edición (solo superadmin) */}
+      {isSuperAdmin && !editing && (
+        <div className={styles.adminBar}>
+          <button className={styles.fab} onClick={enterEdit}>✎ Editar noticias</button>
+        </div>
+      )}
+
+      {editing ? (
+        <div className={styles.editor}>
+          <div className={styles.toolbar}>
+            <button className={styles.toolAdd} onClick={addNoticia}>+ Agregar noticia</button>
+            <button className={styles.toolSave} onClick={saveAll} disabled={saving}>
+              {saving ? 'Guardando…' : '✓ Guardar'}
+            </button>
+            <button className={styles.toolCancel} onClick={cancelEdit} disabled={saving}>✕ Cancelar</button>
+          </div>
+
+          {editRows.length === 0 && (
+            <p className={styles.editEmpty}>No hay noticias. Usa <strong>“+ Agregar noticia”</strong> para crear la primera.</p>
+          )}
+
+          <div className={styles.editGrid}>
+            {editRows.map((r, i) => (
+              <div key={r.id || `new-${i}`} className={styles.editCard}>
+                <button
+                  className={styles.editRemove}
+                  onClick={() => removeNoticia(i)}
+                  title="Eliminar noticia"
+                  aria-label="Eliminar noticia"
+                >✕</button>
+
+                <button
+                  type="button"
+                  className={styles.editMedia}
+                  onClick={() => triggerUpload(i)}
+                  style={r.imagen_url ? { backgroundImage: `url(${r.imagen_url})` } : undefined}
+                >
+                  {uploading === i
+                    ? <span className={styles.editMediaHint}>Subiendo…</span>
+                    : <span className={styles.editMediaHint}>{r.imagen_url ? 'Cambiar imagen' : '＋ Imagen'}</span>}
+                </button>
+
+                <input
+                  className={styles.editInput}
+                  placeholder="Título"
+                  value={r.titulo || ''}
+                  onChange={e => updateField(i, 'titulo', e.target.value)}
                 />
-              ) : (
-                <span className={styles.mediaFallback} aria-hidden="true">PB</span>
-              )}
-            </div>
-            <div className={styles.body}>
-              <div className={styles.meta}>
-                {n.source && <span className={styles.source}>{n.source}</span>}
-                {n.date && <span className={styles.date}>{n.date}</span>}
+                <textarea
+                  className={styles.editTextarea}
+                  placeholder="Resumen"
+                  rows={3}
+                  value={r.resumen || ''}
+                  onChange={e => updateField(i, 'resumen', e.target.value)}
+                />
+                <div className={styles.editRow2}>
+                  <input
+                    className={styles.editInput}
+                    placeholder="Fuente (ej. DIAN)"
+                    value={r.fuente || ''}
+                    onChange={e => updateField(i, 'fuente', e.target.value)}
+                  />
+                  <input
+                    className={styles.editInput}
+                    type="date"
+                    value={r.fecha ? String(r.fecha).slice(0, 10) : ''}
+                    onChange={e => updateField(i, 'fecha', e.target.value)}
+                  />
+                </div>
+                <input
+                  className={styles.editInput}
+                  placeholder="Enlace (https://…)"
+                  value={r.url || ''}
+                  onChange={e => updateField(i, 'url', e.target.value)}
+                />
               </div>
-              <h3 className={styles.cardTitle}>{n.title}</h3>
-              {n.excerpt && <p className={styles.excerpt}>{n.excerpt}</p>}
-              <span className={styles.leer}>Leer más →</span>
-            </div>
-          </motion.a>
-        ))}
-      </motion.div>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <motion.div
+          key={loaded ? 'live' : 'fallback'}
+          className={styles.grid}
+          variants={gridStagger}
+          initial="hidden"
+          whileInView="visible"
+          viewport={VIEWPORT}
+        >
+          {noticias.map((n, i) => {
+            const clickable = !!n.link
+            return (
+              <motion.a
+                key={`${n.id || n.link}-${i}`}
+                className={styles.card}
+                href={clickable ? n.link : undefined}
+                target={clickable ? '_blank' : undefined}
+                rel={clickable ? 'noopener noreferrer' : undefined}
+                variants={cardReveal}
+              >
+                <div className={styles.media}>
+                  {n.image ? (
+                    <img
+                      src={n.image}
+                      alt=""
+                      className={styles.image}
+                      loading="lazy"
+                      decoding="async"
+                      draggable="false"
+                      onError={(e) => { e.currentTarget.style.display = 'none' }}
+                    />
+                  ) : (
+                    <span className={styles.mediaFallback} aria-hidden="true">PB</span>
+                  )}
+                </div>
+                <div className={styles.body}>
+                  <div className={styles.meta}>
+                    {n.source && <span className={styles.source}>{n.source}</span>}
+                    {n.date && <span className={styles.date}>{n.date}</span>}
+                  </div>
+                  <h3 className={styles.cardTitle}>{n.title}</h3>
+                  {n.excerpt && <p className={styles.excerpt}>{n.excerpt}</p>}
+                  {clickable && <span className={styles.leer}>Leer más →</span>}
+                </div>
+              </motion.a>
+            )
+          })}
+        </motion.div>
+      )}
+
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        style={{ display: 'none' }}
+        onChange={handleImageUpload}
+      />
     </section>
   )
 }

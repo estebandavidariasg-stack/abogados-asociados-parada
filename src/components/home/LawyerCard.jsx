@@ -38,6 +38,11 @@ export default function LawyerCard({
   resena,
 }) {
   const [internalOpen, setInternalOpen] = useState(false)
+  // Feature: al tocar las estrellas del modal se despliegan TODOS los
+  // comentarios que los clientes le han dejado (chat_ratings.comentario).
+  const [reviewsOpen, setReviewsOpen]   = useState(false)
+  const [reviews, setReviews]           = useState([])
+  const [reviewsState, setReviewsState] = useState('idle') // idle|loading|done|error
   const isControlled = controlledOpen !== undefined
   const open = isControlled ? controlledOpen : internalOpen
   const setOpen = (v) => {
@@ -78,6 +83,37 @@ export default function LawyerCard({
     document.body.style.overflow = open ? 'hidden' : ''
     return () => { document.body.style.overflow = '' }
   }, [open])
+
+  // Al cerrar el modal, colapsa el panel de comentarios (próxima apertura limpia).
+  useEffect(() => { if (!open) setReviewsOpen(false) }, [open])
+
+  // Carga perezosa de los comentarios: solo la primera vez que se despliegan.
+  async function toggleReviews() {
+    const next = !reviewsOpen
+    setReviewsOpen(next)
+    if (!next || reviewsState !== 'idle') return
+    setReviewsState('loading')
+    try {
+      const { data } = await supabase
+        .from('chat_ratings')
+        .select('rating,comentario,created_at')
+        .eq('lawyer_id', lawyer.id)
+        .order('created_at', { ascending: false })
+        .limit(50)
+      const conTexto = (data || []).filter(r => (r.comentario || '').trim())
+      setReviews(conTexto)
+      setReviewsState('done')
+    } catch {
+      setReviewsState('error')
+    }
+  }
+
+  const fmtFecha = (iso) => {
+    if (!iso) return ''
+    try {
+      return new Date(iso).toLocaleDateString('es-CO', { year: 'numeric', month: 'long', day: 'numeric' })
+    } catch { return '' }
+  }
 
   function InfoRow({ icon, label, value }) {
     if (!value) return null
@@ -216,14 +252,79 @@ export default function LawyerCard({
                     {[lawyer.ciudad, lawyer.departamento].filter(Boolean).join(', ')}
                   </p>
                 )}
-                {/* Calificación en el modal */}
+                {/* Calificación en el modal — clicable: despliega los comentarios */}
                 {rating && (
                   <div style={{ marginTop: 8 }}>
-                    <StarDisplay rating={rating.promedio} total={rating.total} dark={true} />
+                    <button
+                      type="button"
+                      className={styles.ratingBtn}
+                      onClick={toggleReviews}
+                      aria-expanded={reviewsOpen}
+                      aria-label={reviewsOpen ? 'Ocultar comentarios de clientes' : 'Ver comentarios de clientes'}
+                    >
+                      <StarDisplay rating={rating.promedio} total={rating.total} dark={true} />
+                      <span className={styles.ratingHint}>
+                        {reviewsOpen ? 'Ocultar comentarios' : 'Ver comentarios'}
+                        <svg
+                          className={`${styles.ratingChevron}${reviewsOpen ? ' ' + styles.ratingChevronUp : ''}`}
+                          viewBox="0 0 24 24" width="12" height="12" fill="none"
+                          stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"
+                          aria-hidden="true"
+                        >
+                          <path d="M6 9l6 6 6-6" />
+                        </svg>
+                      </span>
+                    </button>
                   </div>
                 )}
               </div>
             </div>
+
+            {/* Panel de comentarios (todas las reseñas del profesional) */}
+            {reviewsOpen && (
+              <div className={styles.reviewsPanel}>
+                {reviewsState === 'loading' && (
+                  <p className={styles.reviewsState}>Cargando comentarios…</p>
+                )}
+                {reviewsState === 'error' && (
+                  <p className={styles.reviewsState}>No se pudieron cargar los comentarios. Intenta de nuevo.</p>
+                )}
+                {reviewsState === 'done' && reviews.length === 0 && (
+                  <div className={styles.reviewsEmpty}>
+                    <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                    </svg>
+                    <p className={styles.reviewsEmptyTitle}>Todavía sin comentarios escritos</p>
+                    {rating?.total > 0 && (
+                      <p className={styles.reviewsEmptyHint}>
+                        Este profesional tiene {rating.total} {rating.total === 1 ? 'calificación' : 'calificaciones'}, pero sus clientes aún no han dejado un comentario.
+                      </p>
+                    )}
+                  </div>
+                )}
+                {reviewsState === 'done' && reviews.length > 0 && (
+                  <>
+                    <h4 className={styles.reviewsTitle}>Comentarios de clientes</h4>
+                    <ul className={styles.reviewsList}>
+                      {reviews.map((r, i) => (
+                        <li key={i} className={styles.reviewItem}>
+                          <div className={styles.reviewTop}>
+                            <span className={styles.reviewStars} role="img" aria-label={`${r.rating} de 5`}>
+                              {[1,2,3,4,5].map(s => (
+                                <span key={s} style={{ color: s <= Math.round(r.rating) ? 'var(--gold)' : 'rgba(109,60,27,0.18)' }}>★</span>
+                              ))}
+                            </span>
+                            {r.created_at && <span className={styles.reviewDate}>{fmtFecha(r.created_at)}</span>}
+                          </div>
+                          <p className={styles.reviewText}>{r.comentario}</p>
+                          <p className={styles.reviewAuthor}>Cliente verificado</p>
+                        </li>
+                      ))}
+                    </ul>
+                  </>
+                )}
+              </div>
+            )}
 
             <div className={styles.modalDivider} />
 
