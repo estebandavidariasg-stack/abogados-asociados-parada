@@ -192,7 +192,10 @@ let _otpSimulado = false
 export const otpSimulado = () => _otpSimulado || esDemo()
 
 export async function enviarCodigo(email) {
-  if (esDemo()) { _otpSimulado = true; return { ok: true, demo: true } }
+  // Demo o desarrollo local (Vite NO ejecuta las funciones /api): se simula el
+  // envío y se acepta el código DEMO_CODIGO. En producción (Vercel) esto nunca
+  // ocurre (import.meta.env.DEV = false) → se envía el correo real.
+  if (esDemo() || import.meta.env.DEV) { _otpSimulado = true; return { ok: true, demo: true } }
   try {
     const res = await fetch('/api/send-verification-code', {
       method: 'POST',
@@ -215,7 +218,7 @@ export async function enviarCodigo(email) {
 }
 
 export async function verificarCodigo(email, code) {
-  if (otpSimulado()) return { ok: String(code).trim() === DEMO_CODIGO }
+  if (otpSimulado() || import.meta.env.DEV) return { ok: String(code).trim() === DEMO_CODIGO }
   try {
     const res = await fetch('/api/verify-code', {
       method: 'POST',

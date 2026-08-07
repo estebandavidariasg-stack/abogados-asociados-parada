@@ -167,22 +167,24 @@ export default function ResultadosProyecto({ proyecto, articulos = [], refreshKe
           </div>
         </div>
         {nivel !== 'nacional' && (
-          <label className={styles.control}>
-            <span>Departamento</span>
-            <select value={depto === TODOS ? '' : depto} onChange={e => setDepto(e.target.value || TODOS)}>
-              {deptos.length === 0 && <option value="">Sin datos</option>}
-              {deptos.map(d => <option key={d} value={d}>{d}</option>)}
-            </select>
-          </label>
-        )}
-        {nivel === 'municipio' && (
-          <label className={`${styles.control} ${munis.length === 0 ? styles.controlOff : ''}`}>
-            <span>Municipio</span>
-            <select value={muni} onChange={e => setMuni(e.target.value)} disabled={depto === TODOS || munis.length === 0}>
-              <option value={TODOS}>Todos</option>
-              {munis.map(mn => <option key={mn} value={mn}>{mn}</option>)}
-            </select>
-          </label>
+          <div className={styles.deptoMuni}>
+            <label className={styles.control}>
+              <span>Departamento</span>
+              <select value={depto === TODOS ? '' : depto} onChange={e => setDepto(e.target.value || TODOS)}>
+                {deptos.length === 0 && <option value="">Sin datos</option>}
+                {deptos.map(d => <option key={d} value={d}>{d}</option>)}
+              </select>
+            </label>
+            {nivel === 'municipio' && (
+              <label className={`${styles.control} ${munis.length === 0 ? styles.controlOff : ''}`}>
+                <span>Municipio</span>
+                <select value={muni} onChange={e => setMuni(e.target.value)} disabled={depto === TODOS || munis.length === 0}>
+                  <option value={TODOS}>Todos</option>
+                  {munis.map(mn => <option key={mn} value={mn}>{mn}</option>)}
+                </select>
+              </label>
+            )}
+          </div>
         )}
       </div>
 
