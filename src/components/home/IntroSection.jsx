@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import styles from './IntroSection.module.css'
 
 /* Scroll suave a un ancla. Si el elemento no existe (raro pero defensivo),
@@ -53,6 +54,11 @@ export default function IntroSection({ onUnirse }) {
             Únete como profesional <ArrowIcon />
           </button>
         </div>
+
+        <Link to="/proyectos-ley" className={styles.ctaCivic}>
+          Debate ciudadano de proyectos de ley
+          <ArrowIcon />
+        </Link>
       </div>
     </section>
   )

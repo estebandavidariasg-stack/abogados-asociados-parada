@@ -6,7 +6,7 @@
   background:
     radial-gradient(1200px 600px at 50% -10%, rgba(201, 168, 76, 0.12), transparent 60%),
     linear-gradient(160deg, #6d3c1b, #40230a);
-  font-family: 'Raleway', system-ui, sans-serif;
+  font-family: 'Poppins', system-ui, sans-serif;
 }
 
 .card {

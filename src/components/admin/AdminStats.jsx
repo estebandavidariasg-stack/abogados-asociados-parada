@@ -141,7 +141,7 @@ export default function AdminStats({
   // Gestores y Pagos y cobros tienen su propio módulo con sub-pestañas y
   // resúmenes propios, así que las tarjetas genéricas del panel sobran ahí —
   // se ocultan para no duplicar información.
-  if (activeTab === 'gestores' || activeTab === 'pagos') return null
+  if (activeTab === 'gestores' || activeTab === 'pagos' || activeTab === 'proyectos') return null
 
   return (
     <div className={styles.wrap}>
@@ -183,7 +183,7 @@ export default function AdminStats({
                 <XAxis dataKey="mes" tick={{ fontSize: 12, fill: '#967f6b' }} axisLine={false} tickLine={false} />
                 <YAxis allowDecimals={false} tick={{ fontSize: 12, fill: '#967f6b' }} axisLine={false} tickLine={false} width={34} />
                 <Tooltip
-                  contentStyle={{ borderRadius: 10, border: '1px solid rgba(109,60,27,0.1)', fontSize: 13, fontFamily: 'Raleway, sans-serif' }}
+                  contentStyle={{ borderRadius: 10, border: '1px solid rgba(109,60,27,0.1)', fontSize: 13, fontFamily: 'Poppins, sans-serif' }}
                   labelStyle={{ color: '#6d3c1b', fontWeight: 700 }}
                 />
                 <Area type="monotone" dataKey="Registros" stroke="#c9a84c" strokeWidth={2} fill="url(#gGold)" isAnimationActive={!reduce} />

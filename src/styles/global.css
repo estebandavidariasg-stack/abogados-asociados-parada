@@ -2,27 +2,31 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 /* ── VARIABLES ─────────────────────────────────────────── */
-/* Rebrand Parada Bridge (2026-07): la marca pasó de azul+dorado a café+dorado.
+/* Paleta oficial Parada Bridge (2026-08): café + dorado.
+   Valores exactos de la paleta de marca:
+     #472F29 espresso (ink)   #6D3C1B café medio   #E6C194 arena
+     #FFFEF1 crema (fondo)    #C9A84C dorado (acento — se conserva)
    Los nombres --navy / --black son LEGADOS (se conservan para no reescribir
-   ~600 usos en los .module.css); su valor real hoy es café. El dorado se
-   mantiene como acento. Diseño anterior: rama backup/diseno-navy-gold-2026-07-27. */
+   ~600 usos en los .module.css); su valor real hoy es café.
+   Diseño anterior: rama backup/diseno-navy-gold-2026-07-27. */
 :root {
-  --navy:     #362415;   /* espresso — oscuro primario (ink, paneles, botones): profundo y elegante, no lodoso */
-  --navy-md:  #6d3c1b;   /* café medio — acento secundario / hover cálido */
+  --navy:     #472f29;   /* espresso — oscuro primario (ink, paneles, botones): valor exacto de paleta */
+  --navy-md:  #6d3c1b;   /* café medio — acento secundario / hover cálido (paleta) */
   --navy-lt:  #8a4e26;   /* café claro */
   --surface:  #f7f1e8;
-  --surface2: #fdfbf7;
+  --surface2: #fffef1;   /* crema (paleta) */
+  --sand:     #e6c194;   /* arena (paleta) — tintes cálidos, bordes suaves, highlights */
   --gold:     #C9A84C;
   --gold-lt:  #E8C96A;
   --gold-dk:  #8A6A28;
-  --ivory:    #fdfbf8;
+  --ivory:    #fffef1;   /* crema (paleta) */
   --muted:    #6f5c48;
   --border:   rgba(109,60,27, 0.15);
 
   /* aliases para no romper module.css que usen los nombres viejos */
   --black:    #1d1d1b;
   --dark:     #6d3c1b;
-  --cream:    #fdfbf8;
+  --cream:    #fffef1;   /* crema (paleta) */
 }
 
 /* ── BASE ───────────────────────────────────────────────── */
@@ -34,10 +38,10 @@ html {
 body {
   /* Degradado blanco→crema muy suave (fijo al viewport) para aligerar el café
      y dar aire; las secciones opacas se apoyan encima. */
-  background: linear-gradient(157deg, #ffffff 0%, #fdfbf7 42%, #f7f1e8 100%);
+  background: linear-gradient(157deg, #fffef1 0%, #fdfbf7 42%, #f7f1e8 100%);
   background-attachment: fixed;
   color: var(--navy);
-  font-family: 'Raleway', sans-serif;
+  font-family: 'Poppins', sans-serif;
   font-weight: 400;
   overflow-x: hidden;
 }
@@ -61,7 +65,7 @@ body {
 
 /* ── BOTONES GLOBALES ───────────────────────────────────── */
 .btn-ghost {
-  font-family: 'Raleway', sans-serif;
+  font-family: 'Poppins', sans-serif;
   font-size: 0.7rem;
   font-weight: 600;
   letter-spacing: 0.18em;
@@ -83,7 +87,7 @@ body {
 }
 
 .btn-solid {
-  font-family: 'Raleway', sans-serif;
+  font-family: 'Poppins', sans-serif;
   font-size: 0.7rem;
   font-weight: 600;
   letter-spacing: 0.18em;

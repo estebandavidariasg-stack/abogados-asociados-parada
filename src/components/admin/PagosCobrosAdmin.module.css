@@ -2,7 +2,7 @@
    Pagos y cobros — panel admin del dinero. Reutiliza la paleta y las
    proporciones del resto del panel (navy #6d3c1b, oro #c9a84c).
    ══════════════════════════════════════════════════════════════════ */
-.screen { display: flex; flex-direction: column; gap: 18px; font-family: 'Raleway', sans-serif; }
+.screen { display: flex; flex-direction: column; gap: 18px; font-family: 'Poppins', sans-serif; }
 .ico { display: inline-block; vertical-align: middle; flex-shrink: 0; }
 .loading { color: #7a6655; font-size: 0.9rem; padding: 32px 4px; }
 

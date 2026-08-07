@@ -10,7 +10,7 @@
   border-bottom: 1px dashed rgba(201, 168, 76, 0.5);
   padding-bottom: 1px;
   color: var(--gold-dk, #8a6a28);
-  font-family: 'Raleway', sans-serif;
+  font-family: 'Poppins', sans-serif;
   font-size: 0.78rem;
   font-weight: 600;
   cursor: pointer;
@@ -76,7 +76,7 @@
 }
 
 .thumbPdfLabel {
-  font-family: 'Raleway', sans-serif;
+  font-family: 'Poppins', sans-serif;
   font-size: 0.65rem;
   font-weight: 700;
   letter-spacing: 0.14em;
@@ -91,7 +91,7 @@
   justify-content: center;
   background: rgba(109,60,27, 0.60);
   color: #fff;
-  font-family: 'Raleway', sans-serif;
+  font-family: 'Poppins', sans-serif;
   font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 0.14em;
@@ -102,7 +102,7 @@
 
 /* ── Label debajo de la tarjeta ─────────────────────────────── */
 .thumbCaption {
-  font-family: 'Raleway', sans-serif;
+  font-family: 'Poppins', sans-serif;
   font-size: 0.72rem;
   font-weight: 600;
   letter-spacing: 0.08em;

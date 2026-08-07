@@ -53,7 +53,7 @@
 }
 
 .tagline {
-  font-family: 'Raleway', sans-serif;
+  font-family: 'Poppins', sans-serif;
   font-size: 0.78rem;
   font-weight: 400;
   color: #68584a;
@@ -120,14 +120,14 @@
 }
 
 .contactLabel {
-  font-family: 'Raleway', sans-serif;
+  font-family: 'Poppins', sans-serif;
   font-size: 0.68rem;
   color: #968271;
   font-weight: 400;
 }
 
 .contactValue {
-  font-family: 'Raleway', sans-serif;
+  font-family: 'Poppins', sans-serif;
   font-size: 0.82rem;
   font-weight: 700;
   color: #6d3c1b;
@@ -137,7 +137,7 @@
 }
 
 .contactSub {
-  font-family: 'Raleway', sans-serif;
+  font-family: 'Poppins', sans-serif;
   font-size: 0.67rem;
   color: #c0afa0;
   font-weight: 300;
@@ -220,7 +220,7 @@
   gap: 0.8rem;
   padding: 1.2rem 0 1.5rem;
   border-top: 1px solid rgba(109,60,27, 0.08);
-  font-family: 'Raleway', sans-serif;
+  font-family: 'Poppins', sans-serif;
   font-size: 0.68rem;
   font-weight: 400;
   color: #c0afa0;

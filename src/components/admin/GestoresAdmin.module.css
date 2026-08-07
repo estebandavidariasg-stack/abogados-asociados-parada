@@ -17,7 +17,7 @@
 .subTab {
   display: inline-flex; align-items: center; gap: 7px;
   appearance: none; cursor: pointer;
-  font-family: 'Raleway', sans-serif;
+  font-family: 'Poppins', sans-serif;
   font-size: 0.85rem; font-weight: 700; color: #7a6655;
   background: transparent; border: none;
   border-radius: 9px; padding: 8px 16px;
@@ -55,7 +55,7 @@
   color: rgba(109,60,27,0.4); pointer-events: none;
 }
 .searchInput {
-  width: 100%; font-family: 'Raleway', sans-serif; font-size: 0.86rem; color: #6d3c1b;
+  width: 100%; font-family: 'Poppins', sans-serif; font-size: 0.86rem; color: #6d3c1b;
   background: #ffffff; border: 1px solid rgba(109,60,27,0.22);
   border-radius: 10px; padding: 9px 34px 9px 34px;
 }
@@ -65,7 +65,7 @@
   position: absolute; right: 8px;
   display: inline-flex; align-items: center; justify-content: center;
   width: 22px; height: 22px; cursor: pointer;
-  font-family: 'Raleway', sans-serif;
+  font-family: 'Poppins', sans-serif;
   color: #a59587; background: rgba(109,60,27,0.06);
   border: none; border-radius: 6px;
 }
@@ -76,7 +76,7 @@
 .statusChip {
   display: inline-flex; align-items: center; gap: 6px;
   appearance: none; cursor: pointer;
-  font-family: 'Raleway', sans-serif;
+  font-family: 'Poppins', sans-serif;
   font-size: 0.78rem; font-weight: 700; color: #7a6655;
   background: rgba(109,60,27,0.05); border: 1px solid rgba(109,60,27,0.14);
   border-radius: 999px; padding: 6px 13px;
@@ -180,7 +180,7 @@
   appearance: none;
   background: rgba(109,60,27,0.06);
   border: 1px solid rgba(109,60,27,0.18);
-  color: #6d3c1b; font-family: 'Raleway', sans-serif; font-size: 0.82rem; font-weight: 700;
+  color: #6d3c1b; font-family: 'Poppins', sans-serif; font-size: 0.82rem; font-weight: 700;
   border-radius: 10px; padding: 8px 14px; cursor: pointer;
 }
 .refresh:hover { background: rgba(109,60,27,0.1); }
@@ -260,7 +260,7 @@
 .assignRow { display: flex; flex-direction: column; gap: 3px; }
 .assignLabel { font-size: 0.66rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: rgba(109,60,27,0.5); }
 .select {
-  appearance: none; min-width: 200px; font-family: 'Raleway', sans-serif; font-size: 0.86rem; color: #6d3c1b;
+  appearance: none; min-width: 200px; font-family: 'Poppins', sans-serif; font-size: 0.86rem; color: #6d3c1b;
   background: #ffffff; border: 1px solid rgba(109,60,27,0.22);
   border-radius: 10px; padding: 9px 12px; cursor: pointer;
 }
@@ -269,7 +269,7 @@
 .btnApprove, .btnReject, .btnExpand {
   display: inline-flex; align-items: center; gap: 6px;
   appearance: none; cursor: pointer;
-  font-family: 'Raleway', sans-serif;
+  font-family: 'Poppins', sans-serif;
   font-size: 0.82rem; font-weight: 700;
   border-radius: 10px; padding: 9px 14px; border: 1px solid transparent;
 }
@@ -318,7 +318,7 @@
 }
 .modalTitle { margin: 0; font-size: 1.1rem; font-weight: 800; color: #6d3c1b; }
 .modalSub { margin: 2px 0 0; font-size: 0.82rem; color: #7a6655; }
-.modalSub strong { color: #9a7a2c; font-family: 'Raleway', sans-serif; }
+.modalSub strong { color: #9a7a2c; font-family: 'Poppins', sans-serif; }
 .modalClose {
   flex-shrink: 0; width: 34px; height: 34px; border-radius: 9px;
   border: 1px solid rgba(109,60,27,0.14); background: #fff; color: #7a6655; cursor: pointer;
@@ -336,7 +336,7 @@
 }
 .modalDone {
   border: 1px solid rgba(109,60,27,0.16); background: #6d3c1b; color: #fff; cursor: pointer;
-  font-family: 'Raleway', sans-serif; font-size: 0.82rem; font-weight: 700; padding: 9px 18px; border-radius: 10px;
+  font-family: 'Poppins', sans-serif; font-size: 0.82rem; font-weight: 700; padding: 9px 18px; border-radius: 10px;
   transition: filter .15s ease;
 }
 .modalDone:hover { filter: brightness(1.1); }
@@ -382,7 +382,7 @@
 /* ── Barra de proporción éxito/fracaso ── */
 .ratioHead { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 8px; }
 .ratioTitle { font-size: 0.82rem; font-weight: 600; color: #6d3c1b; }
-.ratioPct { font-family: 'Raleway', sans-serif; font-size: 1.3rem; font-weight: 800; font-variant-numeric: tabular-nums lining-nums; color: #1f7a4d; }
+.ratioPct { font-family: 'Poppins', sans-serif; font-size: 1.3rem; font-weight: 800; font-variant-numeric: tabular-nums lining-nums; color: #1f7a4d; }
 .ratioBar {
   display: flex; height: 12px; width: 100%;
   border-radius: 999px; overflow: hidden;
@@ -410,7 +410,7 @@
   padding: 12px 14px; border-radius: 12px;
   border: 1px solid rgba(109,60,27,0.1); background: #fbfaf4;
 }
-.tileValue { font-family: 'Raleway', sans-serif; font-size: 1.5rem; font-weight: 800; font-variant-numeric: tabular-nums lining-nums; letter-spacing: -0.015em; color: #6d3c1b; line-height: 1; }
+.tileValue { font-family: 'Poppins', sans-serif; font-size: 1.5rem; font-weight: 800; font-variant-numeric: tabular-nums lining-nums; letter-spacing: -0.015em; color: #6d3c1b; line-height: 1; }
 .tileLabel { font-size: 0.68rem; font-weight: 600; color: #7a6655; letter-spacing: 0.02em; }
 .tile[data-tone="gold"] { border-color: rgba(201,168,76,0.4); background: rgba(201,168,76,0.09); }
 .tile[data-tone="gold"] .tileValue { color: #9a7a2c; }
@@ -431,7 +431,7 @@
 .resBtns { display: flex; gap: 8px; }
 .resBtn {
   display: inline-flex; align-items: center; gap: 5px; cursor: pointer;
-  font-family: 'Raleway', sans-serif;
+  font-family: 'Poppins', sans-serif;
   font-size: 0.78rem; font-weight: 700; border-radius: 9px; padding: 7px 12px;
   border: 1px solid transparent; background: #ffffff;
 }
@@ -449,7 +449,7 @@
   padding: 12px 14px; border-radius: 12px;
   border: 1px solid rgba(109,60,27,0.1); background: #fbfaf4;
 }
-.cobroStatVal { font-family: 'Raleway', sans-serif; font-size: 1.2rem; font-weight: 800; font-variant-numeric: tabular-nums lining-nums; letter-spacing: -0.01em; color: #6d3c1b; }
+.cobroStatVal { font-family: 'Poppins', sans-serif; font-size: 1.2rem; font-weight: 800; font-variant-numeric: tabular-nums lining-nums; letter-spacing: -0.01em; color: #6d3c1b; }
 .cobroStatLbl { font-size: 0.68rem; font-weight: 600; color: #7a6655; }
 
 .cobroForm {
@@ -461,12 +461,12 @@
 .cobroNota { grid-column: auto; }
 .cobroLabel { font-size: 0.68rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: rgba(109,60,27,0.55); }
 .cobroInput {
-  font-family: 'Raleway', sans-serif; font-size: 0.86rem; color: #6d3c1b; background: #ffffff;
+  font-family: 'Poppins', sans-serif; font-size: 0.86rem; color: #6d3c1b; background: #ffffff;
   border: 1px solid rgba(109,60,27,0.22); border-radius: 9px; padding: 9px 11px; width: 100%;
 }
 .cobroInput:focus { outline: none; border-color: #c9a84c; box-shadow: 0 0 0 3px rgba(201,168,76,0.18); }
 .cobroSave {
-  cursor: pointer; font-family: 'Raleway', sans-serif; font-size: 0.82rem; font-weight: 700; color: #6d3c1b;
+  cursor: pointer; font-family: 'Poppins', sans-serif; font-size: 0.82rem; font-weight: 700; color: #6d3c1b;
   background: linear-gradient(135deg, #f2d580, #c9a84c 55%, #9a7a2c);
   border: none; border-radius: 10px; padding: 10px 18px; white-space: nowrap;
 }
@@ -478,7 +478,7 @@
 .cobroTableWrap { margin-top: 16px; overflow-x: auto; }
 .cobroTable {
   width: 100%; border-collapse: collapse; font-size: 0.83rem;
-  font-family: 'Raleway', sans-serif;
+  font-family: 'Poppins', sans-serif;
 }
 /* Encabezados y celdas centrados. */
 .cobroTable th {
@@ -492,7 +492,7 @@
 /* Montos y códigos en Raleway con cifras tabulares (no Courier New) para que
    coincidan con la tipografía del resto del panel y queden bien alineados. */
 .cobroTable .mono {
-  font-family: 'Raleway', sans-serif; letter-spacing: 0.01em;
+  font-family: 'Poppins', sans-serif; letter-spacing: 0.01em;
   font-variant-numeric: tabular-nums; font-weight: 600;
 }
 .tRight { text-align: center; }
@@ -506,7 +506,7 @@
 .chipDisponible{ color: #8a6a28; background: rgba(201,168,76,0.16); border: 1px solid rgba(201,168,76,0.4); }
 .chipSolicitado{ color: #d87e2f; background: rgba(216, 126, 47,0.12); border: 1px solid rgba(216, 126, 47,0.4); }
 .pagarBtn {
-  cursor: pointer; font-family: 'Raleway', sans-serif; font-size: 0.74rem; font-weight: 700; color: #6d3c1b;
+  cursor: pointer; font-family: 'Poppins', sans-serif; font-size: 0.74rem; font-weight: 700; color: #6d3c1b;
   background: rgba(109,60,27,0.06); border: 1px solid rgba(109,60,27,0.16);
   border-radius: 8px; padding: 5px 10px; white-space: nowrap;
 }
@@ -522,7 +522,7 @@
 }
 .cfgLabel { font-size: 0.68rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: rgba(109,60,27,0.55); }
 .cfgValue {
-  font-family: 'Raleway', sans-serif; font-size: 1.4rem; font-weight: 800;
+  font-family: 'Poppins', sans-serif; font-size: 1.4rem; font-weight: 800;
   font-variant-numeric: tabular-nums lining-nums; letter-spacing: -0.015em; color: #6d3c1b; line-height: 1.1;
 }
 .cfgHelp { font-size: 0.82rem; color: #7a6655; line-height: 1.5; margin: 12px 0 0; }
@@ -543,7 +543,7 @@
 .rowSolic { background: rgba(216, 126, 47,0.05); }
 .pagarComisionBtn {
   display: inline-flex; align-items: center; gap: 5px;
-  cursor: pointer; font-family: 'Raleway', sans-serif;
+  cursor: pointer; font-family: 'Poppins', sans-serif;
   font-size: 0.76rem; font-weight: 700; color: #6d3c1b;
   background: linear-gradient(135deg, #f2d580, #c9a84c 55%, #9a7a2c);
   border: none; border-radius: 8px; padding: 6px 12px; white-space: nowrap;
@@ -556,7 +556,7 @@
 .tile[data-tone="req"] .tileValue { color: #d87e2f; }
 
 /* ── Pagos: tabla ── */
-.pagoGestor { display: block; font-family: 'Raleway', sans-serif; font-size: 0.68rem; font-weight: 600; color: #8a6a28; margin-top: 2px; }
+.pagoGestor { display: block; font-family: 'Poppins', sans-serif; font-size: 0.68rem; font-weight: 600; color: #8a6a28; margin-top: 2px; }
 .tableNote { font-size: 0.76rem; color: #a59587; margin: 10px 0 0; }
 
 /* ── Responsive ── */

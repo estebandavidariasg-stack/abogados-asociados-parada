@@ -11,7 +11,7 @@
   flex-direction: column;
   gap: 12px;
   pointer-events: none;          /* el contenedor no bloquea; las tarjetas sí */
-  font-family: 'Raleway', sans-serif;
+  font-family: 'Poppins', sans-serif;
 }
 
 .card {
@@ -73,7 +73,7 @@
 @keyframes deplete { to { stroke-dashoffset: var(--circ); } }
 .timerNum {
   position: absolute; inset: 0; display: grid; place-items: center;
-  font-family: 'Raleway', sans-serif;
+  font-family: 'Poppins', sans-serif;
   font-size: 0.72rem; font-weight: 800; color: #6d3c1b;
   font-variant-numeric: tabular-nums;
 }
@@ -116,7 +116,7 @@
 .acciones { display: flex; gap: 8px; }
 .descartar {
   flex: 0 0 auto;
-  font-family: 'Raleway', sans-serif;
+  font-family: 'Poppins', sans-serif;
   background: none; border: 1px solid rgba(109,60,27, 0.2);
   color: #6f5c48; border-radius: 11px;
   padding: 10px 15px; font-size: 0.8rem; font-weight: 600; cursor: pointer;
@@ -126,7 +126,7 @@
 
 .tomar {
   flex: 1;
-  font-family: 'Raleway', sans-serif;
+  font-family: 'Poppins', sans-serif;
   background: linear-gradient(135deg, #e8c96a, #c9a84c 55%, #8a6a28);
   color: #6d3c1b; border: none; border-radius: 11px;
   padding: 10px 16px; font-weight: 700; font-size: 0.84rem; cursor: pointer;

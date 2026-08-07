@@ -126,7 +126,7 @@
 }
 .sidebar:hover .brandText { max-width: 150px; opacity: 1; }
 .brandText strong {
-  font-family: 'Raleway', sans-serif;
+  font-family: 'Poppins', sans-serif;
   font-size: 0.85rem;
   font-weight: 700;
   color: #6d3c1b;
@@ -157,7 +157,7 @@
   border-radius: 11px;
   background: transparent;
   color: #6e5946;
-  font-family: 'Raleway', sans-serif;
+  font-family: 'Poppins', sans-serif;
   font-size: 0.82rem;
   font-weight: 600;
   cursor: pointer;
@@ -204,7 +204,7 @@
   margin-bottom: 1.4rem;
 }
 .eyebrow {
-  font-family: 'Raleway', sans-serif;
+  font-family: 'Poppins', sans-serif;
   font-size: 0.6rem;
   font-weight: 700;
   letter-spacing: 0.22em;
@@ -279,7 +279,7 @@
   font-size: 1.35rem; font-weight: 600; color: #6d3c1b; margin: 6px 0 0;
 }
 .estadoDesc {
-  font-family: 'Raleway', sans-serif;
+  font-family: 'Poppins', sans-serif;
   font-size: 0.86rem; line-height: 1.6; color: #6f5c48; margin: 0; max-width: 46ch;
 }
 
@@ -307,7 +307,7 @@
   color: #6d3c1b; margin: 4px 0 0;
 }
 .qrHint {
-  font-family: 'Raleway', sans-serif;
+  font-family: 'Poppins', sans-serif;
   font-size: 0.85rem; line-height: 1.55; color: #6f5c48; margin: 0; max-width: 42ch; text-align: center;
 }
 .downloadBtn {
@@ -334,7 +334,7 @@
   position: relative; z-index: 1;
 }
 .ratioTitle {
-  font-family: 'Raleway', sans-serif;
+  font-family: 'Poppins', sans-serif;
   font-size: 0.62rem; font-weight: 700; letter-spacing: 0.2em; text-transform: uppercase;
   color: #96765a;
 }
@@ -366,7 +366,7 @@
 .ratioLegend {
   position: relative; z-index: 1;
   display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 1.25rem;
-  font-family: 'Raleway', sans-serif; font-size: 0.78rem; color: #6f5c48;
+  font-family: 'Poppins', sans-serif; font-size: 0.78rem; color: #6f5c48;
 }
 .legendItem { display: inline-flex; align-items: center; gap: 7px; font-weight: 600; color: #5f4834; }
 .legendMuted { color: #b59e8a; font-size: 0.74rem; }
@@ -407,7 +407,7 @@
   font-size: 1.5rem; font-weight: 600; line-height: 1.1; color: #6d3c1b;
 }
 .statLabel {
-  font-family: 'Raleway', sans-serif;
+  font-family: 'Poppins', sans-serif;
   font-size: 0.6rem; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase;
   color: #a3856b;
 }
@@ -416,13 +416,13 @@
    Numerales tabulares (Raleway) — resumen de cobros
    ══════════════════════════════════════════ */
 .moneyValue {
-  font-family: 'Raleway', sans-serif;
+  font-family: 'Poppins', sans-serif;
   font-size: 1.35rem; font-weight: 800; line-height: 1.1;
   font-variant-numeric: tabular-nums lining-nums;
   letter-spacing: -0.01em; color: #6d3c1b;
 }
 .numValue {
-  font-family: 'Raleway', sans-serif;
+  font-family: 'Poppins', sans-serif;
   font-size: 1.7rem; font-weight: 800; line-height: 1;
   font-variant-numeric: tabular-nums lining-nums;
   letter-spacing: -0.01em; color: #6d3c1b;
@@ -436,7 +436,7 @@
    ══════════════════════════════════════════ */
 .blockTitle {
   position: relative; z-index: 1;
-  font-family: 'Raleway', sans-serif;
+  font-family: 'Poppins', sans-serif;
   font-size: 0.72rem; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase;
   color: #6d3c1b; margin: 0 0 0.9rem;
 }
@@ -455,7 +455,7 @@
   font-family: 'Cormorant Garamond', serif; font-size: 2rem; font-weight: 600; line-height: 1; color: #6d3c1b;
 }
 .donutCenterLbl {
-  font-family: 'Raleway', sans-serif; font-size: 0.6rem; font-weight: 700;
+  font-family: 'Poppins', sans-serif; font-size: 0.6rem; font-weight: 700;
   letter-spacing: 0.14em; text-transform: uppercase; color: #967f6b; margin-top: 3px;
 }
 /* Distribución por segmento con barra de proporción (llena el ancho). */
@@ -466,9 +466,9 @@
 .distRow { display: flex; flex-direction: column; gap: 0.4rem; }
 .distHead { display: flex; align-items: center; gap: 0.6rem; }
 .chartDot { width: 11px; height: 11px; border-radius: 3px; flex-shrink: 0; }
-.distLabel { font-family: 'Raleway', sans-serif; font-size: 0.92rem; color: #5b4633; }
+.distLabel { font-family: 'Poppins', sans-serif; font-size: 0.92rem; color: #5b4633; }
 .distVal {
-  margin-left: auto; font-family: 'Raleway', sans-serif; font-weight: 700; color: #6d3c1b;
+  margin-left: auto; font-family: 'Poppins', sans-serif; font-weight: 700; color: #6d3c1b;
   font-size: 0.86rem; font-variant-numeric: tabular-nums;
 }
 .distTrack { height: 8px; border-radius: 999px; background: rgba(109,60,27, 0.07); overflow: hidden; }
@@ -486,15 +486,15 @@
 }
 .histItem:last-child { border-bottom: none; }
 .histInfo { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.histName { font-family: 'Raleway', sans-serif; font-weight: 700; color: #6d3c1b; font-size: 0.95rem; }
-.histWith { font-family: 'Raleway', sans-serif; font-size: 0.82rem; color: #7a6655; display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.histName { font-family: 'Poppins', sans-serif; font-weight: 700; color: #6d3c1b; font-size: 0.95rem; }
+.histWith { font-family: 'Poppins', sans-serif; font-size: 0.82rem; color: #7a6655; display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 /* Badge de profesión del profesional (abogado / contador). */
 .histRol {
   font-size: 0.66rem; font-weight: 700; letter-spacing: 0.02em; border-radius: 999px; padding: 2px 8px;
   color: #6d3c1b; background: #f7eee6;
 }
 .histRol[data-rol="contador"] { color: #1f6d5a; background: #e2f4ee; }
-.histDate { font-family: 'Raleway', sans-serif; font-size: 0.78rem; color: #92867b; font-variant-numeric: tabular-nums; margin-top: 1px; }
+.histDate { font-family: 'Poppins', sans-serif; font-size: 0.78rem; color: #92867b; font-variant-numeric: tabular-nums; margin-top: 1px; }
 .histProg { display: flex; align-items: center; gap: 1.5rem; min-width: 0; }
 .histProg .stepper { flex: 1 1 auto; min-width: 0; }
 
@@ -506,7 +506,7 @@
 
 .histBadgeOk, .histBadgeBad, .histBadgeNeutral {
   display: inline-block; white-space: nowrap;
-  font-family: 'Raleway', sans-serif; font-size: 0.72rem; font-weight: 700;
+  font-family: 'Poppins', sans-serif; font-size: 0.72rem; font-weight: 700;
   border-radius: 999px; padding: 3px 11px;
 }
 .histBadgeOk      { color: #1f7a4d; background: #e7f6ee; }
@@ -520,7 +520,7 @@
   flex-wrap: wrap; margin-bottom: 0.9rem;
 }
 .blockCount {
-  font-family: 'Raleway', sans-serif; font-size: 0.78rem; font-weight: 600; color: #967f6b;
+  font-family: 'Poppins', sans-serif; font-size: 0.78rem; font-weight: 600; color: #967f6b;
   font-variant-numeric: tabular-nums;
 }
 
@@ -540,7 +540,7 @@
 .gSearchIcon { color: #a59587; flex-shrink: 0; }
 .gSearchInput {
   border: none; background: transparent; outline: none; flex: 1; min-width: 0;
-  font-family: 'Raleway', sans-serif; font-size: 0.9rem; color: #493626;
+  font-family: 'Poppins', sans-serif; font-size: 0.9rem; color: #493626;
 }
 .gSearchInput::placeholder { color: #b6a597; }
 .gClear {
@@ -556,13 +556,13 @@
 }
 .gDateInput {
   border: 1px solid rgba(109,60,27, 0.14); background: #fff; border-radius: 9px;
-  font-family: 'Raleway', sans-serif; font-size: 0.82rem; color: #493626;
+  font-family: 'Poppins', sans-serif; font-size: 0.82rem; color: #493626;
   padding: 7px 10px; height: 36px; color-scheme: light;
 }
 .gDateInput:focus { outline: none; border-color: #c9a84c; box-shadow: 0 0 0 3px rgba(201, 168, 76, 0.16); }
 .gClearAll {
   border: none; background: transparent; color: #b23b3b; cursor: pointer;
-  font-family: 'Raleway', sans-serif; font-size: 0.8rem; font-weight: 600;
+  font-family: 'Poppins', sans-serif; font-size: 0.8rem; font-weight: 600;
   padding: 8px 4px; text-decoration: underline; text-underline-offset: 2px;
 }
 .gClearAll:hover { color: #8f2f2f; }
@@ -598,24 +598,24 @@
   border-radius: 7px; padding: 3px 9px;
 }
 .cuponFecha {
-  font-family: 'Raleway', sans-serif; font-size: 0.76rem; color: #a3856b;
+  font-family: 'Poppins', sans-serif; font-size: 0.76rem; color: #a3856b;
   font-variant-numeric: tabular-nums;
 }
 .cuponCasos {
-  font-family: 'Raleway', sans-serif; font-size: 0.68rem; font-weight: 700;
+  font-family: 'Poppins', sans-serif; font-size: 0.68rem; font-weight: 700;
   color: #8a6a28; background: rgba(201, 168, 76, 0.13);
   border: 1px solid rgba(201, 168, 76, 0.32);
   border-radius: 999px; padding: 2px 9px;
 }
 .cuponMontoWrap { display: flex; align-items: center; gap: 0.7rem; flex-wrap: wrap; }
 .cuponMonto {
-  font-family: 'Raleway', sans-serif;
+  font-family: 'Poppins', sans-serif;
   font-size: 1.35rem; font-weight: 800; line-height: 1;
   font-variant-numeric: tabular-nums lining-nums;
   letter-spacing: -0.01em; color: #6d3c1b;
 }
 .cuponNota {
-  font-family: 'Raleway', sans-serif; font-size: 0.82rem; line-height: 1.5;
+  font-family: 'Poppins', sans-serif; font-size: 0.82rem; line-height: 1.5;
   color: #6f5c48; margin: 0;
 }
 
@@ -630,11 +630,11 @@
   padding: 0.7rem 0.9rem; background: #fff;
 }
 .desLabel {
-  font-family: 'Raleway', sans-serif; font-size: 0.66rem; font-weight: 700;
+  font-family: 'Poppins', sans-serif; font-size: 0.66rem; font-weight: 700;
   letter-spacing: 0.06em; text-transform: uppercase; color: #92867b;
 }
 .desVal {
-  font-family: 'Raleway', sans-serif; font-size: 1rem; font-weight: 800; color: #6d3c1b;
+  font-family: 'Poppins', sans-serif; font-size: 1rem; font-weight: 800; color: #6d3c1b;
   font-variant-numeric: tabular-nums;
 }
 .desItemStrong { background: linear-gradient(180deg, #fdf6e6, #fff); }
@@ -643,7 +643,7 @@
 /* Pills de estado — 3 tonos */
 .pillDisponible, .pillSolicitado, .pillPagado {
   display: inline-block; white-space: nowrap;
-  font-family: 'Raleway', sans-serif;
+  font-family: 'Poppins', sans-serif;
   font-size: 0.6rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
   padding: 4px 11px; border-radius: 999px;
 }
@@ -676,7 +676,7 @@
 .step[data-state="current"] .stepInner { background: #c9a84c; }
 .step[data-state="done"] .stepDot { background: #1f7a4d; border-color: #1f7a4d; }
 .stepLabel {
-  font-family: 'Raleway', sans-serif;
+  font-family: 'Poppins', sans-serif;
   font-size: 0.6rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
   color: #b59e8a; line-height: 1.2;
 }
@@ -686,7 +686,7 @@
 /* Fecha + hora bajo cada punto del stepper (trazabilidad). */
 .stepWhen {
   display: flex; flex-direction: column; align-items: center; gap: 1px; margin-top: 1px;
-  font-family: 'Raleway', sans-serif; font-variant-numeric: tabular-nums;
+  font-family: 'Poppins', sans-serif; font-variant-numeric: tabular-nums;
 }
 .stepWhenDate { font-size: 0.64rem; font-weight: 600; color: #7a6655; white-space: nowrap; }
 .stepWhenTime { font-size: 0.62rem; color: #a59587; white-space: nowrap; }
@@ -696,7 +696,7 @@
 .solicitarBtn {
   display: inline-flex; align-items: center; gap: 8px;
   appearance: none; border: none; cursor: pointer;
-  font-family: 'Raleway', sans-serif;
+  font-family: 'Poppins', sans-serif;
   font-size: 0.82rem; font-weight: 700; letter-spacing: 0.02em;
   color: #6d3c1b;
   background: linear-gradient(135deg, #f2d580, #c9a84c 55%, #9a7a2c);
@@ -708,7 +708,7 @@
 .solicitarBtn:active { transform: translateY(0); }
 .solicitarBtn:disabled { opacity: 0.6; cursor: default; }
 .cuponHint {
-  font-family: 'Raleway', sans-serif; font-size: 0.8rem; font-weight: 600; margin: 0;
+  font-family: 'Poppins', sans-serif; font-size: 0.8rem; font-weight: 600; margin: 0;
   display: inline-flex; align-items: center; gap: 6px;
 }
 .cuponHint[data-tone="wait"] { color: #d87e2f; }
@@ -722,7 +722,7 @@
 .table {
   width: 100%;
   border-collapse: collapse;
-  font-family: 'Raleway', sans-serif;
+  font-family: 'Poppins', sans-serif;
   font-size: 0.82rem;
   color: #5f4834;
 }
@@ -773,7 +773,7 @@
 .field { display: flex; flex-direction: column; gap: 0.4rem; }
 .fLabel {
   display: flex; justify-content: space-between; align-items: center; gap: 0.8rem;
-  font-family: 'Raleway', sans-serif;
+  font-family: 'Poppins', sans-serif;
   font-size: 0.6rem; font-weight: 700; letter-spacing: 0.22em; text-transform: uppercase;
   color: #96765a; margin: 0;
 }
@@ -791,7 +791,7 @@
   border-radius: 9px;
   color: #4a301a;
   padding: 0.62rem 0.85rem;
-  font-family: 'Raleway', sans-serif;
+  font-family: 'Poppins', sans-serif;
   font-size: 0.85rem;
   line-height: 1.6;
   outline: none;
@@ -812,12 +812,12 @@
 }
 .redField { display: flex; flex-direction: column; gap: 0.3rem; }
 .redLabel {
-  font-family: 'Raleway', sans-serif;
+  font-family: 'Poppins', sans-serif;
   font-size: 0.72rem; font-weight: 600; color: #96765a;
 }
 
 .lockNote {
-  font-family: 'Raleway', sans-serif;
+  font-family: 'Poppins', sans-serif;
   font-size: 0.82rem; line-height: 1.55; color: #a3856b; margin: 0;
   background: rgba(109,60,27, 0.04);
   border: 1px dashed rgba(109,60,27, 0.16);
@@ -825,7 +825,7 @@
 }
 .fileLink {
   display: inline-flex; align-items: center; gap: 8px; align-self: flex-start;
-  font-family: 'Raleway', sans-serif; font-size: 0.82rem; font-weight: 600;
+  font-family: 'Poppins', sans-serif; font-size: 0.82rem; font-weight: 600;
   color: #6d3c1b; text-decoration: none;
   background: rgba(109,60,27, 0.05);
   border: 1px solid rgba(109,60,27, 0.14);
@@ -840,7 +840,7 @@
   background: rgba(109,60,27, 0.05);
   border: 1px solid rgba(109,60,27, 0.16);
   color: #6d3c1b;
-  font-family: 'Raleway', sans-serif;
+  font-family: 'Poppins', sans-serif;
   font-size: 0.8rem; font-weight: 700; letter-spacing: 0.04em;
   border-radius: 10px; padding: 0.55rem 1.1rem; cursor: pointer;
   transition: background 0.2s, border-color 0.2s;
@@ -866,7 +866,7 @@
 }
 .identityName {
   margin: 0.2rem 0 0;
-  font-family: 'Raleway', sans-serif; font-weight: 700; font-size: 1rem; color: #6d3c1b;
+  font-family: 'Poppins', sans-serif; font-weight: 700; font-size: 1rem; color: #6d3c1b;
   word-break: break-word;
 }
 .identityBadgeOk, .identityBadgePend {
@@ -882,7 +882,7 @@
 }
 .identityRow { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .identityRow dt {
-  font-family: 'Raleway', sans-serif;
+  font-family: 'Poppins', sans-serif;
   font-size: 0.56rem; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; color: #ad9a8a;
 }
 .identityRow dd { margin: 0; font-size: 0.86rem; color: #4a301a; word-break: break-word; }
@@ -931,7 +931,7 @@
   border-radius: 8px;
   color: #d94444;
   padding: 0.85rem 1.1rem;
-  font-family: 'Raleway', sans-serif; font-size: 0.8rem; line-height: 1.5; margin: 0;
+  font-family: 'Poppins', sans-serif; font-size: 0.8rem; line-height: 1.5; margin: 0;
 }
 .msgSuccess {
   background: rgba(201, 168, 76, 0.07);
@@ -940,7 +940,7 @@
   border-radius: 8px;
   color: #a07c20;
   padding: 0.85rem 1.1rem;
-  font-family: 'Raleway', sans-serif; font-size: 0.8rem; line-height: 1.5; margin: 0;
+  font-family: 'Poppins', sans-serif; font-size: 0.8rem; line-height: 1.5; margin: 0;
 }
 
 /* ══════════════════════════════════════════
@@ -976,12 +976,12 @@
   font-size: 1.5rem; font-weight: 600; color: #6d3c1b; margin: 0 0 6px;
 }
 .logoutText {
-  font-family: 'Raleway', sans-serif;
+  font-family: 'Poppins', sans-serif;
   font-size: 0.86rem; color: #6f5c48; line-height: 1.55; margin: 0 0 20px;
 }
 .logoutActions { display: flex; gap: 10px; }
 .logoutCancel, .logoutConfirm {
-  flex: 1; font-family: 'Raleway', sans-serif; font-size: 0.86rem; font-weight: 600;
+  flex: 1; font-family: 'Poppins', sans-serif; font-size: 0.86rem; font-weight: 600;
   border-radius: 11px; padding: 11px 14px; cursor: pointer;
   transition: background 0.18s, border-color 0.18s, box-shadow 0.18s, color 0.18s;
 }

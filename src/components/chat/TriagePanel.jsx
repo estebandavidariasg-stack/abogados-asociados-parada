@@ -43,7 +43,7 @@ function PrecioSugerido({ valor }) {
 //  tipoProfesional: 'abogado' | 'contador'
 //  onIniciarChat({ profesionalId, area, resumen, costo }): salta al form pre-llenado
 //  onManual(): escape hatch al formulario manual de hoy
-export default function TriagePanel({ tipoProfesional = 'abogado', onIniciarChat, onManual, onPublicar }) {
+export default function TriagePanel({ tipoProfesional = 'abogado', onIniciarChat, onManual, onPublicar, onVolver }) {
   const [thread, setThread] = useState([{ role: 'assistant', content: SALUDO }]);
   const [input, setInput] = useState('');
   const [sessionId, setSessionId] = useState(null);
@@ -133,6 +133,12 @@ export default function TriagePanel({ tipoProfesional = 'abogado', onIniciarChat
 
   return (
     <div className={styles.wrap}>
+      {onVolver && (
+        <button type="button" className={styles.volver} onClick={onVolver}>
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M19 12H5M12 19l-7-7 7-7" /></svg>
+          Volver
+        </button>
+      )}
       <div className={styles.card}>
         <header className={styles.header}>
           <span className={styles.brandMark}><IconChispa /></span>

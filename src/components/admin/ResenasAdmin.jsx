@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { getAuthHeaders } from '../../lib/supabase'
+import ConfirmDialog from './ConfirmDialog'
 import styles from './ResenasAdmin.module.css'
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -32,6 +33,7 @@ export default function ResenasAdmin() {
   const [q, setQ] = useState('') // filtro por profesional (nombre o cédula)
   const [profesion, setProfesion] = useState('todos') // todos | abogado | contador
   const [busy, setBusy] = useState(null)
+  const [confirmar, setConfirmar] = useState(null) // { tipo: 'aprobar'|'quitar'|'eliminar', r }
 
   const cargar = useCallback(async () => {
     setLoading(true)
@@ -79,13 +81,32 @@ export default function ResenasAdmin() {
   }
 
   async function eliminar(r) {
-    if (!window.confirm('¿Eliminar esta reseña? No se puede deshacer.')) return
     setBusy(r.id)
     try {
       const headers = await getAuthHeaders()
       await fetch(`${SUPABASE_URL}/rest/v1/resenas?id=eq.${r.id}`, { method: 'DELETE', headers })
       setRows((rs) => rs.filter((x) => x.id !== r.id))
     } finally { setBusy(null) }
+  }
+
+  // Ejecuta la acción confirmada en el modal y lo cierra.
+  async function ejecutarConfirmacion() {
+    const c = confirmar
+    if (!c) return
+    if (c.tipo === 'aprobar')      await setAprobado(c.r, true)
+    else if (c.tipo === 'quitar')  await setAprobado(c.r, false)
+    else if (c.tipo === 'eliminar') await eliminar(c.r)
+    setConfirmar(null)
+  }
+
+  // Textos y tono del modal según la acción.
+  const CONFIRM_META = {
+    aprobar:  { title: 'Publicar reseña',   confirmLabel: 'Publicar', tone: 'gold',
+                message: (r) => <>Esta reseña de <strong>{r?.nombre || 'un cliente'}</strong> aparecerá en el inicio del sitio, visible para todo el público.</> },
+    quitar:   { title: 'Quitar del home',   confirmLabel: 'Quitar',   tone: 'danger',
+                message: (r) => <>Esta reseña dejará de mostrarse en el inicio del sitio. Podrás volver a publicarla más adelante.</> },
+    eliminar: { title: 'Eliminar reseña',   confirmLabel: 'Sí, eliminar', tone: 'danger',
+                message: (r) => <>Esta reseña se eliminará de forma permanente. Esta acción no se puede deshacer.</> },
   }
 
   const qn = norm(q.trim())
@@ -220,15 +241,15 @@ export default function ResenasAdmin() {
               </p>
               <div className={styles.acciones}>
                 {r.aprobado ? (
-                  <button className={styles.btnQuitar} disabled={busy === r.id} onClick={() => setAprobado(r, false)}>
+                  <button className={styles.btnQuitar} disabled={busy === r.id} onClick={() => setConfirmar({ tipo: 'quitar', r })}>
                     Quitar del home
                   </button>
                 ) : (
-                  <button className={styles.btnAprobar} disabled={busy === r.id} onClick={() => setAprobado(r, true)}>
+                  <button className={styles.btnAprobar} disabled={busy === r.id} onClick={() => setConfirmar({ tipo: 'aprobar', r })}>
                     ✓ Aprobar y mostrar
                   </button>
                 )}
-                <button className={styles.btnEliminar} disabled={busy === r.id} onClick={() => eliminar(r)}>
+                <button className={styles.btnEliminar} disabled={busy === r.id} onClick={() => setConfirmar({ tipo: 'eliminar', r })}>
                   Eliminar
                 </button>
               </div>
@@ -236,6 +257,17 @@ export default function ResenasAdmin() {
           ))}
         </ul>
       )}
+
+      <ConfirmDialog
+        open={!!confirmar}
+        title={confirmar ? CONFIRM_META[confirmar.tipo].title : ''}
+        message={confirmar ? CONFIRM_META[confirmar.tipo].message(confirmar.r) : ''}
+        confirmLabel={confirmar ? CONFIRM_META[confirmar.tipo].confirmLabel : ''}
+        tone={confirmar ? CONFIRM_META[confirmar.tipo].tone : 'danger'}
+        busy={!!confirmar && busy === confirmar.r.id}
+        onConfirm={ejecutarConfirmacion}
+        onClose={() => { if (!(confirmar && busy === confirmar.r.id)) setConfirmar(null) }}
+      />
     </div>
   )
 }

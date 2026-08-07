@@ -13,6 +13,7 @@ import ProfileDetailModal from '../components/admin/ProfileDetailModal'
 import TarjetaPreview from '../components/profile/TarjetaPreview'
 import NotificationBell from '../components/admin/NotificationBell'
 import ResenasAdmin from '../components/admin/ResenasAdmin'
+import ProyectosLeyAdmin from '../components/admin/ProyectosLeyAdmin'
 import AdminStats from '../components/admin/AdminStats'
 import { IconCheck, IconX } from '../components/shared/Icons'
 
@@ -29,6 +30,7 @@ const IconHome   = (p) => (<svg viewBox="0 0 24 24" width="18" height="18" fill=
 const IconLogout = (p) => (<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg>)
 const IconGestor = (p) => (<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/><path d="M12 11v0"/></svg>)
 const IconWallet = (p) => (<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4z"/></svg>)
+const IconLey    = (p) => (<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="m14.5 12.5-8 8a2.12 2.12 0 1 1-3-3l8-8"/><path d="m16 16 6-6"/><path d="m8 8 6-6"/><path d="m9 7 8 8"/><path d="m21 11-8-8"/></svg>)
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
@@ -729,6 +731,7 @@ export default function AdminPage() {
     { key: 'chat_interno', label: 'Chat interno',                                      Icon: IconShield },
     { key: 'contratos',    label: 'Contratos',                                         Icon: IconDoc },
     { key: 'resenas',      label: 'Reseñas',                                           Icon: IconStar },
+    { key: 'proyectos',    label: 'Proyectos de ley',                                  Icon: IconLey },
   ]
 
   return (
@@ -1305,6 +1308,13 @@ export default function AdminPage() {
           {activeTab === 'resenas' && (
             <div className={styles.section}>
               <ResenasAdmin />
+            </div>
+          )}
+
+          {/* ── Proyectos de ley (debate ciudadano) ── */}
+          {activeTab === 'proyectos' && (
+            <div className={styles.section}>
+              <ProyectosLeyAdmin />
             </div>
           )}
 

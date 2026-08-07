@@ -77,7 +77,7 @@
   border: 1px solid rgba(109,60,27, 0.14);
   border-radius: 8px;
   color: #a3856b;
-  font-family: 'Raleway', sans-serif;
+  font-family: 'Poppins', sans-serif;
   font-size: 0.68rem;
   font-weight: 700;
   letter-spacing: 0.2em;
@@ -283,7 +283,7 @@
   border-radius: 9px;
   color: #4a301a;
   padding: 0.62rem 0.85rem;
-  font-family: 'Raleway', sans-serif;
+  font-family: 'Poppins', sans-serif;
   font-size: 0.85rem;
   outline: none;
   transition: border-color 0.25s, box-shadow 0.25s, background 0.25s;
@@ -325,7 +325,7 @@ select.input option {
   border-radius: 9px;
   color: #4a301a;
   padding: 0.62rem 0.85rem;
-  font-family: 'Raleway', sans-serif;
+  font-family: 'Poppins', sans-serif;
   font-size: 0.85rem;
   outline: none;
   transition: border-color 0.25s, box-shadow 0.25s;
@@ -398,7 +398,7 @@ select.input option {
   border: none;
   color: #c0ac9a;
   font-size: 0.66rem;
-  font-family: 'Raleway', sans-serif;
+  font-family: 'Poppins', sans-serif;
   font-weight: 700;
   letter-spacing: 0.16em;
   text-transform: uppercase;
@@ -424,7 +424,7 @@ select.input option {
   border: 1px solid rgba(220, 50, 50, 0.3);
   border-radius: 6px;
   color: #e05555;
-  font-family: 'Raleway', sans-serif;
+  font-family: 'Poppins', sans-serif;
   font-size: 0.66rem;
   font-weight: 700;
   letter-spacing: 0.16em;
@@ -686,7 +686,7 @@ select.input option {
 }
 .sidebar:hover .brandText { max-width: 150px; opacity: 1; }
 .brandText strong {
-  font-family: 'Raleway', sans-serif;
+  font-family: 'Poppins', sans-serif;
   font-size: 0.85rem;
   font-weight: 700;
   color: #6d3c1b;
@@ -717,7 +717,7 @@ select.input option {
   border-radius: 11px;
   background: transparent;
   color: #6e5946;
-  font-family: 'Raleway', sans-serif;
+  font-family: 'Poppins', sans-serif;
   font-size: 0.82rem;
   font-weight: 600;
   cursor: pointer;
@@ -782,12 +782,12 @@ select.input option {
   font-size: 1.5rem; font-weight: 600; color: #6d3c1b; margin: 0 0 6px;
 }
 .logoutText {
-  font-family: 'Raleway', sans-serif;
+  font-family: 'Poppins', sans-serif;
   font-size: 0.86rem; color: #6f5c48; line-height: 1.55; margin: 0 0 20px;
 }
 .logoutActions { display: flex; gap: 10px; }
 .logoutCancel, .logoutConfirm {
-  flex: 1; font-family: 'Raleway', sans-serif; font-size: 0.86rem; font-weight: 600;
+  flex: 1; font-family: 'Poppins', sans-serif; font-size: 0.86rem; font-weight: 600;
   border-radius: 11px; padding: 11px 14px; cursor: pointer;
   transition: background 0.18s, border-color 0.18s, box-shadow 0.18s, color 0.18s;
 }
@@ -815,7 +815,7 @@ select.input option {
 }
 .panelTitle em { font-style: italic; color: var(--gold); }
 .panelSub {
-  font-family: 'Raleway', sans-serif;
+  font-family: 'Poppins', sans-serif;
   font-size: 0.78rem;
   color: #a3856b;
 }

@@ -401,7 +401,7 @@
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
-  font-family: 'Raleway', sans-serif;
+  font-family: 'Poppins', sans-serif;
   font-size: 0.72rem;
   font-weight: 600;
   letter-spacing: 0.02em;
@@ -438,7 +438,7 @@
   margin: 0;
   padding: 0.9rem 0.2rem;
   text-align: center;
-  font-family: 'Raleway', sans-serif;
+  font-family: 'Poppins', sans-serif;
   font-size: 0.86rem;
   color: #96765a;
 }
@@ -467,7 +467,7 @@
 .reviewsEmptyHint {
   margin: 0;
   max-width: 34ch;
-  font-family: 'Raleway', sans-serif;
+  font-family: 'Poppins', sans-serif;
   font-size: 0.82rem;
   line-height: 1.6;
   color: #96765a;
@@ -499,13 +499,13 @@
 }
 .reviewStars { display: inline-flex; gap: 2px; font-size: 0.82rem; line-height: 1; }
 .reviewDate {
-  font-family: 'Raleway', sans-serif;
+  font-family: 'Poppins', sans-serif;
   font-size: 0.72rem;
   color: #a3856b;
 }
 .reviewText {
   margin: 0;
-  font-family: 'Raleway', sans-serif;
+  font-family: 'Poppins', sans-serif;
   font-size: 0.88rem;
   line-height: 1.7;
   color: #6b4d33;
@@ -514,7 +514,7 @@
 }
 .reviewAuthor {
   margin: 0.55rem 0 0;
-  font-family: 'Raleway', sans-serif;
+  font-family: 'Poppins', sans-serif;
   font-size: 0.7rem;
   font-weight: 600;
   letter-spacing: 0.04em;
@@ -642,7 +642,7 @@
   margin-left: 8px;
   padding: 2px 8px;
   border-radius: 999px;
-  font-family: 'Raleway', sans-serif;
+  font-family: 'Poppins', sans-serif;
   font-size: 0.55rem;
   font-weight: 700;
   letter-spacing: 0.12em;

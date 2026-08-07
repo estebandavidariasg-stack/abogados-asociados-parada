@@ -35,7 +35,7 @@
 
 .eyebrow {
   display: block;
-  font-family: 'Raleway', sans-serif;
+  font-family: 'Poppins', sans-serif;
   font-size: 0.65rem;
   font-weight: 600;
   letter-spacing: 0.35em;
@@ -61,7 +61,7 @@
 }
 
 .subtitle {
-  font-family: 'Raleway', sans-serif;
+  font-family: 'Poppins', sans-serif;
   font-size: 0.85rem;
   font-weight: 300;
   color: var(--muted);

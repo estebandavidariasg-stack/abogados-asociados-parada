@@ -59,7 +59,7 @@
 }
 
 .eyebrow {
-  font-family: 'Raleway', sans-serif;
+  font-family: 'Poppins', sans-serif;
   font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 0.42em;
@@ -132,7 +132,7 @@
 }
 
 .subtitle {
-  font-family: 'Raleway', sans-serif;
+  font-family: 'Poppins', sans-serif;
   font-size: clamp(1rem, 1.3vw, 1.15rem);
   font-weight: 400;
   line-height: 1.75;
@@ -158,7 +158,7 @@
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  font-family: 'Raleway', sans-serif;
+  font-family: 'Poppins', sans-serif;
   font-size: 0.78rem;
   font-weight: 700;
   letter-spacing: 0.22em;
@@ -218,8 +218,35 @@
   transform: translateY(-2px);
 }
 
+/* CTA cívico — enlace al debate de proyectos de ley. Navy sólido para
+   distinguirlo del gold (primario) y del ghost (secundario). Etiqueta larga
+   → tracking algo más cerrado que el resto para que quepa en una línea. */
+.ctaCivic {
+  composes: ctaBase;
+  margin-top: 1.5rem;
+  letter-spacing: 0.15em;
+  font-size: 0.72rem;
+  background: var(--navy, #472f29);
+  color: var(--cream, #fffef1);
+  border-color: var(--navy, #472f29);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 6px 20px rgba(71, 47, 41, 0.28);
+  animation: introFadeUp 1.2s ease 0.38s both;
+}
+.ctaCivic:hover {
+  transform: translateY(-2px);
+  background: var(--navy-md, #6d3c1b);
+  border-color: var(--navy-md, #6d3c1b);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    0 10px 28px rgba(71, 47, 41, 0.36);
+}
+.ctaCivic:hover .arrow { transform: translateX(3px); }
+
 .ctaPrimary:focus-visible,
-.ctaSecondary:focus-visible {
+.ctaSecondary:focus-visible,
+.ctaCivic:focus-visible {
   outline: 2px solid var(--gold-dk, #8A6A28);
   outline-offset: 3px;
 }
@@ -241,7 +268,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .eyebrow, .heading, .divider, .subtitle, .actions {
+  .eyebrow, .heading, .divider, .subtitle, .actions, .ctaCivic {
     animation: none;
   }
 }
@@ -260,7 +287,8 @@
   .heading { font-size: clamp(2rem, 9vw, 2.8rem); margin-bottom: 1.4rem; }
   .subtitle { font-size: 0.95rem; margin-bottom: 2.2rem; }
   .actions { flex-direction: column; width: 100%; gap: 0.8rem; }
-  .ctaPrimary, .ctaSecondary { width: 100%; max-width: 320px; }
+  .ctaPrimary, .ctaSecondary, .ctaCivic { width: 100%; max-width: 320px; }
+  .ctaCivic { margin-top: 0.9rem; }
 }
 
 @media (max-width: 480px) {

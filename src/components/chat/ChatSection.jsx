@@ -913,7 +913,7 @@ function StepCedula({ onNew, onResume }) {
           onKeyDown={e => e.key==='Enter' && handleSubmit()}
           placeholder="Ej: PB-A3KX72" maxLength={10} style={{ letterSpacing:'2px', fontWeight:600 }} />
         <p style={{ fontSize:'0.75rem', color:'rgba(109,60,27,0.55)', marginTop:8, marginBottom:0 }}>
-          Si un asesor te dio un código, ingrésalo aquí.
+          Si un gestor te dio un código, ingrésalo aquí.
         </p>
       </div>
 
@@ -2001,9 +2001,9 @@ export default function ChatSection() {
                       <circle cx="12" cy="12" r="3.2"/>
                     </svg>
                   </span>
-                  <span className={styles.metodoLabel}>Con ayuda de la IA</span>
+                  <span className={styles.metodoLabel}>IA Parada</span>
                   <span className={styles.metodoDesc}>
-                    Responde unas preguntas y te recomendamos al profesional ideal para tu caso.
+                    IA Parada te hace unas preguntas y te recomienda al profesional ideal para tu caso.
                   </span>
                   <span className={styles.metodoTag}>Recomendado</span>
                 </button>
@@ -2044,6 +2044,7 @@ export default function ChatSection() {
           <div className={styles.centerContent}>
           <TriagePanel
             tipoProfesional={form.tipo_profesional}
+            onVolver={() => setStep('metodo')}
             onManual={() => {
               // Flujo manual: el cliente elige todo → form completo, sin modo IA.
               setSolicitudAbierta(false); setAreasBloqueadas(false)

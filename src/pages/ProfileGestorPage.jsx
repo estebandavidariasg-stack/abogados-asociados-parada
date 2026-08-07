@@ -549,7 +549,7 @@ function SeccionEstadisticas({ aprobado, codigo }) {
                       </Pie>
                       <Tooltip
                         formatter={(value, name) => [`${value} consulta${value === 1 ? '' : 's'}`, name]}
-                        contentStyle={{ borderRadius: 10, border: '1px solid rgba(109,60,27,0.1)', fontSize: 13, fontFamily: 'Raleway, sans-serif' }}
+                        contentStyle={{ borderRadius: 10, border: '1px solid rgba(109,60,27,0.1)', fontSize: 13, fontFamily: 'Poppins, sans-serif' }}
                       />
                     </PieChart>
                   </ResponsiveContainer>

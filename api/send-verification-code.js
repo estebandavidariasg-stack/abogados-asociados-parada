@@ -43,7 +43,12 @@ const RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000
 const RATE_LIMIT_MAX        = 3
 const CODE_TTL_MS           = 10 * 60 * 1000
 
-const TIPOS_VALIDOS = new Set(['abogado', 'contador', 'gestor', 'firma'])
+const TIPOS_VALIDOS = new Set(['abogado', 'contador', 'gestor', 'firma', 'voto'])
+
+// Tipos que NO crean cuenta (solo verifican identidad de un correo): se saltan
+// el reCAPTCHA y el chequeo "ya registrado". 'firma' = firma electrónica;
+// 'voto' = verificación del votante en el debate de proyectos de ley.
+const TIPOS_SIN_CUENTA = new Set(['firma', 'voto'])
 
 /* ── Verificación de reCAPTCHA contra Google ──────────────────────────────
    Antes el token sólo se recolectaba en el cliente y nunca se validaba.
@@ -153,6 +158,22 @@ async function insertCode({ email, code, tipoRegistro, expiresAt }) {
 
 // ── Plantilla del correo (tema claro compartido) ───────────────────────
 function renderVerificationEmailHtml({ code, tipoRegistro }) {
+  // Debate de proyectos de ley: el código verifica que el votante es una
+  // persona real antes de habilitar su participación (no crea cuenta).
+  if (tipoRegistro === 'voto') {
+    const inner =
+      `<p style="margin:0;font-size:16px;line-height:1.6;color:${C.navy};text-align:center;">
+         Para participar en el ${em('debate de proyectos de ley')}, ingresa este código de verificación:
+       </p>
+       ${codeBox(code)}
+       <p style="margin:0;text-align:center;font-size:13px;color:${C.body};">Este código expira en 10 minutos.</p>
+       <p style="margin:10px 0 0;text-align:center;font-size:12px;color:${C.muted};">Si no solicitaste participar, ignora este correo.</p>`
+    return renderShell({
+      subjectLine: 'Código para votar',
+      preheader: `Tu código para participar: ${code}`,
+      innerHtml: inner,
+    })
+  }
   // Firma electrónica: el código verifica identidad ANTES de firmar (no crea cuenta).
   if (tipoRegistro === 'firma') {
     const inner =
@@ -237,7 +258,7 @@ export default async function handler(req, res) {
   //  autenticado dentro de la app y ya está limitado por el rate-limit
   //  (3/10min por correo) + el propio OTP. Meter un captcha ahí es fricción
   //  innecesaria en medio de la firma de un documento.
-  if (tipoRegistro !== 'firma') {
+  if (!TIPOS_SIN_CUENTA.has(tipoRegistro)) {
     const captchaCheck = await verifyRecaptcha(recaptchaToken)
     if (!captchaCheck.ok) {
       return res.status(403).json({
@@ -260,7 +281,7 @@ export default async function handler(req, res) {
     //    firmante (profesional, administrador o incluso un cliente con cuenta)
     //    normalmente YA existe en auth.users. Aquí el código no crea una cuenta,
     //    solo verifica identidad antes de firmar, así que saltamos el 409.
-    if (tipoRegistro !== 'firma' && await emailAlreadyRegistered(email)) {
+    if (!TIPOS_SIN_CUENTA.has(tipoRegistro) && await emailAlreadyRegistered(email)) {
       return res.status(409).json({ error: 'Este correo ya está registrado' })
     }
 

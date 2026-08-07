@@ -729,7 +729,7 @@ export default function AsistenteIA() {
           )}
           {busy && (<div className={styles.thinking} aria-label="Generando respuesta"><span /><span /><span /></div>)}
           {busy && progreso && (
-            <div style={{ fontSize: '0.78rem', color: '#a3856b', marginTop: 6, fontFamily: 'Raleway, sans-serif' }}>{progreso}</div>
+            <div style={{ fontSize: '0.78rem', color: '#a3856b', marginTop: 6, fontFamily: 'Poppins, sans-serif' }}>{progreso}</div>
           )}
         </div>
       </div>
@@ -754,7 +754,7 @@ export default function AsistenteIA() {
           <div style={{
             width: 'min(520px, 100%)', background: '#fff', borderRadius: 18,
             boxShadow: '0 30px 80px -30px rgba(48, 27, 9,0.6)', overflow: 'hidden',
-            fontFamily: "'Raleway', sans-serif",
+            fontFamily: "'Poppins', sans-serif",
           }}>
             <div style={{ background: 'linear-gradient(160deg, #6d3c1b 0%, #7a471a 100%)', color: '#fff', padding: '1.9rem 1.8rem', textAlign: 'center' }}>
               <div style={{
@@ -808,7 +808,7 @@ export default function AsistenteIA() {
                 disabled={!aceptaCheck}
                 style={{
                   width: '100%', padding: '0.85rem 1rem', borderRadius: 12, border: 'none',
-                  fontFamily: "'Raleway', sans-serif", fontSize: '0.92rem', fontWeight: 700,
+                  fontFamily: "'Poppins', sans-serif", fontSize: '0.92rem', fontWeight: 700,
                   cursor: aceptaCheck ? 'pointer' : 'not-allowed',
                   color: aceptaCheck ? '#6d3c1b' : '#ab998a',
                   background: aceptaCheck ? 'linear-gradient(135deg, #e8c96a, #c9a84c)' : '#f3ede8',

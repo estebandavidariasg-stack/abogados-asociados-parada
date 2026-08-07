@@ -131,14 +131,16 @@
   pointer-events: none;
 }
 
-/* Contorno exterior del territorio — línea dorada nítida y fina */
+/* Contorno exterior del territorio — azul suave y difuminado.
+   Azul apagado (desaturado hacia la paleta cálida) + baja opacidad + más blur:
+   se lee azul pero se funde con el café/crema sin gritar. */
 .worldOutline {
   fill: none;
-  stroke: rgba(201, 168, 76, 0.85);
-  stroke-width: 2;
+  stroke: rgba(96, 138, 178, 0.5);
+  stroke-width: 1.5;
   stroke-linejoin: round;
   pointer-events: none;
-  filter: blur(0.6px);
+  filter: blur(1.6px);
 }
 
 /* ── Líneas animadas ── */
