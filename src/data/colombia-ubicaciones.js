@@ -274,3 +274,30 @@ export const UBICACIONES = {
 export const DEPARTAMENTOS = Object.keys(UBICACIONES).sort((a, b) =>
   a.localeCompare(b, 'es', { sensitivity: 'base' })
 )
+
+/* ── Helpers de tercer nivel territorial (municipio / localidad) ──────────────
+   Bogotá D.C. es su propio "departamento" y usa `localidades` (un ARRAY), no
+   `municipios` (un objeto). Antes se hacía Object.keys(nivel.localidades) sobre
+   ese array → devolvía índices "0","1"… en vez de los nombres, así que las
+   localidades de Bogotá NUNCA aparecían. Estos helpers lo resuelven en un solo
+   sitio y exponen la etiqueta correcta ("Localidad" vs "Municipio"). */
+export const esBogota = (depto) => !!UBICACIONES[depto]?.esBogota
+
+// Etiqueta singular del tercer nivel según el departamento.
+export const nivelMunicipalLabel = (depto) => (esBogota(depto) ? 'Localidad' : 'Municipio')
+// Etiqueta plural (para selects "Todos los municipios/localidades", títulos…).
+export const nivelMunicipalPlural = (depto) => (esBogota(depto) ? 'localidades' : 'municipios')
+
+// Lista ordenada de municipios (o localidades de Bogotá) de un departamento.
+export function municipiosDe(depto) {
+  const nivel = UBICACIONES[depto]
+  if (!nivel) return []
+  const items = nivel.municipios
+    ? Object.keys(nivel.municipios)
+    : (Array.isArray(nivel.localidades) ? nivel.localidades : [])
+  return items.slice().sort((a, b) => a.localeCompare(b, 'es'))
+}
+
+// Dado un departamento + municipio ya guardados en un voto, devuelve la etiqueta
+// correcta aunque el departamento no exista en el mapa (fallback a "Municipio").
+export const labelMunicipalDe = (depto) => nivelMunicipalLabel(depto)

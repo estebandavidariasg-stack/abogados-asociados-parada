@@ -5,6 +5,7 @@ import ResultadosProyecto from '../proyectos/ResultadosProyecto'
 import {
   fetchProyectosAdmin, fetchArticulos, crearProyecto, actualizarProyecto,
   eliminarProyecto, reemplazarArticulos, fetchVotosDetalle,
+  construirVotantes, notificarResultadoVotantes,
   apoyaMeta, toCSV, descargarArchivo, fmtFecha,
 } from '../../lib/proyectosLey'
 import styles from './ProyectosLeyAdmin.module.css'
@@ -18,8 +19,13 @@ import styles from './ProyectosLeyAdmin.module.css'
 
 const emptyForm = () => ({
   id: null, nombre: '', numero: '', descripcion: '', fecha_radicacion: '',
-  permite_articulado: true, publicado: false,
+  enlace_documento: '', permite_articulado: true, publicado: false,
 })
+// Fecha local YYYY-MM-DD (para inputs de tipo date sin desfase de zona horaria).
+const hoyISO = () => {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
 const emptyArt = () => ({ numero: '', titulo: '', contenido: '' })
 
 /* ── Marco de modal reutilizable (backdrop + panel + cierre) ── */
@@ -68,6 +74,10 @@ export default function ProyectosLeyAdmin() {
   const [articulos, setArticulos] = useState([])
   const [selArts, setSelArts]     = useState([])
 
+  // Modal de resultado + notificación a votantes.
+  const [resForm, setResForm]     = useState({ estado: '', fecha: '', notas: '' })
+  const [notif, setNotif]         = useState({ phase: 'idle', done: 0, total: 0, sent: 0, failed: 0, msg: '' })
+
   const cargar = useCallback(async () => { setProyectos(await fetchProyectosAdmin()) }, [])
   useEffect(() => { cargar() }, [cargar])
 
@@ -81,6 +91,7 @@ export default function ProyectosLeyAdmin() {
     setForm({
       id: p.id, nombre: p.nombre || '', numero: p.numero || '',
       descripcion: p.descripcion || '', fecha_radicacion: p.fecha_radicacion || '',
+      enlace_documento: p.enlace_documento || '',
       permite_articulado: !!p.permite_articulado, publicado: !!p.publicado,
     })
     setArticulos([])
@@ -92,6 +103,15 @@ export default function ProyectosLeyAdmin() {
     setSelArts([])
     setModal({ tipo: 'resultados', proyecto: p })
     setSelArts(await fetchArticulos(p.id))
+  }
+  function abrirResultado(p) {
+    setResForm({
+      estado: p.estado_resultado || '',
+      fecha:  p.resultado_fecha || hoyISO(),
+      notas:  p.resultado_notas || '',
+    })
+    setNotif({ phase: 'idle', done: 0, total: 0, sent: 0, failed: 0, msg: '' })
+    setModal({ tipo: 'resultado', proyecto: p })
   }
 
   /* ── Editor artículos ── */
@@ -109,6 +129,7 @@ export default function ProyectosLeyAdmin() {
         numero: form.numero.trim() || null,
         descripcion: form.descripcion.trim() || null,
         fecha_radicacion: form.fecha_radicacion || null,
+        enlace_documento: form.enlace_documento.trim() || null,
         permite_articulado: form.permite_articulado,
         publicado: form.publicado,
       }
@@ -137,15 +158,84 @@ export default function ProyectosLeyAdmin() {
     setBusy(false); setModal(null)
   }
 
+  /* ── Resultado del trámite + notificación a votantes ── */
+  async function guardarResultado() {
+    const p = modal.proyecto
+    if (!resForm.estado) return alert('Elige si el proyecto fue aprobado o no aprobado.')
+    setBusy(true)
+    try {
+      const patch = {
+        estado_resultado: resForm.estado,
+        resultado_fecha:  resForm.fecha || hoyISO(),
+        resultado_notas:  resForm.notas.trim() || null,
+      }
+      const ok = await actualizarProyecto(p.id, patch)
+      if (!ok) throw new Error('No se pudo guardar el resultado.')
+      // Refresca la lista y el proyecto del modal para habilitar "Notificar".
+      const lista = await fetchProyectosAdmin()
+      setProyectos(lista)
+      const actualizado = lista.find(x => x.id === p.id) || { ...p, ...patch }
+      setModal({ tipo: 'resultado', proyecto: actualizado })
+      setNotif(n => ({ ...n, msg: 'Resultado guardado. Ya puedes notificar a los votantes.' }))
+    } catch (e) { alert(e.message || 'Error al guardar el resultado.') }
+    finally { setBusy(false) }
+  }
+
+  async function notificarVotantes() {
+    const p = modal.proyecto
+    if (!p.estado_resultado) return alert('Primero guarda el resultado (aprobado / no aprobado).')
+    setNotif({ phase: 'preparando', done: 0, total: 0, sent: 0, failed: 0, msg: 'Reuniendo votantes…' })
+    try {
+      const [detalle, arts] = await Promise.all([fetchVotosDetalle(p.id), fetchArticulos(p.id)])
+      const recipients = construirVotantes(detalle)
+      if (recipients.length === 0) {
+        setNotif({ phase: 'done', done: 0, total: 0, sent: 0, failed: 0, msg: 'No hay votantes con correo para notificar.' })
+        return
+      }
+      setNotif(n => ({ ...n, phase: 'preparando', total: recipients.length, msg: 'Generando el PDF del proyecto…' }))
+      // PDF del proyecto completo (nacional, completo + cada artículo) para adjuntar.
+      const { generarReportePDFBase64 } = await import('../../lib/proyectosPdf')
+      const base64 = await generarReportePDFBase64({
+        proyecto: p, articulos: arts, resumen: await import('../../lib/proyectosLey').then(m => m.fetchResumen(p.id)),
+        filtro: { nivel: 'nacional' }, scopeSel: 'todos',
+      })
+      const filename = `resultados-${(p.numero || p.nombre || 'proyecto').replace(/[^a-z0-9]+/gi, '-').slice(0, 40)}.pdf`
+
+      setNotif(n => ({ ...n, phase: 'enviando', msg: '' }))
+      const proyectoPayload = {
+        nombre: p.nombre, numero: p.numero || null, estado: p.estado_resultado,
+        fecha: p.resultado_fecha || null, enlace: p.enlace_documento || null, notas: p.resultado_notas || null,
+      }
+      const r = await notificarResultadoVotantes({
+        proyecto: proyectoPayload,
+        recipients,
+        pdf: { base64, filename },
+        onProgress: (done, total) => setNotif(n => ({ ...n, done, total })),
+      })
+      // Sella la fecha de notificación (best-effort).
+      await actualizarProyecto(p.id, { resultado_notificado_at: new Date().toISOString() }).catch(() => {})
+      setNotif({
+        phase: 'done', done: recipients.length, total: recipients.length,
+        sent: r.sent, failed: r.failed,
+        msg: r.demo
+          ? `Modo prueba: se habrían enviado ${r.sent} correos (no se envió nada real).`
+          : `Listo: ${r.sent} correos enviados${r.failed ? `, ${r.failed} fallidos` : ''}.`,
+      })
+    } catch (e) {
+      console.error('[notificar] error', e)
+      setNotif(n => ({ ...n, phase: 'done', msg: 'Ocurrió un error al notificar. Intenta de nuevo.' }))
+    }
+  }
+
   async function descargarDetalle(p) {
     const [votos, arts] = await Promise.all([fetchVotosDetalle(p.id), fetchArticulos(p.id)])
     const artMap = {}; arts.forEach(a => { artMap[a.id] = a })
-    const cab = ['Fecha', 'Ámbito', 'Postura', 'Observaciones', 'Nombre', 'Celular', 'Correo', 'Departamento', 'Municipio']
+    const cab = ['Fecha', 'Ámbito', 'Postura', 'Observaciones', 'Nombre', 'Cédula', 'Celular', 'Correo', 'Departamento', 'Municipio/Localidad']
     const filas = votos.map(v => [
       new Date(v.created_at).toLocaleString('es-CO'),
       v.articulo_id ? `Artículo ${artMap[v.articulo_id]?.numero ?? '—'}` : 'Proyecto completo',
       apoyaMeta(v.apoya).label, v.observaciones || '',
-      v.nombre || '', v.celular || '', v.correo || '', v.departamento || '', v.municipio || '',
+      v.nombre || '', v.cedula || '', v.celular || '', v.correo || '', v.departamento || '', v.municipio || '',
     ])
     const nombre = `reporte-detallado-${(p.numero || p.nombre || 'proyecto').replace(/[^a-z0-9]+/gi, '-').slice(0, 40)}.csv`
     descargarArchivo(nombre, toCSV(cab, filas))
@@ -179,6 +269,11 @@ export default function ProyectosLeyAdmin() {
                   <span className={`${styles.estado} ${p.publicado ? styles.pub : styles.borrador}`}>
                     {p.publicado ? 'Publicado' : 'Borrador'}
                   </span>
+                  {p.estado_resultado && (
+                    <span className={`${styles.estado} ${p.estado_resultado === 'aprobado' ? styles.aprobado : styles.rechazado}`}>
+                      {p.estado_resultado === 'aprobado' ? 'Aprobado' : 'No aprobado'}
+                    </span>
+                  )}
                   {p.numero && <span className={styles.numero}>{p.numero}</span>}
                   {p.fecha_radicacion && <span className={styles.fecha}>Radicado {fmtFecha(p.fecha_radicacion)}</span>}
                 </div>
@@ -186,6 +281,7 @@ export default function ProyectosLeyAdmin() {
               </div>
               <div className={styles.itemActions}>
                 <button className={styles.act} onClick={() => verResultados(p)}>Resultados</button>
+                <button className={styles.act} onClick={() => abrirResultado(p)}>Resultado y aviso</button>
                 <button className={styles.act} onClick={() => editar(p)}>Editar</button>
                 <button className={styles.act} onClick={() => setModal({ tipo: 'publish', proyecto: p })}>
                   {p.publicado ? 'Despublicar' : 'Publicar'}
@@ -227,6 +323,10 @@ export default function ProyectosLeyAdmin() {
                 <label className={styles.field}>
                   <span>Fecha de radicación</span>
                   <input type="date" value={form.fecha_radicacion || ''} onChange={e => setForm(f => ({ ...f, fecha_radicacion: e.target.value }))} />
+                </label>
+                <label className={`${styles.field} ${styles.fieldFull}`}>
+                  <span>Enlace al documento oficial</span>
+                  <input type="url" value={form.enlace_documento} onChange={e => setForm(f => ({ ...f, enlace_documento: e.target.value }))} placeholder="https://www.camara.gov.co/…  (donde está colgado el proyecto completo)" />
                 </label>
                 <label className={`${styles.field} ${styles.fieldFull}`}>
                   <span>Descripción</span>
@@ -325,6 +425,88 @@ export default function ProyectosLeyAdmin() {
                 <span className={styles.resNota}>Incluye datos de contacto (solo visibles para administración).</span>
               </div>
               <ResultadosProyecto proyecto={modal.proyecto} articulos={selArts} />
+            </ModalShell>
+          )}
+
+          {modal?.tipo === 'resultado' && (
+            <ModalShell
+              key="resultado"
+              onClose={cerrar}
+              closeDisabled={notif.phase === 'enviando' || notif.phase === 'preparando'}
+              size="md"
+              title="Resultado y aviso a votantes"
+              subtitle={modal.proyecto.numero || modal.proyecto.nombre}
+              footer={<button className={styles.cerrarBtn} onClick={cerrar} disabled={notif.phase === 'enviando' || notif.phase === 'preparando'}>Cerrar</button>}
+            >
+              <div className={styles.resultadoBox}>
+                <span className={styles.resLabel}>¿El proyecto fue aprobado?</span>
+                <div className={styles.resChoice} role="radiogroup" aria-label="Resultado del proyecto">
+                  {[['aprobado', 'Aprobado'], ['rechazado', 'No aprobado']].map(([k, l]) => (
+                    <button key={k} type="button" role="radio" aria-checked={resForm.estado === k}
+                      className={`${styles.resOpt} ${resForm.estado === k ? (k === 'aprobado' ? styles.resOptOk : styles.resOptNo) : ''}`}
+                      onClick={() => setResForm(f => ({ ...f, estado: k }))} disabled={busy}>
+                      {l}
+                    </button>
+                  ))}
+                </div>
+
+                <div className={styles.resGrid}>
+                  <label className={styles.field}>
+                    <span>Fecha del resultado</span>
+                    <input type="date" value={resForm.fecha} onChange={e => setResForm(f => ({ ...f, fecha: e.target.value }))} disabled={busy} />
+                  </label>
+                </div>
+                <label className={`${styles.field} ${styles.fieldFull}`}>
+                  <span>Nota para los votantes (opcional)</span>
+                  <textarea rows={3} value={resForm.notas} onChange={e => setResForm(f => ({ ...f, notas: e.target.value }))} placeholder="Ej: El proyecto fue aprobado en segundo debate y pasa a sanción presidencial." disabled={busy} />
+                </label>
+
+                {!modal.proyecto.enlace_documento && (
+                  <p className={styles.resAviso}>Sugerencia: agrega el <strong>enlace al documento oficial</strong> en «Editar» para que el correo lo incluya.</p>
+                )}
+
+                <div className={styles.resActions}>
+                  <button className={styles.save} onClick={guardarResultado} disabled={busy}>
+                    {busy ? 'Guardando…' : (modal.proyecto.estado_resultado ? 'Actualizar resultado' : 'Guardar resultado')}
+                  </button>
+                </div>
+              </div>
+
+              <div className={styles.notifBox}>
+                <h4 className={styles.notifTitle}>Notificar por correo</h4>
+                <p className={styles.notifSub}>
+                  Se enviará un correo con el diseño de Parada Bridge a cada votante (con su nombre,
+                  cédula, el voto que realizó, la fecha y el PDF del proyecto adjunto).
+                </p>
+
+                {(notif.phase === 'enviando' || notif.phase === 'preparando') && (
+                  <div className={styles.progressWrap}>
+                    <div className={styles.progressBar}>
+                      <div className={styles.progressFill} style={{ width: `${notif.total ? Math.round((notif.done / notif.total) * 100) : 8}%` }} />
+                    </div>
+                    <span className={styles.progressTxt}>
+                      {notif.msg || `Enviando ${notif.done} de ${notif.total}…`}
+                    </span>
+                  </div>
+                )}
+                {notif.phase === 'done' && notif.msg && (
+                  <p className={`${styles.notifResult} ${notif.failed ? styles.notifWarn : styles.notifOk}`}>{notif.msg}</p>
+                )}
+                {notif.phase === 'idle' && notif.msg && (
+                  <p className={styles.notifResult}>{notif.msg}</p>
+                )}
+
+                <button
+                  className={styles.notifBtn}
+                  onClick={notificarVotantes}
+                  disabled={!modal.proyecto.estado_resultado || notif.phase === 'enviando' || notif.phase === 'preparando'}
+                >
+                  {notif.phase === 'enviando' || notif.phase === 'preparando' ? 'Enviando…' : 'Notificar a los votantes'}
+                </button>
+                {!modal.proyecto.estado_resultado && (
+                  <span className={styles.notifHint}>Guarda primero el resultado para habilitar el envío.</span>
+                )}
+              </div>
             </ModalShell>
           )}
         </AnimatePresence>,

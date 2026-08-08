@@ -305,6 +305,9 @@ export default async function handler(req, res) {
       from:    `"Parada Bridge" <${process.env.GMAIL_USER}>`,
       to:      email,
       subject: 'Tu código de verificación',
+      // Versión de texto plano (multipart): mejora la entregabilidad y evita
+      // que los filtros marquen el correo como spam por ser solo-HTML.
+      text:    `Tu código de verificación de Parada Bridge es: ${code}\n\nEste código expira en 10 minutos. Si no lo solicitaste, ignora este correo.\n\nParada Bridge — https://paradabridge.com`,
       html:    renderVerificationEmailHtml({ code, tipoRegistro }),
     })
 

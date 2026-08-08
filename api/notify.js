@@ -377,6 +377,140 @@ export default async function handler(req, res) {
       }
     }
 
+    // ── Resultado de un proyecto de ley → correo a quienes votaron ──
+    // Acción sensible: envía correo de marca a direcciones arbitrarias del body
+    // + adjunta un PDF. Exige superadmin (igual que contact_card).
+    if (type === 'proyecto_resultado') {
+      const caller = await getCallerProfile(req)
+      if (caller?.rol !== 'superadmin') {
+        return res.status(401).json({ error: 'No autorizado.' })
+      }
+
+      const { proyecto, pdf, recipients } = req.body || {}
+
+      // Validación del payload.
+      const estado = proyecto?.estado
+      if (!proyecto?.nombre || (estado !== 'aprobado' && estado !== 'rechazado')) {
+        return res.status(400).json({ error: 'Datos del proyecto inválidos (nombre y estado aprobado|rechazado requeridos).' })
+      }
+      if (!Array.isArray(recipients) || recipients.length === 0) {
+        return res.status(400).json({ error: 'Falta la lista de destinatarios.' })
+      }
+      // El cliente debe batchear (≤ ~30). Defensa dura del servidor.
+      if (recipients.length > 60) {
+        return res.status(400).json({ error: 'Demasiados destinatarios en un solo lote (máx. 60).' })
+      }
+      // Procesamos como mucho 40 por llamada (el cliente controla el batching).
+      const lote = recipients.slice(0, 40)
+
+      const estadoLabel = estado === 'aprobado'
+        ? 'Proyecto de ley APROBADO'
+        : 'Proyecto de ley NO aprobado'
+      const pillColor = estado === 'aprobado' ? '#2e7d5b' : '#b4442f'
+      const subject = `${estadoLabel} · ${esc(proyecto.numero || proyecto.nombre)}`.slice(0, 180)
+
+      // Adjunto construido UNA sola vez (si viene PDF).
+      const attachments = pdf?.base64
+        ? [{
+            filename: pdf.filename || 'resultados-proyecto.pdf',
+            content: Buffer.from(pdf.base64, 'base64'),
+            contentType: 'application/pdf',
+          }]
+        : []
+
+      // Ficha etiqueta/valor (mismo patrón que emailPqr).
+      const campo = (label, value) =>
+        `<p style="margin:0 0 2px;font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:${C.muted};">${label}</p>
+         <p style="margin:0 0 12px;font-size:14px;color:${C.navy};font-weight:600;">${esc(value) || '—'}</p>`
+
+      // Formatea una fecha ISO a es-CO si parece ISO; si no, la deja tal cual.
+      const fmtFecha = (raw) => {
+        if (!raw) return ''
+        const s = String(raw)
+        if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
+          const d = new Date(s)
+          if (!isNaN(d.getTime())) {
+            return d.toLocaleDateString('es-CO', { day: 'numeric', month: 'long', year: 'numeric' })
+          }
+        }
+        return s
+      }
+
+      const fechaResultado = proyecto.fecha ? fmtFecha(proyecto.fecha) : ''
+      const from = `"Parada Bridge" <${process.env.GMAIL_USER}>`
+
+      // Arma el HTML para un destinatario concreto.
+      const buildHtml = (r) => {
+        const votoLabel   = esc(r.voto)
+        const fechaVoto   = esc(fmtFecha(r.fecha))
+        const proyectoStr = esc(proyecto.nombre) + (proyecto.numero ? ` (${esc(proyecto.numero)})` : '')
+
+        const pill =
+          `<table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto 22px;">
+             <tr>
+               <td align="center" bgcolor="${pillColor}" style="border-radius:8px;background-color:${pillColor};padding:11px 26px;font-family:${FONT_SERIF};font-size:15px;font-weight:700;letter-spacing:0.04em;color:#ffffff;">
+                 ${esc(estadoLabel)}
+               </td>
+             </tr>
+           </table>`
+
+        const enlace = proyecto.enlace
+          ? emailButton('Ver el proyecto de ley', esc(proyecto.enlace))
+          : emailButton('Ver el debate', `${SITE_BASE}/proyectos-ley`)
+
+        const inner =
+          `<p style="margin:0 0 18px;font-size:16px;line-height:1.6;color:${C.navy};text-align:center;">
+             Estimado/a <strong style="color:#6d3c1b;font-weight:700;">${esc(r.nombre) || 'ciudadano/a'}</strong>,
+           </p>
+           ${pill}
+           <p style="margin:0 0 22px;font-size:15px;line-height:1.7;color:${C.body};text-align:center;">
+             El proyecto de ley en el que participaste ya tiene un resultado. A continuación encuentras el detalle de tu participación.
+           </p>
+           ${infoBox(
+             campo('Proyecto', proyectoStr) +
+             campo('Tu voto', votoLabel) +
+             campo('Fecha de tu participación', fechaVoto) +
+             campo('Nombre', r.nombre) +
+             campo('Cédula', r.cedula) +
+             (fechaResultado ? campo('Fecha del resultado', fechaResultado) : '')
+           )}` +
+          (proyecto.notas
+            ? `<p style="margin:22px 0 0;font-size:14px;line-height:1.6;color:${C.body};white-space:pre-wrap;text-align:center;">${esc(proyecto.notas)}</p>`
+            : '') +
+          `<div style="text-align:center;margin:26px 0 0;">${enlace}</div>` +
+          (attachments.length
+            ? `<p style="margin:22px 0 0;font-size:12px;line-height:1.6;color:${C.muted};text-align:center;">Adjuntamos el documento completo con los resultados del proyecto en formato PDF.</p>`
+            : '')
+
+        return renderShell({
+          subjectLine: estadoLabel,
+          preheader: `${estadoLabel}: ${esc(proyecto.nombre)}`,
+          innerHtml: inner,
+        })
+      }
+
+      // Un correo por destinatario con email válido. allSettled: un correo malo
+      // no aborta el resto.
+      const results = await Promise.allSettled(
+        lote
+          .filter((r) => r?.correo && String(r.correo).includes('@'))
+          .map((r) =>
+            transporter.sendMail({
+              from,
+              to: r.correo,
+              subject,
+              html: buildHtml(r),
+              attachments,
+            })
+          )
+      )
+
+      const sent   = results.filter((x) => x.status === 'fulfilled').length
+      const failed = results.filter((x) => x.status === 'rejected').length
+
+      return res.status(200).json({ ok: true, sent, failed })
+    }
+
     // ── Notificación al abogado cuando llega consulta nueva ──
     // Solo `lawyerId`: el correo se resuelve server-side con service role.
     // (El fallback legacy `lawyerEmail` se eliminó — permitía usar este

@@ -49,10 +49,19 @@ export const esDemo = () => { try { return localStorage.getItem('pl_demo') === '
 const DEMO_PROYECTOS = [
   { id: 'demo-1', nombre: 'Reforma al Código de Comercio', numero: 'Proyecto de Ley 145 de 2026',
     descripcion: 'Moderniza el régimen societario, reconoce la firma electrónica en actos mercantiles y simplifica la constitución de empresas.',
-    fecha_radicacion: '2026-07-15', permite_articulado: true, publicado: true, orden: 0 },
+    fecha_radicacion: '2026-07-15', permite_articulado: true, publicado: true, orden: 0,
+    enlace_documento: 'https://www.camara.gov.co/reforma-codigo-comercio',
+    estado_resultado: null, resultado_fecha: null, resultado_notas: null },
   { id: 'demo-2', nombre: 'Ley de Teletrabajo Rural', numero: 'Proyecto de Ley 201 de 2026',
     descripcion: 'Crea incentivos para el trabajo remoto en municipios apartados y garantiza conectividad como servicio esencial.',
-    fecha_radicacion: '2026-06-02', permite_articulado: false, publicado: true, orden: 1 },
+    fecha_radicacion: '2026-06-02', permite_articulado: false, publicado: true, orden: 1,
+    enlace_documento: null, estado_resultado: null, resultado_fecha: null, resultado_notas: null },
+  { id: 'demo-3', nombre: 'Ley de Educación Digital', numero: 'Proyecto de Ley 233 de 2026',
+    descripcion: 'Garantiza conectividad y dispositivos en colegios públicos e incorpora la alfabetización digital al currículo escolar.',
+    fecha_radicacion: '2026-05-10', permite_articulado: false, publicado: true, orden: 2,
+    enlace_documento: 'https://www.senado.gov.co/ley-educacion-digital',
+    estado_resultado: 'aprobado', resultado_fecha: '2026-08-06',
+    resultado_notas: 'El proyecto fue aprobado en segundo debate y pasa a sanción presidencial. Gracias por tu participación.' },
 ]
 const DEMO_ARTICULOS = {
   'demo-1': [
@@ -61,43 +70,106 @@ const DEMO_ARTICULOS = {
     { id: 'demo-1-a3', proyecto_id: 'demo-1', numero: 3, titulo: 'Constitución simplificada', contenido: 'La creación de sociedades podrá hacerse en línea en un término máximo de 24 horas.', orden: 2 },
   ],
   'demo-2': [],
+  'demo-3': [],
+}
+
+/* Datos sintéticos para poblar la demo (cientos de votos: torta, filtros por
+   departamento/localidad, comentarios con nombre). Bogotá D.C. va como su
+   propio "departamento" con sus LOCALIDADES (no bajo Cundinamarca). */
+const DEMO_NOMBRES = [
+  'María Camila Rodríguez', 'Juan David Gómez', 'Laura Valentina Martínez', 'Andrés Felipe Torres',
+  'Daniela Alejandra Ramírez', 'Santiago Herrera', 'Valeria Muñoz', 'Sebastián Castro',
+  'Isabella Vargas', 'Mateo Jiménez', 'Sofía Restrepo', 'Nicolás Rojas', 'Gabriela Ospina',
+  'Samuel Cárdenas', 'Mariana Quintero', 'Emmanuel Salazar', 'Antonia Peña', 'David Mendoza',
+  'Luciana Arango', 'Tomás Cortés', 'Manuela Giraldo', 'Alejandro Suárez', 'Camila Andrea Núñez',
+  'Diego Fernando Ríos', 'Paula Ospina', 'Carlos Andrés Bernal', 'Natalia Beltrán', 'Julián Acosta',
+  'Sara Montoya', 'Felipe Cárdenas', 'Ana Sofía Delgado', 'Ricardo Pineda', 'Verónica Lozano',
+  'Óscar Iván Guzmán', 'Catalina Ríos', 'Miguel Ángel Parra', 'Juliana Correa', 'Esteban Villalba',
+]
+const DEMO_LUGARES = [
+  ['Antioquia', 'Medellín'], ['Antioquia', 'Envigado'], ['Antioquia', 'Bello'], ['Antioquia', 'Itagüí'],
+  ['Valle del Cauca', 'Cali'], ['Valle del Cauca', 'Palmira'], ['Valle del Cauca', 'Buga'],
+  ['Bogotá D.C.', 'Suba'], ['Bogotá D.C.', 'Kennedy'], ['Bogotá D.C.', 'Chapinero'],
+  ['Bogotá D.C.', 'Usaquén'], ['Bogotá D.C.', 'Engativá'], ['Bogotá D.C.', 'Bosa'],
+  ['Bogotá D.C.', 'Teusaquillo'], ['Bogotá D.C.', 'Ciudad Bolívar'], ['Bogotá D.C.', 'Fontibón'],
+  ['Santander', 'Bucaramanga'], ['Santander', 'Floridablanca'], ['Atlántico', 'Barranquilla'],
+  ['Atlántico', 'Soledad'], ['Nariño', 'Pasto'], ['Cundinamarca', 'Soacha'], ['Cundinamarca', 'Zipaquirá'],
+  ['Cundinamarca', 'Chía'], ['Bolívar', 'Cartagena de Indias'], ['Caldas', 'Manizales'],
+  ['Risaralda', 'Pereira'], ['Boyacá', 'Tunja'],
+]
+const DEMO_POSTURAS = ['a_favor', 'a_favor', 'a_favor', 'en_contra', 'en_contra', 'neutral']
+const DEMO_OBS = [
+  'Me parece una iniciativa necesaria para el país; ojalá avance en el Congreso.',
+  'Tengo dudas sobre cómo se financiará y se implementará en las regiones.',
+  'Buen paso, pero falta claridad en la reglamentación posterior.',
+  'No estoy de acuerdo: creo que abre la puerta a abusos que no se controlan bien.',
+  'Como ciudadano, celebro que por fin se debata este tema abiertamente.',
+  'Depende mucho de la letra menuda; habría que revisar cada artículo con cuidado.',
+]
+// Genera `n` votos de un ámbito (articuloId null = proyecto completo) partiendo
+// de un offset para que las cédulas/hashes no colisionen entre ámbitos.
+function genVotos(proyecto_id, articulo_id, n, offset, tBase) {
+  const filas = []
+  for (let i = 0; i < n; i++) {
+    const idx = offset + i
+    const [departamento, municipio] = DEMO_LUGARES[idx % DEMO_LUGARES.length]
+    const apoya = DEMO_POSTURAS[idx % DEMO_POSTURAS.length]
+    const nombre = DEMO_NOMBRES[idx % DEMO_NOMBRES.length]
+    const observaciones = idx % 5 < 2 ? DEMO_OBS[idx % DEMO_OBS.length] : null
+    filas.push({
+      proyecto_id, articulo_id, apoya, departamento, municipio, observaciones,
+      nombre, cedula: String(1000000000 + idx * 7919).slice(0, 10),
+      cedula_hash: 'seed-' + proyecto_id + '-' + (articulo_id || 'full') + '-' + idx,
+      created_at: new Date(tBase + idx * 5400000).toISOString(),
+    })
+  }
+  return filas
 }
 const leerDemoVotos = () => { try { return JSON.parse(localStorage.getItem('pl_demo_votos') || '[]') } catch { return [] } }
 const escribirDemoVotos = (v) => localStorage.setItem('pl_demo_votos', JSON.stringify(v))
 // Siembra los votos de ejemplo una sola vez, SIN pisar votos ya emitidos por
 // quien prueba (los agrega). Se llama al activar el modo demo, antes de votar.
 function sembrarDemo() {
-  if (localStorage.getItem('pl_demo_seed') === '1') return
-  let t = Date.parse('2026-08-01T09:00:00Z')
-  const s = (proyecto_id, articulo_id, apoya, departamento, municipio, observaciones = null) => {
-    t += 3600000 + Math.floor(Math.random() * 6) * 3600000
-    return { proyecto_id, articulo_id, apoya, departamento, municipio, observaciones,
-      cedula_hash: 'seed-' + Math.random().toString(36).slice(2), created_at: new Date(t).toISOString() }
+  if (localStorage.getItem('pl_demo_seed') === '2') return
+  let n = 0
+  // Comentarios curados (con nombre) atados al contenido real del articulado —
+  // se leen mejor que los sintéticos. Bogotá va como su propio departamento.
+  const s = (proyecto_id, articulo_id, apoya, nombre, departamento, municipio, observaciones = null) => {
+    n++
+    return { proyecto_id, articulo_id, apoya, nombre, departamento, municipio, observaciones,
+      cedula: String(1032000000 + n * 131).slice(0, 10),
+      cedula_hash: 'seed-cur-' + n,
+      created_at: new Date(Date.parse('2026-08-01T09:00:00Z') + n * 4200000).toISOString() }
   }
-  const seed = [
-    s('demo-1', null, 'a_favor', 'Antioquia', 'Medellín', 'Excelente que por fin se reconozca la firma electrónica; agiliza todo para las pymes.'),
-    s('demo-1', null, 'a_favor', 'Antioquia', 'Envigado', 'Muy necesario para modernizar el país. Apoyo la reforma completa.'),
-    s('demo-1', null, 'en_contra', 'Cundinamarca', 'Bogotá D.C.', 'Me preocupa que la constitución en 24 horas debilite los controles contra el lavado de activos.'),
-    s('demo-1', null, 'neutral', 'Valle del Cauca', 'Cali', 'Buena intención, pero falta claridad sobre cómo se implementará en municipios pequeños.'),
-    s('demo-1', null, 'a_favor', 'Cundinamarca', 'Bogotá D.C.', 'Reduce trámites y costos para emprender. Ojalá avance rápido en el Congreso.'),
-    s('demo-1', null, 'en_contra', 'Antioquia', 'Medellín', 'Debería incluir un régimen de transición para las sociedades ya constituidas.'),
-    s('demo-1', null, 'a_favor', 'Valle del Cauca', 'Palmira', 'Buen paso hacia la formalización empresarial en las regiones.'),
-    s('demo-1', null, 'neutral', 'Santander', 'Bucaramanga', 'Depende mucho de la reglamentación posterior. Hay que ver la letra menuda.'),
-    s('demo-1', null, 'en_contra', 'Cundinamarca', 'Soacha', 'Falta articular esto con la DIAN y las cámaras de comercio.'),
-    s('demo-1', null, 'a_favor', 'Antioquia', 'Bello', 'Como contador, celebro la firma electrónica en actos mercantiles.'),
-    s('demo-1', 'demo-1-a2', 'a_favor', 'Antioquia', 'Medellín', 'El artículo 2 sobre firma electrónica es el más importante de toda la reforma.'),
-    s('demo-1', 'demo-1-a2', 'a_favor', 'Valle del Cauca', 'Cali', 'Alinea a Colombia con estándares internacionales de firma digital.'),
-    s('demo-1', 'demo-1-a2', 'en_contra', 'Cundinamarca', 'Bogotá D.C.', 'Falta precisar qué entidad certificará la validez de la firma.'),
-    s('demo-1', 'demo-1-a2', 'neutral', 'Santander', 'Bucaramanga', 'De acuerdo en principio, pero ¿qué pasa con quien no tiene medios digitales?'),
-    s('demo-1', 'demo-1-a3', 'neutral', 'Antioquia', 'Medellín', 'La constitución en línea es útil, pero 24 horas puede ser muy poco para verificar identidad.'),
-    s('demo-1', 'demo-1-a3', 'en_contra', 'Cundinamarca', 'Bogotá D.C.', 'Ese plazo tan corto abre la puerta a empresas fachada.'),
-    s('demo-2', null, 'a_favor', 'Antioquia', 'Medellín', 'El teletrabajo rural puede frenar la migración a las ciudades. Ojalá se apruebe.'),
-    s('demo-2', null, 'a_favor', 'Cundinamarca', 'Bogotá D.C.', 'Excelente para descentralizar el empleo formal.'),
-    s('demo-2', null, 'en_contra', 'Valle del Cauca', 'Cali', 'Sin garantía real de conectividad, la ley se queda en el papel.'),
-    s('demo-2', null, 'neutral', 'Santander', 'Bucaramanga', 'Buena idea, pero primero hay que llevar internet a esas zonas.'),
+  const curados = [
+    s('demo-1', null, 'a_favor', 'María Camila Rodríguez', 'Antioquia', 'Medellín', 'Excelente que por fin se reconozca la firma electrónica; agiliza todo para las pymes.'),
+    s('demo-1', null, 'a_favor', 'Juan David Gómez', 'Antioquia', 'Envigado', 'Muy necesario para modernizar el país. Apoyo la reforma completa.'),
+    s('demo-1', null, 'en_contra', 'Laura Valentina Martínez', 'Bogotá D.C.', 'Chapinero', 'Me preocupa que la constitución en 24 horas debilite los controles contra el lavado de activos.'),
+    s('demo-1', null, 'neutral', 'Andrés Felipe Torres', 'Valle del Cauca', 'Cali', 'Buena intención, pero falta claridad sobre cómo se implementará en municipios pequeños.'),
+    s('demo-1', null, 'a_favor', 'Daniela Alejandra Ramírez', 'Bogotá D.C.', 'Suba', 'Reduce trámites y costos para emprender. Ojalá avance rápido en el Congreso.'),
+    s('demo-1', null, 'en_contra', 'Santiago Herrera', 'Antioquia', 'Medellín', 'Debería incluir un régimen de transición para las sociedades ya constituidas.'),
+    s('demo-1', null, 'a_favor', 'Valeria Muñoz', 'Valle del Cauca', 'Palmira', 'Buen paso hacia la formalización empresarial en las regiones.'),
+    s('demo-1', 'demo-1-a2', 'a_favor', 'Isabella Vargas', 'Antioquia', 'Medellín', 'El artículo 2 sobre firma electrónica es el más importante de toda la reforma.'),
+    s('demo-1', 'demo-1-a2', 'a_favor', 'Mateo Jiménez', 'Valle del Cauca', 'Cali', 'Alinea a Colombia con estándares internacionales de firma digital.'),
+    s('demo-1', 'demo-1-a2', 'en_contra', 'Sofía Restrepo', 'Bogotá D.C.', 'Kennedy', 'Falta precisar qué entidad certificará la validez de la firma.'),
+    s('demo-1', 'demo-1-a3', 'neutral', 'Nicolás Rojas', 'Antioquia', 'Medellín', 'La constitución en línea es útil, pero 24 horas puede ser muy poco para verificar identidad.'),
+    s('demo-1', 'demo-1-a3', 'en_contra', 'Gabriela Ospina', 'Bogotá D.C.', 'Usaquén', 'Ese plazo tan corto abre la puerta a empresas fachada.'),
+    s('demo-2', null, 'a_favor', 'Samuel Cárdenas', 'Antioquia', 'Medellín', 'El teletrabajo rural puede frenar la migración a las ciudades. Ojalá se apruebe.'),
+    s('demo-2', null, 'a_favor', 'Mariana Quintero', 'Bogotá D.C.', 'Engativá', 'Excelente para descentralizar el empleo formal.'),
+    s('demo-2', null, 'en_contra', 'Emmanuel Salazar', 'Valle del Cauca', 'Cali', 'Sin garantía real de conectividad, la ley se queda en el papel.'),
   ]
-  escribirDemoVotos([...leerDemoVotos(), ...seed])
-  localStorage.setItem('pl_demo_seed', '1')
+  // Volumen: cientos de votos sintéticos para probar torta, filtros y descargas.
+  const T = Date.parse('2026-07-20T08:00:00Z')
+  const bulk = [
+    ...genVotos('demo-1', null, 96, 0, T),
+    ...genVotos('demo-1', 'demo-1-a1', 22, 200, T),
+    ...genVotos('demo-1', 'demo-1-a2', 26, 400, T),
+    ...genVotos('demo-1', 'demo-1-a3', 20, 600, T),
+    ...genVotos('demo-2', null, 64, 800, T),
+    ...genVotos('demo-3', null, 48, 1000, T),
+  ]
+  escribirDemoVotos([...leerDemoVotos(), ...curados, ...bulk])
+  localStorage.setItem('pl_demo_seed', '2')
 }
 
 // Activación del modo demo (?demo=1 / ?demo=0). Al encender, siembra de una
@@ -124,7 +196,8 @@ function demoComentarios(proyectoId) {
   return leerDemoVotos()
     .filter(v => v.proyecto_id === proyectoId && v.observaciones && String(v.observaciones).trim())
     .map((v, i) => ({ id: 'c' + i, proyecto_id: v.proyecto_id, articulo_id: v.articulo_id || null,
-      apoya: v.apoya, observaciones: v.observaciones, departamento: v.departamento, municipio: v.municipio, created_at: v.created_at }))
+      apoya: v.apoya, observaciones: v.observaciones, nombre: v.nombre || null,
+      departamento: v.departamento, municipio: v.municipio, created_at: v.created_at }))
     .sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')))
 }
 
@@ -336,11 +409,72 @@ export async function reemplazarArticulos(proyectoId, articulos) {
 
 // Detalle completo (con PII) — solo superadmin lo puede leer (RLS).
 export async function fetchVotosDetalle(proyectoId) {
+  if (esDemo()) return Promise.resolve(leerDemoVotos().filter(v => v.proyecto_id === proyectoId))
   try {
     const headers = await getAuthHeaders()
     // Detalle CON PII → solo superadmin, vía función SECURITY DEFINER.
     return await rpcLista('pl_votos_detalle', { p_proyecto: proyectoId }, headers)
   } catch { return [] }
+}
+
+/* ── Notificación del resultado a los votantes ──────────────────────────────
+   Un voto por persona (cedula_hash), pero una persona puede tener varios votos
+   (proyecto completo + artículos). Para el correo elegimos UN voto por persona:
+   se prefiere el del proyecto completo; entre iguales, el más reciente. Solo se
+   incluyen votantes con correo válido. */
+export function construirVotantes(votosDetalle) {
+  const porPersona = new Map()
+  for (const v of votosDetalle || []) {
+    const k = v.cedula_hash || (v.nombre + '|' + v.correo)
+    const prev = porPersona.get(k)
+    const completo = v.articulo_id == null
+    if (!prev) { porPersona.set(k, v); continue }
+    const prevCompleto = prev.articulo_id == null
+    const masReciente = new Date(v.created_at || 0) > new Date(prev.created_at || 0)
+    if ((completo && !prevCompleto) || (completo === prevCompleto && masReciente)) {
+      porPersona.set(k, v)
+    }
+  }
+  return Array.from(porPersona.values())
+    .filter(v => v.correo && String(v.correo).includes('@'))
+    .map(v => ({
+      correo: v.correo,
+      nombre: v.nombre || 'Ciudadano/a',
+      cedula: v.cedula || '',
+      voto: apoyaMeta(v.apoya).label,
+      fecha: v.created_at,
+    }))
+}
+
+// Envía el resultado (aprobado/rechazado) a los votantes por correo, en lotes
+// (para no exceder el tiempo de una función serverless). Devuelve el acumulado
+// { ok, sent, failed }. `onProgress(hechos, total)` alimenta la barra de avance.
+// En demo / dev local (Vite no ejecuta /api) simula el envío para poder probar.
+export async function notificarResultadoVotantes({ proyecto, recipients, pdf, onProgress }) {
+  const total = recipients.length
+  if (esDemo() || import.meta.env.DEV) {
+    for (let i = 0; i < total; i += 30) onProgress?.(Math.min(i + 30, total), total)
+    onProgress?.(total, total)
+    return { ok: true, sent: total, failed: 0, demo: true }
+  }
+  const headers = await getAuthHeaders()
+  const LOTE = 30
+  let sent = 0, failed = 0
+  for (let i = 0; i < total; i += LOTE) {
+    const lote = recipients.slice(i, i + LOTE)
+    try {
+      const res = await fetch('/api/notify', {
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'proyecto_resultado', proyecto, pdf, recipients: lote }),
+      })
+      const data = await res.json().catch(() => null)
+      if (res.ok && data) { sent += data.sent || 0; failed += data.failed || (lote.length - (data.sent || 0)) }
+      else { failed += lote.length }
+    } catch { failed += lote.length }
+    onProgress?.(Math.min(i + LOTE, total), total)
+  }
+  return { ok: failed === 0, sent, failed }
 }
 
 /* ── Utilidades de reporte (CSV, cliente) ───────────────────────────────── */

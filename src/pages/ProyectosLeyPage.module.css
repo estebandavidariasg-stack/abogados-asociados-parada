@@ -200,6 +200,7 @@
 }
 .identBar strong { color: #472f29; }
 .cambiar {
+  font-family: 'Poppins', sans-serif;
   font-size: 0.78rem;
   font-weight: 600;
   color: #6d3c1b;
@@ -577,9 +578,149 @@
 }
 .emptyProj p { font-size: 0.92rem; max-width: 46ch; margin: 0 auto; line-height: 1.6; }
 
+/* ── Revisión de datos (portón) ── */
+.reviewGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.7rem 1.2rem;
+  margin: 0 0 0.5rem;
+}
+.reviewRow {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  background: rgba(255, 254, 241, 0.7);
+  border: 1px solid rgba(109, 60, 27, 0.1);
+  border-radius: 11px;
+  padding: 0.6rem 0.8rem;
+  min-width: 0;
+}
+.reviewRow dt {
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-weight: 700;
+  color: #9a8064;
+}
+.reviewRow dd {
+  margin: 0;
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: #472f29;
+  word-break: break-word;
+}
+.reviewActions {
+  display: flex;
+  gap: 0.8rem;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-top: 1.4rem;
+}
+.reviewActions .gateBtn,
+.reviewActions .votoBtn { margin-top: 0; flex: 1; }
+.ghostBtn {
+  font-family: 'Poppins', sans-serif;
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: #6d3c1b;
+  background: transparent;
+  border: 1px solid rgba(109, 60, 27, 0.25);
+  border-radius: 12px;
+  padding: 0.85rem 1.3rem;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s;
+  white-space: nowrap;
+}
+.ghostBtn:hover:not(:disabled) { background: rgba(109, 60, 27, 0.07); border-color: rgba(109, 60, 27, 0.4); }
+.ghostBtn:disabled { opacity: 0.6; cursor: default; }
+
+/* ── Confirmación del voto ── */
+.confirmHead { margin-bottom: 0.2rem; }
+.confirmTitle {
+  font-family: 'Cormorant Garamond', serif;
+  font-weight: 600;
+  font-size: 1.5rem;
+  color: #472f29;
+  margin: 0 0 0.3rem;
+}
+.confirmSub { font-size: 0.86rem; color: #6f5c48; margin: 0; line-height: 1.55; }
+.confirmList { list-style: none; display: flex; flex-direction: column; gap: 0.7rem; }
+.confirmItem {
+  background: rgba(255, 254, 241, 0.72);
+  border: 1px solid rgba(109, 60, 27, 0.12);
+  border-radius: 13px;
+  padding: 0.85rem 1rem;
+}
+.confirmItemHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.7rem;
+  flex-wrap: wrap;
+}
+.confirmAmbito { font-size: 0.9rem; font-weight: 600; color: #472f29; }
+.confirmBadge {
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.2rem 0.7rem;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.confirmObs {
+  margin: 0.55rem 0 0;
+  font-size: 0.86rem;
+  line-height: 1.55;
+  color: #5a4636;
+  font-style: italic;
+}
+
+/* ── Estado del resultado (tarjeta) ── */
+.cardEstado {
+  font-size: 0.66rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 0.25rem 0.6rem;
+  border-radius: 6px;
+}
+.cardEstadoOk { color: #2e7d5b; background: rgba(46, 125, 91, 0.13); }
+.cardEstadoNo { color: #b4442f; background: rgba(180, 68, 47, 0.12); }
+
+.resultadoNota {
+  font-size: 0.88rem;
+  line-height: 1.6;
+  border-radius: 12px;
+  padding: 0.85rem 1rem;
+  margin: 0 0 1rem;
+}
+.resultadoNotaOk { color: #245c44; background: rgba(46, 125, 91, 0.09); border: 1px solid rgba(46, 125, 91, 0.22); }
+.resultadoNotaNo { color: #8a3323; background: rgba(180, 68, 47, 0.08); border: 1px solid rgba(180, 68, 47, 0.22); }
+
+/* ── Enlace al documento oficial ── */
+.docLink {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  font-family: 'Poppins', sans-serif;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #6d3c1b;
+  background: rgba(201, 168, 76, 0.1);
+  border: 1px solid rgba(201, 168, 76, 0.32);
+  border-radius: 11px;
+  padding: 0.7rem 0.95rem;
+  text-decoration: none;
+  margin-bottom: 1.1rem;
+  transition: background 0.2s, border-color 0.2s;
+}
+.docLink:hover { background: rgba(201, 168, 76, 0.18); border-color: var(--gold, #C9A84C); }
+
 /* ── Responsive ── */
 @media (max-width: 560px) {
   .gateGrid { grid-template-columns: 1fr; }
+  .reviewGrid { grid-template-columns: 1fr; }
+  .reviewActions { flex-direction: column-reverse; align-items: stretch; }
+  .reviewActions .ghostBtn { width: 100%; text-align: center; }
   .modoOpts { grid-template-columns: 1fr; }
   .brandLogo { height: 40px; }
   .segment { width: 100%; }

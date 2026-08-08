@@ -9,6 +9,7 @@
    ───────────────────────────────────────────────────────────────────────── */
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib'
 import { APOYA } from './proyectosLey'
+import { esBogota } from '../data/colombia-ubicaciones'
 
 // Paleta oficial (global.css): café + dorado + verde/rojo semánticos.
 const hx = (h) => {
@@ -53,8 +54,16 @@ function contar(resumen, articuloId, filtro) {
 
 function filtroLabel(filtro) {
   if (!filtro || filtro.nivel === 'nacional' || (!filtro.depto && !filtro.muni)) return 'Cobertura: Nacional'
-  if (filtro.muni) return `Municipio: ${filtro.muni} (${filtro.depto})`
+  if (filtro.muni) {
+    const lbl = esBogota(filtro.depto) ? 'Localidad' : 'Municipio'
+    return `${lbl}: ${filtro.muni} (${filtro.depto})`
+  }
   return `Departamento: ${filtro.depto}`
+}
+
+// Título del ámbito seleccionado (proyecto completo o un artículo concreto).
+function tituloArticulo(a) {
+  return `Artículo ${a.numero ?? ''}${a.titulo ? ` — ${a.titulo}` : ''}`.trim()
 }
 
 // Path SVG (polígono) de un sector de anillo centrado en (0,0).
@@ -73,7 +82,10 @@ function ringPath(R, r) {
 
 // Genera el PDF y devuelve los bytes (Uint8Array). Separado de la descarga
 // para poder previsualizarlo/probarlo sin disparar el diálogo del navegador.
-export async function generarReportePDF({ proyecto, articulos = [], resumen = [], filtro }) {
+// scopeSel: 'todos' (completo + cada artículo) | 'completo' (solo el proyecto
+// completo) | <articulo_id> (solo ese artículo). Permite descargas muy
+// específicas: nivel territorial (filtro) × ámbito (scopeSel).
+export async function generarReportePDF({ proyecto, articulos = [], resumen = [], filtro, scopeSel = 'todos' }) {
   const pdf = await PDFDocument.create()
   const font = await pdf.embedFont(StandardFonts.Helvetica)
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold)
@@ -131,13 +143,23 @@ export async function generarReportePDF({ proyecto, articulos = [], resumen = []
     .filter(Boolean).join('  ·  ')
   if (metaLinea) { page.drawText(metaLinea, { x: M, y, size: 10, font, color: PAL.cafe }); y -= 15 }
   page.drawText(`${filtroLabel(filtro)}     Fecha de descarga: ${fechaDescarga}`, { x: M, y, size: 9.5, font, color: PAL.muted })
-  y -= 20
+  y -= 15
 
-  // ── Ámbitos: proyecto completo + cada artículo ──
-  const scopes = [{ id: null, titulo: 'Proyecto completo' }]
-  for (const a of articulos) {
-    scopes.push({ id: a.id, titulo: `Artículo ${a.numero ?? ''}${a.titulo ? ` — ${a.titulo}` : ''}`.trim() })
+  // ── Ámbito seleccionado ──
+  let scopes
+  if (scopeSel === 'completo') {
+    scopes = [{ id: null, titulo: 'Proyecto completo' }]
+  } else if (scopeSel && scopeSel !== 'todos') {
+    const a = articulos.find(x => x.id === scopeSel)
+    scopes = a ? [{ id: a.id, titulo: tituloArticulo(a) }] : [{ id: null, titulo: 'Proyecto completo' }]
+  } else {
+    scopes = [{ id: null, titulo: 'Proyecto completo' }, ...articulos.map(a => ({ id: a.id, titulo: tituloArticulo(a) }))]
   }
+  const ambitoTxt = scopeSel === 'todos'
+    ? 'Ámbito: proyecto completo y cada artículo'
+    : `Ámbito: ${scopes[0].titulo}`
+  page.drawText(ambitoTxt, { x: M, y, size: 9.5, font, color: PAL.muted })
+  y -= 20
 
   const BLOCK_H = 168
   for (const sc of scopes) {
@@ -213,10 +235,27 @@ export async function generarReportePDF({ proyecto, articulos = [], resumen = []
   return await pdf.save()
 }
 
+// Sufijo del nombre de archivo según nivel territorial + ámbito, para que la
+// descarga sea autoexplicativa (p.ej. "…-localidad-suba-articulo.pdf").
+function sufijoArchivo({ filtro, scopeSel, articulos = [] }) {
+  const slug = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase().slice(0, 24)
+  let nivel = 'nacional'
+  if (filtro?.muni) nivel = `${esBogota(filtro.depto) ? 'localidad' : 'municipio'}-${slug(filtro.muni)}`
+  else if (filtro?.depto) nivel = `departamento-${slug(filtro.depto)}`
+  let ambito = 'completo-y-articulos'
+  if (scopeSel === 'completo') ambito = 'proyecto-completo'
+  else if (scopeSel && scopeSel !== 'todos') {
+    const a = articulos.find(x => x.id === scopeSel)
+    ambito = a ? `articulo-${a.numero ?? ''}` : 'proyecto-completo'
+  }
+  return `${nivel}-${ambito}`
+}
+
 export async function descargarReportePDF(args) {
   const pdfBytes = await generarReportePDF(args)
   const p = args.proyecto || {}
-  const nombre = `resultados-${(p.numero || p.nombre || 'proyecto').replace(/[^a-z0-9]+/gi, '-').slice(0, 40)}.pdf`
+  const base = (p.numero || p.nombre || 'proyecto').replace(/[^a-z0-9]+/gi, '-').slice(0, 32)
+  const nombre = `resultados-${base}-${sufijoArchivo(args)}.pdf`
   const blob = new Blob([pdfBytes], { type: 'application/pdf' })
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
@@ -226,4 +265,15 @@ export async function descargarReportePDF(args) {
   link.click()
   link.remove()
   URL.revokeObjectURL(url)
+}
+
+// Base64 del reporte (para adjuntarlo al correo del resultado a los votantes).
+export async function generarReportePDFBase64(args) {
+  const bytes = await generarReportePDF(args)
+  let bin = ''
+  const chunk = 0x8000
+  for (let i = 0; i < bytes.length; i += chunk) {
+    bin += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk))
+  }
+  return btoa(bin)
 }

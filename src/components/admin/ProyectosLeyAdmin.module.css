@@ -372,11 +372,122 @@
 .delDanger:hover:not(:disabled) { transform: translateY(-1px); background: #8c2f2f; box-shadow: 0 6px 16px rgba(162, 59, 59, 0.38); }
 .delDanger:disabled { opacity: 0.6; cursor: default; }
 
+/* ── Badges de resultado en la lista ── */
+.aprobado { color: #2e7d5b; background: rgba(46, 125, 91, 0.14); }
+.rechazado { color: #b4442f; background: rgba(180, 68, 47, 0.12); }
+
+/* ── Modal de resultado + notificación ── */
+.resultadoBox { display: flex; flex-direction: column; gap: 0.9rem; }
+.resLabel {
+  font-size: 0.64rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-weight: 700;
+  color: #9a8064;
+}
+.resChoice { display: grid; grid-template-columns: 1fr 1fr; gap: 0.7rem; }
+.resOpt {
+  font-family: 'Poppins', sans-serif;
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #6f5c48;
+  background: #fffef7;
+  border: 1.5px solid rgba(109, 60, 27, 0.16);
+  border-radius: 12px;
+  padding: 0.8rem 1rem;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s, color 0.2s, box-shadow 0.2s;
+}
+.resOpt:hover:not(:disabled) { border-color: rgba(201, 168, 76, 0.6); }
+.resOpt:disabled { opacity: 0.6; cursor: default; }
+.resOptOk {
+  color: #216447; border-color: #2e7d5b; background: rgba(46, 125, 91, 0.1);
+  box-shadow: 0 4px 14px rgba(46, 125, 91, 0.16);
+}
+.resOptNo {
+  color: #8a3323; border-color: #b4442f; background: rgba(180, 68, 47, 0.09);
+  box-shadow: 0 4px 14px rgba(180, 68, 47, 0.16);
+}
+.resGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.9rem 1.1rem; }
+.resAviso {
+  font-size: 0.8rem;
+  color: #6f5c48;
+  background: rgba(201, 168, 76, 0.1);
+  border: 1px solid rgba(201, 168, 76, 0.28);
+  border-radius: 10px;
+  padding: 0.6rem 0.8rem;
+  margin: 0;
+  line-height: 1.5;
+}
+.resAviso strong { color: #472f29; }
+.resActions { display: flex; justify-content: flex-end; }
+
+.notifBox {
+  margin-top: 1.4rem;
+  padding-top: 1.3rem;
+  border-top: 1px solid rgba(109, 60, 27, 0.12);
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+.notifTitle {
+  font-family: 'Cinzel', serif;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #472f29;
+  margin: 0;
+}
+.notifSub { font-size: 0.84rem; color: #6f5c48; margin: 0; line-height: 1.55; }
+.progressWrap { display: flex; flex-direction: column; gap: 0.4rem; }
+.progressBar {
+  height: 8px;
+  background: rgba(109, 60, 27, 0.1);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.progressFill {
+  height: 100%;
+  border-radius: 6px;
+  background: linear-gradient(90deg, var(--gold, #C9A84C), #a9842f);
+  transition: width 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.progressTxt { font-size: 0.78rem; color: #6f5c48; }
+.notifResult {
+  font-size: 0.85rem;
+  border-radius: 10px;
+  padding: 0.6rem 0.85rem;
+  margin: 0;
+  color: #5a4636;
+  background: rgba(109, 60, 27, 0.05);
+}
+.notifOk { color: #216447; background: rgba(46, 125, 91, 0.1); }
+.notifWarn { color: #8a3323; background: rgba(180, 68, 47, 0.09); }
+.notifBtn {
+  align-self: flex-start;
+  font-family: 'Poppins', sans-serif;
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: #fff;
+  background: var(--navy, #472f29);
+  border: none;
+  border-radius: 11px;
+  padding: 0.72rem 1.4rem;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.15s;
+}
+.notifBtn:hover:not(:disabled) { background: var(--navy-md, #6d3c1b); }
+.notifBtn:disabled { opacity: 0.55; cursor: default; }
+.notifHint { font-size: 0.76rem; color: #9a8064; }
+
 @media (max-width: 560px) {
   .backdrop { padding: 0.6rem; }
   .modal { max-height: 94vh; border-radius: 16px; }
   .cancel, .save, .delDanger, .cerrarBtn { flex: 1 1 auto; }
+  .resChoice { grid-template-columns: 1fr; }
+  .resGrid { grid-template-columns: 1fr; }
+  .notifBtn { align-self: stretch; text-align: center; }
 }
 @media (prefers-reduced-motion: reduce) {
   .backdrop { backdrop-filter: none; }
+  .progressFill { transition: none; }
 }

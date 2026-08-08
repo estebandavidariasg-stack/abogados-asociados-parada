@@ -49,6 +49,18 @@
 .controlOff { opacity: 0.65; }
 .control select:disabled { cursor: not-allowed; background: #f4efe7; }
 
+/* Nivel + (departamento/municipio) van JUNTOS en la misma fila: los selects de
+   departamento y municipio/localidad quedan AL LADO del segmentado de Nivel, no
+   en un renglón aparte debajo. */
+.nivelWrap {
+  display: flex;
+  gap: 0.75rem 1rem;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
 /* Departamento y Municipio apilados: el municipio aparece DEBAJO del
    departamento, no en una columna aparte a la izquierda. */
 .deptoMuni {
@@ -220,6 +232,123 @@
   border-color: var(--gold);
   color: #472f29;
 }
+/* Modal de descarga específica (portaleado a <body>) */
+.dlBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1400;               /* por encima del modal del admin (1300) */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(45, 26, 16, 0.42);
+  backdrop-filter: blur(3px);
+}
+.dlModal {
+  width: 100%;
+  max-width: 440px;
+  background: #fffdf6;
+  border: 1px solid rgba(109, 60, 27, 0.14);
+  border-radius: 18px;
+  box-shadow: 0 24px 60px rgba(71, 47, 41, 0.28);
+  overflow: hidden;
+}
+.dlModalHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.1rem 1.3rem;
+  border-bottom: 1px solid rgba(109, 60, 27, 0.1);
+}
+.dlModalTitle {
+  font-family: 'Cormorant Garamond', serif;
+  font-weight: 600;
+  font-size: 1.4rem;
+  color: #472f29;
+  margin: 0;
+}
+.dlClose {
+  font-size: 0.9rem;
+  line-height: 1;
+  color: #6f5c48;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  padding: 0.4rem 0.5rem;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+.dlClose:hover { background: rgba(109, 60, 27, 0.08); color: #472f29; }
+.dlModalBody {
+  padding: 1.2rem 1.3rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+.dlModalFoot {
+  display: flex;
+  gap: 0.7rem;
+  justify-content: flex-end;
+  padding: 0 1.3rem 1.2rem;
+}
+.dlCancel {
+  font-family: 'Poppins', sans-serif;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #6d3c1b;
+  background: transparent;
+  border: 1px solid rgba(109, 60, 27, 0.25);
+  border-radius: 10px;
+  padding: 0.65rem 1.1rem;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s;
+}
+.dlCancel:hover:not(:disabled) { background: rgba(109, 60, 27, 0.07); border-color: rgba(109, 60, 27, 0.4); }
+.dlCancel:disabled { opacity: 0.6; cursor: default; }
+.dlHint { font-size: 0.8rem; color: #6f5c48; line-height: 1.5; margin: 0; }
+.dlField { display: flex; flex-direction: column; gap: 5px; }
+.dlLabel {
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.13em;
+  font-weight: 700;
+  color: #9a8064;
+}
+.dlCobertura {
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: #472f29;
+  background: rgba(201, 168, 76, 0.12);
+  border-radius: 8px;
+  padding: 0.5rem 0.7rem;
+}
+.dlField select {
+  font-family: 'Poppins', sans-serif;
+  font-size: 0.85rem;
+  color: #472f29;
+  background: #fffef7;
+  border: 1px solid rgba(109, 60, 27, 0.18);
+  border-radius: 10px;
+  padding: 0.55rem 0.7rem;
+  cursor: pointer;
+  width: 100%;
+}
+.dlField select:focus { outline: none; border-color: var(--gold); box-shadow: 0 0 0 3px rgba(201, 168, 76, 0.18); }
+.dlGo {
+  font-family: 'Poppins', sans-serif;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #fff;
+  background: var(--navy, #472f29);
+  border: none;
+  border-radius: 10px;
+  padding: 0.65rem 1rem;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.dlGo:hover:not(:disabled) { background: var(--navy-md, #6d3c1b); }
+.dlGo:disabled { opacity: 0.6; cursor: default; }
 
 /* ── Vacío ── */
 .vacio {
@@ -281,7 +410,8 @@
   padding: 0.16rem 0.55rem;
   border-radius: 6px;
 }
-.comLugar { font-size: 0.74rem; color: #6f5c48; font-weight: 600; }
+.comNombre { font-size: 0.86rem; color: #472f29; font-weight: 700; }
+.comLugar { font-size: 0.74rem; color: #6f5c48; font-weight: 600; display: block; margin-bottom: 0.35rem; }
 .comFecha { font-size: 0.7rem; color: #9a8064; margin-left: auto; }
 .comTexto {
   font-size: 0.88rem;
@@ -307,18 +437,25 @@
 .verMas:hover { background: rgba(201, 168, 76, 0.18); border-color: var(--gold, #C9A84C); }
 
 /* ── Responsive ── */
+/* Hasta tablet: TODOS los controles se apilan en una sola columna, cada uno a
+   todo el ancho. Así Departamento y Municipio/Localidad nunca se aprietan al
+   lado de Nivel ni se cortan contra el borde (pasaba entre ~620 y ~760px). */
+@media (max-width: 820px) {
+  .controls { flex-direction: column; align-items: stretch; gap: 0.9rem; }
+  .control,
+  .controlNivel,
+  .nivelWrap,
+  .deptoMuni { flex-basis: auto; width: 100%; min-width: 0; }
+  .control select { width: 100%; }
+  .nivelWrap { flex-direction: column; }
+  .nivelSeg { display: flex; width: 100%; }
+  .nivelBtn { flex: 1 1 0; padding: 0.44rem 0.4rem; }
+}
 @media (max-width: 620px) {
   .grid { grid-template-columns: 1fr; gap: 1.2rem; }
   .chartBox { max-width: 280px; margin: 0 auto; }
   .centerNum { font-size: 1.7rem; }
   .comFecha { margin-left: 0; width: 100%; }
-  /* En móvil cada control ocupa toda la fila y el Nivel reparte sus botones. */
-  .control { flex-basis: 100%; }
-  .control select { width: 100%; }
-  .controlNivel { flex-basis: 100%; }
-  .deptoMuni { flex-basis: 100%; width: 100%; }
-  .nivelSeg { display: flex; width: 100%; }
-  .nivelBtn { flex: 1 1 0; padding: 0.44rem 0.4rem; }
 }
 @media (max-width: 400px) {
   .nivelBtn { font-size: 0.72rem; padding: 0.44rem 0.2rem; }

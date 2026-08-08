@@ -3,12 +3,12 @@ import { Link } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import Footer from '../components/layout/Footer'
 import ResultadosProyecto from '../components/proyectos/ResultadosProyecto'
-import { UBICACIONES } from '../data/colombia-ubicaciones'
+import { DEPARTAMENTOS, municipiosDe, nivelMunicipalLabel } from '../data/colombia-ubicaciones'
 import {
   validarCelular, validarCorreo, normalizarCelular, formatCedula,
 } from '../lib/validaciones'
 import {
-  APOYA, OBS_MAX, hashCedula, fmtFecha, DEMO_CODIGO,
+  APOYA, apoyaMeta, OBS_MAX, hashCedula, fmtFecha, DEMO_CODIGO,
   fetchProyectosPublicos, fetchArticulos, emitirVotos,
   enviarCodigo, verificarCodigo, otpSimulado,
 } from '../lib/proyectosLey'
@@ -41,12 +41,7 @@ function marcarVotado(hash, proyectoId) {
   localStorage.setItem(LS_VOTED, JSON.stringify(map))
 }
 
-const deptos = Object.keys(UBICACIONES).sort((a, b) => a.localeCompare(b, 'es'))
-const munisDe = (d) => {
-  const nivel = UBICACIONES[d]
-  if (!nivel) return []
-  return Object.keys(nivel.municipios || nivel.localidades || {}).sort((a, b) => a.localeCompare(b, 'es'))
-}
+const deptos = DEPARTAMENTOS
 
 /* ── Control segmentado de postura ("Apoya") ─────────────────────────────── */
 function SegmentApoya({ value, onChange, name }) {
@@ -81,54 +76,78 @@ function ObsField({ value, onChange, id }) {
 }
 
 /* ═══════════════ Identificación (portón de entrada) ═════════════════════ */
-function IdentidadGate({ onListo }) {
-  const [nombre, setNombre]   = useState('')
-  const [cedula, setCedula]   = useState('')
-  const [celular, setCelular] = useState('')
-  const [correo, setCorreo]   = useState('')
-  const [depto, setDepto]     = useState('')
-  const [muni, setMuni]       = useState('')
+function IdentidadGate({ onListo, initial }) {
+  const [nombre, setNombre]   = useState(initial?.nombre || '')
+  const [cedula, setCedula]   = useState(initial?.cedula || '')
+  const [celular, setCelular] = useState(initial?.celular || '')
+  const [correo, setCorreo]   = useState(initial?.correo || '')
+  const [depto, setDepto]     = useState(initial?.departamento || '')
+  const [muni, setMuni]       = useState(initial?.municipio || '')
   const [err, setErr]         = useState('')
   const [busy, setBusy]       = useState(false)
 
-  // Verificación por correo (OTP).
-  const [fase, setFase]         = useState('form')   // 'form' | 'verify'
+  // Si la persona vuelve a editar sus datos y NO cambia el correo, no la
+  // obligamos a verificar de nuevo (ya estaba verificada).
+  const yaVerificado = !!initial?.email_verificado
+  const correoOriginal = initial?.correo || ''
+
+  // form → review (confirmar datos) → verify (OTP). El estado del formulario se
+  // conserva siempre: volver a "Corregir" nunca borra lo que la persona escribió.
+  const [fase, setFase]           = useState('form')   // 'form' | 'review' | 'verify'
   const [identPend, setIdentPend] = useState(null)
-  const [codeErr, setCodeErr]   = useState('')
+  const [codeErr, setCodeErr]     = useState('')
   const [verifying, setVerifying] = useState(false)
 
   const cedNum = cedula.replace(/\D/g, '')
+  const muniLabel = nivelMunicipalLabel(depto)   // "Municipio" o "Localidad" (Bogotá)
 
-  async function enviar(e) {
+  // Paso 1 → 2: valida y pasa a la pantalla de revisión (sin enviar código aún).
+  async function revisar(e) {
     e.preventDefault()
     if (!nombre.trim()) return setErr('Escribe tu nombre completo.')
     if (cedNum.length < 6 || cedNum.length > 10) return setErr('Ingresa un número de cédula válido.')
     const vc = validarCelular(celular)
-    if (vc.valid === false) return setErr('Celular: ' + vc.msg)
     if (!celular.trim()) return setErr('Ingresa tu número de celular.')
+    if (vc.valid === false) return setErr('Celular: ' + vc.msg)
+    if (!correo.trim()) return setErr('Ingresa tu correo electrónico.')
     const ve = validarCorreo(correo)
     if (ve.valid === false) return setErr('Correo: ' + ve.msg)
-    if (!correo.trim()) return setErr('Ingresa tu correo electrónico.')
     if (!depto) return setErr('Selecciona tu departamento.')
-    if (!muni) return setErr('Selecciona tu municipio.')
+    if (!muni) return setErr(`Selecciona tu ${muniLabel.toLowerCase()}.`)
 
+    setErr('')
+    const hash = await hashCedula(cedNum)
+    setIdentPend({
+      nombre: nombre.trim(),
+      cedula: formatCedula(cedNum),
+      celular: normalizarCelular(celular),
+      correo: correo.trim(),
+      departamento: depto,
+      municipio: muni,
+      muniLabel,
+      hash,
+      email_verificado: false,
+    })
+    setFase('review')
+  }
+
+  // ¿Puede saltarse el OTP? Sí, si ya estaba verificada y no cambió el correo.
+  const sinNuevaVerificacion = () => yaVerificado && identPend && identPend.correo === correoOriginal
+
+  // Paso 2 → 3: confirma los datos. Si no cambió el correo (y ya estaba
+  // verificada), finaliza directo; si no, dispara el código de verificación.
+  async function confirmarDatos() {
+    if (!identPend) return
+    if (sinNuevaVerificacion()) {
+      const ident = { ...identPend, email_verificado: true }
+      localStorage.setItem(LS_IDENT, JSON.stringify(ident))
+      onListo(ident)
+      return
+    }
     setErr(''); setBusy(true)
     try {
-      const hash = await hashCedula(cedNum)
-      const ident = {
-        nombre: nombre.trim(),
-        cedula: formatCedula(cedNum),
-        celular: normalizarCelular(celular),
-        correo: correo.trim(),
-        departamento: depto,
-        municipio: muni,
-        hash,
-        email_verificado: false,
-      }
-      // Enviar código de verificación al correo antes de dejar participar.
-      const r = await enviarCodigo(ident.correo)
+      const r = await enviarCodigo(identPend.correo)
       if (!r.ok) { setErr(r.error || 'No se pudo enviar el código a tu correo.'); return }
-      setIdentPend(ident)
       setCodeErr('')
       setFase('verify')
     } finally { setBusy(false) }
@@ -146,6 +165,7 @@ function IdentidadGate({ onListo }) {
     } finally { setVerifying(false) }
   }
 
+  /* ── Paso 3: verificación por correo (OTP) ── */
   if (fase === 'verify' && identPend) {
     return (
       <motion.div
@@ -155,7 +175,7 @@ function IdentidadGate({ onListo }) {
       >
         <h2 className={styles.gateTitle}>Verifica tu correo</h2>
         <p className={styles.gateSub}>
-          Enviamos un código de 6 dígitos a tu correo para confirmar que eres una persona real.
+          Enviamos un código de 6 dígitos a <strong>{identPend.correo}</strong> para confirmar que eres una persona real.
           {otpSimulado() && <> <strong>Modo de prueba:</strong> usa el código <strong>{DEMO_CODIGO}</strong>.</>}
         </p>
         <VerificationStep
@@ -164,23 +184,70 @@ function IdentidadGate({ onListo }) {
           submitting={verifying}
           onSubmit={confirmarCodigo}
           onResend={() => enviarCodigo(identPend.correo)}
-          onBack={() => { setFase('form'); setCodeErr('') }}
+          onBack={() => { setFase('review'); setCodeErr('') }}
         />
       </motion.div>
     )
   }
 
+  /* ── Paso 2: revisión de datos antes de verificar ── */
+  if (fase === 'review' && identPend) {
+    const filas = [
+      ['Nombre completo', identPend.nombre],
+      ['Cédula', identPend.cedula],
+      ['Celular', identPend.celular],
+      ['Correo electrónico', identPend.correo],
+      ['Departamento', identPend.departamento],
+      [identPend.muniLabel, identPend.municipio],
+    ]
+    return (
+      <motion.div
+        className={styles.gate}
+        initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+      >
+        <h2 className={styles.gateTitle}>Revisa tus datos</h2>
+        <p className={styles.gateSub}>
+          Confirma que todo esté correcto. Si algo está mal, vuelve a <strong>Corregir</strong>: no
+          se borrará nada de lo que escribiste.
+        </p>
+
+        <dl className={styles.reviewGrid}>
+          {filas.map(([k, v]) => (
+            <div key={k} className={styles.reviewRow}>
+              <dt>{k}</dt>
+              <dd>{v}</dd>
+            </div>
+          ))}
+        </dl>
+
+        {err && <p className={styles.gateErr} role="alert">{err}</p>}
+
+        <div className={styles.reviewActions}>
+          <button type="button" className={styles.ghostBtn} onClick={() => { setErr(''); setFase('form') }} disabled={busy}>
+            ← Corregir datos
+          </button>
+          <button type="button" className={styles.gateBtn} onClick={confirmarDatos} disabled={busy}>
+            {busy ? 'Enviando código…' : (sinNuevaVerificacion() ? 'Confirmar cambios' : 'Confirmar y verificar correo')}
+          </button>
+        </div>
+      </motion.div>
+    )
+  }
+
+  /* ── Paso 1: formulario ── */
   return (
     <motion.form
-      className={styles.gate} onSubmit={enviar}
+      className={styles.gate} onSubmit={revisar}
       initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
     >
       <h2 className={styles.gateTitle}>Identifícate para participar</h2>
       <p className={styles.gateSub}>
-        Tu cédula se usa <strong>solo para garantizar un voto por persona</strong> en cada
-        proyecto: se guarda cifrada, nunca en texto visible. Enviaremos un código a tu correo
-        para verificar que eres una persona real. Tus datos no se muestran en los resultados.
+        Tu cédula se usa <strong>solo para garantizar un voto por persona</strong> y se guarda de
+        forma reservada (solo la ve la administración). Tu <strong>nombre aparecerá junto a tu
+        opinión</strong> en los resultados. Enviaremos un código a tu correo para verificar que
+        eres una persona real.
       </p>
 
       <div className={styles.gateGrid}>
@@ -212,19 +279,17 @@ function IdentidadGate({ onListo }) {
           </select>
         </label>
         <label className={styles.field}>
-          <span>Municipio</span>
+          <span>{muniLabel}</span>
           <select value={muni} onChange={e => setMuni(e.target.value)} disabled={!depto}>
             <option value="">{depto ? 'Selecciona…' : 'Elige departamento'}</option>
-            {munisDe(depto).map(mn => <option key={mn} value={mn}>{mn}</option>)}
+            {municipiosDe(depto).map(mn => <option key={mn} value={mn}>{mn}</option>)}
           </select>
         </label>
       </div>
 
       {err && <p className={styles.gateErr} role="alert">{err}</p>}
 
-      <button type="submit" className={styles.gateBtn} disabled={busy}>
-        {busy ? 'Enviando código…' : 'Continuar y verificar correo'}
-      </button>
+      <button type="submit" className={styles.gateBtn}>Continuar</button>
     </motion.form>
   )
 }
@@ -238,16 +303,20 @@ function VotoForm({ proyecto, articulos, identidad, onVotado }) {
   const [estado, setEstado] = useState('idle')          // idle | enviando | error
   const [err, setErr] = useState('')
   const [verArts, setVerArts] = useState(false)         // revisar articulado (modo completo)
+  const [paso, setPaso] = useState('form')              // 'form' | 'revisar'
+  const [filasPend, setFilasPend] = useState([])        // votos listos por confirmar
 
   const setArt = (id, patch) => setArts(p => ({ ...p, [id]: { apoya: '', obs: '', ...p[id], ...patch } }))
   const artsConPostura = Object.entries(arts).filter(([, v]) => v.apoya)
+  const artById = (id) => articulos.find(a => a.id === id)
 
-  async function enviar() {
+  // Paso 1 → 2: valida y arma las filas, luego muestra la confirmación.
+  function irARevisar() {
     setErr('')
     const base = {
       cedula_hash: identidad.hash,
-      nombre: identidad.nombre, celular: identidad.celular, correo: identidad.correo,
-      departamento: identidad.departamento, municipio: identidad.municipio,
+      nombre: identidad.nombre, cedula: identidad.cedula, celular: identidad.celular,
+      correo: identidad.correo, departamento: identidad.departamento, municipio: identidad.municipio,
     }
     let filas = []
     if (modo === 'completo') {
@@ -259,11 +328,64 @@ function VotoForm({ proyecto, articulos, identidad, onVotado }) {
         proyecto_id: proyecto.id, articulo_id: id, apoya: v.apoya, observaciones: (v.obs || '').trim() || null, ...base,
       }))
     }
+    setFilasPend(filas)
+    setPaso('revisar')
+  }
+
+  // Paso 2 → registro definitivo.
+  async function enviar() {
+    setErr('')
     setEstado('enviando')
-    const r = await emitirVotos(filas)
+    const r = await emitirVotos(filasPend)
     if (r.ok) { marcarVotado(identidad.hash, proyecto.id); onVotado() }
     else if (r.code === 'duplicado') { marcarVotado(identidad.hash, proyecto.id); onVotado('duplicado') }
     else { setEstado('error'); setErr(r.msg || 'No se pudo registrar tu voto. Intenta de nuevo.') }
+  }
+
+  /* ── Paso 2: confirmación del voto (evita registrar por error uno irreversible) ── */
+  if (paso === 'revisar') {
+    return (
+      <motion.div
+        className={styles.voto}
+        initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+      >
+        <div className={styles.confirmHead}>
+          <h4 className={styles.confirmTitle}>Confirma tu voto</h4>
+          <p className={styles.confirmSub}>Revisa tu postura antes de registrarla. Solo podrás votar una vez por este proyecto.</p>
+        </div>
+        <ul className={styles.confirmList}>
+          {filasPend.map((f, i) => {
+            const m = apoyaMeta(f.apoya)
+            const a = f.articulo_id ? artById(f.articulo_id) : null
+            return (
+              <li key={i} className={styles.confirmItem}>
+                <div className={styles.confirmItemHead}>
+                  <span className={styles.confirmAmbito}>
+                    {a ? `Artículo ${a.numero ?? ''}${a.titulo ? ` — ${a.titulo}` : ''}` : 'Proyecto completo'}
+                  </span>
+                  <span className={styles.confirmBadge} style={{ color: m.color, background: `color-mix(in srgb, ${m.color} 14%, transparent)` }}>
+                    {m.label}
+                  </span>
+                </div>
+                {f.observaciones && <p className={styles.confirmObs}>“{f.observaciones}”</p>}
+              </li>
+            )
+          })}
+        </ul>
+
+        {err && <p className={styles.votoErr} role="alert">{err}</p>}
+
+        <div className={styles.reviewActions}>
+          <button type="button" className={styles.ghostBtn} onClick={() => { setErr(''); setEstado('idle'); setPaso('form') }} disabled={estado === 'enviando'}>
+            ← Corregir
+          </button>
+          <button type="button" className={styles.votoBtn} onClick={enviar} disabled={estado === 'enviando'}>
+            {estado === 'enviando' ? 'Registrando…' : 'Confirmar y registrar voto'}
+          </button>
+        </div>
+      </motion.div>
+    )
   }
 
   return (
@@ -343,8 +465,8 @@ function VotoForm({ proyecto, articulos, identidad, onVotado }) {
 
       {err && <p className={styles.votoErr} role="alert">{err}</p>}
 
-      <button type="button" className={styles.votoBtn} onClick={enviar} disabled={estado === 'enviando'}>
-        {estado === 'enviando' ? 'Registrando…' : 'Registrar mi voto'}
+      <button type="button" className={styles.votoBtn} onClick={irARevisar}>
+        Revisar mi voto
       </button>
       <p className={styles.votoNota}>Podrás votar una sola vez por este proyecto.</p>
     </div>
@@ -386,6 +508,11 @@ function ProyectoCard({ proyecto, identidad, votadoInicial, index }) {
       <button type="button" className={styles.cardHead} onClick={() => setAbierto(o => !o)} aria-expanded={abierto}>
         <div className={styles.cardMeta}>
           {proyecto.numero && <span className={styles.cardNumero}>{proyecto.numero}</span>}
+          {proyecto.estado_resultado && (
+            <span className={`${styles.cardEstado} ${proyecto.estado_resultado === 'aprobado' ? styles.cardEstadoOk : styles.cardEstadoNo}`}>
+              {proyecto.estado_resultado === 'aprobado' ? '✓ Aprobado' : '✕ No aprobado'}
+            </span>
+          )}
           {proyecto.fecha_radicacion && (
             <span className={styles.cardFecha}>Radicado el {fmtFecha(proyecto.fecha_radicacion)}</span>
           )}
@@ -408,6 +535,22 @@ function ProyectoCard({ proyecto, identidad, votadoInicial, index }) {
             transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
           >
             <div className={styles.cardBodyInner}>
+              {proyecto.estado_resultado && proyecto.resultado_notas && (
+                <p className={`${styles.resultadoNota} ${proyecto.estado_resultado === 'aprobado' ? styles.resultadoNotaOk : styles.resultadoNotaNo}`}>
+                  {proyecto.resultado_notas}
+                </p>
+              )}
+              {proyecto.enlace_documento && (
+                <a className={styles.docLink} href={proyecto.enlace_documento} target="_blank" rel="noopener noreferrer">
+                  <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6" />
+                  </svg>
+                  Ver el proyecto de ley completo
+                  <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ marginLeft: 'auto' }}>
+                    <path d="M7 17 17 7M9 7h8v8" />
+                  </svg>
+                </a>
+              )}
               <div className={styles.innerTabs} role="tablist">
                 {(!votado ? [['votar', 'Votar'], ['resultados', 'Resultados']] : [['resultados', 'Resultados'], ['votar', 'Mi voto']]).map(([k, l]) => (
                   <button key={k} type="button" role="tab" aria-selected={tab === k}
@@ -440,6 +583,7 @@ function ProyectoCard({ proyecto, identidad, votadoInicial, index }) {
 /* ═══════════════════════════ Página ═════════════════════════════════════ */
 export default function ProyectosLeyPage() {
   const [identidad, setIdentidad] = useState(leerIdent)
+  const [prefill, setPrefill]     = useState(null)   // datos para reeditar al "Volver"
   const [proyectos, setProyectos] = useState(null)   // null = cargando
   const votados = useMemo(() => (identidad ? (leerVotados()[identidad.hash] || []) : []), [identidad])
   const topRef = useRef(null)
@@ -474,21 +618,21 @@ export default function ProyectosLeyPage() {
           <h1 className={styles.heroTitle}>Debate de <em>proyectos de ley</em></h1>
           <p className={styles.heroLead}>
             Lee los proyectos en trámite, deja tu postura sobre el articulado y observa,
-            en tiempo real, lo que opina el país. Tu voz cuenta: un voto por persona, con total reserva de tus datos.
+            en tiempo real, lo que opina el país. Tu voz cuenta: un voto por persona, con tu cédula bajo reserva.
           </p>
         </motion.div>
       </section>
 
       <main className={styles.main}>
         {!identidad ? (
-          <IdentidadGate onListo={setIdentidad} />
+          <IdentidadGate initial={prefill} onListo={(id) => { setIdentidad(id); setPrefill(null) }} />
         ) : (
           <>
             <div className={styles.identBar}>
               <span>Participas como <strong>{identidad.nombre}</strong> · {identidad.municipio}, {identidad.departamento}</span>
               <button type="button" className={styles.cambiar}
-                onClick={() => { localStorage.removeItem(LS_IDENT); setIdentidad(null); setProyectos(null) }}>
-                Cambiar
+                onClick={() => { setPrefill(identidad); setIdentidad(null); setProyectos(null) }}>
+                Volver
               </button>
             </div>
 
