@@ -27,7 +27,8 @@ export default async function handler(req, res) {
   // 1) Solo superadmin.
   const caller = await getCallerProfile(req)
   if (caller?.rol !== 'superadmin') {
-    return res.status(401).json({ error: 'No autorizado.' })
+    // Autenticado pero sin permiso → 403 (no 401).
+    return res.status(403).json({ error: 'No autorizado.' })
   }
 
   // 2) Validar el nuevo abogado: existe, está aprobado y trae su rol (para el

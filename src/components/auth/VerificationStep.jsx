@@ -2,7 +2,8 @@ import { useState, useEffect, useRef } from 'react'
 
 /* ────────────────────────────────────────────────────────────────────────
    Pantalla de verificación de código (Paso B del flujo de registro).
-   Compartida entre AuthModal (abogados) y RegisterContadorModal.
+   Compartida por AuthModal, el RegisterModal unificado (abogado/contador/gestor)
+   y el gate de voto de proyectos de ley.
 
    Props:
      · email       — para mostrar enmascarado en el subtítulo

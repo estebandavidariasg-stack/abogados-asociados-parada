@@ -90,6 +90,15 @@ function IconMoney() {
   )
 }
 
+function IconFlag() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" /><line x1="4" y1="22" x2="4" y2="15" />
+    </svg>
+  )
+}
+
 /* Config declarativa por tipo: icono, clase de color, etiqueta y si reasigna. */
 const TIPOS = {
   inactividad: {
@@ -124,6 +133,11 @@ const TIPOS = {
     iconClass: 'iconCobro',
     conMonto: true,
     esGestor: true,
+  },
+  reporte: {
+    label: 'Comentario reportado',
+    Icon: IconFlag,
+    iconClass: 'iconCritical',
   },
 }
 

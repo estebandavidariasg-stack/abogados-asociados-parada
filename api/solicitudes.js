@@ -186,7 +186,10 @@ async function tomar(req, res) {
 
   await fetch(`${SUPABASE_URL}/rest/v1/chat_messages`, {
     method: 'POST', headers: serviceHeaders(),
-    body: JSON.stringify({ room_id: roomId, sender_type: 'system', lawyer_id: null, content: 'Un profesional tomó tu consulta y se unió al chat.' }),
+    // sender_type 'system' NO existe en el CHECK del esquema (ver api/reassign.js):
+    // usar 'lawyer' + message_type 'system' → el cliente lo pinta como aviso
+    // centrado (ChatSection: `msg.message_type === 'system'`) sin violar el CHECK.
+    body: JSON.stringify({ room_id: roomId, sender_type: 'lawyer', lawyer_id: null, message_type: 'system', content: 'Un profesional tomó tu consulta y se unió al chat.' }),
   }).catch(() => {});
   await fetch(`${SUPABASE_URL}/rest/v1/notificaciones?room_id=eq.${rid}&tipo=eq.solicitud_abierta`, {
     method: 'PATCH', headers: serviceHeaders(), body: JSON.stringify({ atendida: true, leido: true }),
