@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import ResultadosProyecto from '../proyectos/ResultadosProyecto'
@@ -97,6 +97,27 @@ export default function ProyectosLeyAdmin() {
   const [resForm, setResForm]     = useState({ estado: '', fecha: '', notas: '' })
   const [notif, setNotif]         = useState({ phase: 'idle', done: 0, total: 0, sent: 0, failed: 0, msg: '' })
   const [paso, setPaso]           = useState('resultado')   // modal resultado: 'resultado' | 'notificar'
+
+  // Filtros de la lista: texto (nombre/número/tema) + rango de fecha de radicación.
+  const [busqueda, setBusqueda] = useState('')
+  const [desde, setDesde]       = useState('')
+  const [hasta, setHasta]       = useState('')
+  const proyectosFiltrados = useMemo(() => {
+    if (!proyectos) return []
+    const term = busqueda.trim().toLowerCase()
+    return proyectos.filter(p => {
+      if (term) {
+        const heno = `${p.nombre || ''} ${p.numero || ''} ${p.descripcion || ''}`.toLowerCase()
+        if (!heno.includes(term)) return false
+      }
+      const f = (p.fecha_radicacion || '').slice(0, 10)
+      if (desde && (!f || f < desde)) return false
+      if (hasta && (!f || f > hasta)) return false
+      return true
+    })
+  }, [proyectos, busqueda, desde, hasta])
+  const hayFiltro = !!(busqueda.trim() || desde || hasta)
+  const limpiarFiltros = () => { setBusqueda(''); setDesde(''); setHasta('') }
 
   const cargar = useCallback(async () => { setProyectos(await fetchProyectosAdmin()) }, [])
   useEffect(() => { cargar() }, [cargar])
@@ -274,6 +295,43 @@ export default function ProyectosLeyAdmin() {
         <button className={styles.newBtn} onClick={nuevoProyecto}>+ Nuevo proyecto</button>
       </div>
 
+      {Array.isArray(proyectos) && proyectos.length > 0 && (
+        <div className={styles.filtros}>
+          <div className={styles.buscador}>
+            <svg className={styles.buscadorIcon} viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <circle cx="11" cy="11" r="7" /><path d="m21 21-4.3-4.3" />
+            </svg>
+            <input
+              type="search" value={busqueda} onChange={e => setBusqueda(e.target.value)}
+              placeholder="Buscar por nombre, número o tema…" aria-label="Buscar proyectos de ley"
+            />
+            {busqueda && (
+              <button type="button" className={styles.buscadorClear} onClick={() => setBusqueda('')} aria-label="Limpiar búsqueda">✕</button>
+            )}
+          </div>
+          <div className={styles.fechas}>
+            <label className={styles.fechaField}>
+              <span>Radicado desde</span>
+              <input type="date" value={desde} onChange={e => setDesde(e.target.value)} max={hasta || undefined} />
+            </label>
+            <label className={styles.fechaField}>
+              <span>Radicado hasta</span>
+              <input type="date" value={hasta} onChange={e => setHasta(e.target.value)} min={desde || undefined} />
+            </label>
+          </div>
+          {hayFiltro && (
+            <button type="button" className={styles.limpiarBtn} onClick={limpiarFiltros}>Limpiar</button>
+          )}
+        </div>
+      )}
+      {hayFiltro && Array.isArray(proyectos) && proyectos.length > 0 && (
+        <p className={styles.filtroCount} aria-live="polite">
+          {proyectosFiltrados.length === 0
+            ? 'Sin coincidencias'
+            : `Mostrando ${proyectosFiltrados.length} de ${proyectos.length} proyecto${proyectos.length === 1 ? '' : 's'}`}
+        </p>
+      )}
+
       {proyectos === null ? (
         <p className={styles.muted}>Cargando proyectos…</p>
       ) : proyectos.length === 0 ? (
@@ -282,9 +340,15 @@ export default function ProyectosLeyAdmin() {
           <p>Aún no has creado ningún proyecto de ley.</p>
           <button className={styles.newBtn} onClick={nuevoProyecto}>+ Crear el primero</button>
         </div>
+      ) : proyectosFiltrados.length === 0 ? (
+        <div className={styles.empty}>
+          <span aria-hidden="true">🔎</span>
+          <p>Ningún proyecto coincide con la búsqueda o el rango de fechas.</p>
+          <button className={styles.limpiarBtn} onClick={limpiarFiltros}>Limpiar filtros</button>
+        </div>
       ) : (
         <ul className={styles.list}>
-          {proyectos.map(p => (
+          {proyectosFiltrados.map(p => (
             <li key={p.id} className={styles.item}>
               <div className={styles.itemMain}>
                 <div className={styles.itemMeta}>
