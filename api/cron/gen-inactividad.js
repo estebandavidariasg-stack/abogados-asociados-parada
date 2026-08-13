@@ -237,13 +237,15 @@ async function procesarBarrera4h() {
 }
 
 export default async function handler(req, res) {
-  // Auth del cron.
+  // Auth del cron (fail-closed): sin CRON_SECRET configurado el endpoint queda
+  // cerrado, no abierto. Evita que un tercero dispare notificaciones/correos.
   const secret = process.env.CRON_SECRET
-  if (secret) {
-    const auth = req.headers.authorization || req.headers.Authorization || ''
-    if (auth !== `Bearer ${secret}`) {
-      return res.status(401).json({ error: 'No autorizado.' })
-    }
+  if (!secret) {
+    return res.status(500).json({ error: 'CRON_SECRET no configurado.' })
+  }
+  const auth = req.headers.authorization || req.headers.Authorization || ''
+  if (auth !== `Bearer ${secret}`) {
+    return res.status(401).json({ error: 'No autorizado.' })
   }
 
   // Cola de reseñas: se procesa en CADA invocación (pg_cron la llama cada 5 min).

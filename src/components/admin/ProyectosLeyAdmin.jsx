@@ -53,6 +53,13 @@ function ModalShell({ onClose, title, subtitle, size = 'md', children, footer, c
         exit={{ opacity: 0, scale: 0.97, y: 8 }}
         transition={{ duration: 0.26, ease: [0.16, 1, 0.3, 1] }}
       >
+        {!closeDisabled && (
+          <button type="button" className={styles.modalX} onClick={onClose} aria-label="Cerrar">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M18 6 6 18M6 6l12 12" />
+            </svg>
+          </button>
+        )}
         <div className={styles.modalHead}>
           <h3 className={styles.modalTitle}>{title}</h3>
           {subtitle && <p className={styles.modalSub}>{subtitle}</p>}
@@ -63,6 +70,18 @@ function ModalShell({ onClose, title, subtitle, size = 'md', children, footer, c
     </motion.div>
   )
 }
+
+/* Iconos de acción (mismo trazo que el resto de la UI). */
+const IconEdit = () => (
+  <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M12 20h9" /><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+  </svg>
+)
+const IconTrash = () => (
+  <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M3 6h18" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+  </svg>
+)
 
 export default function ProyectosLeyAdmin() {
   const [proyectos, setProyectos] = useState(null)
@@ -77,6 +96,7 @@ export default function ProyectosLeyAdmin() {
   // Modal de resultado + notificación a votantes.
   const [resForm, setResForm]     = useState({ estado: '', fecha: '', notas: '' })
   const [notif, setNotif]         = useState({ phase: 'idle', done: 0, total: 0, sent: 0, failed: 0, msg: '' })
+  const [paso, setPaso]           = useState('resultado')   // modal resultado: 'resultado' | 'notificar'
 
   const cargar = useCallback(async () => { setProyectos(await fetchProyectosAdmin()) }, [])
   useEffect(() => { cargar() }, [cargar])
@@ -111,6 +131,7 @@ export default function ProyectosLeyAdmin() {
       notas:  p.resultado_notas || '',
     })
     setNotif({ phase: 'idle', done: 0, total: 0, sent: 0, failed: 0, msg: '' })
+    setPaso('resultado')
     setModal({ tipo: 'resultado', proyecto: p })
   }
 
@@ -177,6 +198,7 @@ export default function ProyectosLeyAdmin() {
       const actualizado = lista.find(x => x.id === p.id) || { ...p, ...patch }
       setModal({ tipo: 'resultado', proyecto: actualizado })
       setNotif(n => ({ ...n, msg: 'Resultado guardado. Ya puedes notificar a los votantes.' }))
+      setPaso('notificar')   // paso 2: avisar a los votantes
     } catch (e) { alert(e.message || 'Error al guardar el resultado.') }
     finally { setBusy(false) }
   }
@@ -280,13 +302,17 @@ export default function ProyectosLeyAdmin() {
                 <h4 className={styles.itemName}>{p.nombre}</h4>
               </div>
               <div className={styles.itemActions}>
-                <button className={styles.act} onClick={() => verResultados(p)}>Resultados</button>
-                <button className={styles.act} onClick={() => abrirResultado(p)}>Resultado y aviso</button>
-                <button className={styles.act} onClick={() => editar(p)}>Editar</button>
+                <button className={styles.act} onClick={() => verResultados(p)}>Estadísticas</button>
+                <button className={styles.act} onClick={() => abrirResultado(p)}>Definir resultado</button>
                 <button className={styles.act} onClick={() => setModal({ tipo: 'publish', proyecto: p })}>
                   {p.publicado ? 'Despublicar' : 'Publicar'}
                 </button>
-                <button className={`${styles.act} ${styles.danger}`} onClick={() => setModal({ tipo: 'delete', proyecto: p })}>Eliminar</button>
+                <button className={`${styles.act} ${styles.actIcon}`} onClick={() => editar(p)} title="Editar" aria-label="Editar proyecto">
+                  <IconEdit />
+                </button>
+                <button className={`${styles.act} ${styles.actIcon} ${styles.danger}`} onClick={() => setModal({ tipo: 'delete', proyecto: p })} title="Eliminar" aria-label="Eliminar proyecto">
+                  <IconTrash />
+                </button>
               </div>
             </li>
           ))}
@@ -424,7 +450,7 @@ export default function ProyectosLeyAdmin() {
                 </button>
                 <span className={styles.resNota}>Incluye datos de contacto (solo visibles para administración).</span>
               </div>
-              <ResultadosProyecto proyecto={modal.proyecto} articulos={selArts} />
+              <ResultadosProyecto proyecto={modal.proyecto} articulos={selArts} isAdmin />
             </ModalShell>
           )}
 
@@ -434,68 +460,13 @@ export default function ProyectosLeyAdmin() {
               onClose={cerrar}
               closeDisabled={notif.phase === 'enviando' || notif.phase === 'preparando'}
               size="md"
-              title="Resultado y aviso a votantes"
+              title={paso === 'resultado' ? 'Resultado del proyecto' : 'Avisar a los votantes'}
               subtitle={modal.proyecto.numero || modal.proyecto.nombre}
-              footer={<button className={styles.cerrarBtn} onClick={cerrar} disabled={notif.phase === 'enviando' || notif.phase === 'preparando'}>Cerrar</button>}
-            >
-              <div className={styles.resultadoBox}>
-                <span className={styles.resLabel}>¿El proyecto fue aprobado?</span>
-                <div className={styles.resChoice} role="radiogroup" aria-label="Resultado del proyecto">
-                  {[['aprobado', 'Aprobado'], ['rechazado', 'No aprobado']].map(([k, l]) => (
-                    <button key={k} type="button" role="radio" aria-checked={resForm.estado === k}
-                      className={`${styles.resOpt} ${resForm.estado === k ? (k === 'aprobado' ? styles.resOptOk : styles.resOptNo) : ''}`}
-                      onClick={() => setResForm(f => ({ ...f, estado: k }))} disabled={busy}>
-                      {l}
-                    </button>
-                  ))}
-                </div>
-
-                <div className={styles.resGrid}>
-                  <label className={styles.field}>
-                    <span>Fecha del resultado</span>
-                    <input type="date" value={resForm.fecha} onChange={e => setResForm(f => ({ ...f, fecha: e.target.value }))} disabled={busy} />
-                  </label>
-                </div>
-                <label className={`${styles.field} ${styles.fieldFull}`}>
-                  <span>Nota para los votantes (opcional)</span>
-                  <textarea rows={3} value={resForm.notas} onChange={e => setResForm(f => ({ ...f, notas: e.target.value }))} placeholder="Ej: El proyecto fue aprobado en segundo debate y pasa a sanción presidencial." disabled={busy} />
-                </label>
-
-                {!modal.proyecto.enlace_documento && (
-                  <p className={styles.resAviso}>Sugerencia: agrega el <strong>enlace al documento oficial</strong> en «Editar» para que el correo lo incluya.</p>
-                )}
-
-                <div className={styles.resActions}>
-                  <button className={styles.save} onClick={guardarResultado} disabled={busy}>
-                    {busy ? 'Guardando…' : (modal.proyecto.estado_resultado ? 'Actualizar resultado' : 'Guardar resultado')}
-                  </button>
-                </div>
-              </div>
-
-              <div className={styles.notifBox}>
-                <h4 className={styles.notifTitle}>Notificar por correo</h4>
-                <p className={styles.notifSub}>
-                  Se enviará un correo con el diseño de Parada Bridge a cada votante (con su nombre,
-                  cédula, el voto que realizó, la fecha y el PDF del proyecto adjunto).
-                </p>
-
-                {(notif.phase === 'enviando' || notif.phase === 'preparando') && (
-                  <div className={styles.progressWrap}>
-                    <div className={styles.progressBar}>
-                      <div className={styles.progressFill} style={{ width: `${notif.total ? Math.round((notif.done / notif.total) * 100) : 8}%` }} />
-                    </div>
-                    <span className={styles.progressTxt}>
-                      {notif.msg || `Enviando ${notif.done} de ${notif.total}…`}
-                    </span>
-                  </div>
-                )}
-                {notif.phase === 'done' && notif.msg && (
-                  <p className={`${styles.notifResult} ${notif.failed ? styles.notifWarn : styles.notifOk}`}>{notif.msg}</p>
-                )}
-                {notif.phase === 'idle' && notif.msg && (
-                  <p className={styles.notifResult}>{notif.msg}</p>
-                )}
-
+              footer={paso === 'resultado' ? (
+                <button className={styles.save} onClick={guardarResultado} disabled={busy || !resForm.estado}>
+                  {busy ? 'Guardando…' : (modal.proyecto.estado_resultado ? 'Actualizar resultado' : 'Guardar resultado')}
+                </button>
+              ) : (
                 <button
                   className={styles.notifBtn}
                   onClick={notificarVotantes}
@@ -503,10 +474,76 @@ export default function ProyectosLeyAdmin() {
                 >
                   {notif.phase === 'enviando' || notif.phase === 'preparando' ? 'Enviando…' : 'Notificar a los votantes'}
                 </button>
-                {!modal.proyecto.estado_resultado && (
-                  <span className={styles.notifHint}>Guarda primero el resultado para habilitar el envío.</span>
-                )}
+              )}
+            >
+              {/* Indicador de los dos pasos */}
+              <div className={styles.pasos} aria-hidden="true">
+                <span className={`${styles.pasoDot} ${paso === 'resultado' ? styles.pasoDotOn : styles.pasoDotDone}`}>1</span>
+                <span className={styles.pasoLinea} />
+                <span className={`${styles.pasoDot} ${paso === 'notificar' ? styles.pasoDotOn : ''}`}>2</span>
               </div>
+
+              {paso === 'resultado' ? (
+                <div className={styles.resultadoBox}>
+                  <span className={styles.resLabel}>¿El proyecto fue aprobado?</span>
+                  <div className={styles.resChoice} role="radiogroup" aria-label="Resultado del proyecto">
+                    {[['aprobado', 'Aprobado'], ['rechazado', 'No aprobado']].map(([k, l]) => (
+                      <button key={k} type="button" role="radio" aria-checked={resForm.estado === k}
+                        className={`${styles.resOpt} ${resForm.estado === k ? (k === 'aprobado' ? styles.resOptOk : styles.resOptNo) : ''}`}
+                        onClick={() => setResForm(f => ({ ...f, estado: k }))} disabled={busy}>
+                        {l}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className={styles.resGrid}>
+                    <label className={styles.field}>
+                      <span>Fecha del resultado</span>
+                      <input type="date" value={resForm.fecha} onChange={e => setResForm(f => ({ ...f, fecha: e.target.value }))} disabled={busy} />
+                    </label>
+                  </div>
+                  <label className={`${styles.field} ${styles.fieldFull}`}>
+                    <span>Nota para los votantes (opcional)</span>
+                    <textarea rows={3} value={resForm.notas} onChange={e => setResForm(f => ({ ...f, notas: e.target.value }))} placeholder="Ej: El proyecto fue aprobado en segundo debate y pasa a sanción presidencial." disabled={busy} />
+                  </label>
+
+                  {!modal.proyecto.enlace_documento && (
+                    <p className={styles.resAviso}>Sugerencia: agrega el <strong>enlace al documento oficial</strong> en «Editar» para que el correo lo incluya.</p>
+                  )}
+                </div>
+              ) : (
+                <div className={styles.notifBox}>
+                  <button type="button" className={styles.volverLink} onClick={() => setPaso('resultado')} disabled={notif.phase === 'enviando' || notif.phase === 'preparando'}>
+                    ← Volver al resultado
+                  </button>
+
+                  {modal.proyecto.estado_resultado && (
+                    <div className={`${styles.resumenChip} ${modal.proyecto.estado_resultado === 'aprobado' ? styles.resumenOk : styles.resumenNo}`}>
+                      {modal.proyecto.estado_resultado === 'aprobado' ? '✓ Aprobado' : '✕ No aprobado'}
+                      {modal.proyecto.resultado_fecha ? ` · ${fmtFecha(modal.proyecto.resultado_fecha)}` : ''}
+                    </div>
+                  )}
+
+                  <p className={styles.notifSub}>
+                    Se enviará un correo con el diseño de Parada Bridge a cada votante (con su nombre,
+                    cédula, el voto que realizó, la fecha y el PDF del proyecto adjunto).
+                  </p>
+
+                  {(notif.phase === 'enviando' || notif.phase === 'preparando') && (
+                    <div className={styles.progressWrap}>
+                      <div className={styles.progressBar}>
+                        <div className={styles.progressFill} style={{ width: `${notif.total ? Math.round((notif.done / notif.total) * 100) : 8}%` }} />
+                      </div>
+                      <span className={styles.progressTxt}>
+                        {notif.msg || `Enviando ${notif.done} de ${notif.total}…`}
+                      </span>
+                    </div>
+                  )}
+                  {notif.phase === 'done' && notif.msg && (
+                    <p className={`${styles.notifResult} ${notif.failed ? styles.notifWarn : styles.notifOk}`}>{notif.msg}</p>
+                  )}
+                </div>
+              )}
             </ModalShell>
           )}
         </AnimatePresence>,

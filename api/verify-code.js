@@ -35,6 +35,10 @@ const INVALID_MSG = 'Código inválido o expirado'
 // tiempo de validez. Solo cuentan las fallas: un usuario que acierta no suma.
 const ATTEMPT_WINDOW_MS   = 10 * 60 * 1000
 const MAX_FAILED_ATTEMPTS = 6
+// Tope adicional por IP (a través de MUCHOS correos): frena a un atacante que
+// rota el email para esquivar el límite por-correo. Más alto que el de correo
+// para no castigar redes compartidas (NAT/oficinas) en uso legítimo.
+const MAX_FAILED_ATTEMPTS_IP = 30
 
 const svcHeaders = () => ({
   apikey:        SUPABASE_SERVICE_ROLE_KEY,
@@ -60,6 +64,23 @@ async function countRecentFailures(email) {
     `?email=eq.${encodeURIComponent(email)}` +
     `&created_at=gt.${encodeURIComponent(since)}` +
     `&select=id&limit=${MAX_FAILED_ATTEMPTS + 1}`
+  try {
+    const res = await fetch(url, { headers: svcHeaders() })
+    if (!res.ok) return 0
+    const rows = await res.json()
+    return Array.isArray(rows) ? rows.length : 0
+  } catch { return 0 }
+}
+
+// Cuenta intentos fallidos recientes para una IP (a través de cualquier correo).
+// Fail-open igual que el de correo.
+async function countRecentFailuresByIp(ipHash) {
+  const since = new Date(Date.now() - ATTEMPT_WINDOW_MS).toISOString()
+  const url =
+    `${SUPABASE_URL}/rest/v1/verify_code_attempts` +
+    `?ip_hash=eq.${encodeURIComponent(ipHash)}` +
+    `&created_at=gt.${encodeURIComponent(since)}` +
+    `&select=id&limit=${MAX_FAILED_ATTEMPTS_IP + 1}`
   try {
     const res = await fetch(url, { headers: svcHeaders() })
     if (!res.ok) return 0
@@ -135,6 +156,10 @@ export default async function handler(req, res) {
   // demasiadas fallas recientes para este correo, cortamos aquí.
   if (await countRecentFailures(email) >= MAX_FAILED_ATTEMPTS) {
     return res.status(429).json({ error: 'Demasiados intentos. Solicita un código nuevo.' })
+  }
+  // Tope por IP (frena la rotación de correos desde un mismo origen).
+  if (ipHash && await countRecentFailuresByIp(ipHash) >= MAX_FAILED_ATTEMPTS_IP) {
+    return res.status(429).json({ error: 'Demasiados intentos. Intenta más tarde.' })
   }
 
   // ── PATCH atómico: filtros (email, code, used=false, expires_at>now)

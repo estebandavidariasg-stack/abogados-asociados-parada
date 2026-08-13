@@ -436,6 +436,131 @@
 }
 .verMas:hover { background: rgba(201, 168, 76, 0.18); border-color: var(--gold, #C9A84C); }
 
+/* ── Capa social del comentario ─────────────────────────────────────────── */
+.comFlag {
+  display: inline-flex; align-items: center; gap: 0.28rem;
+  font-size: 0.7rem; font-weight: 700; color: #b4442f;
+  background: rgba(180, 68, 47, 0.1); border-radius: 999px;
+  padding: 0.12rem 0.5rem; margin-left: 0.1rem;
+}
+/* Acciones bajo el comentario, en una sola fila: Responder (izq),
+   reacciones + Reportar (der). */
+.comFootRow {
+  display: flex; align-items: center; flex-wrap: wrap;
+  gap: 0.4rem 0.5rem; margin-top: 0.55rem;
+}
+.comReacts { display: inline-flex; align-items: center; gap: 0.45rem; }
+.reactBtn {
+  display: inline-flex; align-items: center; gap: 0.34rem;
+  font-family: 'Poppins', sans-serif; font-size: 0.82rem; font-weight: 700;
+  color: #6f5c48; background: rgba(255, 254, 241, 0.6);
+  border: 1px solid rgba(109, 60, 27, 0.16); border-radius: 999px;
+  padding: 0.32rem 0.7rem; cursor: pointer; min-width: 3.4rem; justify-content: center;
+  transition: background 0.18s, border-color 0.18s, color 0.18s;
+}
+.reactBtn svg { opacity: 0.8; }
+.reactBtn b { font-weight: 700; font-variant-numeric: tabular-nums; }
+.reactBtn:hover { background: rgba(201, 168, 76, 0.12); border-color: rgba(201, 168, 76, 0.4); }
+.reactOnUp {
+  color: #2e7d5b; background: color-mix(in srgb, #2e7d5b 13%, transparent);
+  border-color: color-mix(in srgb, #2e7d5b 45%, transparent);
+}
+.reactOnUp svg { opacity: 1; }
+.reactOnDown {
+  color: #b4442f; background: color-mix(in srgb, #b4442f 12%, transparent);
+  border-color: color-mix(in srgb, #b4442f 45%, transparent);
+}
+.reactOnDown svg { opacity: 1; }
+.linkBtn {
+  font-family: 'Poppins', sans-serif; font-size: 0.78rem; font-weight: 600;
+  color: #6d3c1b; background: none; border: none; cursor: pointer;
+  padding: 0.34rem 0.5rem; border-radius: 8px; transition: background 0.18s;
+}
+.linkBtn:hover { background: rgba(109, 60, 27, 0.07); text-decoration: underline; }
+.actionsSpacer { flex: 1 1 auto; }
+.reportBtn {
+  display: inline-flex; align-items: center; gap: 0.32rem;
+  font-family: 'Poppins', sans-serif; font-size: 0.74rem; font-weight: 600;
+  color: #9a8064; background: none; border: none; cursor: pointer;
+  padding: 0.34rem 0.5rem; border-radius: 8px; transition: color 0.18s, background 0.18s;
+}
+.reportBtn:hover { color: #b4442f; background: rgba(180, 68, 47, 0.08); }
+.reportedTag { font-size: 0.74rem; font-weight: 600; color: #2e7d5b; padding: 0.34rem 0.4rem; }
+.delBtn {
+  display: inline-flex; align-items: center; gap: 0.32rem;
+  font-family: 'Poppins', sans-serif; font-size: 0.74rem; font-weight: 700;
+  color: #b4442f; background: rgba(180, 68, 47, 0.08);
+  border: 1px solid rgba(180, 68, 47, 0.28); border-radius: 8px;
+  padding: 0.3rem 0.6rem; cursor: pointer; transition: background 0.18s;
+}
+.delBtn:hover:not(:disabled) { background: rgba(180, 68, 47, 0.16); }
+.delBtn:disabled { opacity: 0.6; cursor: default; }
+
+/* Menú de motivos de reporte (inline) */
+.reportMenu {
+  margin-top: 0.6rem; padding: 0.6rem 0.7rem;
+  background: rgba(180, 68, 47, 0.05);
+  border: 1px solid rgba(180, 68, 47, 0.18); border-radius: 10px;
+}
+.reportMenuLbl { display: block; font-size: 0.76rem; font-weight: 600; color: #5a4636; margin-bottom: 0.45rem; }
+.reportMotivos { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.reportMotivo {
+  font-family: 'Poppins', sans-serif; font-size: 0.74rem; font-weight: 600;
+  color: #6d3c1b; background: #fffef1;
+  border: 1px solid rgba(109, 60, 27, 0.2); border-radius: 999px;
+  padding: 0.3rem 0.7rem; cursor: pointer; transition: background 0.18s, border-color 0.18s;
+}
+.reportMotivo:hover { background: rgba(180, 68, 47, 0.1); border-color: rgba(180, 68, 47, 0.4); color: #b4442f; }
+
+/* Hilo de respuestas */
+.respThread {
+  margin-top: 0.75rem; padding-top: 0.7rem;
+  border-top: 1px solid rgba(109, 60, 27, 0.1);
+  display: flex; flex-direction: column; gap: 0.6rem;
+}
+/* Respuesta: se lee como un comentario (nombre + apellido) pero diferenciada —
+   sangrada, con icono de respuesta y una etiqueta «respuesta». */
+.respItem {
+  display: flex; gap: 0.5rem; margin-left: 1.1rem;
+  padding: 0.55rem 0.7rem; background: rgba(201, 168, 76, 0.06);
+  border-radius: 10px; border: 1px solid rgba(109, 60, 27, 0.1);
+}
+.respMark { color: #b08a3a; flex: 0 0 auto; margin-top: 0.15rem; display: inline-flex; }
+.respBody { min-width: 0; flex: 1 1 auto; }
+.respHead { display: flex; align-items: baseline; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.2rem; }
+.respNombre { font-size: 0.84rem; font-weight: 700; color: #472f29; }
+.respTag {
+  font-size: 0.62rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
+  color: #8A6A28; background: rgba(201, 168, 76, 0.16);
+  border-radius: 5px; padding: 0.06rem 0.4rem;
+}
+.respFecha { font-size: 0.68rem; color: #9a8064; margin-left: auto; }
+.respTexto { font-size: 0.84rem; line-height: 1.5; color: #5a4636; margin: 0; text-wrap: pretty; }
+.respHint { font-size: 0.8rem; color: #6f5c48; margin: 0.2rem 0 0 1.1rem; }
+.respForm { display: flex; flex-direction: column; gap: 0.45rem; margin: 0.2rem 0 0 1.1rem; }
+.respInput {
+  font-family: 'Poppins', sans-serif; font-size: 0.82rem; color: #472f29;
+  background: #fffef1; border: 1px solid rgba(109, 60, 27, 0.2);
+  border-radius: 9px; padding: 0.5rem 0.65rem; width: 100%;
+  transition: border-color 0.18s, box-shadow 0.18s;
+}
+.respNombreInput::placeholder, .respInput::placeholder { color: #9a8064; }
+.respNombreInput:focus, .respInput:focus {
+  outline: none; border-color: var(--gold, #C9A84C);
+  box-shadow: 0 0 0 3px rgba(201, 168, 76, 0.18);
+}
+.respRow { display: flex; gap: 0.45rem; }
+.respRow .respInput { flex: 1 1 auto; }
+.respSend {
+  font-family: 'Poppins', sans-serif; font-size: 0.8rem; font-weight: 700;
+  color: #fffef1; background: var(--navy, #472f29);
+  border: 1px solid var(--navy, #472f29); border-radius: 9px;
+  padding: 0.5rem 0.95rem; cursor: pointer; white-space: nowrap;
+  transition: background 0.18s;
+}
+.respSend:hover:not(:disabled) { background: var(--navy-md, #6d3c1b); }
+.respSend:disabled { opacity: 0.5; cursor: default; }
+
 /* ── Responsive ── */
 /* Hasta tablet: TODOS los controles se apilan en una sola columna, cada uno a
    todo el ancho. Así Departamento y Municipio/Localidad nunca se aprietan al

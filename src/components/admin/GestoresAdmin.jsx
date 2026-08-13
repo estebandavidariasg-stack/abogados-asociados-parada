@@ -184,12 +184,27 @@ export default function GestoresAdmin({ onChange }) {
   }
 
   async function marcarPagado(cobroId) {
-    const headers = await getAuthHeaders()
+    // RPC segura (pagar_comision_gestor): valida superadmin, setea pagado_at y
+    // notifica al gestor. Antes se hacía un PATCH directo que dejaba pagado_at
+    // en null (fecha errónea en el panel del gestor) y no enviaba la notificación.
+    const prev = cobros.find(c => c.id === cobroId)?.estado ?? 'pendiente'
     setCobros(cs => cs.map(c => c.id === cobroId ? { ...c, estado: 'pagado' } : c))
-    await fetch(`${SUPABASE_URL}/rest/v1/gestor_cobros?id=eq.${cobroId}`, {
-      method: 'PATCH', headers, body: JSON.stringify({ estado: 'pagado' }),
-    })
-    flash('Cobro marcado como pagado.')
+    try {
+      const headers = await getAuthHeaders()
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/pagar_comision_gestor`, {
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ p_cobro_id: cobroId }),
+      })
+      if (!res.ok) throw new Error('rpc')
+      const ok = await res.json()
+      if (ok === false) throw new Error('rechazado')
+      flash('Cobro marcado como pagado. Se notificó al gestor.')
+      await cargar()
+    } catch {
+      setCobros(cs => cs.map(c => c.id === cobroId ? { ...c, estado: prev } : c))
+      flash('No se pudo marcar el cobro como pagado.')
+    }
   }
 
   const codigoDeGestor = (gid) => codigos.find(c => c.gestor_id === gid) || null

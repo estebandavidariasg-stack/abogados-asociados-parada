@@ -82,6 +82,10 @@
   transition: background 0.18s, border-color 0.18s, color 0.18s;
 }
 .act:hover:not(:disabled) { background: rgba(201, 168, 76, 0.12); border-color: var(--gold, #C9A84C); }
+.actIcon {
+  padding: 0.4rem; width: 34px; height: 34px;
+  display: inline-flex; align-items: center; justify-content: center;
+}
 .act:disabled { opacity: 0.5; cursor: default; }
 .danger { color: #b4442f; border-color: rgba(180, 68, 47, 0.3); }
 .danger:hover:not(:disabled) { background: rgba(180, 68, 47, 0.08); border-color: #b4442f; }
@@ -296,6 +300,7 @@
   -webkit-backdrop-filter: blur(10px);
 }
 .modal {
+  position: relative;
   width: 100%;
   max-height: min(92vh, 900px);
   display: flex;
@@ -306,6 +311,16 @@
   box-shadow: 0 24px 60px rgba(109, 60, 27, 0.3);
   overflow: hidden;
 }
+.modalX {
+  position: absolute; top: 14px; right: 14px; z-index: 2;
+  width: 34px; height: 34px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 9px; cursor: pointer;
+  color: #8a4e26; background: rgba(109, 60, 27, 0.06);
+  border: 1px solid rgba(109, 60, 27, 0.14);
+  transition: background 0.18s, color 0.18s, border-color 0.18s;
+}
+.modalX:hover { background: rgba(180, 68, 47, 0.1); color: #b4442f; border-color: rgba(180, 68, 47, 0.35); }
 .size_sm { max-width: 420px; }
 .size_md { max-width: 480px; }
 .size_lg { max-width: 660px; }
@@ -423,9 +438,6 @@
 .resActions { display: flex; justify-content: flex-end; }
 
 .notifBox {
-  margin-top: 1.4rem;
-  padding-top: 1.3rem;
-  border-top: 1px solid rgba(109, 60, 27, 0.12);
   display: flex;
   flex-direction: column;
   gap: 0.7rem;
@@ -479,10 +491,51 @@
 .notifBtn:disabled { opacity: 0.55; cursor: default; }
 .notifHint { font-size: 0.76rem; color: #9a8064; }
 
+/* Cerrar en rojo (footer de los pasos de resultado) */
+.cerrarRojo {
+  font-family: 'Poppins', sans-serif;
+  font-size: 0.86rem; font-weight: 700;
+  min-width: 132px; border-radius: 11px; padding: 12px 26px;
+  cursor: pointer;
+  color: #b4442f; background: rgba(180, 68, 47, 0.06);
+  border: 1px solid rgba(180, 68, 47, 0.4);
+  transition: background 0.18s, border-color 0.18s, color 0.18s;
+}
+.cerrarRojo:hover:not(:disabled) { background: rgba(180, 68, 47, 0.12); border-color: #b4442f; color: #973823; }
+.cerrarRojo:disabled { opacity: 0.5; cursor: default; }
+
+/* Indicador de dos pasos */
+.pasos { display: flex; align-items: center; justify-content: center; gap: 0.5rem; margin: 0 0 1.2rem; }
+.pasoDot {
+  width: 26px; height: 26px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 0.78rem; font-weight: 700; font-family: 'Poppins', sans-serif;
+  color: #9a8064; background: rgba(109, 60, 27, 0.08);
+  border: 1px solid rgba(109, 60, 27, 0.15);
+}
+.pasoDotOn { color: #fff; background: var(--navy, #472f29); border-color: var(--navy, #472f29); }
+.pasoDotDone { color: #216447; background: rgba(46, 125, 91, 0.12); border-color: rgba(46, 125, 91, 0.35); }
+.pasoLinea { width: 36px; height: 2px; background: rgba(109, 60, 27, 0.15); border-radius: 2px; }
+
+/* Paso 2: volver + chip de resultado */
+.volverLink {
+  align-self: flex-start; font-family: 'Poppins', sans-serif;
+  font-size: 0.8rem; font-weight: 600; color: #6d3c1b;
+  background: none; border: none; cursor: pointer; padding: 0 0 0.1rem;
+}
+.volverLink:hover:not(:disabled) { text-decoration: underline; }
+.volverLink:disabled { opacity: 0.5; cursor: default; }
+.resumenChip {
+  align-self: flex-start; font-size: 0.8rem; font-weight: 700;
+  border-radius: 999px; padding: 0.3rem 0.85rem;
+}
+.resumenOk { color: #216447; background: rgba(46, 125, 91, 0.12); border: 1px solid rgba(46, 125, 91, 0.3); }
+.resumenNo { color: #8a3323; background: rgba(180, 68, 47, 0.1); border: 1px solid rgba(180, 68, 47, 0.3); }
+
 @media (max-width: 560px) {
   .backdrop { padding: 0.6rem; }
   .modal { max-height: 94vh; border-radius: 16px; }
-  .cancel, .save, .delDanger, .cerrarBtn { flex: 1 1 auto; }
+  .cancel, .save, .delDanger, .cerrarBtn, .cerrarRojo, .notifBtn { flex: 1 1 auto; }
   .resChoice { grid-template-columns: 1fr; }
   .resGrid { grid-template-columns: 1fr; }
   .notifBtn { align-self: stretch; text-align: center; }

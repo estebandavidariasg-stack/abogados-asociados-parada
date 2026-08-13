@@ -192,10 +192,13 @@ function demoResumen(proyectoId) {
   }
   return Array.from(map.values())
 }
+// id ESTABLE por comentario (para que reacciones/respuestas/reportes persistan):
+// deriva del hash de cédula + ámbito, únicos en la semilla demo.
+const demoComId = (v) => 'dc-' + (v.cedula_hash || 'x') + '-' + (v.articulo_id || 'full')
 function demoComentarios(proyectoId) {
   return leerDemoVotos()
     .filter(v => v.proyecto_id === proyectoId && v.observaciones && String(v.observaciones).trim())
-    .map((v, i) => ({ id: 'c' + i, proyecto_id: v.proyecto_id, articulo_id: v.articulo_id || null,
+    .map(v => ({ id: demoComId(v), proyecto_id: v.proyecto_id, articulo_id: v.articulo_id || null,
       apoya: v.apoya, observaciones: v.observaciones, nombre: v.nombre || null,
       departamento: v.departamento, municipio: v.municipio, created_at: v.created_at }))
     .sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')))
@@ -251,6 +254,210 @@ export function fetchResumen(proyectoId) {
 export function fetchComentarios(proyectoId) {
   if (esDemo()) return Promise.resolve(demoComentarios(proyectoId))
   return rpcLista('pl_comentarios', { p_proyecto: proyectoId })
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   CAPA SOCIAL DE COMENTARIOS — acuerdo/desacuerdo, respuestas, reportes.
+   Backend: RPCs SECURITY DEFINER (ver proyectos-ley-comentarios-social-*.sql).
+   En modo demo se simula todo en localStorage.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+// Identidad anónima del navegante (no es prueba de identidad; solo evita el
+// doble clic y permite alternar la reacción). El VOTO sí exige OTP aparte.
+export function anonId() {
+  try {
+    let id = localStorage.getItem('pl_anon')
+    if (!id) {
+      id = (crypto?.randomUUID?.() || ('a' + Math.random().toString(36).slice(2) + Date.now().toString(36)))
+      localStorage.setItem('pl_anon', id)
+    }
+    return id
+  } catch { return 'anon' }
+}
+
+// Espejo local de MIS reacciones (qué marqué en este navegador) → resalta el
+// botón activo aunque los conteos vengan del servidor.
+const leerMis   = () => { try { return JSON.parse(localStorage.getItem('pl_mis_reacc') || '{}') } catch { return {} } }
+const escribirMis = (m) => { try { localStorage.setItem('pl_mis_reacc', JSON.stringify(m)) } catch { /* */ } }
+export const miReaccion = (comId) => leerMis()[comId] || null
+
+// ── Stores demo ─────────────────────────────────────────────────────────────
+const dGet = (k) => { try { return JSON.parse(localStorage.getItem(k) || '{}') } catch { return {} } }
+const dSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)) } catch { /* */ } }
+const D_REACC = 'pl_demo_reacc', D_RESP = 'pl_demo_resp', D_REPORT = 'pl_demo_report', D_MOD = 'pl_demo_mod'
+
+// Siembra social del demo: da a cada comentario likes/desacuerdos y algunas
+// respuestas (determinista por id, para que se vea "vivo"). No pisa las
+// reacciones/respuestas ya existentes del que prueba.
+const _hashN = (s) => { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0; return h }
+const D_RESP_TXT = [
+  'Coincido con lo que planteas.',
+  'No lo había visto así, buen punto.',
+  'Habría que ver cómo se financia en las regiones.',
+  'Apoyo esta postura; ojalá avance en el Congreso.',
+  'Tengo mis dudas, pero es un debate necesario.',
+  'Justo lo que necesitaba el país. Bien por el debate.',
+]
+function sembrarSocial() {
+  try {
+    if (localStorage.getItem('pl_demo_social_seed') === '2') return
+    const reacc = dGet(D_REACC), resp = dGet(D_RESP)
+    const votos = leerDemoVotos().filter(v => v.observaciones && String(v.observaciones).trim())
+    for (const v of votos) {
+      const id = demoComId(v)
+      if (!reacc[id]) {
+        const nl = 3 + (_hashN(id) % 40)     // 3..42 de acuerdo
+        const nd = _hashN(id + 'd') % 11      // 0..10 en desacuerdo
+        const r = {}
+        for (let i = 0; i < nl; i++) r['sl-' + id + '-' + i] = 'like'
+        for (let i = 0; i < nd; i++) r['sd-' + id + '-' + i] = 'dislike'
+        reacc[id] = r
+      }
+      if (!resp[id]) {
+        const nr = _hashN(id + 'r') % 3       // 0..2 respuestas
+        if (nr > 0) {
+          const arr = []
+          for (let i = 0; i < nr; i++) {
+            arr.push({
+              id: 'sr-' + id + '-' + i,
+              nombre: DEMO_NOMBRES[_hashN(id + 'n' + i) % DEMO_NOMBRES.length],
+              texto: D_RESP_TXT[_hashN(id + 't' + i) % D_RESP_TXT.length],
+              created_at: new Date(Date.parse('2026-08-06T09:00:00Z') + (_hashN(id + i) % 900000) * 1000).toISOString(),
+            })
+          }
+          resp[id] = arr
+        }
+      }
+    }
+    dSet(D_REACC, reacc); dSet(D_RESP, resp)
+    localStorage.setItem('pl_demo_social_seed', '2')
+  } catch { /* */ }
+}
+
+// Comentarios enriquecidos (conteos) ordenados por acuerdos desc.
+export async function fetchComentariosExt(proyectoId) {
+  if (esDemo()) {
+    sembrarSocial()
+    const mod = dGet(D_MOD)
+    const reacc = dGet(D_REACC), resp = dGet(D_RESP), rep = dGet(D_REPORT)
+    return demoComentarios(proyectoId)
+      .filter(c => !mod[c.id])
+      .map(c => {
+        const r = reacc[c.id] || {}
+        const vals = Object.values(r)
+        return {
+          ...c,
+          likes: vals.filter(t => t === 'like').length,
+          dislikes: vals.filter(t => t === 'dislike').length,
+          respuestas: (resp[c.id] || []).length,
+          reportes: (rep[c.id] || []).length,
+        }
+      })
+      .sort((a, b) => (b.likes - a.likes) || String(b.created_at || '').localeCompare(String(a.created_at || '')))
+  }
+  const rows = await rpcLista('pl_comentarios_ext', { p_proyecto: proyectoId })
+  if (rows.length) return rows
+  // Fallback: si la migración social aún no se aplicó (o el proyecto no tiene
+  // comentarios), cae a pl_comentarios → los comentarios siguen apareciendo
+  // (sin conteos) en vez de desaparecer. Deploy seguro sin importar el orden.
+  return rpcLista('pl_comentarios', { p_proyecto: proyectoId })
+}
+
+// Respuestas del proyecto (se agrupan por voto_id en el componente).
+export async function fetchRespuestas(proyectoId) {
+  if (esDemo()) {
+    sembrarSocial()
+    const resp = dGet(D_RESP)
+    return Object.entries(resp).flatMap(([voto_id, arr]) =>
+      (arr || []).map(r => ({ ...r, voto_id })))
+      .sort((a, b) => String(a.created_at || '').localeCompare(String(b.created_at || '')))
+  }
+  return rpcLista('pl_respuestas', { p_proyecto: proyectoId })
+}
+
+// Reaccionar (toggle). Devuelve { ok, likes, dislikes, mine }.
+export async function reaccionarComentario(comId, tipo) {
+  const mis = leerMis()
+  const prev = mis[comId] || null
+  const nuevo = prev === tipo ? null : tipo   // toggle off si repite
+  if (nuevo) mis[comId] = nuevo; else delete mis[comId]
+  escribirMis(mis)
+
+  if (esDemo()) {
+    const reacc = dGet(D_REACC); const id = anonId()
+    const r = reacc[comId] || {}
+    if (nuevo) r[id] = nuevo; else delete r[id]
+    reacc[comId] = r; dSet(D_REACC, reacc)
+    const vals = Object.values(r)
+    return { ok: true, likes: vals.filter(t => t === 'like').length, dislikes: vals.filter(t => t === 'dislike').length, mine: nuevo }
+  }
+  try {
+    const res = await fetch(`${URL}/rest/v1/rpc/pl_reaccionar`, {
+      method: 'POST', headers: { ...anonHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ p_voto_id: comId, p_anon: anonId(), p_tipo: tipo }),
+    })
+    const b = await res.json().catch(() => null)
+    if (res.ok && b?.ok) return { ok: true, likes: b.likes, dislikes: b.dislikes, mine: b.mine || null }
+    return { ok: false }
+  } catch { return { ok: false } }
+}
+
+// Responder. Devuelve { ok, id }.
+export async function responderComentario(comId, nombre, texto) {
+  const t = (texto || '').trim()
+  if (!t) return { ok: false, msg: 'Escribe una respuesta.' }
+  if (esDemo()) {
+    const resp = dGet(D_RESP)
+    const arr = resp[comId] || []
+    const id = 'r-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6)
+    arr.push({ id, nombre: (nombre || '').trim() || null, texto: t.slice(0, 500), created_at: new Date().toISOString() })
+    resp[comId] = arr; dSet(D_RESP, resp)
+    return { ok: true, id }
+  }
+  try {
+    const res = await fetch(`${URL}/rest/v1/rpc/pl_responder`, {
+      method: 'POST', headers: { ...anonHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ p_voto_id: comId, p_nombre: nombre || null, p_texto: t, p_anon: anonId() }),
+    })
+    const b = await res.json().catch(() => null)
+    return res.ok && b?.ok ? { ok: true, id: b.id } : { ok: false, msg: b?.msg }
+  } catch { return { ok: false } }
+}
+
+// Reportar. Devuelve { ok }.
+export async function reportarComentario(comId, motivo) {
+  if (esDemo()) {
+    const rep = dGet(D_REPORT); const id = anonId()
+    const arr = rep[comId] || []
+    if (!arr.some(x => x.anonId === id)) arr.push({ anonId: id, motivo: (motivo || '').trim() || null })
+    rep[comId] = arr; dSet(D_REPORT, rep)
+    return { ok: true }
+  }
+  try {
+    const res = await fetch(`${URL}/rest/v1/rpc/pl_reportar`, {
+      method: 'POST', headers: { ...anonHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ p_voto_id: comId, p_motivo: motivo || null, p_anon: anonId() }),
+    })
+    const b = await res.json().catch(() => null)
+    return res.ok && b?.ok ? { ok: true } : { ok: false }
+  } catch { return { ok: false } }
+}
+
+// Moderar (superadmin): borra el texto, conserva el voto. Devuelve { ok }.
+export async function moderarComentario(comId) {
+  if (esDemo()) {
+    const mod = dGet(D_MOD); mod[comId] = true; dSet(D_MOD, mod)
+    return { ok: true }
+  }
+  try {
+    const headers = await getAuthHeaders()
+    const res = await fetch(`${URL}/rest/v1/rpc/pl_moderar_comentario`, {
+      method: 'POST', headers: { ...headers, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ p_voto_id: comId }),
+    })
+    const b = await res.json().catch(() => null)
+    return res.ok && b?.ok ? { ok: true } : { ok: false }
+  } catch { return { ok: false } }
 }
 
 /* ── Verificación del votante por correo (OTP) ──────────────────────────── */
@@ -310,10 +517,20 @@ export async function verificarCodigo(email, code) {
   }
 }
 
-/* ── Emitir voto(s) ─────────────────────────────────────────────────────── */
-// filas: array de objetos listos para insertar. Devuelve:
-//   { ok:true } | { ok:false, code:'duplicado' } | { ok:false, code:'error', msg }
-export async function emitirVotos(filas) {
+/* ── Emitir voto(s) ─────────────────────────────────────────────────────────
+   SEGURIDAD (2026-08-10): el voto ya NO se inserta directo con la anon key.
+   Se emite por la función SECURITY DEFINER `pl_emitir_votos`, que:
+     · exige un OTP 'voto' verificado (used=true) para el correo en <15 min,
+     · hashea la cédula con una sal SECRETA del servidor (no en el navegador),
+     · inserta de forma atómica y deduplica por el UNIQUE.
+   El INSERT anónimo directo sobre votos_proyecto queda revocado en la BD.
+   Ver docs/sql/proyectos-ley-voto-seguro-2026-08-10.sql.
+
+   Args: (filas, identidad). `filas` son las filas armadas por el formulario;
+   `identidad` aporta el correo verificado y la cédula en claro (dígitos).
+   Devuelve: {ok:true} | {ok:false, code:'duplicado'} |
+             {ok:false, code:'otp'} | {ok:false, code:'error', msg} */
+export async function emitirVotos(filas, identidad) {
   // Modo demo: simula el UNIQUE index (un voto por persona y ámbito). Si
   // cualquier fila choca con un voto existente, se rechaza el lote completo
   // (igual que el INSERT atómico real → 409), sin insertar nada.
@@ -328,16 +545,38 @@ export async function emitirVotos(filas) {
     escribirDemoVotos([...votos, ...filas.map(f => ({ ...f, created_at: f.created_at || stamp }))])
     return { ok: true }
   }
+  // Cuerpo para el RPC: la cédula/correo van en los parámetros top-level (una
+  // sola vez); cada voto lleva solo su ámbito y campos públicos. El hash de
+  // cédula lo calcula el servidor → aquí NO se envía cedula_hash.
+  const p_votos = filas.map(f => ({
+    proyecto_id: f.proyecto_id,
+    articulo_id: f.articulo_id ?? null,
+    apoya: f.apoya,
+    observaciones: f.observaciones ?? null,
+    departamento: f.departamento ?? null,
+    municipio: f.municipio ?? null,
+    nombre: f.nombre ?? null,
+    celular: f.celular ?? null,
+  }))
   try {
-    const res = await fetch(`${URL}/rest/v1/votos_proyecto`, {
+    const res = await fetch(`${URL}/rest/v1/rpc/pl_emitir_votos`, {
       method: 'POST',
-      headers: { ...anonHeaders(), 'Content-Type': 'application/json', Prefer: 'return=minimal' },
-      body: JSON.stringify(filas),
+      headers: { ...anonHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        p_correo: identidad?.correo || '',
+        p_cedula: identidad?.cedulaNum || '',
+        p_votos,
+      }),
     })
-    if (res.ok) return { ok: true }
     let body = null
     try { body = await res.json() } catch { /* sin cuerpo */ }
-    if (res.status === 409 || body?.code === '23505') return { ok: false, code: 'duplicado' }
+    if (res.ok && body && typeof body === 'object') {
+      if (body.ok) return { ok: true }
+      if (body.code === 'duplicado') return { ok: false, code: 'duplicado' }
+      if (body.code === 'otp') return { ok: false, code: 'otp' }
+      return { ok: false, code: 'error', msg: body.msg || 'No se pudo registrar el voto.' }
+    }
+    if (res.status === 409) return { ok: false, code: 'duplicado' }
     return { ok: false, code: 'error', msg: body?.message || `HTTP ${res.status}` }
   } catch (err) {
     return { ok: false, code: 'error', msg: err.message }

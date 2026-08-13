@@ -86,11 +86,6 @@ function IdentidadGate({ onListo, initial }) {
   const [err, setErr]         = useState('')
   const [busy, setBusy]       = useState(false)
 
-  // Si la persona vuelve a editar sus datos y NO cambia el correo, no la
-  // obligamos a verificar de nuevo (ya estaba verificada).
-  const yaVerificado = !!initial?.email_verificado
-  const correoOriginal = initial?.correo || ''
-
   // form → review (confirmar datos) → verify (OTP). El estado del formulario se
   // conserva siempre: volver a "Corregir" nunca borra lo que la persona escribió.
   const [fase, setFase]           = useState('form')   // 'form' | 'review' | 'verify'
@@ -120,6 +115,7 @@ function IdentidadGate({ onListo, initial }) {
     setIdentPend({
       nombre: nombre.trim(),
       cedula: formatCedula(cedNum),
+      cedulaNum: cedNum,           // dígitos en claro → el servidor hashea con sal secreta
       celular: normalizarCelular(celular),
       correo: correo.trim(),
       departamento: depto,
@@ -131,19 +127,12 @@ function IdentidadGate({ onListo, initial }) {
     setFase('review')
   }
 
-  // ¿Puede saltarse el OTP? Sí, si ya estaba verificada y no cambió el correo.
-  const sinNuevaVerificacion = () => yaVerificado && identPend && identPend.correo === correoOriginal
-
-  // Paso 2 → 3: confirma los datos. Si no cambió el correo (y ya estaba
-  // verificada), finaliza directo; si no, dispara el código de verificación.
+  // Paso 2 → 3: confirma los datos y dispara SIEMPRE el código de verificación.
+  // (Seguridad: cada sesión de voto exige un OTP fresco; el RPC pl_emitir_votos
+  // requiere un código 'voto' consumido en los últimos 15 min. Ya no se salta
+  // la verificación aunque el correo no haya cambiado.)
   async function confirmarDatos() {
     if (!identPend) return
-    if (sinNuevaVerificacion()) {
-      const ident = { ...identPend, email_verificado: true }
-      localStorage.setItem(LS_IDENT, JSON.stringify(ident))
-      onListo(ident)
-      return
-    }
     setErr(''); setBusy(true)
     try {
       const r = await enviarCodigo(identPend.correo)
@@ -228,7 +217,7 @@ function IdentidadGate({ onListo, initial }) {
             ← Corregir datos
           </button>
           <button type="button" className={styles.gateBtn} onClick={confirmarDatos} disabled={busy}>
-            {busy ? 'Enviando código…' : (sinNuevaVerificacion() ? 'Confirmar cambios' : 'Confirmar y verificar correo')}
+            {busy ? 'Enviando código…' : 'Confirmar y verificar correo'}
           </button>
         </div>
       </motion.div>
@@ -332,13 +321,17 @@ function VotoForm({ proyecto, articulos, identidad, onVotado }) {
     setPaso('revisar')
   }
 
-  // Paso 2 → registro definitivo.
+  // Paso 2 → registro definitivo (vía RPC seguro pl_emitir_votos).
   async function enviar() {
     setErr('')
     setEstado('enviando')
-    const r = await emitirVotos(filasPend)
+    const r = await emitirVotos(filasPend, identidad)
     if (r.ok) { marcarVotado(identidad.hash, proyecto.id); onVotado() }
     else if (r.code === 'duplicado') { marcarVotado(identidad.hash, proyecto.id); onVotado('duplicado') }
+    else if (r.code === 'otp') {
+      setEstado('error')
+      setErr('Tu verificación por correo expiró (más de 15 min). Pulsa “Volver” arriba para verificar tu correo otra vez y luego vota.')
+    }
     else { setEstado('error'); setErr(r.msg || 'No se pudo registrar tu voto. Intenta de nuevo.') }
   }
 
@@ -570,7 +563,7 @@ function ProyectoCard({ proyecto, identidad, votadoInicial, index }) {
                 <p className={styles.yaVoto}>Ya registraste tu voto para este proyecto. Gracias por participar.</p>
               )}
               {tab === 'resultados' && (
-                <ResultadosProyecto proyecto={proyecto} articulos={articulos || []} refreshKey={refresh} />
+                <ResultadosProyecto proyecto={proyecto} articulos={articulos || []} refreshKey={refresh} autor={identidad?.nombre} />
               )}
             </div>
           </motion.div>

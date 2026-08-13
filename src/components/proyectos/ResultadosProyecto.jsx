@@ -2,7 +2,9 @@ import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  APOYA, apoyaMeta, fetchResumen, fetchComentarios,
+  APOYA, apoyaMeta, fetchResumen, fetchComentariosExt, fetchRespuestas,
+  reaccionarComentario, responderComentario, reportarComentario,
+  moderarComentario, miReaccion,
 } from '../../lib/proyectosLey'
 import { nivelMunicipalLabel } from '../../data/colombia-ubicaciones'
 import styles from './ResultadosProyecto.module.css'
@@ -40,12 +42,196 @@ const fmtDia = (iso) => {
 
 const TODOS = '__todos__'
 
+const MOTIVOS_REPORTE = ['Contenido ofensivo', 'Spam o publicidad', 'Información falsa', 'Otro']
+
+/* Tarjeta de un comentario con capa social: acuerdo/desacuerdo, respuestas
+   desplegables y reporte. En modo admin muestra el nº de reportes y permite
+   eliminar el texto (el voto se conserva en el conteo). */
+function ComentarioCard({ c, respuestas, isAdmin, autor }) {
+  const m = apoyaMeta(c.apoya)
+  const [likes, setLikes]       = useState(c.likes || 0)
+  const [dislikes, setDislikes] = useState(c.dislikes || 0)
+  const [mine, setMine]         = useState(miReaccion(c.id))
+  const [reps, setReps]         = useState(respuestas || [])
+  const [open, setOpen]         = useState(false)
+  const [texto, setTexto]       = useState('')
+  const [enviando, setEnviando] = useState(false)
+  const [reportUI, setReportUI] = useState(false)
+  const [reportado, setReportado] = useState(false)
+  const [oculto, setOculto]     = useState(false)
+  const [busyMod, setBusyMod]   = useState(false)
+
+  // Una reacción por persona: al hacer clic se alterna (quita) o se cambia de
+  // acuerdo↔desacuerdo. El servidor (o el store demo) reconfirma los conteos.
+  async function reaccionar(tipo) {
+    const was = mine
+    const next = tipo === was ? null : tipo
+    setMine(next)
+    setLikes(l => l - (was === 'like' ? 1 : 0) + (next === 'like' ? 1 : 0))
+    setDislikes(d => d - (was === 'dislike' ? 1 : 0) + (next === 'dislike' ? 1 : 0))
+    const r = await reaccionarComentario(c.id, tipo)
+    if (r.ok) { setLikes(r.likes); setDislikes(r.dislikes); setMine(r.mine) }
+  }
+
+  // El autor de la respuesta es la persona ya identificada (no se vuelve a pedir).
+  async function responder(e) {
+    e.preventDefault()
+    const t = texto.trim()
+    if (!t || enviando || !autor) return
+    setEnviando(true)
+    const r = await responderComentario(c.id, autor, t)
+    setEnviando(false)
+    if (r.ok) {
+      setReps(rs => [...rs, { id: r.id, nombre: autor, texto: t, created_at: new Date().toISOString() }])
+      setTexto(''); setOpen(true)
+    }
+  }
+
+  async function reportar(motivo) {
+    setReportUI(false)
+    const r = await reportarComentario(c.id, motivo)
+    if (r.ok) setReportado(true)
+  }
+
+  async function moderar() {
+    if (busyMod) return
+    setBusyMod(true)
+    const r = await moderarComentario(c.id)
+    setBusyMod(false)
+    if (r.ok) setOculto(true)
+  }
+
+  if (oculto) return null
+
+  return (
+    <li className={styles.comCard}>
+      <div className={styles.comHead}>
+        <span className={styles.comNombre}>{c.nombre || 'Ciudadano/a'}</span>
+        <span className={styles.comBadge} style={{ color: m.color, background: `color-mix(in srgb, ${m.color} 13%, transparent)` }}>{m.label}</span>
+        {c.created_at && <span className={styles.comFecha}>{fmtDia(c.created_at)}</span>}
+        {isAdmin && c.reportes > 0 && (
+          <span className={styles.comFlag} title={`${c.reportes} reporte${c.reportes === 1 ? '' : 's'}`}>
+            <FlagIcon /> {c.reportes}
+          </span>
+        )}
+      </div>
+      {[c.municipio, c.departamento].filter(Boolean).length > 0 && (
+        <span className={styles.comLugar}>{[c.municipio, c.departamento].filter(Boolean).join(', ')}</span>
+      )}
+      <p className={styles.comTexto}>{c.observaciones}</p>
+
+      {/* Acciones directamente bajo el comentario: Responder a la izquierda;
+          reacciones (icono + conteo) y Reportar/Eliminar a la derecha. */}
+      <div className={styles.comFootRow}>
+        <button type="button" className={styles.linkBtn}
+          onClick={() => setOpen(o => !o)} aria-expanded={open}>
+          {reps.length > 0 ? `${open ? 'Ocultar' : 'Ver'} ${reps.length} respuesta${reps.length === 1 ? '' : 's'}` : 'Responder'}
+        </button>
+        <span className={styles.actionsSpacer} />
+        <div className={styles.comReacts}>
+          <button type="button"
+            className={`${styles.reactBtn} ${mine === 'like' ? styles.reactOnUp : ''}`}
+            onClick={() => reaccionar('like')} aria-pressed={mine === 'like'} aria-label={`De acuerdo (${likes})`}>
+            <ThumbIcon /> <b>{likes}</b>
+          </button>
+          <button type="button"
+            className={`${styles.reactBtn} ${mine === 'dislike' ? styles.reactOnDown : ''}`}
+            onClick={() => reaccionar('dislike')} aria-pressed={mine === 'dislike'} aria-label={`En desacuerdo (${dislikes})`}>
+            <ThumbIcon down /> <b>{dislikes}</b>
+          </button>
+        </div>
+        {reportado ? (
+          <span className={styles.reportedTag}>Reportado ✓</span>
+        ) : (
+          <button type="button" className={styles.reportBtn} onClick={() => setReportUI(v => !v)} aria-expanded={reportUI}>
+            <FlagIcon /> Reportar
+          </button>
+        )}
+        {isAdmin && (
+          <button type="button" className={styles.delBtn} onClick={moderar} disabled={busyMod}>
+            <TrashIcon /> {busyMod ? 'Eliminando…' : 'Eliminar'}
+          </button>
+        )}
+      </div>
+
+      {/* Menú de motivos de reporte (inline, sin recorte) */}
+      {reportUI && (
+        <div className={styles.reportMenu} role="menu">
+          <span className={styles.reportMenuLbl}>¿Por qué reportas este comentario?</span>
+          <div className={styles.reportMotivos}>
+            {MOTIVOS_REPORTE.map(mo => (
+              <button key={mo} type="button" role="menuitem" className={styles.reportMotivo} onClick={() => reportar(mo)}>{mo}</button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Hilo de respuestas + composer (la respuesta se firma con el nombre ya
+          identificado; se muestra como un comentario nuevo pero diferenciado). */}
+      {open && (
+        <div className={styles.respThread}>
+          {reps.map(r => (
+            <div key={r.id} className={styles.respItem}>
+              <span className={styles.respMark} aria-hidden="true"><ReplyIcon /></span>
+              <div className={styles.respBody}>
+                <div className={styles.respHead}>
+                  <span className={styles.respNombre}>{r.nombre || 'Ciudadano/a'}</span>
+                  <span className={styles.respTag}>respuesta</span>
+                  {r.created_at && <span className={styles.respFecha}>{fmtDia(r.created_at)}</span>}
+                </div>
+                <p className={styles.respTexto}>{r.texto}</p>
+              </div>
+            </div>
+          ))}
+          {autor ? (
+            <form className={styles.respForm} onSubmit={responder}>
+              <div className={styles.respRow}>
+                <input className={styles.respInput} value={texto} onChange={e => setTexto(e.target.value)}
+                  placeholder={`Responder como ${autor}…`} maxLength={500} aria-label="Escribe una respuesta" />
+                <button type="submit" className={styles.respSend} disabled={!texto.trim() || enviando}>
+                  {enviando ? '…' : 'Responder'}
+                </button>
+              </div>
+            </form>
+          ) : (
+            <p className={styles.respHint}>Identifícate para responder.</p>
+          )}
+        </div>
+      )}
+    </li>
+  )
+}
+
+/* Iconos (mismo trazo que el resto de la UI) */
+const ThumbIcon = ({ down }) => (
+  <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"
+    style={down ? { transform: 'rotate(180deg)' } : undefined}>
+    <path d="M7 10v11" /><path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88Z" />
+  </svg>
+)
+const FlagIcon = () => (
+  <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" /><line x1="4" y1="22" x2="4" y2="15" />
+  </svg>
+)
+const TrashIcon = () => (
+  <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M3 6h18" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+  </svg>
+)
+const ReplyIcon = () => (
+  <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <polyline points="9 17 4 12 9 7" /><path d="M20 18v-2a4 4 0 0 0-4-4H4" />
+  </svg>
+)
+
 /* Resultados de un proyecto: torta por postura, filtrable por ámbito
    (proyecto completo / artículo) y por departamento + municipio.
    Reutilizado por la página pública y por el panel de administración. */
-export default function ResultadosProyecto({ proyecto, articulos = [], refreshKey = 0 }) {
+export default function ResultadosProyecto({ proyecto, articulos = [], refreshKey = 0, isAdmin = false, autor = '' }) {
   const [resumen, setResumen]       = useState(null)   // null = cargando
   const [comentarios, setComentarios] = useState([])
+  const [respuestas, setRespuestas] = useState([])     // todas las del proyecto
   const [scope, setScope]     = useState('all')  // 'all' = proyecto completo | articulo_id
   const [nivel, setNivel]     = useState('nacional') // 'nacional' | 'departamento' | 'municipio'
   const [depto, setDepto]     = useState(TODOS)
@@ -59,9 +245,20 @@ export default function ResultadosProyecto({ proyecto, articulos = [], refreshKe
     let cancel = false
     setResumen(null)
     fetchResumen(proyecto.id).then(r => { if (!cancel) setResumen(r) })
-    fetchComentarios(proyecto.id).then(c => { if (!cancel) setComentarios(Array.isArray(c) ? c : []) })
+    fetchComentariosExt(proyecto.id).then(c => { if (!cancel) setComentarios(Array.isArray(c) ? c : []) })
+    fetchRespuestas(proyecto.id).then(r => { if (!cancel) setRespuestas(Array.isArray(r) ? r : []) })
     return () => { cancel = true }
   }, [proyecto.id, refreshKey])
+
+  // Respuestas agrupadas por comentario (voto_id).
+  const respPorComentario = useMemo(() => {
+    const m = new Map()
+    for (const r of respuestas) {
+      if (!m.has(r.voto_id)) m.set(r.voto_id, [])
+      m.get(r.voto_id).push(r)
+    }
+    return m
+  }, [respuestas])
 
   // Filas del ámbito activo (proyecto completo → articulo_id null).
   const rowsScope = useMemo(() => {
@@ -264,22 +461,13 @@ export default function ResultadosProyecto({ proyecto, articulos = [], refreshKe
             Comentarios <span>{comentariosFiltrados.length}</span>
           </h4>
           <ul className={styles.comList}>
-            {comentariosFiltrados.slice(0, comLimit).map(c => {
-              const m = apoyaMeta(c.apoya)
-              return (
-                <li key={c.id} className={styles.comCard}>
-                  <div className={styles.comHead}>
-                    <span className={styles.comNombre}>{c.nombre || 'Ciudadano/a'}</span>
-                    <span className={styles.comBadge} style={{ color: m.color, background: `color-mix(in srgb, ${m.color} 13%, transparent)` }}>{m.label}</span>
-                    {c.created_at && <span className={styles.comFecha}>{fmtDia(c.created_at)}</span>}
-                  </div>
-                  {[c.municipio, c.departamento].filter(Boolean).length > 0 && (
-                    <span className={styles.comLugar}>{[c.municipio, c.departamento].filter(Boolean).join(', ')}</span>
-                  )}
-                  <p className={styles.comTexto}>{c.observaciones}</p>
-                </li>
-              )
-            })}
+            {comentariosFiltrados.slice(0, comLimit).map(c => (
+              <ComentarioCard
+                key={c.id} c={c}
+                respuestas={respPorComentario.get(c.id) || []}
+                isAdmin={isAdmin} autor={autor}
+              />
+            ))}
           </ul>
           {comentariosFiltrados.length > comLimit ? (
             <button type="button" className={styles.verMas} onClick={() => setComLimit(n => n + 8)}>
