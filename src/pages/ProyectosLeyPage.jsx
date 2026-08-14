@@ -581,6 +581,29 @@ export default function ProyectosLeyPage() {
   const votados = useMemo(() => (identidad ? (leerVotados()[identidad.hash] || []) : []), [identidad])
   const topRef = useRef(null)
 
+  // Filtros de la lista: texto (nombre/número/tema) + rango de fecha de radicación.
+  const [busqueda, setBusqueda] = useState('')
+  const [desde, setDesde]       = useState('')
+  const [hasta, setHasta]       = useState('')
+
+  const proyectosFiltrados = useMemo(() => {
+    if (!proyectos) return []
+    const term = busqueda.trim().toLowerCase()
+    return proyectos.filter(p => {
+      if (term) {
+        const heno = `${p.nombre || ''} ${p.numero || ''} ${p.descripcion || ''}`.toLowerCase()
+        if (!heno.includes(term)) return false
+      }
+      const f = (p.fecha_radicacion || '').slice(0, 10)
+      if (desde && (!f || f < desde)) return false
+      if (hasta && (!f || f > hasta)) return false
+      return true
+    })
+  }, [proyectos, busqueda, desde, hasta])
+
+  const hayFiltro = !!(busqueda.trim() || desde || hasta)
+  const limpiarFiltros = () => { setBusqueda(''); setDesde(''); setHasta('') }
+
   useEffect(() => { window.scrollTo(0, 0) }, [])
 
   useEffect(() => {
@@ -640,14 +663,61 @@ export default function ProyectosLeyPage() {
                 <p>Cuando el equipo publique un proyecto de ley para debate, aparecerá aquí para que dejes tu voto.</p>
               </div>
             ) : (
-              <div className={styles.list}>
-                {proyectos.map((p, i) => (
-                  <ProyectoCard
-                    key={p.id} proyecto={p} identidad={identidad}
-                    votadoInicial={votados.includes(p.id)} index={i}
-                  />
-                ))}
-              </div>
+              <>
+                <div className={styles.filtros}>
+                  <div className={styles.buscador}>
+                    <svg className={styles.buscadorIcon} viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <circle cx="11" cy="11" r="7" /><path d="m21 21-4.3-4.3" />
+                    </svg>
+                    <input
+                      type="search" value={busqueda} onChange={e => setBusqueda(e.target.value)}
+                      placeholder="Buscar por nombre, número o tema…" aria-label="Buscar proyectos de ley"
+                    />
+                    {busqueda && (
+                      <button type="button" className={styles.buscadorClear} onClick={() => setBusqueda('')} aria-label="Limpiar búsqueda">✕</button>
+                    )}
+                  </div>
+                  <div className={styles.fechas}>
+                    <label className={styles.fechaField}>
+                      <span>Radicado desde</span>
+                      <input type="date" value={desde} onChange={e => setDesde(e.target.value)} max={hasta || undefined} />
+                    </label>
+                    <label className={styles.fechaField}>
+                      <span>Radicado hasta</span>
+                      <input type="date" value={hasta} onChange={e => setHasta(e.target.value)} min={desde || undefined} />
+                    </label>
+                  </div>
+                  {hayFiltro && (
+                    <button type="button" className={styles.limpiarBtn} onClick={limpiarFiltros}>Limpiar</button>
+                  )}
+                </div>
+
+                {hayFiltro && (
+                  <p className={styles.filtroCount} aria-live="polite">
+                    {proyectosFiltrados.length === 0
+                      ? 'Sin coincidencias'
+                      : `Mostrando ${proyectosFiltrados.length} de ${proyectos.length} proyecto${proyectos.length === 1 ? '' : 's'}`}
+                  </p>
+                )}
+
+                {proyectosFiltrados.length === 0 ? (
+                  <div className={styles.emptyProj}>
+                    <span aria-hidden="true">🔎</span>
+                    <h2>Sin resultados</h2>
+                    <p>Ningún proyecto coincide con tu búsqueda. Prueba con otras palabras o cambia el rango de fechas.</p>
+                    <button type="button" className={styles.limpiarBtn} onClick={limpiarFiltros}>Limpiar filtros</button>
+                  </div>
+                ) : (
+                  <div className={styles.list}>
+                    {proyectosFiltrados.map((p, i) => (
+                      <ProyectoCard
+                        key={p.id} proyecto={p} identidad={identidad}
+                        votadoInicial={votados.includes(p.id)} index={i}
+                      />
+                    ))}
+                  </div>
+                )}
+              </>
             )}
           </>
         )}

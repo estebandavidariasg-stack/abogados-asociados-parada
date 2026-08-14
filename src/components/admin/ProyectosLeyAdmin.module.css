@@ -34,6 +34,57 @@
 }
 .newBtn:hover { background: var(--navy-md, #6d3c1b); }
 
+/* Filtros de la lista (texto + rango de fechas) */
+.filtros {
+  display: flex; align-items: flex-end; gap: 0.7rem;
+  flex-wrap: wrap; margin-bottom: 0.9rem;
+}
+.buscador { position: relative; flex: 1 1 240px; min-width: 190px; display: flex; align-items: center; }
+.buscadorIcon { position: absolute; left: 0.8rem; color: #9a8064; pointer-events: none; display: inline-flex; }
+.buscador input {
+  font-family: 'Poppins', sans-serif; font-size: 0.88rem; color: #472f29;
+  background: #fffef7; border: 1px solid rgba(109, 60, 27, 0.18);
+  border-radius: 10px; padding: 0.56rem 2.3rem; width: 100%;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.buscador input::placeholder { color: #9a8064; }
+.buscador input::-webkit-search-cancel-button { display: none; }
+.buscador input:focus { outline: none; border-color: var(--gold, #C9A84C); box-shadow: 0 0 0 3px rgba(201, 168, 76, 0.18); }
+.buscadorClear {
+  position: absolute; right: 0.5rem; width: 22px; height: 22px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: none; background: rgba(109, 60, 27, 0.08); color: #6d3c1b;
+  border-radius: 50%; cursor: pointer; font-size: 0.7rem; line-height: 1;
+  transition: background 0.18s, color 0.18s;
+}
+.buscadorClear:hover { background: rgba(180, 68, 47, 0.14); color: #b4442f; }
+.fechas { display: flex; gap: 0.55rem; }
+.fechaField { display: flex; flex-direction: column; gap: 0.26rem; }
+.fechaField span { font-size: 0.58rem; text-transform: uppercase; letter-spacing: 0.09em; font-weight: 700; color: #9a8064; }
+.fechaField input {
+  font-family: 'Poppins', sans-serif; font-size: 0.82rem; color: #472f29;
+  background: #fffef7; border: 1px solid rgba(109, 60, 27, 0.18);
+  border-radius: 10px; padding: 0.5rem 0.65rem;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.fechaField input:focus { outline: none; border-color: var(--gold, #C9A84C); box-shadow: 0 0 0 3px rgba(201, 168, 76, 0.18); }
+.limpiarBtn {
+  font-family: 'Poppins', sans-serif; font-size: 0.78rem; font-weight: 600;
+  color: #6d3c1b; background: rgba(201, 168, 76, 0.1);
+  border: 1px solid rgba(201, 168, 76, 0.3); border-radius: 9px;
+  padding: 0.5rem 0.95rem; cursor: pointer; transition: background 0.18s, border-color 0.18s;
+}
+.limpiarBtn:hover { background: rgba(201, 168, 76, 0.2); border-color: var(--gold, #C9A84C); }
+.filtroCount { font-size: 0.76rem; color: #6f5c48; margin: 0 0 0.9rem; font-weight: 600; }
+
+@media (max-width: 620px) {
+  .filtros { flex-direction: column; align-items: stretch; }
+  .fechas { width: 100%; }
+  .fechaField { flex: 1 1 0; }
+  .fechaField input { width: 100%; }
+  .limpiarBtn { align-self: flex-start; }
+}
+
 /* Lista */
 .list { list-style: none; display: flex; flex-direction: column; gap: 0.8rem; }
 .item {
