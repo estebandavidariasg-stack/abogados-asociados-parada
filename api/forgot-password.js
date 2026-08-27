@@ -236,14 +236,20 @@ export default async function handler(req, res) {
     })
 
     if (!linkRes.ok) {
-      // Usuario no encontrado u otro error de Supabase. Respondemos OK
-      // genérico para no enumerar.
+      // Usuario no encontrado u otro error de Supabase. Respondemos OK genérico
+      // para no enumerar, pero LOGUEAMOS el motivo (visible en los logs de la
+      // función en Vercel) para diagnosticar por qué no llega el correo. Causa
+      // típica: el redirect_to NO está en la allowlist de Supabase
+      // (Authentication → URL Configuration → Redirect URLs).
+      const detalle = await linkRes.text().catch(() => '')
+      console.error('[forgot-password] generate_link falló:', linkRes.status, detalle.slice(0, 300))
       return res.status(200).json({ success: true })
     }
 
     const linkData = await linkRes.json()
     const actionLink = linkData?.properties?.action_link || linkData?.action_link
     if (!actionLink) {
+      console.error('[forgot-password] respuesta sin action_link:', JSON.stringify(linkData).slice(0, 300))
       return res.status(200).json({ success: true })
     }
 

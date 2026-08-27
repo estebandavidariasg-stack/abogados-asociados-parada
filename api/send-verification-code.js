@@ -252,27 +252,31 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Tipo de registro inválido.' })
   }
 
-  // ── Verificación de captcha (antes de tocar BD/admin API/SMTP) ───────
-  //  Se exige para el registro público (evita relay de correos). Para la FIRMA
-  //  electrónica (tipoRegistro='firma') NO: el flujo lo inicia un profesional
-  //  autenticado dentro de la app y ya está limitado por el rate-limit
-  //  (3/10min por correo) + el propio OTP. Meter un captcha ahí es fricción
-  //  innecesaria en medio de la firma de un documento.
-  if (!TIPOS_SIN_CUENTA.has(tipoRegistro)) {
-    const captchaCheck = await verifyRecaptcha(recaptchaToken)
-    if (!captchaCheck.ok) {
-      return res.status(403).json({
-        error: 'No se pudo verificar el captcha. Recarga la página e intenta de nuevo.'
-      })
-    }
-  }
-
   // Supabase Auth almacena emails en lowercase — alineamos.
   const email = rawEmail.toLowerCase()
+  // (El captcha se verifica dentro del try, más abajo, para poder distinguir el
+  //  PRIMER envío de un REENVÍO — ver nota ahí.)
 
   try {
-    // 1. Rate-limit primero (barato, antes de tocar admin API o SMTP)
-    if (await countRecentCodes(email) >= RATE_LIMIT_MAX) {
+    // 0. ¿REENVÍO? Si ya hay un código reciente para este correo, hubo un primer
+    //    envío que YA pasó el captcha. El token reCAPTCHA v2 es de UN SOLO USO y
+    //    en el paso "ingresa el código" no hay forma de refrescarlo, así que en
+    //    reenvíos NO re-exigimos captcha (por eso "Reenviar código" fallaba con
+    //    "No se pudo verificar el captcha"). El PRIMER envío de cada correo sí
+    //    exige captcha (gate anti-bot), y el rate-limit (3/10min) acota el abuso.
+    const recientes = await countRecentCodes(email)
+    const esReenvio = recientes >= 1
+    if (!TIPOS_SIN_CUENTA.has(tipoRegistro) && !esReenvio) {
+      const captchaCheck = await verifyRecaptcha(recaptchaToken)
+      if (!captchaCheck.ok) {
+        return res.status(403).json({
+          error: 'No se pudo verificar el captcha. Recarga la página e intenta de nuevo.'
+        })
+      }
+    }
+
+    // 1. Rate-limit (barato, antes de tocar admin API o SMTP)
+    if (recientes >= RATE_LIMIT_MAX) {
       return res.status(429).json({ error: 'Demasiados intentos. Espera 10 minutos.' })
     }
 
