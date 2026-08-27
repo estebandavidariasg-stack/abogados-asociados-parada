@@ -274,10 +274,16 @@ export default async function handler(req, res) {
     const linkData = await linkRes.json()
     // Usamos el CÓDIGO (email_otp) que devuelve generate_link, no el action_link
     // (que Gmail consume por prefetch → llegaba "expirado"). El botón del correo
-    // solo abre la página de reset, sin token.
-    const otp = linkData?.properties?.email_otp
+    // solo abre la página de reset, sin token. La respuesta de generate_link trae
+    // los campos anidados en `properties` o al nivel raíz según la versión de
+    // GoTrue — probamos AMBOS (por eso antes fallaba y no enviaba nada).
+    const otp = linkData?.properties?.email_otp || linkData?.email_otp
     if (!otp) {
-      console.error('[forgot-password] respuesta sin email_otp:', JSON.stringify(linkData).slice(0, 300))
+      console.error(
+        '[forgot-password] respuesta sin email_otp. keys:',
+        Object.keys(linkData || {}).join(','),
+        '| props:', Object.keys(linkData?.properties || {}).join(',')
+      )
       return res.status(200).json({ success: true })
     }
     let pageLink = DEFAULT_REDIRECT
