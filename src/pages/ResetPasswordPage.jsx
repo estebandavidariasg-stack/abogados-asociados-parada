@@ -44,22 +44,6 @@ function storeSession(accessToken, refreshToken) {
   return claims
 }
 
-// Verifica el código de recuperación contra Supabase → devuelve la sesión.
-async function verifyRecoveryOtp(email, token) {
-  const URL  = import.meta.env.VITE_SUPABASE_URL
-  const ANON = import.meta.env.VITE_SUPABASE_ANON_KEY
-  const res = await fetch(`${URL}/auth/v1/verify`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', apikey: ANON },
-    body: JSON.stringify({ type: 'recovery', email, token }),
-  })
-  const data = await res.json().catch(() => ({}))
-  if (!res.ok || !data?.access_token) {
-    throw new Error(data?.msg || data?.error_description || 'Código inválido o expirado.')
-  }
-  return data
-}
-
 const PwToggle = ({ shown, onClick }) => (
   <button
     type="button"
@@ -144,7 +128,8 @@ export default function ResetPasswordPage() {
     finally { setLoading(false) }
   }
 
-  // Código: verificamos el OTP, guardamos la sesión y actualizamos.
+  // Código: lo enviamos a nuestro endpoint, que valida el código y cambia la
+  // contraseña con el service-role. No hay token de Supabase que expire/pise.
   async function submitCode(e) {
     e.preventDefault(); setError('')
     const em = emailInput.trim().toLowerCase()
@@ -153,11 +138,16 @@ export default function ResetPasswordPage() {
     if (!validarPassword()) return
     setLoading(true)
     try {
-      const data = await verifyRecoveryOtp(em, code.trim())
-      storeSession(data.access_token, data.refresh_token)
-      await aplicarPassword()
+      const res = await fetch('/api/forgot-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: em, code: code.trim(), newPassword: pw1 }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok || !data?.success) throw new Error(data?.error || 'Código inválido o expirado.')
+      setDone(true)
     } catch (err) {
-      setError(err.message || 'Código inválido o expirado.')
+      setError(err.message || 'No se pudo cambiar la contraseña.')
     } finally {
       setLoading(false)
     }

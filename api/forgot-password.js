@@ -191,9 +191,114 @@ function renderResetEmailHtml({ otp, pageLink }) {
   })
 }
 
+/* ── Plan B: recuperación 100% bajo nuestro control ────────────────────────
+   No dependemos del OTP de Supabase (se "vencía"/pisaba). Generamos NUESTRO
+   código de 6 dígitos, lo guardamos en verification_codes (tipo 'recovery') y,
+   al verificarlo, cambiamos la contraseña con el service-role (admin API).
+   ⚠️ Requiere permitir tipo_registro='recovery' en el CHECK de la tabla — ver
+   docs/sql/recovery-code-2026-08-17.sql. */
+const CODE_TTL_MS = 60 * 60 * 1000 // 1 hora
+
+async function getUserIdByEmail(email) {
+  const url = new URL(`${SUPABASE_URL}/auth/v1/admin/users`)
+  url.searchParams.set('filter', email)
+  url.searchParams.set('per_page', '10')
+  const res = await fetch(url.toString(), { headers: adminHeaders() })
+  if (!res.ok) return null
+  const data = await res.json().catch(() => ({}))
+  const list = Array.isArray(data) ? data : (data?.users || [])
+  const target = email.toLowerCase()
+  const u = list.find(x => (x?.email || '').toLowerCase() === target)
+  return u?.id || null
+}
+
+async function invalidateRecoveryCodes(email) {
+  await fetch(
+    `${SUPABASE_URL}/rest/v1/verification_codes?email=eq.${encodeURIComponent(email)}&tipo_registro=eq.recovery&used=eq.false`,
+    { method: 'PATCH', headers: { ...adminHeaders(), Prefer: 'return=minimal' }, body: JSON.stringify({ used: true }) }
+  ).catch(() => {})
+}
+
+async function insertRecoveryCode(email, code) {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/verification_codes`, {
+    method: 'POST',
+    headers: { ...adminHeaders(), Prefer: 'return=minimal' },
+    body: JSON.stringify({
+      email, code, tipo_registro: 'recovery',
+      expires_at: new Date(Date.now() + CODE_TTL_MS).toISOString(),
+    }),
+  })
+  if (!res.ok) {
+    const detail = await res.text().catch(() => '')
+    throw new Error(`insert recovery code failed (${res.status}): ${detail}`)
+  }
+}
+
+// Backstop en memoria contra fuerza-bruta del código en el paso de reset.
+const memReset = new Map()
+function resetTooMany(email) {
+  if (!email) return false
+  const now = Date.now()
+  const e = memReset.get(email)
+  if (!e || e.resetAt <= now) { memReset.set(email, { n: 1, resetAt: now + 15 * 60 * 1000 }); return false }
+  e.n += 1
+  return e.n > 8
+}
+
+// Verifica el código y cambia la contraseña (service-role). No hay token de
+// Supabase de por medio, así que no puede "expirar" por prefetch ni pisarse.
+async function handleReset(req, res) {
+  const b = req.body || {}
+  const email = String(b.email || '').trim().toLowerCase()
+  const code  = String(b.code || '').trim()
+  const newPassword = typeof b.newPassword === 'string' ? b.newPassword : ''
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: 'Correo inválido.' })
+  if (!/^\d{4,10}$/.test(code))                  return res.status(400).json({ error: 'Código inválido.' })
+  if (newPassword.length < 8)                    return res.status(400).json({ error: 'La contraseña debe tener al menos 8 caracteres.' })
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return res.status(500).json({ error: 'Configuración del servidor incompleta.' })
+  if (resetTooMany(email)) return res.status(429).json({ error: 'Demasiados intentos. Solicita un código nuevo.' })
+
+  // Validación ATÓMICA (un único UPDATE con filtros → sin ventana TOCTOU).
+  const now = new Date().toISOString()
+  const url =
+    `${SUPABASE_URL}/rest/v1/verification_codes` +
+    `?email=eq.${encodeURIComponent(email)}` +
+    `&code=eq.${encodeURIComponent(code)}` +
+    `&tipo_registro=eq.recovery&used=eq.false` +
+    `&expires_at=gt.${encodeURIComponent(now)}&select=id`
+  const patch = await fetch(url, {
+    method: 'PATCH',
+    headers: { ...adminHeaders(), Prefer: 'return=representation' },
+    body: JSON.stringify({ used: true }),
+  })
+  const rows = await patch.json().catch(() => [])
+  if (!patch.ok || !Array.isArray(rows) || rows.length === 0) {
+    return res.status(400).json({ error: 'Código inválido o expirado.' })
+  }
+
+  const userId = await getUserIdByEmail(email)
+  if (!userId) return res.status(400).json({ error: 'No se pudo procesar la solicitud.' })
+  const upd = await fetch(`${SUPABASE_URL}/auth/v1/admin/users/${encodeURIComponent(userId)}`, {
+    method: 'PUT',
+    headers: { ...adminHeaders() },
+    body: JSON.stringify({ password: newPassword }),
+  })
+  if (!upd.ok) {
+    const detail = await upd.text().catch(() => '')
+    console.error('[forgot-password] update password failed:', upd.status, detail.slice(0, 200))
+    return res.status(500).json({ error: 'No se pudo actualizar la contraseña.' })
+  }
+  return res.status(200).json({ success: true })
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' })
+  }
+
+  // Dos modos: (1) verificar código + cambiar contraseña, (2) enviar código.
+  if (req.body && typeof req.body.code === 'string' && typeof req.body.newPassword === 'string') {
+    return handleReset(req, res)
   }
 
   const { email, redirectTo, recaptchaToken } = req.body || {}
@@ -245,47 +350,17 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Generar el link de recovery con la SERVICE_ROLE key
-    const linkRes = await fetch(`${SUPABASE_URL}/auth/v1/admin/generate_link`, {
-      method: 'POST',
-      headers: {
-        apikey:        SUPABASE_SERVICE_ROLE_KEY,
-        Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        type: 'recovery',
-        email: normalizedEmail,
-        options: { redirect_to: target },
-      }),
-    })
-
-    if (!linkRes.ok) {
-      // Usuario no encontrado u otro error de Supabase. Respondemos OK genérico
-      // para no enumerar, pero LOGUEAMOS el motivo (visible en los logs de la
-      // función en Vercel) para diagnosticar por qué no llega el correo. Causa
-      // típica: el redirect_to NO está en la allowlist de Supabase
-      // (Authentication → URL Configuration → Redirect URLs).
-      const detalle = await linkRes.text().catch(() => '')
-      console.error('[forgot-password] generate_link falló:', linkRes.status, detalle.slice(0, 300))
-      return res.status(200).json({ success: true })
+    // Solo enviamos código si el usuario EXISTE (pero respondemos 200 igual,
+    // anti-enumeración). Generamos NUESTRO código, invalidamos los previos y lo
+    // guardamos. La contraseña se cambia luego en handleReset.
+    const userId = await getUserIdByEmail(normalizedEmail)
+    if (!userId) {
+      return res.status(200).json({ success: true }) // no revelar que no existe
     }
+    const code = String(crypto.randomInt(100000, 1000000)) // 6 dígitos CSPRNG
+    await invalidateRecoveryCodes(normalizedEmail)
+    await insertRecoveryCode(normalizedEmail, code)
 
-    const linkData = await linkRes.json()
-    // Usamos el CÓDIGO (email_otp) que devuelve generate_link, no el action_link
-    // (que Gmail consume por prefetch → llegaba "expirado"). El botón del correo
-    // solo abre la página de reset, sin token. La respuesta de generate_link trae
-    // los campos anidados en `properties` o al nivel raíz según la versión de
-    // GoTrue — probamos AMBOS (por eso antes fallaba y no enviaba nada).
-    const otp = linkData?.properties?.email_otp || linkData?.email_otp
-    if (!otp) {
-      console.error(
-        '[forgot-password] respuesta sin email_otp. keys:',
-        Object.keys(linkData || {}).join(','),
-        '| props:', Object.keys(linkData?.properties || {}).join(',')
-      )
-      return res.status(200).json({ success: true })
-    }
     let pageLink = DEFAULT_REDIRECT
     try {
       pageLink = `${new URL(target).origin}/nueva-contrasena?email=${encodeURIComponent(normalizedEmail)}`
@@ -295,7 +370,7 @@ export default async function handler(req, res) {
       from:    `"Parada Bridge" <${process.env.GMAIL_USER}>`,
       to:      normalizedEmail,
       subject: 'Restablece tu contraseña',
-      html:    renderResetEmailHtml({ otp, pageLink }),
+      html:    renderResetEmailHtml({ otp: code, pageLink }),
     })
 
     return res.status(200).json({ success: true })
