@@ -1,6 +1,6 @@
 import nodemailer from 'nodemailer'
 import crypto from 'node:crypto'
-import { renderShell, emailButton, infoBox, em, C } from './_lib/emailTemplate.js'
+import { renderShell, emailButton, infoBox, codeBox, em, C } from './_lib/emailTemplate.js'
 
 /* ────────────────────────────────────────────────────────────────────────
    Endpoint de "olvidé mi contraseña" con correo customizado estilo AAP.
@@ -146,22 +146,26 @@ async function recordAttempt(email, ipHash) {
   }
 }
 
-function renderResetEmailHtml({ actionLink }) {
+// Correo de recuperación por CÓDIGO (no por enlace). Un magic-link es de un
+// solo uso y los escáneres de correo (Gmail) lo "pre-abren" y lo consumen antes
+// de que el usuario haga clic → llegaba siempre "expirado". Un código tecleado
+// no se puede consumir así. El botón lleva a la PÁGINA (sin token, inofensivo).
+function renderResetEmailHtml({ otp, pageLink }) {
   const inner =
-    `<p style="margin:0 0 26px;font-size:15px;line-height:1.75;color:${C.body};text-align:justify;">
-       Recibimos una solicitud para restablecer la contraseña de tu cuenta. Si fuiste tú, usa el botón para crear una nueva contraseña.
+    `<p style="margin:0 0 18px;font-size:15px;line-height:1.7;color:${C.body};text-align:center;">
+       Recibimos una solicitud para restablecer tu contraseña. Ingresa este código en la página de nueva contraseña:
      </p>
-     <div style="text-align:center;margin:0 0 26px;">${emailButton('Restablecer contraseña', actionLink)}</div>
+     ${codeBox(otp)}
+     <p style="margin:0 0 22px;font-size:13px;color:${C.body};text-align:center;">
+       El código expira en ${em('1 hora')}.
+     </p>
+     <div style="text-align:center;margin:0 0 22px;">${emailButton('Abrir página de nueva contraseña', pageLink)}</div>
      ${infoBox(
-       `<p style="margin:0;color:${C.muted};font-size:12px;line-height:1.6;">Si el botón no funciona, copia y pega este enlace en tu navegador:</p>
-        <p style="margin:8px 0 0;word-break:break-all;"><a href="${actionLink}" target="_blank" style="color:${C.navy};font-size:12px;text-decoration:underline;">${actionLink}</a></p>`
-     )}
-     <p style="margin:22px 0 0;font-size:13px;line-height:1.65;color:${C.body};">
-       El enlace expira en ${em('1 hora')}. Si no solicitaste este cambio, puedes ignorar este correo; tu contraseña actual seguirá funcionando.
-     </p>`
+       `<p style="margin:0;color:${C.muted};font-size:12px;line-height:1.6;">Si no solicitaste este cambio, ignora este correo; tu contraseña actual seguirá funcionando.</p>`
+     )}`
   return renderShell({
     subjectLine: 'Restablecer contraseña',
-    preheader: 'Crea una nueva contraseña para tu cuenta.',
+    preheader: `Tu código para restablecer la contraseña: ${otp}`,
     innerHtml: inner,
   })
 }
@@ -242,16 +246,24 @@ export default async function handler(req, res) {
     }
 
     const linkData = await linkRes.json()
-    const actionLink = linkData?.properties?.action_link || linkData?.action_link
-    if (!actionLink) {
+    // Usamos el CÓDIGO (email_otp) que devuelve generate_link, no el action_link
+    // (que Gmail consume por prefetch → llegaba "expirado"). El botón del correo
+    // solo abre la página de reset, sin token.
+    const otp = linkData?.properties?.email_otp
+    if (!otp) {
+      console.error('[forgot-password] respuesta sin email_otp:', JSON.stringify(linkData).slice(0, 300))
       return res.status(200).json({ success: true })
     }
+    let pageLink = DEFAULT_REDIRECT
+    try {
+      pageLink = `${new URL(target).origin}/nueva-contrasena?email=${encodeURIComponent(normalizedEmail)}`
+    } catch { /* target inválido → default */ }
 
     await transporter.sendMail({
       from:    `"Parada Bridge" <${process.env.GMAIL_USER}>`,
       to:      normalizedEmail,
       subject: 'Restablece tu contraseña',
-      html:    renderResetEmailHtml({ actionLink }),
+      html:    renderResetEmailHtml({ otp, pageLink }),
     })
 
     return res.status(200).json({ success: true })
