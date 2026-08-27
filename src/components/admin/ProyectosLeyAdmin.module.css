@@ -43,8 +43,9 @@
 .buscadorIcon { position: absolute; left: 0.8rem; color: #9a8064; pointer-events: none; display: inline-flex; }
 .buscador input {
   font-family: 'Poppins', sans-serif; font-size: 0.88rem; color: #472f29;
-  background: #fffef7; border: 1px solid rgba(109, 60, 27, 0.18);
+  background: #ffffff; border: 1px solid rgba(109, 60, 27, 0.28);
   border-radius: 10px; padding: 0.56rem 2.3rem; width: 100%;
+  box-shadow: 0 1px 2px rgba(109, 60, 27, 0.06);
   transition: border-color 0.2s, box-shadow 0.2s;
 }
 .buscador input::placeholder { color: #9a8064; }
@@ -63,8 +64,9 @@
 .fechaField span { font-size: 0.58rem; text-transform: uppercase; letter-spacing: 0.09em; font-weight: 700; color: #9a8064; }
 .fechaField input {
   font-family: 'Poppins', sans-serif; font-size: 0.82rem; color: #472f29;
-  background: #fffef7; border: 1px solid rgba(109, 60, 27, 0.18);
+  background: #ffffff; border: 1px solid rgba(109, 60, 27, 0.28);
   border-radius: 10px; padding: 0.5rem 0.65rem;
+  box-shadow: 0 1px 2px rgba(109, 60, 27, 0.06);
   transition: border-color 0.2s, box-shadow 0.2s;
 }
 .fechaField input:focus { outline: none; border-color: var(--gold, #C9A84C); box-shadow: 0 0 0 3px rgba(201, 168, 76, 0.18); }
@@ -78,7 +80,10 @@
 .filtroCount { font-size: 0.76rem; color: #6f5c48; margin: 0 0 0.9rem; font-weight: 600; }
 
 @media (max-width: 620px) {
-  .filtros { flex-direction: column; align-items: stretch; }
+  .filtros { flex-direction: column; align-items: stretch; gap: 0.6rem; }
+  /* En columna, el `flex-basis: 240px` del buscador se volvía ALTO (caja alta
+     con el input flotando al centro) → hueco enorme. Que mida su contenido. */
+  .buscador { flex: 0 0 auto; min-width: 0; }
   .fechas { width: 100%; }
   .fechaField { flex: 1 1 0; }
   .fechaField input { width: 100%; }
@@ -160,6 +165,90 @@
 }
 .back:hover { background: rgba(109, 60, 27, 0.07); }
 
+/* ── Importar desde archivo (autodetección de título / número / artículos) ── */
+.importBox {
+  background: linear-gradient(180deg, rgba(201, 168, 76, 0.09), rgba(201, 168, 76, 0.04));
+  border: 1px dashed rgba(201, 168, 76, 0.5);
+  border-radius: 14px;
+  padding: 0.95rem 1.05rem;
+  margin-bottom: 1.3rem;
+}
+/* Zona interactiva: clic/toque (móvil) o arrastre (escritorio). */
+.importZone {
+  display: flex; align-items: center; gap: 0.85rem; flex-wrap: wrap;
+  border-radius: 11px;
+  padding: 0.35rem;
+  cursor: pointer;
+  transition: background 0.2s, box-shadow 0.2s;
+}
+.importZone:hover { background: rgba(201, 168, 76, 0.08); }
+.importZone:focus-visible { outline: 2px solid var(--gold-dk, #8A6A28); outline-offset: 3px; }
+/* Arrastre activo: se resalta toda la zona como blanco de soltado. */
+.importZoneDrag {
+  background: rgba(201, 168, 76, 0.2);
+  box-shadow: inset 0 0 0 2px var(--gold, #C9A84C);
+}
+.importZoneDrag .importIcon { transform: scale(1.08); }
+.importZoneBusy { cursor: progress; }
+/* Los hijos no capturan el puntero: así el arrastre no “parpadea” al pasar
+   sobre el icono/texto y el clic siempre lo maneja la zona. */
+.importZone > * { pointer-events: none; }
+
+.importIcon {
+  flex-shrink: 0;
+  width: 40px; height: 40px;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--gold-dk, #8A6A28);
+  background: rgba(201, 168, 76, 0.16);
+  border-radius: 11px;
+  transition: transform 0.2s;
+}
+.importText { flex: 1 1 220px; min-width: 0; display: flex; flex-direction: column; gap: 0.15rem; }
+.importText strong { font-family: 'Poppins', sans-serif; font-size: 0.9rem; font-weight: 700; color: #472f29; }
+.importText > span { font-size: 0.78rem; line-height: 1.45; color: #6f5c48; }
+.importBtn {
+  flex-shrink: 0;
+  font-family: 'Poppins', sans-serif; font-size: 0.8rem; font-weight: 600;
+  color: #fff; background: var(--gold-dk, #8A6A28);
+  border: none; border-radius: 10px; padding: 0.58rem 1.1rem;
+  transition: background 0.2s;
+  white-space: nowrap;
+}
+.importZone:hover .importBtn { background: #6f5420; }
+.importBtnBusy { opacity: 0.7; }
+
+/* Copia adaptada al dispositivo (el arrastre no existe en táctil). */
+.soloMovil { display: none; }
+@media (hover: none), (max-width: 620px) {
+  .soloDesktop { display: none; }
+  .soloMovil { display: inline; }
+}
+@media (max-width: 480px) {
+  .importZone { justify-content: center; text-align: center; }
+  .importText { flex-basis: 100%; align-items: center; }
+  .importBtn { flex: 1 1 100%; text-align: center; padding: 0.66rem 1.1rem; }
+}
+
+.importProg { display: flex; flex-direction: column; gap: 0.35rem; margin-top: 0.75rem; }
+.importProgBar { height: 7px; background: rgba(109, 60, 27, 0.1); border-radius: 5px; overflow: hidden; }
+.importProgFill {
+  height: 100%; border-radius: 5px;
+  background: linear-gradient(90deg, var(--gold, #C9A84C), #a9842f);
+  transition: width 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.importProg span { font-size: 0.76rem; color: #6f5c48; }
+.importOk {
+  font-size: 0.8rem; line-height: 1.5; color: #216447; margin: 0.75rem 0 0;
+  background: rgba(46, 125, 91, 0.1); border: 1px solid rgba(46, 125, 91, 0.28);
+  border-radius: 9px; padding: 0.55rem 0.75rem;
+}
+.importOk b { color: #472f29; }
+.importErr {
+  font-size: 0.8rem; line-height: 1.5; color: #8a3323; margin: 0.75rem 0 0;
+  background: rgba(180, 68, 47, 0.09); border: 1px solid rgba(180, 68, 47, 0.28);
+  border-radius: 9px; padding: 0.55rem 0.75rem;
+}
+
 .formGrid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -179,6 +268,7 @@
 .field textarea {
   font-family: 'Poppins', sans-serif;
   font-size: 0.9rem;
+  line-height: 1.55;
   color: #472f29;
   background: #fffef7;
   border: 1px solid rgba(109, 60, 27, 0.18);
@@ -187,6 +277,7 @@
   transition: border-color 0.2s, box-shadow 0.2s;
   resize: vertical;
 }
+.field textarea { min-height: 112px; }
 .field input:focus,
 .field textarea:focus {
   outline: none;
@@ -249,6 +340,7 @@
 .artFields textarea {
   font-family: 'Poppins', sans-serif;
   font-size: 0.88rem;
+  line-height: 1.55;
   color: #472f29;
   background: #fffef7;
   border: 1px solid rgba(109, 60, 27, 0.18);
@@ -256,6 +348,7 @@
   padding: 0.5rem 0.7rem;
   resize: vertical;
 }
+.artFields textarea { min-height: 118px; }
 .artFields input:focus,
 .artFields textarea:focus { outline: none; border-color: var(--gold, #C9A84C); box-shadow: 0 0 0 3px rgba(201, 168, 76, 0.14); }
 .delBtn {
@@ -593,5 +686,7 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .backdrop { backdrop-filter: none; }
-  .progressFill { transition: none; }
+  .progressFill, .importProgFill { transition: none; }
+  .importIcon { transition: none; }
+  .importZoneDrag .importIcon { transform: none; }
 }

@@ -5,7 +5,7 @@
   align-items: flex-start; gap: 12px; flex-wrap: wrap;
 }
 .titulo {
-  font-family: 'Cinzel', serif; font-size: 1.05rem; font-weight: 700;
+  font-family: 'Poppins', sans-serif; font-size: 1.05rem; font-weight: 700;
   color: #6d3c1b; margin: 0 0 4px; letter-spacing: 0.04em;
 }
 .subtitulo { font-size: 0.78rem; color: #a3856b; margin: 0; max-width: 460px; }
@@ -172,7 +172,7 @@
   display: flex; align-items: center; justify-content: space-between; gap: 1rem;
   padding: 1rem 1.3rem; background: linear-gradient(135deg,#6d3c1b,#8a4e26); color: #fff;
 }
-.modalTitle { font-family: 'Cinzel', serif; font-size: 1.05rem; font-weight: 700; margin: 0; letter-spacing: 0.03em; }
+.modalTitle { font-family: 'Poppins', sans-serif; font-size: 1.05rem; font-weight: 700; margin: 0; letter-spacing: 0.03em; }
 .modalClose {
   width: 32px; height: 32px; border: none; border-radius: 8px; cursor: pointer;
   background: rgba(255,255,255,0.14); color: #fff; font-size: 0.9rem; flex-shrink: 0;
@@ -232,6 +232,9 @@
 .btnDel:active { transform: none; }
 
 @media (max-width: 600px) {
+  /* Acciones a todo el ancho, repartidas en partes iguales para que ningún
+     botón ("Ver documento" / "Certificado") se salga de la tarjeta. */
   .contratoAcciones { width: 100%; }
-  .btnDown { flex: 1; text-align: center; }
+  .btnDown,
+  .btnFirmarSm { flex: 1 1 0; justify-content: center; text-align: center; }
 }

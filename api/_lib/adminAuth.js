@@ -66,7 +66,7 @@ export async function lawyerAssignedToRoom(lawyerId, roomId) {
   try {
     const res = await fetch(
       `${SUPABASE_URL}/rest/v1/chat_room_lawyers` +
-      `?room_id=eq.${roomId}&lawyer_id=eq.${lawyerId}&select=lawyer_id&limit=1`,
+      `?room_id=eq.${encodeURIComponent(roomId)}&lawyer_id=eq.${encodeURIComponent(lawyerId)}&select=lawyer_id&limit=1`,
       { headers: serviceHeaders() }
     )
     const rows = await res.json()

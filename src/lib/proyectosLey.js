@@ -718,8 +718,14 @@ export async function notificarResultadoVotantes({ proyecto, recipients, pdf, on
 
 /* ── Utilidades de reporte (CSV, cliente) ───────────────────────────────── */
 const csvCell = (v) => {
-  const s = v == null ? '' : String(v)
-  return /[",\n;]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+  let s = v == null ? '' : String(v)
+  // Anti CSV/fórmula injection: una celda que empieza por = + - @ (o tab/CR) la
+  // interpretan Excel/LibreOffice como fórmula (=HYPERLINK/=WEBSERVICE/DDE),
+  // capaz de exfiltrar PII de celdas vecinas o ejecutar comandos al abrir el
+  // reporte. Se antepone un apóstrofo para neutralizarla y se fuerza el
+  // entrecomillado. Aplica a TODOS los export CSV (voto detallado, etc.).
+  if (/^[=+\-@\t\r]/.test(s)) s = "'" + s
+  return /[",\n;=+\-@\t\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
 }
 export function toCSV(headers, rows) {
   // BOM para que Excel abra UTF-8 con tildes correctamente.

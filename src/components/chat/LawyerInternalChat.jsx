@@ -4,6 +4,7 @@ import { openChatFile, ChatImage, ChatLightbox } from '../../lib/chatFiles'
 import styles from './LawyerInternalChat.module.css'
 import AudioPlayer from './AudioPlayer'
 import { IconMic, IconPaperclip } from '../shared/Icons'
+import { parseRevision, RevisionCard } from './AdminInternalChat'
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
 const MAX_FILE_BYTES = 10 * 1024 * 1024 // 10 MB
@@ -463,6 +464,12 @@ export default function LawyerInternalChat({ miId }) {
         )}
         {messages.map(m => {
           const mine = m.from_id === miId
+          const rev = parseRevision(m)
+          if (rev) {
+            return (
+              <RevisionCard key={m.id} rev={rev} fecha={fmtFechaHora(m.created_at)} styles={styles} />
+            )
+          }
           return (
             <div
               key={m.id}

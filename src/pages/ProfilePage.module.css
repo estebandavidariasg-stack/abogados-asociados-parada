@@ -882,20 +882,22 @@ select.input option {
   .sidebar:hover { overflow-x: visible; }
   .sidebarInner,
   .sidebar:hover .sidebarInner { flex-wrap: wrap; justify-content: center; row-gap: 0.45rem; }
-  /* 5 secciones → una fila pareja de 5 columnas, icono solo (con tooltip) */
+  /* Secciones en fila de 5: flex-wrap centrado (no grid) para que, cuando hay
+     6, la última quede CENTRADA sola debajo en vez de pegada a la izquierda.
+     Cada icono ocupa 1/5 del ancho → 5 llenan la fila y la 6ª se centra. */
   .sideNav,
   .sidebar:hover .sideNav {
-    display: grid;
-    grid-template-columns: repeat(5, 1fr);
-    justify-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: stretch;
     flex: 1 1 100%;
-    gap: 0.5rem 0.2rem;
+    gap: 0.5rem 0.3rem;
   }
   .navLabel,
   .sidebar:hover .navLabel { display: none; }
-  /* width:auto + flex:0 0 auto → cada icono ocupa su ancho dentro de su celda */
   .navItem,
-  .sidebar:hover .navItem { width: auto; flex: 0 0 auto; padding: 0.55rem 0.7rem; justify-content: center; }
+  .sidebar:hover .navItem { flex: 0 0 calc(20% - 0.24rem); width: auto; padding: 0.55rem 0; justify-content: center; }
   /* Pie (inicio / salir) en su propia fila, centrado y con separador */
   .sideFoot,
   .sidebar:hover .sideFoot {

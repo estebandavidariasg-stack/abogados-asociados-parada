@@ -402,6 +402,74 @@
   padding: 0 4px;
 }
 
+/* ── Tarjeta "Solicitud de revisión" (mensaje automático) ─────────────────
+   Reemplaza el texto corrido por una ficha en líneas con fondo dorado suave. */
+.revisionCard {
+  align-self: stretch;
+  background: linear-gradient(135deg, #fff9ec 0%, #fdf2dc 100%);
+  border: 1px solid rgba(201, 168, 76, 0.5);
+  border-radius: 14px;
+  padding: 14px 16px;
+  box-shadow: 0 2px 10px rgba(109, 60, 27, 0.06);
+  margin: 4px 0;
+}
+.revisionHead {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding-bottom: 10px;
+  margin-bottom: 10px;
+  border-bottom: 1px solid rgba(201, 168, 76, 0.28);
+}
+.revisionIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: rgba(201, 168, 76, 0.18);
+  color: #a9812b;
+  flex-shrink: 0;
+}
+.revisionTitle {
+  font-family: 'Cinzel', serif;
+  font-size: 0.86rem;
+  font-weight: 700;
+  color: #6d3c1b;
+  letter-spacing: 0.01em;
+}
+.revisionRows {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.revisionRow {
+  display: grid;
+  grid-template-columns: 118px 1fr;
+  gap: 10px;
+  align-items: baseline;
+}
+.revisionLabel {
+  margin: 0;
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #a9812b;
+}
+.revisionValue {
+  margin: 0;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #5f3613;
+  word-break: break-word;
+}
+@media (max-width: 480px) {
+  .revisionRow { grid-template-columns: 1fr; gap: 1px; }
+}
+
 /* Input */
 .inputArea {
   display: flex;

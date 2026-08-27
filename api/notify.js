@@ -1,4 +1,5 @@
 import nodemailer from 'nodemailer'
+import crypto from 'node:crypto'
 import { renderEmailHtml, renderShell, infoBox, emailButton, em, C, FONT_SERIF } from './_lib/emailTemplate.js'
 import { getCallerProfile, lawyerAssignedToRoom } from './_lib/adminAuth.js'
 
@@ -247,6 +248,201 @@ function renderContactCardHtml({ recipient, contact, codigoReferencia }) {
   })
 }
 
+// ── Integración Alegra (Sub-proyecto B) ─────────────────────────────────────
+// Emite la factura de la COMISIÓN que el profesional le paga a la empresa.
+// Cuenta DEMO: se crea la factura de venta en Alegra (sin forzar timbre DIAN);
+// cuando se habilite facturación electrónica, la misma factura se emite FE.
+// Todo best-effort: si Alegra falla, el pago YA quedó registrado en Supabase.
+const ALEGRA_EMAIL = process.env.ALEGRA_EMAIL
+const ALEGRA_TOKEN = process.env.ALEGRA_TOKEN
+const ALEGRA_BASE  = 'https://api.alegra.com/api/v1'
+const ALEGRA_ITEM_NAME = 'Comisión de plataforma'
+
+function svcHeaders(extra = {}) {
+  return {
+    apikey:        SUPABASE_SERVICE_ROLE_KEY,
+    Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+    'Content-Type': 'application/json',
+    ...extra,
+  }
+}
+
+function alegraHeaders() {
+  const auth = Buffer.from(`${ALEGRA_EMAIL}:${ALEGRA_TOKEN}`).toString('base64')
+  return { Authorization: `Basic ${auth}`, 'Content-Type': 'application/json', Accept: 'application/json' }
+}
+
+// Llamada genérica a Alegra. Lanza Error con el mensaje de la API si falla.
+async function alegra(path, opts = {}) {
+  const res  = await fetch(`${ALEGRA_BASE}${path}`, { ...opts, headers: { ...alegraHeaders(), ...(opts.headers || {}) } })
+  const text = await res.text()
+  let body; try { body = text ? JSON.parse(text) : null } catch { body = text }
+  if (!res.ok) {
+    const msg = body?.message || body?.error || `Alegra HTTP ${res.status}`
+    throw new Error(typeof msg === 'string' ? msg : JSON.stringify(msg))
+  }
+  return body
+}
+
+// Asegura el contacto (profesional) en Alegra: lo busca por cédula, o lo crea.
+async function alegraEnsureContact({ nombre, apellido, cedula, email }) {
+  const name = `${nombre || ''} ${apellido || ''}`.trim() || 'Profesional'
+  if (cedula) {
+    const found = await alegra(`/contacts?identification=${encodeURIComponent(cedula)}&limit=1`)
+    if (Array.isArray(found) && found.length) return found[0].id
+  }
+  const created = await alegra('/contacts', {
+    method: 'POST',
+    body: JSON.stringify({ name, identification: cedula || undefined, email: email || undefined, type: 'client' }),
+  })
+  return created.id
+}
+
+// Asegura el ítem/servicio de la comisión (sin IVA). Lo busca por nombre o lo crea.
+async function alegraEnsureItem() {
+  const found = await alegra(`/items?query=${encodeURIComponent(ALEGRA_ITEM_NAME)}&limit=30`)
+  if (Array.isArray(found)) {
+    const exact = found.find(i => (i.name || '').toLowerCase() === ALEGRA_ITEM_NAME.toLowerCase())
+    if (exact) return exact.id
+  }
+  const created = await alegra('/items', {
+    method: 'POST',
+    body: JSON.stringify({ name: ALEGRA_ITEM_NAME, price: 0, type: 'service' }),
+  })
+  return created.id
+}
+
+// Crea la factura de venta (comisión) SIN IVA (tax: []).
+async function alegraCreateInvoice({ contactId, itemId, monto }) {
+  const today = new Date().toISOString().slice(0, 10)
+  return alegra('/invoices', {
+    method: 'POST',
+    body: JSON.stringify({
+      date: today,
+      dueDate: today,
+      client: { id: contactId },
+      items: [{
+        id: itemId,
+        price: Number(monto) || 0,
+        quantity: 1,
+        tax: [],
+        description: 'Comisión de plataforma por asesoría',
+      }],
+    }),
+  })
+}
+
+// Lee el pago (service role) para validar dueño + estado antes de facturar.
+async function getPagoProfesional(id) {
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return null
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/pagos_profesional?id=eq.${encodeURIComponent(id)}` +
+      `&select=id,profesional_id,monto,estado,alegra_factura_id,alegra_factura_numero&limit=1`,
+      { headers: svcHeaders() }
+    )
+    const rows = await res.json()
+    return Array.isArray(rows) && rows[0] ? rows[0] : null
+  } catch { return null }
+}
+
+// Perfil del profesional para facturar (nombre, cédula, correo).
+async function getProfileForAlegra(id) {
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/profiles?id=eq.${encodeURIComponent(id)}&select=nombre,apellido,cedula,email&limit=1`,
+      { headers: svcHeaders() }
+    )
+    const rows = await res.json()
+    return Array.isArray(rows) && rows[0] ? rows[0] : null
+  } catch { return null }
+}
+
+// Emite la factura de la comisión en Alegra para un pago dado (reutilizable por
+// la rama autenticada y por el webhook de Wompi). Best-effort.
+async function emitirFacturaAlegra(pagoId) {
+  if (!ALEGRA_EMAIL || !ALEGRA_TOKEN) return { ok: false, skipped: 'not_configured' }
+  const pago = await getPagoProfesional(pagoId)
+  if (!pago) return { ok: false, error: 'pago_no_encontrado' }
+  if (pago.alegra_factura_id) return { ok: true, already: true, numero: pago.alegra_factura_numero }
+  const prof = await getProfileForAlegra(pago.profesional_id)
+  const contactId = await alegraEnsureContact({
+    nombre: prof?.nombre, apellido: prof?.apellido, cedula: prof?.cedula, email: prof?.email,
+  })
+  const itemId  = await alegraEnsureItem()
+  const invoice = await alegraCreateInvoice({ contactId, itemId, monto: pago.monto })
+  const numero  = invoice?.numberTemplate?.fullNumber || invoice?.number || `#${invoice?.id}`
+  if (invoice?.id && SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY) {
+    await fetch(`${SUPABASE_URL}/rest/v1/pagos_profesional?id=eq.${encodeURIComponent(pagoId)}`, {
+      method: 'PATCH',
+      headers: svcHeaders({ Prefer: 'return=minimal' }),
+      body: JSON.stringify({ alegra_factura_id: String(invoice.id), alegra_factura_numero: numero }),
+    })
+  }
+  return { ok: true, id: invoice?.id, numero }
+}
+
+// ── Pasarela Wompi (Fase 2) ─────────────────────────────────────────────────
+const WOMPI_PUBLIC_KEY       = process.env.WOMPI_PUBLIC_KEY
+const WOMPI_INTEGRITY_SECRET = process.env.WOMPI_INTEGRITY_SECRET
+const WOMPI_EVENTS_SECRET    = process.env.WOMPI_EVENTS_SECRET
+
+// Webhook de Wompi: valida el checksum firmado y, si la transacción fue
+// APROBADA, confirma el pago (service-role) y emite la factura en Alegra.
+// El cuerpo trae { event, data.transaction, signature:{checksum,properties}, timestamp }.
+async function handleWompiWebhook(req, res) {
+  if (!WOMPI_EVENTS_SECRET) return res.status(200).json({ ok: false, skipped: 'not_configured' })
+  const body = req.body || {}
+  const props = body.signature?.properties || []
+  // Concatena los valores de las rutas indicadas (dentro de `data`) + timestamp + secret.
+  let concat = ''
+  for (const p of props) {
+    const val = String(p).split('.').reduce((o, k) => (o == null ? undefined : o[k]), body.data)
+    concat += (val == null ? '' : String(val))
+  }
+  concat += String(body.timestamp)
+  concat += WOMPI_EVENTS_SECRET
+  const digest = crypto.createHash('sha256').update(concat).digest('hex').toLowerCase()
+  const given  = String(body.signature?.checksum || '').toLowerCase()
+  // Comparación en TIEMPO CONSTANTE: con `!==` (corto-circuito byte a byte) un
+  // atacante podría recuperar el checksum correcto por diferencias de tiempo y
+  // forjar un pago APPROVED. timingSafeEqual exige misma longitud.
+  const firmaOk =
+    digest.length === given.length &&
+    crypto.timingSafeEqual(Buffer.from(digest), Buffer.from(given))
+  if (!firmaOk) {
+    return res.status(401).json({ error: 'firma inválida' })
+  }
+
+  const tx = body.data?.transaction || {}
+  if (body.event === 'transaction.updated' && tx.status === 'APPROVED') {
+    const ref = String(tx.reference || '')
+    // Prefijo de marca: solo procesamos referencias de ESTA plataforma
+    // (Parada Bridge). Si la cuenta Wompi es compartida con otra marca, sus
+    // eventos (otro prefijo) se ignoran aquí sin tocarlos.
+    const m = ref.match(/^pb_pp_([0-9a-fA-F-]{36})$/)
+    if (m && SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY) {
+      const pagoId = m[1]
+      const pago = await getPagoProfesional(pagoId)
+      // Cross-check del monto firmado por Wompi contra el pago (defensa extra).
+      if (pago && Math.round(Number(pago.monto) * 100) === Number(tx.amount_in_cents)) {
+        try {
+          await fetch(`${SUPABASE_URL}/rest/v1/rpc/confirmar_pago_wompi`, {
+            method: 'POST',
+            headers: svcHeaders(),
+            body: JSON.stringify({ p_pago_id: pagoId, p_tx_id: String(tx.id) }),
+          })
+          try { await emitirFacturaAlegra(pagoId) } catch (e) { console.error('[notify] alegra tras wompi:', e?.message || e) }
+        } catch (e) {
+          console.error('[notify] confirmar_pago_wompi failed:', e?.message || e)
+        }
+      }
+    }
+  }
+  // Siempre 200 en eventos con firma válida (evita reintentos infinitos de Wompi).
+  return res.status(200).json({ ok: true })
+}
+
 // ── Handler principal ──────────────────────────────────────────────────────
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -254,6 +450,12 @@ export default async function handler(req, res) {
   }
 
   try {
+    // Webhook de Wompi: su cuerpo trae `event` + `signature`, no `type`.
+    // Se detecta y procesa antes del dispatch por `type` (no lleva auth).
+    if (req.body?.event && req.body?.signature?.checksum) {
+      return await handleWompiWebhook(req, res)
+    }
+
     const { type, data, recipientRole, codigoReferencia } = req.body
     const ctaUrl = buildCtaUrl(recipientRole, codigoReferencia)
 
@@ -623,6 +825,84 @@ export default async function handler(req, res) {
       }
 
       return res.status(200).json({ ok: true, sent: 'lawyer_inactivity', stamped })
+    }
+
+    // ── Emitir factura de la comisión en Alegra (Sub-proyecto B) ──
+    // La dispara MisPagos tras un pago exitoso (pagar_pago). Autenticada: solo
+    // el profesional dueño del pago. Best-effort: si Alegra falla, responde 200
+    // con ok:false para NO romper el flujo de pago (que ya quedó registrado).
+    if (type === 'alegra_factura') {
+      const caller = await getCallerProfile(req)
+      if (!caller || !['abogado', 'contador'].includes(caller.rol)) {
+        return res.status(401).json({ error: 'No autorizado.' })
+      }
+      if (!ALEGRA_EMAIL || !ALEGRA_TOKEN) {
+        // Aún no configurada: no es un error para el usuario.
+        return res.status(200).json({ ok: false, skipped: 'not_configured' })
+      }
+      const { pagoId } = data || {}
+      if (!pagoId) return res.status(400).json({ error: 'Falta pagoId.' })
+
+      const pago = await getPagoProfesional(pagoId)
+      if (!pago) return res.status(404).json({ error: 'Pago no encontrado.' })
+      if (pago.profesional_id !== caller.id) return res.status(403).json({ error: 'No autorizado.' })
+      if (pago.estado !== 'pagado') return res.status(400).json({ error: 'El pago no está confirmado.' })
+      if (pago.alegra_factura_id) {
+        return res.status(200).json({ ok: true, already: true, numero: pago.alegra_factura_numero })
+      }
+
+      try {
+        const result = await emitirFacturaAlegra(pagoId)
+        return res.status(200).json(result)
+      } catch (err) {
+        console.error('[notify] alegra_factura failed:', err?.message || err)
+        // 200 + ok:false: el pago ya está hecho; la factura se puede reintentar.
+        return res.status(200).json({ ok: false, error: 'No se pudo emitir la factura en Alegra.' })
+      }
+    }
+
+    // ── Firma de integridad para abrir el Widget de Wompi (Fase 2) ──
+    // Autenticada: solo el profesional dueño del pago pendiente. Devuelve la
+    // referencia + monto + firma para que MisPagos abra el widget. La firma se
+    // calcula server-side (el integrity secret NUNCA va al navegador).
+    if (type === 'wompi_firma') {
+      const caller = await getCallerProfile(req)
+      if (!caller || !['abogado', 'contador'].includes(caller.rol)) {
+        return res.status(401).json({ error: 'No autorizado.' })
+      }
+      if (!WOMPI_PUBLIC_KEY || !WOMPI_INTEGRITY_SECRET) {
+        return res.status(200).json({ ok: false, skipped: 'not_configured' })
+      }
+      const { pagoId } = data || {}
+      if (!pagoId) return res.status(400).json({ error: 'Falta pagoId.' })
+
+      const pago = await getPagoProfesional(pagoId)
+      if (!pago) return res.status(404).json({ error: 'Pago no encontrado.' })
+      if (pago.profesional_id !== caller.id) return res.status(403).json({ error: 'No autorizado.' })
+      if (pago.estado !== 'pendiente') return res.status(400).json({ error: 'El pago no está pendiente.' })
+
+      // Prefijo de marca (pb_ = Parada Bridge) para diferenciar en una cuenta
+      // Wompi compartida con otra marca (misma empresa/NIT).
+      const reference     = `pb_pp_${pagoId}`
+      const amountInCents = Math.round(Number(pago.monto) * 100)
+      const currency      = 'COP'
+      const integrity = crypto
+        .createHash('sha256')
+        .update(`${reference}${amountInCents}${currency}${WOMPI_INTEGRITY_SECRET}`)
+        .digest('hex')
+
+      // Guarda la referencia (best-effort) para conciliar en el webhook.
+      if (SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY) {
+        try {
+          await fetch(`${SUPABASE_URL}/rest/v1/pagos_profesional?id=eq.${encodeURIComponent(pagoId)}`, {
+            method: 'PATCH',
+            headers: svcHeaders({ Prefer: 'return=minimal' }),
+            body: JSON.stringify({ wompi_reference: reference }),
+          })
+        } catch { /* noop */ }
+      }
+
+      return res.status(200).json({ ok: true, publicKey: WOMPI_PUBLIC_KEY, reference, amountInCents, currency, integrity })
     }
 
     // (La rama 'lawyer_joined' se eliminó: era código muerto — ningún flujo

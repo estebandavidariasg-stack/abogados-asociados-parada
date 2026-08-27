@@ -32,11 +32,11 @@ export default function FirmaClienteChat({ firma, roomId, onClose, onDone }) {
     return () => { cancel = true }
   }, [firma.docPath])
 
-  async function firmar(signedBytes, pie, firmaPng) {
+  async function firmar(signedBytes, pie, firmaPng, firmaProof) {
     const res = await persistirFirma({
       solicitud: { id: firma.solicitudId, doc_original_path: firma.docPath },
       firmante: { id: firma.firmanteId },
-      signedBytes, pie, headers: anonHeaders(),
+      signedBytes, pie, firmaProof, headers: anonHeaders(),
     })
 
     // Guardamos el PNG de la firma (para que el profesional la ubique luego y

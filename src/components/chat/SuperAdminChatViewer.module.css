@@ -983,7 +983,13 @@
   .backBtn { display: inline-flex; }
 
   .bubbleMine, .bubbleOther { max-width: 88%; }
-  .chatHeader { flex-direction: column; }
+  .chatHeader { flex-direction: column; gap: 10px; }
+  /* En columna, el `flex-basis: 260px` de la meta pasa a ser ALTO mínimo y
+     abría un hueco enorme sobre las acciones. Que ocupe solo su contenido. */
+  .chatHeader > div:first-child { flex: 0 0 auto; }
+  /* Acciones a todo el ancho, apiladas y con su contenido centrado. */
+  .headerActions { width: 100%; justify-content: stretch; }
+  .headerActions > button { flex: 1 1 100%; justify-content: center; text-align: center; }
 }
 
 @media (max-width: 600px) {

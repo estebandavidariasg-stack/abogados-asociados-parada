@@ -49,6 +49,22 @@
 .controlOff { opacity: 0.65; }
 .control select:disabled { cursor: not-allowed; background: #f4efe7; }
 
+/* Aviso: la torta y los filtros territoriales solo reflejan lugares con votos. */
+.avisoLugares {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  color: #6f5c48;
+  background: rgba(201, 168, 76, 0.1);
+  border: 1px solid rgba(201, 168, 76, 0.28);
+  border-radius: 10px;
+  padding: 0.5rem 0.75rem;
+  margin: -0.3rem 0 1.2rem;
+}
+.avisoLugares svg { flex-shrink: 0; color: var(--gold-dk, #8A6A28); }
+
 /* Nivel + (departamento/municipio) van JUNTOS en la misma fila: los selects de
    departamento y municipio/localidad quedan AL LADO del segmentado de Nivel, no
    en un renglón aparte debajo. */

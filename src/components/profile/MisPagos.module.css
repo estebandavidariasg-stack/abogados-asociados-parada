@@ -571,6 +571,10 @@
   .dateGroup { width: 100%; }
   .dateField { flex: 1 1 auto; }
   .dateInput { width: 100%; }
+  /* El "Pagar con PSE" se salía por la derecha: la cabecera envuelve y el
+     bloque estado+botón pasa a su propia fila a todo el ancho. */
+  .cardHead { flex-wrap: wrap; }
+  .cardSide { width: 100%; justify-content: space-between; }
 }
 
 /* ── Reduced motion ── */

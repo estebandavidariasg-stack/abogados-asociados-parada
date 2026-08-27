@@ -41,7 +41,11 @@ const signedCache = new Map()
 export async function resolveSignedUrl(src, expiresIn = 3600) {
   if (!src) return null
   const path = /^https?:\/\//.test(src) ? extractChatFilesPath(src) : src
-  if (!path) return src // formato no reconocido — último intento con el original
+  // Si `src` es una URL http(s) que NO resuelve a un path del bucket chat-files,
+  // NO la devolvemos: el file_url lo controla quien envía el mensaje y abrirlo
+  // tal cual sería un open-redirect hacia un sitio arbitrario (phishing). Solo
+  // navegamos a objetos de nuestro propio storage. (Un path puro sí se firma.)
+  if (!path) return null
   const hit = signedCache.get(path)
   if (hit && hit.expiresAt - Date.now() > 5 * 60_000) return hit.url
   const { data, error } = await supabase.storage

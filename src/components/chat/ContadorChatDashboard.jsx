@@ -12,6 +12,9 @@ import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
 import Markdown from '../shared/Markdown'
 import EnviarAFirmar from '../firma/EnviarAFirmar'
 import { firmantesPendientes } from '../../lib/firmaService'
+import {
+  COP, fetchCobroProfesional, fijarCobro, confirmarPagoAsesoria, formatMiles, parseMiles,
+} from '../../lib/cobroAsesoria'
 
 // Parseo seguro de los payloads JSON de los mensajes de firma.
 function parseFirma(content) {
@@ -154,6 +157,16 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
   const [iaTipo, setIaTipo]           = useState('resumen')
   const [iaCopiado, setIaCopiado]     = useState(false)
   const [iaCargando, setIaCargando]   = useState(false)
+
+  // ── Cobro de asesoría (cliente → profesional, manual) ──
+  const [cobro, setCobro]           = useState(null)
+  const [cobroOpen, setCobroOpen]   = useState(false)
+  const [cobroGratis, setCobroGratis] = useState(false)
+  const [cobroMonto, setCobroMonto] = useState('')
+  const [cobroNota, setCobroNota]   = useState('')
+  const [cobroDatos, setCobroDatos] = useState('')
+  const [cobroBusy, setCobroBusy]   = useState(false)
+  const [cobroErr, setCobroErr]     = useState('')
 
   // ── Filtros del sidebar (búsqueda por nombre + rango de fechas) ──
   // Estado en el componente padre → los inputs se renderizan inline y no
@@ -777,6 +790,75 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
     }
   }
 
+  // ── Cobro de asesoría: cargar el cobro de la sala activa (con poll suave) ──
+  useEffect(() => {
+    if (!activeRoom?.id) { setCobro(null); return }
+    let cancel = false
+    const load = () => fetchCobroProfesional(activeRoom.id)
+      .then(c => { if (!cancel) setCobro(c) })
+      .catch(() => {})
+    load()
+    const t = setInterval(load, 10000)
+    return () => { cancel = true; clearInterval(t) }
+  }, [activeRoom?.id])
+
+  async function abrirCobro() {
+    setCobroErr('')
+    setCobroGratis(cobro?.estado === 'gratuita')
+    setCobroMonto(cobro && Number(cobro.monto) > 0 ? formatMiles(String(cobro.monto)) : '')
+    setCobroNota(cobro?.nota || '')
+    let datos = cobro?.datos_pago || ''
+    if (!datos) {
+      try {
+        const headers = await getAuthHeaders()
+        const r = await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${contadorId}&select=datos_pago`, { headers })
+        const d = await r.json(); datos = d?.[0]?.datos_pago || ''
+      } catch { /* noop */ }
+    }
+    setCobroDatos(datos)
+    setCobroOpen(true)
+  }
+
+  async function guardarCobro() {
+    if (cobroBusy) return
+    if (!cobroGratis) {
+      const m = parseMiles(cobroMonto)
+      if (!m || m <= 0) { setCobroErr('Ingresa un valor mayor a 0, o marca la asesoría como gratuita.'); return }
+      if (!cobroDatos.trim()) { setCobroErr('Ingresa tus datos de pago (Nequi, cuenta…) para que el cliente pueda pagarte.'); return }
+    }
+    setCobroBusy(true); setCobroErr('')
+    try {
+      const row = await fijarCobro({
+        roomId: activeRoom.id,
+        monto: cobroGratis ? 0 : parseMiles(cobroMonto),
+        nota: cobroNota.trim() || null,
+        datosPago: cobroGratis ? null : cobroDatos.trim(),
+      })
+      setCobro(row)
+      setCobroOpen(false)
+      setToast(cobroGratis ? 'Asesoría marcada como gratuita.' : 'Cobro enviado al cliente.')
+    } catch (err) {
+      setCobroErr('No se pudo guardar el cobro. Intenta de nuevo.')
+    } finally {
+      setCobroBusy(false)
+    }
+  }
+
+  async function confirmarRecibido() {
+    if (cobroBusy || !cobro?.id) return
+    setCobroBusy(true); setCobroErr('')
+    try {
+      await confirmarPagoAsesoria(cobro.id)
+      const fresco = await fetchCobroProfesional(activeRoom.id)
+      setCobro(fresco)
+      setToast('Pago confirmado. Se generó tu comisión de plataforma en “Pagos”.')
+    } catch (err) {
+      setToast('No se pudo confirmar el pago. Intenta de nuevo.')
+    } finally {
+      setCobroBusy(false)
+    }
+  }
+
   async function pedirResumenIA(tipo) {
     if (!activeRoom || iaCargando) return
     setIaTipo(tipo); setIaCopiado(false); setIaCargando(true); setIaResultado(null)
@@ -1047,14 +1129,26 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
                         </button>
                   )}
                   {!confirmClose && (
-                    <button type="button" className={styles.btnVerificar} disabled={iaCargando} onClick={() => pedirResumenIA('resumen')}>
-                      {iaCargando ? '✨ Generando…' : '✨ Resumir con IA'}
-                    </button>
-                  )}
-                  {!confirmClose && (
-                    <button type="button" className={styles.btnVerificar} disabled={iaCargando} onClick={() => pedirResumenIA('analisis')}>
-                      ✨ Analizar caso
-                    </button>
+                    cobro?.estado === 'pendiente' && cobro?.marcado_cliente_at ? (
+                      <button
+                        type="button"
+                        className={styles.btnVerificar}
+                        style={{ background: '#e8f5ec', borderColor: '#2e9e5f', color: '#1f5e3c', fontWeight: 700 }}
+                        disabled={cobroBusy}
+                        onClick={confirmarRecibido}
+                        title="El cliente marcó que ya pagó — confirma que recibiste el pago"
+                      >
+                        {cobroBusy ? 'Confirmando…' : '✓ Confirmar pago recibido'}
+                      </button>
+                    ) : (
+                      <button type="button" className={styles.btnVerificar} onClick={abrirCobro}
+                        title="Fijar el valor de la asesoría o marcarla gratuita">
+                        {cobro?.estado === 'pagado' ? '✓ Cobrado'
+                          : cobro?.estado === 'gratuita' ? 'Gratuita'
+                          : Number(cobro?.monto) > 0 ? `Cobro · ${COP.format(Number(cobro.monto))}`
+                          : 'Cobro'}
+                      </button>
+                    )
                   )}
                   {!confirmClose
                     ? <button className={styles.btnClose} onClick={() => setConfirmClose(true)}>
@@ -1418,6 +1512,68 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
             <div className={styles.modalActions}>
               <button className={styles.btnConfirmDanger} onClick={() => setContactoBlocked(false)}>
                 Entendido
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal: cobro de asesoría (cliente → profesional, manual) ── */}
+      {cobroOpen && (
+        <div
+          className={styles.modalOverlay}
+          onClick={() => !cobroBusy && setCobroOpen(false)}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="modalCobroTitleContador"
+        >
+          <div className={styles.modalCard} onClick={e => e.stopPropagation()}
+            style={{ textAlign: 'left', maxHeight: 'calc(100dvh - 40px)', overflowY: 'auto' }}>
+            <h3 id="modalCobroTitleContador" className={styles.modalTitle} style={{ textAlign: 'center' }}>Cobro de la asesoría</h3>
+            <p className={styles.modalText} style={{ textAlign: 'center' }}>
+              Define si esta asesoría se cobra o es gratuita. El cliente paga
+              directamente a tus datos de pago; Parada Bridge no intermedia el dinero.
+            </p>
+
+            <label className={styles.cobroCheck}>
+              <input type="checkbox" checked={cobroGratis}
+                onChange={e => { setCobroGratis(e.target.checked); setCobroErr('') }} />
+              Marcar como asesoría gratuita
+            </label>
+
+            {!cobroGratis && (
+              <>
+                <div className={styles.cobroField}>
+                  <label className={styles.cobroLabel}>Valor a cobrar (COP)</label>
+                  <input type="text" inputMode="numeric" value={cobroMonto}
+                    onChange={e => { setCobroMonto(formatMiles(e.target.value)); setCobroErr('') }}
+                    placeholder="Ej: 80.000"
+                    className={`${styles.cobroInput} ${styles.cobroAmount}`} />
+                </div>
+                <div className={styles.cobroField}>
+                  <label className={styles.cobroLabel}>Tus datos de pago</label>
+                  <textarea value={cobroDatos} rows={2}
+                    onChange={e => { setCobroDatos(e.target.value); setCobroErr('') }}
+                    placeholder="Ej: Nequi 300 123 4567 · Bancolombia ahorros 123-456789-00"
+                    className={styles.cobroTextarea} />
+                  <p className={styles.cobroHint}>Se guardan en tu perfil para reutilizarlos.</p>
+                </div>
+                <div className={styles.cobroField}>
+                  <label className={styles.cobroLabel}>Concepto (opcional)</label>
+                  <input type="text" value={cobroNota} maxLength={120}
+                    onChange={e => setCobroNota(e.target.value)}
+                    placeholder="Ej: Concepto contable / tributario"
+                    className={styles.cobroInput} />
+                </div>
+              </>
+            )}
+
+            {cobroErr && <p className={styles.cobroErr}>{cobroErr}</p>}
+
+            <div className={styles.modalActions}>
+              <button className={styles.btnCancel} onClick={() => setCobroOpen(false)} disabled={cobroBusy}>Cancelar</button>
+              <button className={styles.btnConfirmGold} onClick={guardarCobro} disabled={cobroBusy}>
+                {cobroBusy ? 'Guardando…' : cobroGratis ? 'Marcar gratuita' : 'Enviar cobro'}
               </button>
             </div>
           </div>

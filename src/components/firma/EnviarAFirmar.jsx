@@ -160,9 +160,9 @@ export default function EnviarAFirmar({ contrato, abogadoId, onClose, onDone, mo
   // La fila del iniciador = la que coincide por correo con el usuario actual.
   const miFila = misFilas?.find((f) => (f.correo || '').toLowerCase() === (user?.email || '').toLowerCase()) || misFilas?.[0]
 
-  async function firmarIniciador(signedBytes, pie) {
+  async function firmarIniciador(signedBytes, pie, _firmaPng, firmaProof) {
     const headers = await getAuthHeaders()
-    await persistirFirma({ solicitud, firmante: miFila, signedBytes, pie, headers })
+    await persistirFirma({ solicitud, firmante: miFila, signedBytes, pie, firmaProof, headers })
     onDone?.()
   }
 

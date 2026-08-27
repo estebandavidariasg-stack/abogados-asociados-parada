@@ -201,23 +201,39 @@
 /* ══════════════════════════════════════════
    EDICIÓN (superadmin)
    ══════════════════════════════════════════ */
-.adminBar {
-  display: flex;
-  justify-content: center;
-  margin-bottom: 2rem;
-}
+/* Mismo FAB que "Editar videos"/"Editar imágenes": flotante arriba a la
+   derecha en escritorio, centrado en flujo bajo el encabezado en móvil. */
+.adminBar { display: contents; }
 .fab {
-  padding: 0.65rem 1.3rem;
-  border-radius: 999px;
-  border: 1px solid var(--gold);
+  position: absolute;
+  top: 6rem;
+  right: 2rem;
+  z-index: 50;
   background: var(--navy);
-  color: var(--gold-lt);
-  font-size: 0.9rem;
+  color: #ffffff;
+  border: none;
+  border-radius: 30px;
+  padding: 10px 22px;
+  font-family: inherit;
   font-weight: 700;
+  font-size: 0.82rem;
+  letter-spacing: 0.5px;
   cursor: pointer;
-  transition: background 0.25s ease, transform 0.25s ease;
+  box-shadow: 0 4px 20px rgba(109,60,27,0.25);
+  transition: transform 0.2s, box-shadow 0.2s;
 }
-.fab:hover { background: var(--navy-md); transform: translateY(-2px); }
+.fab:hover {
+  transform: scale(1.05);
+  box-shadow: 0 6px 28px rgba(109,60,27,0.4);
+}
+@media (max-width: 768px) {
+  .fab {
+    position: static;
+    display: block;
+    margin: 0.75rem auto 0;
+    width: fit-content;
+  }
+}
 
 .editor { max-width: 1120px; margin: 0 auto; }
 .toolbar {

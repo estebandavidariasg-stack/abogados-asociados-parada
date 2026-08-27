@@ -120,6 +120,8 @@ export default function ProfileContadorPage() {
   const [tarjetaArchivoUrl, setTarjetaArchivoUrl] = useState(null)
   const [tarjetaDisplayUrl, setTarjetaDisplayUrl] = useState(null)
   const [uploadingTarjeta, setUploadingTarjeta]   = useState(false)
+  // Datos de pago para el cobro de asesorías (Nequi, cuenta bancaria…).
+  const [datosPago, setDatosPago] = useState('')
   const [departamento, setDepartamento]     = useState('')
   const [barrio, setBarrio]                 = useState('')
   const [especialidades, setEspecialidades] = useState([])
@@ -173,6 +175,7 @@ export default function ProfileContadorPage() {
       setFotoUrl(profile.foto_url    || null)
       setVideoUrl(profile.video_url  || null)
       setTarjetaArchivoUrl(profile.tarjeta_archivo_url || null)
+      setDatosPago(profile.datos_pago || '')
       if (profile.foto_url) setFotoPreview(profile.foto_url)
 
       setInstagram(profile.instagram || '')
@@ -330,6 +333,7 @@ export default function ProfileContadorPage() {
             area_derecho: especialidadesFinal.join(', '),
             descripcion, foto_url: fotoUrl, video_url: videoUrl,
             tarjeta_archivo_url: tarjetaArchivoUrl || null,
+            datos_pago: datosPago.trim() || null,
             instagram, linkedin, facebook, twitter, whatsapp, tiktok,
           }),
         }
@@ -572,6 +576,17 @@ export default function ProfileContadorPage() {
             <div className={styles.field}>
               <label className={styles.label}>Dirección de oficina</label>
               <input type="text" className={styles.input} placeholder="Calle 123 # 45-67, Of. 101" value={direccion} onChange={e => setDireccion(e.target.value)} />
+            </div>
+
+            {/* ── Datos de pago (para el cobro de asesorías) ── */}
+            <div className={`${styles.field} ${styles.fullWidth}`}>
+              <label className={styles.label}>Datos de pago (para cobrar asesorías)</label>
+              <input type="text" className={styles.input}
+                placeholder="Ej: Nequi 300 123 4567 · Bancolombia ahorros 123-456789-00"
+                value={datosPago} onChange={e => setDatosPago(e.target.value)} />
+              <p style={{ fontSize: '0.75rem', color: 'rgba(109,60,27,0.6)', marginTop: 6 }}>
+                El cliente verá estos datos cuando le cobres una asesoría. El pago es directo a ti.
+              </p>
             </div>
 
             {/* Descripción */}

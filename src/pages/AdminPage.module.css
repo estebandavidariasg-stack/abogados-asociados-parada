@@ -939,8 +939,12 @@
    (antes el texto quedaba aplastado y el botón encimado). */
 @media (max-width: 600px) {
   .alertaCard { align-items: flex-start; gap: 10px; }
-  .alertaActions { flex: 1 1 100%; flex-direction: row; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
-  .alertaActions .btnNotificar { flex: 1 1 100%; justify-content: center; }
+  /* Bloque de acciones a todo el ancho, apilado y centrado: la insignia arriba
+     y el botón (rojo o navy) debajo, ambos centrados y de ancho completo. */
+  .alertaActions { flex: 1 1 100%; flex-direction: column; align-items: stretch; gap: 8px; }
+  .alertaActions .btnNotificar,
+  .alertaActions .btnReasignar { flex: 1 1 100%; justify-content: center; }
+  .alertaBadge, .alertaBadgeEscalada { align-self: center; text-align: center; }
 }
 
 .alertaIcono { font-size: 1.5rem; flex-shrink: 0; }
@@ -1202,16 +1206,23 @@
    pie es una sola fila (inicio y salir lado a lado, no apilados). Va DESPUÉS
    de la regla base .sideFoot para ganarle en el orden de cascada. ── */
 @media (max-width: 480px) {
-  /* Tabs en grilla pareja de 4 columnas → 8 tabs = 2 filas de 4 (no 7+1
-     huérfano). justify-items:center deja el icono centrado en su celda, así
-     el badge se pega al icono y no a la esquina de la celda. */
+  /* Tabs en fila de 4: flex-wrap centrado (no grid) para que la última fila
+     PARCIAL quede centrada y no pegada a la izquierda. Cada tab ocupa 1/4 del
+     ancho, así que 4 llenan la fila y las que sobran se centran como bloque. */
   .sideNav,
   .sidebar:hover .sideNav {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    justify-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: stretch;
     flex: 1 1 100%;
-    gap: 0.5rem 0.2rem;
+    gap: 0.5rem 0.4rem;
+  }
+  .navItem,
+  .sidebar:hover .navItem {
+    flex: 0 0 calc(25% - 0.3rem);
+    padding: 0.6rem 0;
+    justify-content: center;
   }
   .sideFoot,
   .sidebar:hover .sideFoot {

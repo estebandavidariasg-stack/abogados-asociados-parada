@@ -81,12 +81,16 @@ export default async function handler(req, res) {
       await fetch(`${SUPABASE_URL}/rest/v1/mensajes_internos`, {
         method: 'POST',
         headers: serviceHeaders({ Prefer: 'return=minimal' }),
+        // Formato en líneas (Campo: valor). La primera línea es el marcador que
+        // el chat interno usa para renderizarlo como tarjeta estructurada; se
+        // conserva legible como texto por si algún cliente antiguo lo muestra.
         body: JSON.stringify({
           from_id: caller.id, to_id: adminId,
           mensaje:
-            `🔔 Solicitud de revisión de proceso\n` +
-            `Consulta: ${areaTxt}\nCliente: ${cliente}\n` +
-            `${nombreAbogado} solicita que revises este proceso.`,
+            `Solicitud de revisión de proceso\n` +
+            `Profesional: ${nombreAbogado}\n` +
+            `Cliente: ${cliente}\n` +
+            `Áreas de derecho: ${areaTxt}`,
         }),
       })
     } catch { /* no bloquea */ }

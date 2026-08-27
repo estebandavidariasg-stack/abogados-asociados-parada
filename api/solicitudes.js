@@ -203,8 +203,29 @@ async function tomar(req, res) {
 // Realtime) a SUS salas. role SIEMPRE 'anon' (no escala nada); lo único que
 // aporta el llamante es el hash, que no otorga más de lo que ya da conocer la
 // cédula. Firma HS256 con SUPABASE_JWT_SECRET (Legacy Secret del proyecto).
+// Limitador en memoria (por instancia) para acotar la emisión de tokens: sin
+// esto, un atacante podía pedir tokens en masa (enumerar hashes de cédula).
+// NO es la solución de fondo (ver docs/sql/security-fixes-2026-08-17.sql:
+// el client_token debe derivarse con un pepper server-side y/o prueba de
+// posesión), pero corta el abuso acelerado desde un mismo origen.
+const _tokHits = new Map(); // ip -> { n, resetAt }
+const TOK_MAX = Number(process.env.CHAT_TOKEN_MAX_IP_HORA || 60);
+function tokRateLimited(req) {
+  const real = req.headers['x-real-ip'];
+  const ip = (Array.isArray(real) ? real[0] : real)
+    || String(req.headers['x-forwarded-for'] || '').split(',')[0].trim()
+    || req.socket?.remoteAddress || '';
+  if (!ip) return false;
+  const now = Date.now();
+  const e = _tokHits.get(ip);
+  if (!e || e.resetAt <= now) { _tokHits.set(ip, { n: 1, resetAt: now + 3600_000 }); return false; }
+  e.n += 1;
+  return e.n > TOK_MAX;
+}
+
 async function chatToken(req, res) {
   if (!JWT_SECRET) { res.status(500).json({ error: 'Configuración del servidor incompleta.' }); return; }
+  if (tokRateLimited(req)) { res.status(429).json({ error: 'Demasiadas solicitudes. Intenta más tarde.' }); return; }
   const cedulaHash = String((req.body || {}).cedulaHash || '');
   // SHA-256 hex (64 chars): el claim solo puede ser un id de sala de cliente.
   if (!/^[a-f0-9]{64}$/i.test(cedulaHash)) { res.status(400).json({ error: 'Identificador inválido.' }); return; }
@@ -215,11 +236,73 @@ async function chatToken(req, res) {
   res.status(200).json({ token: signHS256(payload, JWT_SECRET), exp });
 }
 
+// ── POST firma_finalizar: escribe la firma de un firmante SERVER-SIDE ────────
+// Cierra F12–F16/F27: el cliente ya NO marca otp_verificado con la anon key.
+// Exige la prueba HMAC que emitió /api/verify-code al verificar el OTP, y ata
+// la escritura al correo REALMENTE verificado (no al que teclee el firmante),
+// eliminando el IDOR y la firma con identidad inventada.
+function verifyFirmaProof(proof) {
+  const secret = process.env.FIRMA_PROOF_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!secret || !proof || typeof proof !== 'string') return null;
+  const parts = proof.split('.');
+  if (parts.length !== 3) return null;
+  const [b, expStr, sig] = parts;
+  const exp = parseInt(expStr, 10);
+  if (!exp || exp < Math.floor(Date.now() / 1000)) return null;
+  const expected = crypto.createHmac('sha256', secret).update(`${b}.${expStr}`).digest('hex');
+  if (expected.length !== sig.length ||
+      !crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(sig))) return null;
+  try { return Buffer.from(b, 'base64url').toString('utf8').toLowerCase(); } catch { return null; }
+}
+
+async function firmaFinalizar(req, res) {
+  const b = req.body || {};
+  const email = verifyFirmaProof(b.firmaProof);
+  if (!email) { res.status(403).json({ error: 'Verificación de identidad inválida o expirada.' }); return; }
+  const firmanteId = String(b.firmanteId || '');
+  if (!/^[0-9a-fA-F-]{36}$/.test(firmanteId)) { res.status(400).json({ error: 'Firmante inválido.' }); return; }
+
+  // La fila del firmante manda el correo verdadero; el proof debe coincidir.
+  const r = await fetch(
+    `${SUPABASE_URL}/rest/v1/firmas_firmantes?id=eq.${encodeURIComponent(firmanteId)}&select=id,correo,estado`,
+    { headers: serviceHeaders() }
+  );
+  const rows = await r.json().catch(() => []);
+  const row = Array.isArray(rows) ? rows[0] : null;
+  if (!row) { res.status(404).json({ error: 'Firmante no encontrado.' }); return; }
+  if (String(row.correo || '').toLowerCase() !== email) {
+    res.status(403).json({ error: 'El correo verificado no coincide con el firmante.' }); return;
+  }
+
+  const pie = b.pie || {};
+  const ip = (req.headers['x-real-ip'] ||
+    String(req.headers['x-forwarded-for'] || '').split(',')[0].trim() || '').slice(0, 64);
+  const patch = {
+    estado: 'firmado', otp_verificado: true,
+    nombre: cap(pie.nombre, 200) || null, cedula: cap(pie.cedula, 40) || null,
+    telefono: cap(pie.telefono, 40) || null,
+    correo: row.correo,                 // FORZADO al correo verificado por OTP
+    ciudad: cap(pie.ciudad, 120) || null,
+    firmado_at: new Date().toISOString(),
+    ip: ip || null,
+    user_agent: cap(b.userAgent, 300) || null,
+    doc_hash: cap(b.docHash, 200) || null,
+  };
+  const up = await fetch(
+    `${SUPABASE_URL}/rest/v1/firmas_firmantes?id=eq.${encodeURIComponent(firmanteId)}`,
+    { method: 'PATCH', headers: { ...serviceHeaders(), Prefer: 'return=representation' }, body: JSON.stringify(patch) }
+  );
+  if (!up.ok) { res.status(500).json({ error: 'No se pudo registrar la firma.' }); return; }
+  const out = await up.json().catch(() => []);
+  res.status(200).json({ ok: true, firmante: Array.isArray(out) ? out[0] : out });
+}
+
 export default async function handler(req, res) {
   if (req.method === 'GET') return listar(req, res);
   if (req.method === 'POST') {
     const accion = (req.body && req.body.accion) || '';
     if (accion === 'chat_token') return chatToken(req, res);
+    if (accion === 'firma_finalizar') return firmaFinalizar(req, res);
     if (accion === 'publicar') return publicar(req, res);
     if (accion === 'tomar') return tomar(req, res);
     res.status(400).json({ error: 'Acción no soportada' });

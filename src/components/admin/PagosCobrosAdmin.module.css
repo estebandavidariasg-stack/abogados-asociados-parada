@@ -239,6 +239,12 @@
   .clearAll { margin-left: 0; }
   /* El separador vertical no aporta cuando los grupos de chips se apilan. */
   .chipDivider { display: none; }
+  /* Sub-tabs apilados como filas parejas de ancho completo: etiqueta a la
+     izquierda, contador a la derecha (antes quedaban raídos y el contador
+     desalineado cuando la etiqueta larga se partía en dos líneas). */
+  .subTabs { display: flex; flex-direction: column; width: 100%; align-self: stretch; }
+  .subTab { width: 100%; justify-content: flex-start; text-align: left; }
+  .subTabBadge { margin-left: auto; flex-shrink: 0; }
 }
 
 @media (prefers-reduced-motion: reduce) {

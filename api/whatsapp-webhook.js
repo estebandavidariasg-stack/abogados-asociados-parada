@@ -248,6 +248,14 @@ function extraerTexto(msg) {
   return ''
 }
 
+// Compara un token recibido con el secreto en TIEMPO CONSTANTE, para no filtrar
+// el secreto byte a byte por diferencias de tiempo (como ya hace la rama HMAC).
+function tokenIgual(recibido, esperado) {
+  const a = Buffer.from(String(recibido ?? ''))
+  const b = Buffer.from(String(esperado ?? ''))
+  return a.length === b.length && crypto.timingSafeEqual(a, b)
+}
+
 // ── Handler principal ──────────────────────────────────────────────────────
 export default async function handler(req, res) {
   // ── 1) GET: verificación del webhook (handshake con Meta) ──
@@ -256,7 +264,7 @@ export default async function handler(req, res) {
     const token     = req.query['hub.verify_token']
     const challenge = req.query['hub.challenge']
 
-    if (mode === 'subscribe' && token === WHATSAPP_VERIFY_TOKEN) {
+    if (mode === 'subscribe' && WHATSAPP_VERIFY_TOKEN && tokenIgual(token, WHATSAPP_VERIFY_TOKEN)) {
       // Meta espera el challenge en texto plano con 200.
       return res.status(200).send(String(challenge ?? ''))
     }
@@ -285,7 +293,7 @@ export default async function handler(req, res) {
 
     // Token en la URL (si está activado).
     if (enforceToken) {
-      if (!WHATSAPP_VERIFY_TOKEN || req.query?.token !== WHATSAPP_VERIFY_TOKEN) {
+      if (!WHATSAPP_VERIFY_TOKEN || !tokenIgual(req.query?.token, WHATSAPP_VERIFY_TOKEN)) {
         return res.status(403).end()
       }
     }

@@ -6,6 +6,7 @@ import styles from './ChatSection.module.css'
 import AudioPlayer from './AudioPlayer'
 import TriagePanel from './TriagePanel'
 import { ChatImage, ChatLightbox, openChatFile } from '../../lib/chatFiles'
+import { COP, fetchCobroCliente, clienteMarcoPago, descargarReciboPDF } from '../../lib/cobroAsesoria'
 // Lazy: arrastra ~30 kB de datos geográficos (32 departamentos + ~1.100
 // municipios) que solo se usan en el paso del formulario, nunca en el
 // primer render de la home.
@@ -889,7 +890,15 @@ function StepCedula({ onNew, onResume }) {
     const rooms = await fetchMisSalas(hash)
     const existing = rooms?.find(r => r.status === 'waiting' || r.status === 'active')
     if (existing) onResume(existing)
-    else onNew(abogadoURL ? { abogadoId: abogadoURL, tipo: tipoURL } : null)
+    else {
+      // Releer el deep-link en el momento del envío: si el cliente pulsó una
+      // tarjeta de profesional mientras estaba en este paso, el hash ya cambió
+      // aunque el componente no se haya re-renderizado.
+      const p = new URLSearchParams(window.location.hash.split('?')[1] || '')
+      const abg = p.get('abogado') || abogadoURL
+      const tp  = (p.get('tipo') || tipoURL) === 'contador' ? 'contador' : 'abogado'
+      onNew(abg ? { abogadoId: abg, tipo: tp } : null)
+    }
     setLoading(false)
   }
 
@@ -941,6 +950,118 @@ function StepCedula({ onNew, onResume }) {
         onClick={handleSubmit} disabled={loading || !cedula || !acepta}>
         {loading ? 'Verificando…' : 'Continuar'}
       </button>
+    </div>
+  )
+}
+
+// Tarjeta de cobro de la asesoría (cliente). Aparece dentro del chat cuando el
+// profesional fijó un cobro o marcó la consulta gratuita. El pago es MANUAL y
+// directo al profesional — Parada Bridge no intermedia el dinero.
+function CobroClienteCard({ roomId, clientToken, profesionalNombre }) {
+  const [cobro, setCobro]   = useState(null)
+  const [busy, setBusy]     = useState(false)
+  const [copied, setCopied] = useState(false)
+
+  useEffect(() => {
+    if (!roomId || !clientToken) return
+    let cancel = false
+    const load = () => fetchCobroCliente(roomId, clientToken).then(c => { if (!cancel) setCobro(c) })
+    load()
+    const t = setInterval(load, 8000)
+    return () => { cancel = true; clearInterval(t) }
+  }, [roomId, clientToken])
+
+  if (!cobro) return null
+
+  const marcar = async () => {
+    setBusy(true)
+    try {
+      await clienteMarcoPago(roomId, clientToken)
+      const c = await fetchCobroCliente(roomId, clientToken)
+      setCobro(c)
+    } catch { /* noop */ } finally { setBusy(false) }
+  }
+  const copiar = () => {
+    navigator.clipboard?.writeText(cobro.datos_pago || '')
+    setCopied(true); setTimeout(() => setCopied(false), 1600)
+  }
+  const recibo = () => descargarReciboPDF({
+    reciboNum: cobro.recibo_num,
+    monto: cobro.monto,
+    nota: cobro.nota,
+    profesionalNombre,
+    fecha: cobro.confirmado_at ? new Date(cobro.confirmado_at).toLocaleString('es-CO') : undefined,
+  })
+
+  const wrap = {
+    margin: '12px 16px', padding: '14px 16px', borderRadius: 14,
+    border: '1px solid rgba(201,168,76,0.45)',
+    background: 'linear-gradient(180deg,#fffdf5 0%,#fbf6e7 100%)',
+    fontSize: '0.86rem', color: '#472F29', lineHeight: 1.5,
+  }
+
+  if (cobro.estado === 'gratuita') {
+    return (
+      <div style={{ ...wrap, borderColor: 'rgba(46,158,95,0.4)', background: 'linear-gradient(180deg,#f3faf5,#eaf6ee)' }}>
+        <strong style={{ color: '#1f5e3c' }}>Asesoría sin costo 🙌</strong>
+        <div style={{ marginTop: 2, color: '#3d5a49' }}>El profesional marcó esta consulta como gratuita.</div>
+      </div>
+    )
+  }
+
+  if (cobro.estado === 'pagado') {
+    return (
+      <div style={{ ...wrap, borderColor: 'rgba(46,158,95,0.45)', background: 'linear-gradient(180deg,#f3faf5,#eaf6ee)' }}>
+        <strong style={{ color: '#1f5e3c' }}>Pago confirmado ✓</strong>
+        <div style={{ marginTop: 2, color: '#3d5a49' }}>
+          El profesional confirmó tu pago de <strong>{COP.format(Number(cobro.monto) || 0)}</strong>.
+          {cobro.recibo_num ? ` Recibo ${cobro.recibo_num}.` : ''}
+        </div>
+        <button type="button" onClick={recibo}
+          style={{ marginTop: 10, background: 'linear-gradient(135deg,#f2d580,#c9a84c 55%,#9a7a2c)', color: '#5a3d12', border: 'none', borderRadius: 9, padding: '9px 16px', fontWeight: 700, fontSize: '0.82rem', cursor: 'pointer' }}>
+          Descargar recibo (PDF)
+        </button>
+      </div>
+    )
+  }
+
+  // pendiente
+  const informado = !!cobro.marcado_cliente_at
+  return (
+    <div style={wrap}>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10 }}>
+        <strong style={{ color: '#6d3c1b', fontSize: '1.02rem' }}>Pago de la asesoría</strong>
+        <span style={{ fontWeight: 800, fontSize: '1.1rem', color: '#472F29' }}>{COP.format(Number(cobro.monto) || 0)}</span>
+      </div>
+      {cobro.nota && <div style={{ marginTop: 2, color: '#634f3d' }}>Concepto: {cobro.nota}</div>}
+
+      {cobro.datos_pago && (
+        <div style={{ marginTop: 10, padding: '10px 12px', background: 'rgba(109,60,27,0.05)', borderRadius: 10 }}>
+          <div style={{ fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'rgba(109,60,27,0.6)', marginBottom: 4 }}>Datos de pago del profesional</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'space-between' }}>
+            <span style={{ fontWeight: 600, whiteSpace: 'pre-wrap' }}>{cobro.datos_pago}</span>
+            <button type="button" onClick={copiar}
+              style={{ flexShrink: 0, background: '#fff', border: '1px solid rgba(109,60,27,0.25)', borderRadius: 8, padding: '5px 10px', fontSize: '0.75rem', fontWeight: 600, color: '#6d3c1b', cursor: 'pointer' }}>
+              {copied ? 'Copiado ✓' : 'Copiar'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      <p style={{ margin: '10px 0 0', fontSize: '0.74rem', color: 'rgba(109,60,27,0.7)' }}>
+        El pago es directo al profesional. Parada Bridge no intermedia el dinero.
+      </p>
+
+      {informado ? (
+        <div style={{ marginTop: 10, color: '#8a6a28', fontWeight: 600, fontSize: '0.82rem' }}>
+          ✓ Pago informado — esperando que el profesional lo confirme.
+        </div>
+      ) : (
+        <button type="button" onClick={marcar} disabled={busy}
+          style={{ marginTop: 12, width: '100%', background: 'linear-gradient(135deg,#f2d580,#c9a84c 55%,#9a7a2c)', color: '#5a3d12', border: 'none', borderRadius: 10, padding: '11px 16px', fontWeight: 700, fontSize: '0.88rem', cursor: busy ? 'not-allowed' : 'pointer' }}>
+          {busy ? 'Registrando…' : 'Ya realicé el pago'}
+        </button>
+      )}
     </div>
   )
 }
@@ -1254,6 +1375,12 @@ export default function ChatSection() {
       return
     }
 
+    // El cliente eligió explícitamente a este profesional (desde su tarjeta):
+    // dejamos un flujo manual limpio con él pre-seleccionado. Si venía de la IA
+    // (u otra selección), descartamos ese estado para no arrastrar el resumen /
+    // recomendación anteriores.
+    setDesdeIA(false); setProfesionalIA(null); setTriageResumen(''); setCostoIA('')
+    setSolicitudAbierta(false)
     setProfesionalDeepLink(prof)
     setPicked([prof.id])
     // El profesional ya fue elegido: sus áreas/especialidades se conocen, así
@@ -1283,6 +1410,26 @@ export default function ChatSection() {
       }
     } catch { /* noop */ }
   }
+
+  // Deep-link "en caliente": si el cliente ya pasó la cédula y, estando en el
+  // paso de método / IA / selección, pulsa "Iniciar consulta" en una tarjeta de
+  // profesional (del carrusel o de un testimonio), el hash cambia a
+  // #chat?abogado=<id>. Sin esto se quedaba clavado en la IA. Aquí saltamos
+  // directo al formulario con ese profesional ya elegido, sin importar el paso.
+  useEffect(() => {
+    const REDIRIGIBLES = new Set(['metodo', 'triage', 'form', 'lawyers', 'choose_another'])
+    function onHashChange() {
+      if (!REDIRIGIBLES.has(step)) return
+      const params = new URLSearchParams(window.location.hash.split('?')[1] || '')
+      const abg = params.get('abogado')
+      if (!abg) return
+      const tipo = params.get('tipo') === 'contador' ? 'contador' : 'abogado'
+      handleNew({ abogadoId: abg, tipo })
+    }
+    window.addEventListener('hashchange', onHashChange)
+    return () => window.removeEventListener('hashchange', onHashChange)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step])
 
   function handleResume(room) {
     setRoomId(room.id)
@@ -1777,6 +1924,13 @@ export default function ChatSection() {
                   antes de iniciar. Ver{' '}
                   <a href="/terminos" target="_blank" rel="noopener noreferrer" style={{ color:'#6d3c1b', fontWeight:700 }}>términos</a>.
                 </div>
+
+                {/* Cobro de la asesoría (manual, directo al profesional) */}
+                <CobroClienteCard
+                  roomId={roomId}
+                  clientToken={localStorage.getItem('chat_cedula_hash')}
+                  profesionalNombre={profesionalNombre}
+                />
 
                 <div
                   className={styles.chatMessages}

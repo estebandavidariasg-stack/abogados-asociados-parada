@@ -15,6 +15,16 @@ const transporter = nodemailer.createTransport({
   auth: { user: process.env.GMAIL_USER, pass: process.env.GMAIL_PASS },
 })
 
+// Escapa metacaracteres HTML de valores provenientes del usuario (nombre del
+// cliente, área, nombre del profesional) antes de interpolarlos en el correo,
+// para que markup inyectado no se renderice en la bandeja del administrador.
+// (notify.js ya hace esto con su propio esc(); aquí faltaba.)
+function esc(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;')
+}
+
 // Etiqueta de campo dentro de la ficha de datos.
 function campo(label, value) {
   return `<p style="margin:0 0 2px;font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:${C.muted};">${label}</p>
@@ -22,22 +32,25 @@ function campo(label, value) {
 }
 
 function renderHtml({ nombreAbogado, nombreCliente, area, ctaUrl }) {
+  const abogadoSafe  = esc(nombreAbogado)
+  const clienteSafe  = esc(nombreCliente)
+  const areaSafe     = esc(area)
   const datos = infoBox(
     `<div style="text-align:center;">
-       ${campo('Cliente', nombreCliente)}
+       ${campo('Cliente', clienteSafe)}
        <div style="height:14px;line-height:14px;font-size:0;">&nbsp;</div>
-       ${campo('Consulta', area)}
+       ${campo('Consulta', areaSafe)}
      </div>`
   )
   const inner =
     `<p style="margin:0 0 24px;font-size:15px;line-height:1.7;color:${C.body};text-align:center;">
-       El profesional ${em(nombreAbogado)} solicita que revises una conversación con un cliente.
+       El profesional ${em(abogadoSafe)} solicita que revises una conversación con un cliente.
      </p>
      ${datos}
      <div style="text-align:center;margin:26px 0 0;">${emailButton('Ver conversación', ctaUrl)}</div>`
   return renderShell({
     subjectLine: 'Solicitud de revisión de proceso',
-    preheader: `${nombreAbogado} solicita revisar una conversación.`,
+    preheader: `${abogadoSafe} solicita revisar una conversación.`,
     innerHtml: inner,
   })
 }

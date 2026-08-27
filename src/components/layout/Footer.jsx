@@ -29,41 +29,27 @@ export default function Footer() {
       <div className={styles.glow} />
 
       <div className={styles.inner}>
-        {/* ── Columna 1: Logo + tagline ── */}
+        {/* ── Columna 1: tagline ── */}
         <div className={styles.brand}>
-          <a href="/" className={styles.logoWrap}>
-            <picture>
-              <source srcSet="/logo-nav.webp" type="image/webp" />
-              <img
-                src="/logo-nav.png"
-                alt="Parada Bridge"
-                className={styles.logoImg}
-                width="96"
-                height="96"
-                loading="lazy"
-                decoding="async"
-              />
-            </picture>
-          </a>
           <p className={styles.tagline}>Somos una plataforma web de intermediación que facilita la conexión entre personas que necesitan orientación jurídica y contable.</p>
         </div>
 
         {/* ── Columna 2: Contacto (correo, WhatsApp, ubicación) + redes ── */}
         <div className={styles.contact}>
           <h4 className={`${styles.colTitle} ${styles.colTitleContact}`}>Contacto</h4>
-          <a href="mailto:gerencia@abogadosparada.com" className={styles.contactItem}>
+          <a href="mailto:gerencia@paradabridge.com" className={styles.contactItem}>
             <span className={styles.contactIcon}><IconMail /></span>
             <div>
               <span className={styles.contactLabel}>En cualquier momento</span>
-              <span className={styles.contactValue}>gerencia@abogadosparada.com</span>
+              <span className={styles.contactValue}>gerencia@paradabridge.com</span>
               <span className={styles.contactSub}>Respondemos en menos de 24 horas</span>
             </div>
           </a>
-          <a href="https://wa.me/573124086734" target="_blank" rel="noopener noreferrer" className={styles.contactItem}>
+          <a href="https://wa.me/573108886571" target="_blank" rel="noopener noreferrer" className={styles.contactItem}>
             <span className={styles.contactIcon}><IconPhone /></span>
             <div>
               <span className={styles.contactLabel}>¿Tienes dudas?</span>
-              <span className={styles.contactValue}>+57 312 408 6734</span>
+              <span className={styles.contactValue}>+57 310 888 6571</span>
               <span className={styles.contactSub}>Escríbenos por WhatsApp</span>
             </div>
           </a>

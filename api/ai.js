@@ -15,6 +15,14 @@ const MAX_SESIONES_IP_HORA = Number(process.env.AI_MAX_SESIONES_IP_HORA || 10);
 const MAX_LEN_MENSAJE = 2000;
 
 function clientIp(req) {
+  // Vercel fija `x-real-ip` con la IP real del cliente que observó su edge; el
+  // cliente NO puede sobrescribirla. NO usamos el primer valor de
+  // `x-forwarded-for`: Vercel lo APENDE, así que su extremo izquierdo es
+  // exactamente lo que el cliente mandó y se puede falsificar para rotar el
+  // ip_hash y saltarse el límite por IP. `x-real-ip` primero; XFF solo como
+  // respaldo en local/dev donde no existe.
+  const real = req.headers['x-real-ip'];
+  if (real) return (Array.isArray(real) ? real[0] : real).trim();
   const xff = req.headers['x-forwarded-for'] || '';
   return (Array.isArray(xff) ? xff[0] : xff).split(',')[0].trim() || req.socket?.remoteAddress || '';
 }
@@ -231,6 +239,13 @@ async function handleAbogado(req, res) {
   if (!perfil) { res.status(401).json({ error: 'No autenticado' }); return; }
   if (perfil.rol !== 'abogado' && perfil.rol !== 'contador') {
     res.status(403).json({ error: 'No autorizado' }); return;
+  }
+  // Solo profesionales APROBADOS por la administración pueden usar el asistente
+  // pagado (mismo criterio que api/solicitudes.js y api/reassign.js). Sin esto,
+  // una cuenta autorregistrada sin aprobar consume el modelo Sonnet a costa de
+  // la clave Anthropic de la firma.
+  if (!perfil.aprobado) {
+    res.status(403).json({ error: 'Perfil no aprobado' }); return;
   }
 
   // Historial acotado: los hilos legítimos crecen sin tope en localStorage,

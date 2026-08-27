@@ -27,6 +27,9 @@ export default function FirmaSigner({ pdfBytes, firmante = {}, onComplete, onCan
   const [paso, setPaso] = useState(initialStep)
   const [pdfUrl, setPdfUrl] = useState('')
   const [error, setError] = useState('')
+  // Prueba HMAC del OTP verificado (emitida por /api/verify-code). Obligatoria
+  // para que el servidor registre la firma; sin ella el paso 2 no finaliza.
+  const [firmaProof, setFirmaProof] = useState('')
 
   // Blob URL para previsualizar el documento.
   useEffect(() => {
@@ -68,7 +71,7 @@ export default function FirmaSigner({ pdfBytes, firmante = {}, onComplete, onCan
           <PasoOtp
             correo={firmante.correo}
             onError={setError}
-            onVerified={() => { setError(''); setPaso(2) }}
+            onVerified={(proof) => { setError(''); setFirmaProof(proof || ''); setPaso(2) }}
             onBack={() => setPaso(0)}
           />
         )}
@@ -81,7 +84,7 @@ export default function FirmaSigner({ pdfBytes, firmante = {}, onComplete, onCan
             onDone={async (signedBytes, pie, firmaPng) => {
               setError('')
               setPaso(3)
-              try { await onComplete?.(signedBytes, pie, firmaPng) }
+              try { await onComplete?.(signedBytes, pie, firmaPng, firmaProof) }
               catch (e) { setError(e?.message || 'No se pudo guardar el documento firmado.'); setPaso(2) }
             }}
             onBack={() => setPaso(1)}
@@ -172,7 +175,7 @@ function PasoOtp({ correo, onVerified, onBack, onError }) {
       })
       const data = await r.json().catch(() => ({}))
       if (!r.ok || data?.success === false) throw new Error(data?.error || 'Código inválido o expirado')
-      onVerified()
+      onVerified(data?.firmaProof)
     } catch (err) { onError(err.message || 'Código inválido o expirado') }
     finally { setChecking(false) }
   }

@@ -41,24 +41,13 @@
   gap: 1.2rem;
 }
 
-.logoWrap {
-  display: inline-flex;
-  text-decoration: none;
-}
-
-.logoImg {
-  height: 80px;
-  width: auto;
-  object-fit: contain;
-}
-
 .tagline {
   font-family: 'Poppins', sans-serif;
-  font-size: 0.78rem;
+  font-size: 1.02rem;
   font-weight: 400;
-  color: #68584a;
-  line-height: 1.9;
-  max-width: 260px;
+  color: #5a4a3d;
+  line-height: 1.75;
+  max-width: 420px;
 }
 
 /* ── TÍTULOS DE COLUMNA ───────────────────────────────────────── */

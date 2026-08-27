@@ -963,16 +963,6 @@ function SeccionCobros({ aprobado, userId }) {
                             <span className={styles.desLabel}>Total de la consulta</span>
                             <span className={styles.desVal}>{fmtCOP(c.total_consulta)}</span>
                           </div>
-                          <div className={styles.desItem}>
-                            <span className={styles.desLabel}>
-                              Empresa{c.pct_empresa != null ? ` · ${c.pct_empresa}%` : ''}
-                            </span>
-                            <span className={styles.desVal}>
-                              {fmtCOP(c.monto_empresa != null
-                                ? c.monto_empresa
-                                : (c.total_consulta && c.pct_empresa ? Math.round(c.total_consulta * c.pct_empresa / 100) : 0))}
-                            </span>
-                          </div>
                           <div className={`${styles.desItem} ${styles.desItemStrong}`}>
                             <span className={styles.desLabel}>
                               Tu comisión{c.pct_gestor != null ? ` · ${c.pct_gestor}%` : ''}

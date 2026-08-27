@@ -74,23 +74,28 @@ export async function crearSolicitud({ origen, roomId, contratoId, creadorId, do
   return { solicitud, firmantes: await firRes.json() }
 }
 
-/* Marca una fila de firmante como firmada (traza + hash). */
-export async function registrarFirmaFirmante(firmanteId, { pie, docHash }, headers) {
-  const res = await fetch(`${URL}/rest/v1/firmas_firmantes?id=eq.${firmanteId}`, {
-    method: 'PATCH',
-    headers: { ...headers, Prefer: 'return=representation' },
+/* Marca una fila de firmante como firmada (traza + hash) — SERVER-SIDE.
+   Antes el cliente ponía otp_verificado=true con la anon key (forjable y con
+   IDOR). Ahora la escritura la hace /api/solicitudes (accion firma_finalizar),
+   que exige la prueba HMAC del OTP (firmaProof, emitida por /api/verify-code) y
+   ata la firma al correo REALMENTE verificado. `firmaProof` es obligatorio. */
+export async function registrarFirmaFirmante(firmanteId, { pie, docHash, firmaProof }) {
+  if (!firmaProof) throw new Error('Falta la verificación de identidad (OTP).')
+  const res = await fetch('/api/solicitudes', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      estado: 'firmado', otp_verificado: true,
-      nombre: pie.nombre, cedula: pie.cedula, telefono: pie.telefono,
-      correo: pie.correo, ciudad: pie.ciudad,
-      firmado_at: new Date().toISOString(),
-      ip: null, // la IP la registra idealmente un endpoint; aquí queda null
-      user_agent: (navigator?.userAgent || '').slice(0, 300),
-      doc_hash: docHash || null,
+      accion: 'firma_finalizar',
+      firmanteId,
+      firmaProof,
+      pie: { nombre: pie.nombre, cedula: pie.cedula, telefono: pie.telefono, ciudad: pie.ciudad },
+      docHash: docHash || null,
+      userAgent: (typeof navigator !== 'undefined' ? navigator.userAgent : '').slice(0, 300),
     }),
   })
-  if (!res.ok) throw new Error('No se pudo registrar la firma')
-  return (await res.json())[0]
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok || !data?.ok) throw new Error(data?.error || 'No se pudo registrar la firma')
+  return data.firmante
 }
 
 /* Cierra la solicitud: guarda el PDF firmado final y estado='firmado'. */
@@ -132,12 +137,12 @@ export async function listarEvidencia(profesionalId, headers) {
    firmantes pendientes: anexa el certificado de auditoría, guarda el PDF final
    y cierra la solicitud. Devuelve { completa, docFirmadoPath }.
    `signedBytes` viene de FirmaSigner (ya trae la firma + pie estampados). */
-export async function persistirFirma({ solicitud, firmante, signedBytes, pie, headers }) {
+export async function persistirFirma({ solicitud, firmante, signedBytes, pie, firmaProof, headers }) {
   const running = `${solicitud.id}/firmado.pdf`
   const docHash = await hashDocumento(signedBytes)
 
   await subirDoc(running, signedBytes, headers)
-  await registrarFirmaFirmante(firmante.id, { pie, docHash }, headers)
+  await registrarFirmaFirmante(firmante.id, { pie, docHash, firmaProof })
 
   const filas = await firmantesPendientes(solicitud.id, headers)
   const pendientes = filas.filter((f) => f.estado !== 'firmado')

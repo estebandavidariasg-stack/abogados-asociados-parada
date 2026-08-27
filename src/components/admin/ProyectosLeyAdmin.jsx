@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import ResultadosProyecto from '../proyectos/ResultadosProyecto'
@@ -93,6 +93,12 @@ export default function ProyectosLeyAdmin() {
   const [articulos, setArticulos] = useState([])
   const [selArts, setSelArts]     = useState([])
 
+  // Importación automática desde archivo (PDF / Word / TXT) → prellenar el form.
+  const [imp, setImp]           = useState({ phase: 'idle', progress: 0, msg: '', resumen: null })
+  const [dragging, setDragging] = useState(false)   // arrastre activo (solo escritorio)
+  const fileRef = useRef(null)
+  const resetImport = () => { setImp({ phase: 'idle', progress: 0, msg: '', resumen: null }); setDragging(false) }
+
   // Modal de resultado + notificación a votantes.
   const [resForm, setResForm]     = useState({ estado: '', fecha: '', notas: '' })
   const [notif, setNotif]         = useState({ phase: 'idle', done: 0, total: 0, sent: 0, failed: 0, msg: '' })
@@ -126,9 +132,10 @@ export default function ProyectosLeyAdmin() {
 
   /* ── Abrir modales ── */
   function nuevoProyecto() {
-    setForm(emptyForm()); setArticulos([]); setModal({ tipo: 'edit' })
+    setForm(emptyForm()); setArticulos([]); resetImport(); setModal({ tipo: 'edit' })
   }
   async function editar(p) {
+    resetImport()
     setForm({
       id: p.id, nombre: p.nombre || '', numero: p.numero || '',
       descripcion: p.descripcion || '', fecha_radicacion: p.fecha_radicacion || '',
@@ -160,6 +167,76 @@ export default function ProyectosLeyAdmin() {
   const setArt = (i, patch) => setArticulos(prev => prev.map((a, idx) => idx === i ? { ...a, ...patch } : a))
   const addArt = () => setArticulos(prev => [...prev, emptyArt()])
   const delArt = (i) => setArticulos(prev => prev.filter((_, idx) => idx !== i))
+
+  /* ── Importar desde archivo: extrae el texto en el navegador y detecta
+     número, título, fecha y articulado para prellenar el formulario. No usa
+     IA ni funciones serverless (respeta el tope de 12 de Vercel). Acepta el
+     archivo por arrastre (escritorio) o por selección/toque (móvil). ── */
+  const importBusy = imp.phase === 'leyendo' || busy
+
+  async function procesarArchivo(file) {
+    if (!file) return
+    if (file.size > 25 * 1024 * 1024) {
+      setImp({ phase: 'error', progress: 0, msg: 'El archivo supera los 25 MB.', resumen: null })
+      return
+    }
+    setImp({ phase: 'leyendo', progress: 0, msg: 'Leyendo el documento…', resumen: null })
+    try {
+      const [{ extractDocText }, { parseProyectoLey }] = await Promise.all([
+        import('../../utils/extractDocText'),
+        import('../../utils/parseProyectoLey'),
+      ])
+      const { text } = await extractDocText(file, { onProgress: (p) => setImp(s => ({ ...s, progress: p })) })
+      if (!text || text.trim().length < 40) {
+        setImp({ phase: 'error', progress: 0, resumen: null,
+          msg: 'No se encontró texto legible. Si el PDF es una imagen escaneada, no tiene texto seleccionable: usa un PDF con texto o un Word.' })
+        return
+      }
+      const r = parseProyectoLey(text)
+      if (!r.numero && !r.nombre && r.articulos.length === 0) {
+        setImp({ phase: 'error', progress: 0, resumen: null,
+          msg: 'Se leyó el archivo pero no se reconoció la estructura de un proyecto de ley. Revisa y completa los campos a mano.' })
+        return
+      }
+      // Prellenar sin pisar lo ya escrito cuando la detección viene vacía.
+      setForm(f => ({
+        ...f,
+        nombre:           r.nombre || f.nombre,
+        numero:           r.numero || f.numero,
+        fecha_radicacion: r.fecha_radicacion || f.fecha_radicacion,
+        descripcion:      r.descripcion || f.descripcion,
+      }))
+      if (r.articulos.length > 0) {
+        setForm(f => ({ ...f, permite_articulado: true }))
+        setArticulos(r.articulos.map(a => ({ numero: a.numero, titulo: a.titulo, contenido: a.contenido })))
+      }
+      setImp({ phase: 'done', progress: 1, msg: '', resumen: r.meta })
+    } catch (err) {
+      setImp({ phase: 'error', progress: 0, resumen: null, msg: err.message || 'No se pudo procesar el archivo.' })
+    }
+  }
+
+  // <input type=file> (toque/clic → funciona en celular, donde no hay arrastre).
+  function onInputChange(e) {
+    const file = e.target.files?.[0]
+    e.target.value = ''                 // permite re-elegir el mismo archivo
+    procesarArchivo(file)
+  }
+  const abrirSelector = () => { if (!importBusy) fileRef.current?.click() }
+
+  // Arrastrar y soltar (solo escritorio: en táctil estos eventos no se disparan).
+  function onDrop(e) {
+    e.preventDefault(); setDragging(false)
+    if (importBusy) return
+    procesarArchivo(e.dataTransfer?.files?.[0])
+  }
+  function onDragOver(e) { e.preventDefault() }
+  function onDragEnter(e) { e.preventDefault(); if (!importBusy) setDragging(true) }
+  function onDragLeave(e) {
+    e.preventDefault()
+    if (e.currentTarget.contains(e.relatedTarget)) return   // sigue dentro de la zona
+    setDragging(false)
+  }
 
   /* ── Acciones ── */
   async function guardar() {
@@ -401,6 +478,67 @@ export default function ProyectosLeyAdmin() {
                 </>
               }
             >
+              {/* Importar desde archivo: arrastra (escritorio) o toca para elegir
+                  (móvil). Detecta título, número, fecha y artículos. */}
+              <div className={styles.importBox}>
+                <div
+                  className={`${styles.importZone} ${dragging ? styles.importZoneDrag : ''} ${importBusy ? styles.importZoneBusy : ''}`}
+                  role="button" tabIndex={0}
+                  onClick={abrirSelector}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); abrirSelector() } }}
+                  onDragOver={onDragOver} onDragEnter={onDragEnter} onDragLeave={onDragLeave} onDrop={onDrop}
+                  aria-label="Importar proyecto desde archivo: arrastra un PDF o Word aquí, o toca para elegirlo"
+                >
+                  <div className={styles.importIcon} aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6" /><path d="m9 15 3-3 3 3" /><path d="M12 12v6" />
+                    </svg>
+                  </div>
+                  <div className={styles.importText}>
+                    <strong>Importar desde archivo</strong>
+                    <span>
+                      <span className={styles.soloDesktop}>Arrastra aquí el archivo o </span>
+                      <span className={styles.soloMovil}>Toca para elegir un archivo</span>
+                      <span className={styles.soloDesktop}>toca para elegirlo</span>
+                      {' '}(PDF con texto, Word .docx o TXT). Detectamos título, número, fecha y artículos.
+                    </span>
+                  </div>
+                  <span className={`${styles.importBtn} ${imp.phase === 'leyendo' ? styles.importBtnBusy : ''}`} aria-hidden="true">
+                    {imp.phase === 'leyendo' ? 'Leyendo…' : 'Elegir archivo'}
+                  </span>
+                </div>
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept=".pdf,.docx,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
+                  onChange={onInputChange}
+                  disabled={importBusy}
+                  hidden
+                />
+
+                {imp.phase === 'leyendo' && (
+                  <div className={styles.importProg}>
+                    <div className={styles.importProgBar}>
+                      <div className={styles.importProgFill} style={{ width: `${Math.max(8, Math.round(imp.progress * 100))}%` }} />
+                    </div>
+                    <span>{imp.msg}</span>
+                  </div>
+                )}
+                {imp.phase === 'done' && imp.resumen && (
+                  <p className={styles.importOk}>
+                    ✓ Detectado:
+                    {imp.resumen.detecto.numero && ' número,'}
+                    {imp.resumen.detecto.nombre && ' título,'}
+                    {imp.resumen.detecto.fecha && ' fecha,'}
+                    {' '}{imp.resumen.totalArticulos} artículo{imp.resumen.totalArticulos === 1 ? '' : 's'}.
+                    {' '}<b>Revisa y ajusta antes de guardar.</b>
+                  </p>
+                )}
+                {imp.phase === 'error' && (
+                  <p className={styles.importErr}>{imp.msg}</p>
+                )}
+              </div>
+
               <div className={styles.formGrid}>
                 <label className={styles.field}>
                   <span>Nombre del proyecto *</span>
@@ -420,7 +558,7 @@ export default function ProyectosLeyAdmin() {
                 </label>
                 <label className={`${styles.field} ${styles.fieldFull}`}>
                   <span>Descripción</span>
-                  <textarea rows={3} value={form.descripcion} onChange={e => setForm(f => ({ ...f, descripcion: e.target.value }))} placeholder="Resumen del proyecto para la ciudadanía…" />
+                  <textarea rows={5} value={form.descripcion} onChange={e => setForm(f => ({ ...f, descripcion: e.target.value }))} placeholder="Resumen del proyecto para la ciudadanía…" />
                 </label>
               </div>
 
@@ -446,7 +584,7 @@ export default function ProyectosLeyAdmin() {
                     <input className={styles.artNum} value={a.numero} onChange={e => setArt(i, { numero: e.target.value })} placeholder="N°" inputMode="numeric" />
                     <div className={styles.artFields}>
                       <input value={a.titulo} onChange={e => setArt(i, { titulo: e.target.value })} placeholder="Título del artículo" />
-                      <textarea rows={2} value={a.contenido} onChange={e => setArt(i, { contenido: e.target.value })} placeholder="Texto del artículo (opcional)" />
+                      <textarea rows={5} value={a.contenido} onChange={e => setArt(i, { contenido: e.target.value })} placeholder="Texto del artículo (opcional)" />
                     </div>
                     <button className={styles.delBtn} onClick={() => delArt(i)} title="Eliminar artículo" aria-label="Eliminar artículo">✕</button>
                   </div>

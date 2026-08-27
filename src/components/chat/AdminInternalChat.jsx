@@ -24,6 +24,73 @@ function fmtHora(ts) {
   return new Date(ts).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })
 }
 
+function fmtFechaHora(ts) {
+  return new Date(ts).toLocaleString('es-CO', {
+    day: '2-digit', month: 'short', year: 'numeric',
+    hour: '2-digit', minute: '2-digit', hour12: true,
+  })
+}
+
+// Detecta el mensaje automático de "Solicitud de revisión de proceso" (posteado
+// por api/verify-request) y extrae sus campos (Profesional / Cliente / Áreas)
+// para pintarlo como tarjeta en líneas en vez de texto corrido.
+export function parseRevision(m) {
+  if (!m || m.message_type === 'audio' || m.message_type === 'file') return null
+  const txt = (m.mensaje || '').trim()
+  if (!/^Solicitud de revisi[óo]n/i.test(txt)) return null
+  const campos = {}
+  txt.split('\n').forEach(line => {
+    const i = line.indexOf(':')
+    if (i > -1) campos[line.slice(0, i).trim().toLowerCase()] = line.slice(i + 1).trim()
+  })
+  return {
+    profesional: campos['profesional'] || '',
+    cliente: campos['cliente'] || '',
+    areas: campos['áreas de derecho'] || campos['areas de derecho'] || campos['consulta'] || '',
+  }
+}
+
+// Tarjeta de "Solicitud de revisión" compartida por ambos lados del chat interno.
+export function RevisionCard({ rev, fecha, styles }) {
+  return (
+    <div className={styles.revisionCard}>
+      <div className={styles.revisionHead}>
+        <span className={styles.revisionIcon} aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6" />
+            <path d="m9 15 2 2 4-4" />
+          </svg>
+        </span>
+        <span className={styles.revisionTitle}>Solicitud de revisión</span>
+      </div>
+      <dl className={styles.revisionRows}>
+        <div className={styles.revisionRow}>
+          <dt className={styles.revisionLabel}>Fecha</dt>
+          <dd className={styles.revisionValue}>{fecha}</dd>
+        </div>
+        {rev.profesional && (
+          <div className={styles.revisionRow}>
+            <dt className={styles.revisionLabel}>Profesional</dt>
+            <dd className={styles.revisionValue}>{rev.profesional}</dd>
+          </div>
+        )}
+        {rev.cliente && (
+          <div className={styles.revisionRow}>
+            <dt className={styles.revisionLabel}>Cliente</dt>
+            <dd className={styles.revisionValue}>{rev.cliente}</dd>
+          </div>
+        )}
+        {rev.areas && (
+          <div className={styles.revisionRow}>
+            <dt className={styles.revisionLabel}>Áreas de derecho</dt>
+            <dd className={styles.revisionValue}>{rev.areas}</dd>
+          </div>
+        )}
+      </dl>
+    </div>
+  )
+}
+
 export default function AdminInternalChat({ miId }) {
   const [abogados, setAbogados]         = useState([])
   const [selected, setSelected]         = useState(null)
@@ -617,6 +684,12 @@ export default function AdminInternalChat({ miId }) {
               )}
               {messages.map(m => {
                 const mine = m.from_id === miId
+                const rev = parseRevision(m)
+                if (rev) {
+                  return (
+                    <RevisionCard key={m.id} rev={rev} fecha={fmtFechaHora(m.created_at)} styles={styles} />
+                  )
+                }
                 return (
                   <div
                     key={m.id}

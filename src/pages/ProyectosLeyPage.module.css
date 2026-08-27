@@ -223,8 +223,9 @@
 .buscadorIcon { position: absolute; left: 0.85rem; color: #9a8064; pointer-events: none; display: inline-flex; }
 .buscador input {
   font-family: 'Poppins', sans-serif; font-size: 0.9rem; color: #472f29;
-  background: #fffef7; border: 1px solid rgba(109, 60, 27, 0.18);
+  background: #ffffff; border: 1px solid rgba(109, 60, 27, 0.28);
   border-radius: 11px; padding: 0.62rem 2.4rem; width: 100%;
+  box-shadow: 0 1px 2px rgba(109, 60, 27, 0.06);
   transition: border-color 0.2s, box-shadow 0.2s;
 }
 .buscador input::placeholder { color: #9a8064; }
@@ -243,8 +244,9 @@
 .fechaField span { font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.09em; font-weight: 700; color: #9a8064; }
 .fechaField input {
   font-family: 'Poppins', sans-serif; font-size: 0.85rem; color: #472f29;
-  background: #fffef7; border: 1px solid rgba(109, 60, 27, 0.18);
+  background: #ffffff; border: 1px solid rgba(109, 60, 27, 0.28);
   border-radius: 11px; padding: 0.54rem 0.7rem;
+  box-shadow: 0 1px 2px rgba(109, 60, 27, 0.06);
   transition: border-color 0.2s, box-shadow 0.2s;
 }
 .fechaField input:focus { outline: none; border-color: var(--gold); box-shadow: 0 0 0 3px rgba(201, 168, 76, 0.18); }
@@ -258,7 +260,11 @@
 .filtroCount { font-size: 0.78rem; color: #6f5c48; margin: 0 0 1rem; font-weight: 600; }
 
 @media (max-width: 620px) {
-  .filtros { flex-direction: column; align-items: stretch; }
+  .filtros { flex-direction: column; align-items: stretch; gap: 0.6rem; }
+  /* En columna, el `flex-basis: 260px` del buscador se volvía ALTO (caja de
+     260px con el input flotando al centro) → hueco enorme. Que mida su
+     contenido; el ancho lo da 'stretch' del contenedor. */
+  .buscador { flex: 0 0 auto; min-width: 0; }
   .fechas { width: 100%; }
   .fechaField { flex: 1 1 0; }
   .fechaField input { width: 100%; }

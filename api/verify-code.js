@@ -89,6 +89,35 @@ async function countRecentFailuresByIp(ipHash) {
   } catch { return 0 }
 }
 
+// Backstop en memoria (por instancia). Los contadores de BD de arriba son
+// FAIL-OPEN (devuelven 0 si la tabla no existe o la BD no responde): eso dejaba
+// el código de 6 dígitos abierto a fuerza bruta completa dentro de su ventana.
+// Este limitador vive en la instancia serverless y está ACTIVO siempre, así que
+// aunque el guard de BD esté caído, una ráfaga contra una instancia caliente se
+// corta. No sustituye al guard de BD (las instancias son efímeras) — sigue
+// recomendándose aplicar verify_code_attempts y subir la entropía del OTP.
+// Prueba efímera (HMAC) de que el OTP de FIRMA se verificó para este correo.
+// /api/solicitudes (accion 'firma_finalizar') la consume para escribir
+// otp_verificado=true SERVER-SIDE, atado al correo realmente verificado, sin
+// confiar en lo que teclee el firmante. TTL 10 min. Secreto solo server.
+function mintFirmaProof(email) {
+  const secret = process.env.FIRMA_PROOF_SECRET || SUPABASE_SERVICE_ROLE_KEY
+  const exp = Math.floor(Date.now() / 1000) + 600
+  const b = Buffer.from(email).toString('base64url')
+  const sig = crypto.createHmac('sha256', secret).update(`${b}.${exp}`).digest('hex')
+  return `${b}.${exp}.${sig}`
+}
+
+const memHits = new Map() // key -> { n, resetAt }
+function memTooMany(key, max) {
+  if (!key) return false
+  const now = Date.now()
+  const e = memHits.get(key)
+  if (!e || e.resetAt <= now) { memHits.set(key, { n: 1, resetAt: now + ATTEMPT_WINDOW_MS }); return false }
+  e.n += 1
+  return e.n > max
+}
+
 // Registra un intento FALLIDO (no-fatal: si falla, solo perdemos un punto).
 async function recordFailure(email, ipHash) {
   try {
@@ -152,6 +181,13 @@ export default async function handler(req, res) {
   const now    = new Date().toISOString()
   const ipHash = clientIpHash(req)
 
+  // Backstop en memoria (siempre activo): cubre el caso en que el guard de BD
+  // esté inactivo (tabla no aplicada / BD inaccesible). Cada verificación cuenta
+  // contra un tope por correo y por IP dentro de la ventana.
+  if (memTooMany('e:' + email, MAX_FAILED_ATTEMPTS) || (ipHash && memTooMany('i:' + ipHash, MAX_FAILED_ATTEMPTS_IP))) {
+    return res.status(429).json({ error: 'Demasiados intentos. Solicita un código nuevo.' })
+  }
+
   // Bloqueo por fuerza-bruta ANTES de tocar la tabla de códigos: si ya hubo
   // demasiadas fallas recientes para este correo, cortamos aquí.
   if (await countRecentFailures(email) >= MAX_FAILED_ATTEMPTS) {
@@ -202,9 +238,13 @@ export default async function handler(req, res) {
     }
 
     // Sólo exponemos tipo_registro — id, code y demás quedan en el server.
+    const tipo = rows[0].tipo_registro
     return res.status(200).json({
       success:      true,
-      tipoRegistro: rows[0].tipo_registro,
+      tipoRegistro: tipo,
+      // La firma electrónica recibe además una prueba HMAC del correo verificado,
+      // que el endpoint de finalización exige para marcar otp_verificado.
+      ...(tipo === 'firma' ? { firmaProof: mintFirmaProof(email) } : {}),
     })
 
   } catch (err) {

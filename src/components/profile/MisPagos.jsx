@@ -77,6 +77,9 @@ export default function MisPagos({ userId }) {
   const [tipoPersona, setTipoPersona] = useState('Natural')
   const [fase, setFase]             = useState('form') // 'form' | 'procesando' | 'aprobado' | 'error'
   const [modalError, setModalError] = useState(null)
+  // Cuando el pago va por la pasarela real de Wompi, el modal muestra solo el
+  // estado (procesando/aprobado/error), no el formulario PSE simulado.
+  const [wompiFlow, setWompiFlow]   = useState(false)
 
   const cargarPagos = useCallback(async () => {
     if (!userId) return
@@ -128,18 +131,113 @@ export default function MisPagos({ userId }) {
     .filter(p => p.estado === 'pagado')
     .reduce((acc, p) => acc + Number(p.monto || 0), 0)
 
+  // Carga el widget.js de Wompi una sola vez.
+  function ensureWompiScript() {
+    return new Promise((resolve, reject) => {
+      if (window.WidgetCheckout) return resolve()
+      let s = document.querySelector('script[data-wompi]')
+      if (s) {
+        s.addEventListener('load', () => resolve())
+        s.addEventListener('error', () => reject(new Error('wompi')))
+        return
+      }
+      s = document.createElement('script')
+      s.src = 'https://checkout.wompi.co/widget.js'
+      s.async = true
+      s.dataset.wompi = '1'
+      s.onload = () => resolve()
+      s.onerror = () => reject(new Error('No se pudo cargar Wompi'))
+      document.body.appendChild(s)
+    })
+  }
+
+  // Sondea el estado del pago hasta que el webhook de Wompi lo marque 'pagado'
+  // (la confirmación real es server-side, nunca el resultado del navegador).
+  async function pollPagoPagado(pagoId) {
+    for (let i = 0; i < 24; i++) {          // ~72 s (24 × 3 s)
+      await new Promise(r => setTimeout(r, 3000))
+      try {
+        const headers = await getAuthHeaders()
+        const res = await fetch(
+          `${SUPABASE_URL}/rest/v1/pagos_profesional?id=eq.${pagoId}&select=estado`,
+          { headers }
+        )
+        const d = await res.json()
+        if (d?.[0]?.estado === 'pagado') return true
+      } catch { /* reintenta */ }
+    }
+    return false
+  }
+
+  // Inicia el pago: intenta Wompi (pasarela real); si no está configurada, cae
+  // al modal PSE simulado existente.
+  async function iniciarPago(pago) {
+    try {
+      const headers = await getAuthHeaders()
+      const res = await fetch('/api/notify', {
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'wompi_firma', data: { pagoId: pago.id } }),
+      })
+      const firma = await res.json()
+      if (firma?.ok && firma.publicKey && typeof window !== 'undefined') {
+        await abrirWidgetWompi(pago, firma)
+        return
+      }
+    } catch { /* cae al simulado */ }
+    abrirPSE(pago)   // fallback: modal PSE simulado
+  }
+
+  async function abrirWidgetWompi(pago, firma) {
+    try {
+      await ensureWompiScript()
+    } catch {
+      abrirPSE(pago)   // si el widget no carga, no dejamos al usuario sin opción
+      return
+    }
+    const checkout = new window.WidgetCheckout({
+      currency: firma.currency,
+      amountInCents: firma.amountInCents,
+      reference: firma.reference,
+      publicKey: firma.publicKey,
+      signature: { integrity: firma.integrity },
+      redirectUrl: window.location.origin + '/perfil',
+    })
+    checkout.open(async () => {
+      // No confiamos en el resultado del cliente: confirmamos por el webhook.
+      setPagoActivo(pago)
+      setWompiFlow(true)
+      setModalError(null)
+      setFase('procesando')
+      const ok = await pollPagoPagado(pago.id)
+      if (ok) {
+        setFase('aprobado')
+        await new Promise(r => setTimeout(r, 1200))
+        setPagoActivo(null)
+        setWompiFlow(false)
+        await cargarPagos()
+      } else {
+        setFase('error')
+        setModalError('Tu pago se está procesando. Si ya pagaste (p. ej. por PSE), esta pantalla se actualizará cuando el banco confirme; puede tardar unos minutos.')
+      }
+    })
+  }
+
   function abrirPSE(pago) {
     setPagoActivo(pago)
     setBanco('')
     setTipoPersona('Natural')
     setFase('form')
     setModalError(null)
+    setWompiFlow(false)
   }
 
   function cerrarPSE() {
-    // No permitimos cerrar mientras procesa (evita dobles pagos).
-    if (fase === 'procesando') return
+    // En el simulado no dejamos cerrar mientras procesa (evita dobles pagos).
+    // En Wompi sí: el sondeo sigue en segundo plano y el webhook confirma igual.
+    if (fase === 'procesando' && !wompiFlow) return
     setPagoActivo(null)
+    setWompiFlow(false)
   }
 
   async function confirmarPSE(e) {
@@ -160,6 +258,17 @@ export default function MisPagos({ userId }) {
       if (!res.ok) throw new Error('El banco rechazó la transacción')
       const ok = await res.json()
       if (ok !== true) throw new Error('No se pudo confirmar el pago')
+
+      // Best-effort: emitir la factura de la comisión en Alegra. NO bloquea el
+      // pago (que ya quedó registrado); si Alegra falla o no está configurada,
+      // el endpoint responde ok:false y aquí lo ignoramos.
+      try {
+        await fetch('/api/notify', {
+          method: 'POST',
+          headers: { ...headers, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: 'alegra_factura', data: { pagoId: pagoActivo.id } }),
+        })
+      } catch { /* noop */ }
 
       setFase('aprobado')
       // Breve pausa para que el usuario vea el "✓ Pago aprobado".
@@ -283,7 +392,7 @@ export default function MisPagos({ userId }) {
                       <button
                         type="button"
                         className={styles.payBtn}
-                        onClick={() => abrirPSE(pago)}
+                        onClick={() => iniciarPago(pago)}
                       >
                         Pagar con PSE
                       </button>
@@ -354,8 +463,12 @@ export default function MisPagos({ userId }) {
             {fase === 'procesando' && (
               <div className={styles.stateBox}>
                 <span className={styles.spinner} aria-hidden="true" />
-                <p className={styles.stateText}>Procesando pago…</p>
-                <p className={styles.stateSub}>Estás siendo redirigido a tu banco de forma segura.</p>
+                <p className={styles.stateText}>{wompiFlow ? 'Confirmando tu pago…' : 'Procesando pago…'}</p>
+                <p className={styles.stateSub}>
+                  {wompiFlow
+                    ? 'Esperamos la confirmación de la pasarela. No cierres esta ventana.'
+                    : 'Estás siendo redirigido a tu banco de forma segura.'}
+                </p>
               </div>
             )}
 
@@ -367,7 +480,18 @@ export default function MisPagos({ userId }) {
               </div>
             )}
 
-            {(fase === 'form' || fase === 'error') && (
+            {wompiFlow && fase === 'error' && (
+              <div className={styles.stateBox}>
+                <p className={styles.stateSub} style={{ marginBottom: 16 }}>
+                  {modalError || 'Tu pago se está procesando. Se actualizará cuando el banco confirme.'}
+                </p>
+                <button type="button" className={styles.confirmBtn} onClick={cerrarPSE}>
+                  Entendido
+                </button>
+              </div>
+            )}
+
+            {!wompiFlow && (fase === 'form' || fase === 'error') && (
               <form className={styles.pseForm} onSubmit={confirmarPSE}>
                 <div className={styles.field}>
                   <label className={styles.label}>Banco</label>
