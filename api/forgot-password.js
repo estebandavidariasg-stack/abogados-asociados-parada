@@ -29,6 +29,27 @@ const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
 
 const DEFAULT_REDIRECT = 'https://paradabridge.com/nueva-contrasena'
 
+// Solo se acepta redirect_to hacia orígenes conocidos y a la ruta de reset.
+// Evita que un correo (p.ej. pedido desde localhost) apunte a un sitio que el
+// destinatario no puede abrir, y cierra un posible open-redirect. Si no calza,
+// se usa el destino de producción por defecto.
+const REDIRECT_ORIGINS = new Set([
+  'https://paradabridge.com',
+  'https://www.paradabridge.com',
+  'http://localhost:5173',
+])
+function safeRedirect(redirectTo) {
+  if (typeof redirectTo === 'string' && redirectTo) {
+    try {
+      const u = new URL(redirectTo)
+      if (REDIRECT_ORIGINS.has(u.origin) && u.pathname === '/nueva-contrasena') {
+        return redirectTo
+      }
+    } catch { /* URL inválida → default */ }
+  }
+  return DEFAULT_REDIRECT
+}
+
 /* ── Verificación de reCAPTCHA contra Google ──────────────────────────────
    Sin esto, un atacante hace flooding de correos de recuperación a víctimas
    arbitrarias (DoS de bandeja + costo de Gmail). RECAPTCHA_SECRET_KEY debe
@@ -204,7 +225,7 @@ export default async function handler(req, res) {
   // Por seguridad, NO revelamos si el email existe o no en la base.
   // SIEMPRE respondemos 200 al cliente, independientemente del resultado
   // (esto previene enumeración de usuarios).
-  const target = (typeof redirectTo === 'string' && redirectTo) ? redirectTo : DEFAULT_REDIRECT
+  const target = safeRedirect(redirectTo)
 
   // ── Rate-limit ────────────────────────────────────────────────────────
   // Registramos el intento ANTES de chequear el límite — así el conteo
