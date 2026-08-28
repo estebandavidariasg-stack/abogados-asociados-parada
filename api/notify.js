@@ -279,7 +279,15 @@ async function alegra(path, opts = {}) {
   let body; try { body = text ? JSON.parse(text) : null } catch { body = text }
   if (!res.ok) {
     const msg = body?.message || body?.error || `Alegra HTTP ${res.status}`
-    throw new Error(typeof msg === 'string' ? msg : JSON.stringify(msg))
+    // Adjuntamos la ruta, el status y el cuerpo COMPLETO al error: Alegra suele
+    // devolver el detalle real en body (validaciones, campo faltante, etc.) y su
+    // `message` genérico ("Ha ocurrido un error inesperado") no basta para
+    // diagnosticar. Se loguea donde se atrapa el error.
+    const e = new Error(typeof msg === 'string' ? msg : JSON.stringify(msg))
+    e.alegraPath   = path
+    e.alegraStatus = res.status
+    e.alegraBody   = (typeof body === 'string' ? body : JSON.stringify(body || {})).slice(0, 600)
+    throw e
   }
   return body
 }
@@ -432,7 +440,10 @@ async function handleWompiWebhook(req, res) {
             headers: svcHeaders(),
             body: JSON.stringify({ p_pago_id: pagoId, p_tx_id: String(tx.id) }),
           })
-          try { await emitirFacturaAlegra(pagoId) } catch (e) { console.error('[notify] alegra tras wompi:', e?.message || e) }
+          try { await emitirFacturaAlegra(pagoId) } catch (e) {
+            console.error('[notify] alegra tras wompi:', e?.message || e,
+              '| path:', e?.alegraPath, '| status:', e?.alegraStatus, '| body:', e?.alegraBody)
+          }
         } catch (e) {
           console.error('[notify] confirmar_pago_wompi failed:', e?.message || e)
         }
@@ -855,7 +866,8 @@ export default async function handler(req, res) {
         const result = await emitirFacturaAlegra(pagoId)
         return res.status(200).json(result)
       } catch (err) {
-        console.error('[notify] alegra_factura failed:', err?.message || err)
+        console.error('[notify] alegra_factura failed:', err?.message || err,
+          '| path:', err?.alegraPath, '| status:', err?.alegraStatus, '| body:', err?.alegraBody)
         // 200 + ok:false: el pago ya está hecho; la factura se puede reintentar.
         return res.status(200).json({ ok: false, error: 'No se pudo emitir la factura en Alegra.' })
       }
