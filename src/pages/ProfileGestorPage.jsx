@@ -727,11 +727,11 @@ function ConsultaProgreso({ paso, resultado, tiempos = {} }) {
    (pendiente → solicitado). El admin luego marca pagado (→ pagado).
    ══════════════════════════════════════════════════════════════════ */
 
-// Pasos del "cupón" de comisión: Disponible → Solicitado → Pagado.
+// Pasos del "cupón" de comisión: Disponible → Solicitado → Cobrado.
 const PASOS_PAGO = [
   { key: 'pendiente',  label: 'Disponible' },
   { key: 'solicitado', label: 'Solicitado' },
-  { key: 'pagado',     label: 'Pagado' },
+  { key: 'pagado',     label: 'Cobrado' },
 ]
 const idxEstado = (e) => Math.max(0, PASOS_PAGO.findIndex(p => p.key === e))
 
@@ -771,10 +771,10 @@ function PagoProgreso({ estado }) {
   )
 }
 
-// Pill de estado con los 3 tonos: ámbar (disponible) / azul (solicitado) / verde (pagado).
+// Pill de estado con los 3 tonos: ámbar (disponible) / azul (solicitado) / verde (cobrado).
 function EstadoPill({ estado }) {
-  if (estado === 'pagado')     return <span className={styles.pillPagado}>Pagado</span>
-  if (estado === 'solicitado') return <span className={styles.pillSolicitado}>Solicitado</span>
+  if (estado === 'pagado')     return <span className={styles.pillPagado}>Cobrado</span>
+  if (estado === 'solicitado') return <span className={styles.pillSolicitado}>Pendiente</span>
   return <span className={styles.pillDisponible}>Disponible</span>
 }
 
@@ -783,10 +783,20 @@ function SeccionCobros({ aprobado, userId }) {
   const [estado, setEstado] = useState('loading') // loading | ready | error
   const [pidiendo, setPidiendo] = useState(null)   // id del cobro en proceso de solicitud
   const [aviso, setAviso] = useState(null)         // {tone:'ok'|'error', text}
+  const [showAcumulado, setShowAcumulado] = useState(false) // modal del acumulado
   // Filtro (código/nota + rango de fechas).
   const [cQuery, setCQuery] = useState('')
   const [cDesde, setCDesde] = useState('')
   const [cHasta, setCHasta] = useState('')
+
+  // Abre el comprobante de pago adjuntado por el admin (bucket privado
+  // `comprobantes`; la RLS permite al gestor leer su propia carpeta).
+  async function verComprobante(c) {
+    if (!c.comprobante_path) return
+    const { data } = await supabase.storage.from('comprobantes').createSignedUrl(c.comprobante_path, 3600)
+    if (data?.signedUrl) window.open(data.signedUrl, '_blank', 'noopener')
+    else setAviso({ tone: 'error', text: 'No se pudo abrir el comprobante. Intenta de nuevo.' })
+  }
 
   async function cargar(silencioso = false) {
     if (!aprobado || !userId) { setEstado('ready'); return }
@@ -843,6 +853,9 @@ function SeccionCobros({ aprobado, userId }) {
   const totalProceso    = cobros.filter(c => c.estado === 'solicitado').reduce((s, c) => s + (Number(c.monto) || 0), 0)
   const totalPagado     = cobros.filter(c => c.estado === 'pagado').reduce((s, c) => s + (Number(c.monto) || 0), 0)
   const totalCasos      = cobros.reduce((s, c) => s + (Number(c.casos_exitosos) || 0), 0)
+  // Acumulado = TODO lo que el gestor ha generado (disponible + pendiente + cobrado).
+  const totalAcumulado  = totalDisponible + totalProceso + totalPagado
+  const primeraComision = cobros.length ? cobros[cobros.length - 1].created_at : null
 
   const cobrosFiltrados = cobros.filter(c => {
     if (!enRango(c.created_at, cDesde, cHasta)) return false
@@ -883,16 +896,27 @@ function SeccionCobros({ aprobado, userId }) {
             </div>
             <div className={styles.statTile} data-tone="navy">
               <span className={styles.moneyValue}>{fmtCOP(totalProceso)}</span>
-              <span className={styles.statLabel}>En proceso</span>
+              <span className={styles.statLabel}>Pendiente</span>
             </div>
             <div className={styles.statTile} data-tone="ok">
               <span className={styles.moneyValue}>{fmtCOP(totalPagado)}</span>
-              <span className={styles.statLabel}>Pagado</span>
+              <span className={styles.statLabel}>Cobrado</span>
             </div>
             <div className={styles.statTile} data-tone="navy">
               <span className={styles.numValue}>{totalCasos}</span>
               <span className={styles.statLabel}>Casos exitosos</span>
             </div>
+            {/* Acumulado: TODO lo generado. Al tocarla se abre el detalle. */}
+            <button
+              type="button"
+              className={`${styles.statTile} ${styles.acumTile}`}
+              onClick={() => setShowAcumulado(true)}
+              title="Ver el detalle de todo tu acumulado"
+            >
+              <span className={styles.moneyValue}>{fmtCOP(totalAcumulado)}</span>
+              <span className={styles.statLabel}>Acumulado</span>
+              <span className={styles.acumHint}>Toca para ver el detalle</span>
+            </button>
           </div>
 
           {aviso && (
@@ -963,9 +987,17 @@ function SeccionCobros({ aprobado, userId }) {
                             <span className={styles.desLabel}>Total de la consulta</span>
                             <span className={styles.desVal}>{fmtCOP(c.total_consulta)}</span>
                           </div>
+                          {c.monto_empresa != null && (
+                            <div className={styles.desItem}>
+                              <span className={styles.desLabel}>
+                                Parte de la empresa{c.pct_empresa != null ? ` · ${c.pct_empresa}%` : ''}
+                              </span>
+                              <span className={styles.desVal}>{fmtCOP(c.monto_empresa)}</span>
+                            </div>
+                          )}
                           <div className={`${styles.desItem} ${styles.desItemStrong}`}>
                             <span className={styles.desLabel}>
-                              Tu comisión{c.pct_gestor != null ? ` · ${c.pct_gestor}%` : ''}
+                              Tu comisión{c.pct_gestor != null ? ` · ${c.pct_gestor}% de la parte empresa` : ''}
                             </span>
                             <span className={styles.desVal}>{fmtCOP(c.monto)}</span>
                           </div>
@@ -990,13 +1022,27 @@ function SeccionCobros({ aprobado, userId }) {
                         )}
                         {c.estado === 'solicitado' && (
                           <p className={styles.cuponHint} data-tone="wait">
-                            Solicitado el {fmtFechaHora(c.solicitado_at || c.created_at)} — el pago se envía en 24-48h.
+                            Pendiente — solicitado el {fmtFechaHora(c.solicitado_at || c.created_at)}. El pago se envía en 24-48h.
                           </p>
                         )}
                         {c.estado === 'pagado' && (
-                          <p className={styles.cuponHint} data-tone="ok">
-                            Pagado el {fmtFechaHora(c.pagado_at || c.solicitado_at || c.created_at)}.
-                          </p>
+                          <div className={styles.cuponPagadoRow}>
+                            <p className={styles.cuponHint} data-tone="ok">
+                              Cobrado el {fmtFechaHora(c.pagado_at || c.solicitado_at || c.created_at)}.
+                            </p>
+                            {c.comprobante_path && (
+                              <button
+                                type="button"
+                                className={styles.comprobanteBtn}
+                                onClick={() => verComprobante(c)}
+                              >
+                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6" />
+                                </svg>
+                                Ver comprobante de pago
+                              </button>
+                            )}
+                          </div>
                         )}
                       </div>
                     </article>
@@ -1006,6 +1052,58 @@ function SeccionCobros({ aprobado, userId }) {
             </>
           )}
         </>
+      )}
+
+      {/* ── Modal: detalle del acumulado ── */}
+      {showAcumulado && (
+        <div
+          className={styles.logoutOverlay}
+          role="dialog" aria-modal="true" aria-labelledby="acumTitle"
+          onClick={() => setShowAcumulado(false)}
+        >
+          <div className={`${styles.logoutModal} ${styles.acumModal}`} onClick={(e) => e.stopPropagation()}>
+            <p className={styles.acumEyebrow}>Todo tu recorrido como gestor</p>
+            <h2 id="acumTitle" className={styles.acumTotal}>{fmtCOP(totalAcumulado)}</h2>
+            <p className={styles.acumTotalLbl}>Acumulado total en comisiones</p>
+
+            <div className={styles.acumRows}>
+              <div className={styles.acumRow}>
+                <span className={styles.acumDot} data-tone="gold" aria-hidden="true" />
+                <span className={styles.acumRowLbl}>Disponible para solicitar</span>
+                <span className={styles.acumRowVal}>{fmtCOP(totalDisponible)}</span>
+              </div>
+              <div className={styles.acumRow}>
+                <span className={styles.acumDot} data-tone="wait" aria-hidden="true" />
+                <span className={styles.acumRowLbl}>Pendiente de pago</span>
+                <span className={styles.acumRowVal}>{fmtCOP(totalProceso)}</span>
+              </div>
+              <div className={styles.acumRow}>
+                <span className={styles.acumDot} data-tone="ok" aria-hidden="true" />
+                <span className={styles.acumRowLbl}>Ya cobrado</span>
+                <span className={styles.acumRowVal}>{fmtCOP(totalPagado)}</span>
+              </div>
+            </div>
+
+            <div className={styles.acumMeta}>
+              <div className={styles.acumMetaItem}>
+                <span className={styles.acumMetaVal}>{totalCasos}</span>
+                <span className={styles.acumMetaLbl}>Casos exitosos</span>
+              </div>
+              <div className={styles.acumMetaItem}>
+                <span className={styles.acumMetaVal}>{cobros.length}</span>
+                <span className={styles.acumMetaLbl}>{cobros.length === 1 ? 'Comisión' : 'Comisiones'}</span>
+              </div>
+              <div className={styles.acumMetaItem}>
+                <span className={styles.acumMetaVal}>{primeraComision ? fmtFecha(primeraComision) : '—'}</span>
+                <span className={styles.acumMetaLbl}>Primera comisión</span>
+              </div>
+            </div>
+
+            <button type="button" className={styles.acumClose} onClick={() => setShowAcumulado(false)}>
+              Cerrar
+            </button>
+          </div>
+        </div>
       )}
     </section>
   )

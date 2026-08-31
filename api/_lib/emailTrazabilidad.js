@@ -13,17 +13,17 @@ function esc(s) {
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 }
 
-// Barra de progreso de 3 pasos (tabla email-safe, tema claro de la marca).
+// Barra de progreso de 4 pasos (tabla email-safe, tema claro de la marca).
 function barra(pasoActual) {
-  const pasos = ['Inicio', 'En desarrollo', 'Cierre']
-  const idx = { inicio: 0, en_curso: 1, cierre: 2 }[pasoActual] ?? 0
+  const pasos = ['Inicio', 'En desarrollo', 'Cierre', 'Pago']
+  const idx = { inicio: 0, en_curso: 1, cierre: 2, pago: 3 }[pasoActual] ?? 0
   const celdas = pasos.map((label, i) => {
     const activo = i <= idx
     const bg = activo ? C.gold : '#f6ece3'
     const num = activo ? C.navy : '#c8b29f'
     const fg = activo ? C.navy : '#c8b29f'
     return `
-      <td align="center" width="33%" valign="top" style="padding:0 3px;">
+      <td align="center" width="25%" valign="top" style="padding:0 3px;">
         <div style="width:34px;height:34px;line-height:34px;margin:0 auto 9px;border-radius:50%;background-color:${bg};color:${num};font-family:${FONT_SANS};font-size:15px;font-weight:700;">${i + 1}</div>
         <div style="font-family:${FONT_SANS};font-size:12px;font-weight:700;color:${fg};letter-spacing:0.01em;">${label}</div>
       </td>`
@@ -41,7 +41,7 @@ function barra(pasoActual) {
  * @param {string} o.profesional    nombre del profesional
  * @param {string} o.profesionalRol 'abogado' | 'contador'
  * @param {string} o.area
- * @param {'inicio'|'en_curso'|'cierre'} o.estado
+ * @param {'inicio'|'en_curso'|'cierre'|'pago'} o.estado
  * @param {'exitosa'|'no_concluida'|null} [o.resultado]
  * @param {string} [o.codigo]
  * @param {string} [o.comision]  ej "$2.500"
@@ -55,15 +55,19 @@ export function renderTrazabilidadEmail(o) {
 
   let titulo, cuerpo
   if (estado === 'inicio') {
-    titulo = 'Tu referido inició su consulta'
+    titulo = 'Alguien usó tu código QR'
     cuerpo = `${ref} entró por tu código y ya está en consulta con ${trato} ${em(prof)}${area ? ` en el área de ${em(esc(area))}` : ''}. Te avisaremos a medida que avance.`
   } else if (estado === 'en_curso') {
     titulo = 'La consulta está en desarrollo'
     cuerpo = `${ref} y ${trato} ${em(prof)} siguen trabajando en el caso${area ? ` de ${em(esc(area))}` : ''}. Todo marcha bien; falta el cierre.`
+  } else if (estado === 'pago') {
+    titulo = 'Tu comisión fue pagada'
+    cuerpo = `El pago de tu comisión${comision ? ` de ${em(esc(comision))}` : ''} por la consulta de ${ref} ya fue realizado. ` +
+      `Entra a tu panel para ver el comprobante de pago adjuntado por el administrador.`
   } else if (resultado === 'exitosa') {
-    titulo = 'Consulta cerrada con éxito'
+    titulo = 'Consulta cerrada con éxito · comisión disponible'
     cuerpo = `La consulta de ${ref} con ${trato} ${em(prof)} se cerró de forma ${em('exitosa')}.` +
-      (comision ? ` Tu comisión de ${em(esc(comision))} ya está disponible para solicitar el pago desde tu panel.` : '')
+      (comision ? ` Tu comisión de ${em(esc(comision))} ya está disponible: entra a tu panel y solicita el cobro.` : ' Entra a tu panel y solicita el cobro de tu comisión.')
   } else {
     titulo = 'La consulta se cerró sin concretarse'
     cuerpo = `La consulta de ${ref} con ${trato} ${em(prof)} se cerró sin concretarse. Esta vez no genera comisión, pero gracias por traer el contacto.`
@@ -75,6 +79,8 @@ export function renderTrazabilidadEmail(o) {
           ? 'color:#1f7a4d;background-color:#e7f6ee;border:1px solid #bfe6cf;'
           : 'color:#b23b3b;background-color:#fbeded;border:1px solid #f0cccc;'
       }">${resultado === 'exitosa' ? 'RESULTADO · EXITOSA' : 'RESULTADO · NO CONCLUIDA'}</span></div>`
+    : estado === 'pago'
+    ? `<div align="center" style="margin-top:8px;"><span style="display:inline-block;padding:7px 18px;border-radius:999px;font-family:${FONT_SANS};font-size:12px;font-weight:700;letter-spacing:0.04em;color:#1f7a4d;background-color:#e7f6ee;border:1px solid #bfe6cf;">PAGO REALIZADO</span></div>`
     : ''
 
   const refPie = codigo
@@ -98,8 +104,9 @@ export function renderTrazabilidadEmail(o) {
 }
 
 export function asuntoTrazabilidad(o) {
-  if (o.estado === 'inicio')   return `${o.referido || 'Tu referido'} inició su consulta`
+  if (o.estado === 'inicio')   return `${o.referido || 'Tu referido'} usó tu código QR`
   if (o.estado === 'en_curso') return `La consulta de ${o.referido || 'tu referido'} avanza`
+  if (o.estado === 'pago')     return 'Tu comisión fue pagada · comprobante disponible'
   return o.resultado === 'exitosa'
     ? 'Consulta cerrada con éxito · comisión disponible'
     : `La consulta de ${o.referido || 'tu referido'} se cerró`

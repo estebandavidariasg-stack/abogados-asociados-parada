@@ -1,6 +1,7 @@
 import nodemailer from 'nodemailer'
 import crypto from 'node:crypto'
 import { renderEmailHtml, renderShell, infoBox, emailButton, em, C, FONT_SERIF } from './_lib/emailTemplate.js'
+import { renderTrazabilidadEmail, asuntoTrazabilidad } from './_lib/emailTrazabilidad.js'
 import { getCallerProfile, lawyerAssignedToRoom } from './_lib/adminAuth.js'
 
 const ADMIN_NOTIFY_EMAIL = process.env.ADMIN_NOTIFY_EMAIL || 'abogadosyasociados.parada@gmail.com'
@@ -722,6 +723,162 @@ export default async function handler(req, res) {
       const failed = results.filter((x) => x.status === 'rejected').length
 
       return res.status(200).json({ ok: true, sent, failed })
+    }
+
+    // ── Trazabilidad del gestor (correo por etapa del referido) ──
+    // 4 eventos: inicio (alguien usó el QR) · en_curso (el profesional tomó el
+    // caso) · cierre (el admin definió el cobro → comisión disponible) · pago
+    // (el admin pagó la comisión). El correo del gestor se resuelve SIEMPRE
+    // server-side desde la sala/cobro real (nada del body se refleja en el
+    // correo). Dedupe por sala con chat_rooms.traza_gestor: cada etapa se
+    // envía UNA sola vez y nunca hacia atrás.
+    if (type === 'gestor_trazabilidad') {
+      const { evento, roomId, cobroId } = data || {}
+      const ETAPAS = { inicio: 0, en_curso: 1, cierre: 2, pago: 3 }
+      if (!(evento in ETAPAS)) {
+        return res.status(400).json({ error: 'Evento inválido.' })
+      }
+      if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+        return res.status(200).json({ ok: false, skipped: 'not_configured' })
+      }
+
+      // Autorización por evento:
+      //  · cierre/pago: solo superadmin (los dispara el panel del admin).
+      //  · en_curso: profesional autenticado Y asignado a esa sala.
+      //  · inicio: flujo ANÓNIMO del cliente (igual que new_consultation); el
+      //    dedupe por sala limita el abuso a 1 correo por sala real con código.
+      if (evento === 'cierre' || evento === 'pago') {
+        const caller = await getCallerProfile(req)
+        if (caller?.rol !== 'superadmin') {
+          return res.status(401).json({ error: 'No autorizado.' })
+        }
+      } else if (evento === 'en_curso') {
+        const caller = await getCallerProfile(req)
+        if (!caller || !['abogado', 'contador'].includes(caller.rol)) {
+          return res.status(401).json({ error: 'No autorizado.' })
+        }
+        if (!roomId || !(await lawyerAssignedToRoom(caller.id, roomId))) {
+          return res.status(403).json({ error: 'El profesional no está asignado a esa sala.' })
+        }
+      }
+
+      const svcGetOne = async (pathQuery) => {
+        try {
+          const r = await fetch(`${SUPABASE_URL}/rest/v1/${pathQuery}`, { headers: svcHeaders() })
+          if (!r.ok) return null
+          const rows = await r.json()
+          return Array.isArray(rows) && rows[0] ? rows[0] : null
+        } catch { return null }
+      }
+
+      // Evento 'pago': parte del cobro (gestor_cobros), no de la sala.
+      let cobro = null
+      let rid = roomId || null
+      if (evento === 'pago') {
+        if (!cobroId) return res.status(400).json({ error: 'Falta cobroId.' })
+        cobro = await svcGetOne(
+          `gestor_cobros?id=eq.${encodeURIComponent(cobroId)}&select=id,room_id,gestor_id,monto,codigo&limit=1`
+        )
+        if (!cobro) return res.status(404).json({ error: 'Cobro no encontrado.' })
+        rid = cobro.room_id || rid
+      } else if (!rid) {
+        return res.status(400).json({ error: 'Falta roomId.' })
+      }
+
+      const room = rid
+        ? await svcGetOne(
+            `chat_rooms?id=eq.${encodeURIComponent(rid)}` +
+            `&select=id,codigo_referencia,client_nombre,area_derecho,traza_gestor,tipo_profesional&limit=1`
+          )
+        : null
+      if (evento !== 'pago') {
+        if (!room) return res.status(404).json({ error: 'Sala no encontrada.' })
+        if (!room.codigo_referencia) {
+          return res.status(200).json({ ok: false, skipped: 'sin_gestor' })
+        }
+        // Dedupe/orden: nunca repetir ni retroceder de etapa.
+        const previa = room.traza_gestor
+        if (previa != null && ETAPAS[previa] != null && ETAPAS[previa] >= ETAPAS[evento]) {
+          return res.status(200).json({ ok: true, skipped: 'ya_notificado' })
+        }
+      }
+
+      // Gestor dueño del código (o del cobro).
+      let gestorId = cobro?.gestor_id || null
+      const codigo = cobro?.codigo || room?.codigo_referencia || null
+      if (!gestorId && codigo) {
+        const c = await svcGetOne(
+          `codigos_referencia?codigo=eq.${encodeURIComponent(codigo)}&select=gestor_id&limit=1`
+        )
+        gestorId = c?.gestor_id || null
+      }
+      if (!gestorId) return res.status(200).json({ ok: false, skipped: 'sin_gestor' })
+      const gestor = await svcGetOne(
+        `profiles?id=eq.${encodeURIComponent(gestorId)}&select=email,username,nombre,apellido&limit=1`
+      )
+      if (!gestor?.email) return res.status(200).json({ ok: false, skipped: 'sin_email' })
+
+      // Profesional asignado (mejor esfuerzo, para el cuerpo del correo).
+      let prof = null
+      if (rid) {
+        const asg = await svcGetOne(
+          `chat_room_lawyers?room_id=eq.${encodeURIComponent(rid)}&select=lawyer_id,status&order=status.asc&limit=1`
+        )
+        if (asg?.lawyer_id) prof = await resolveProfessionalEmail(asg.lawyer_id)
+      }
+
+      // Comisión (cierre: el cupón recién creado de la sala; pago: el cobro).
+      let comision = cobro?.monto ?? null
+      if (evento === 'cierre' && comision == null && rid) {
+        const gc = await svcGetOne(
+          `gestor_cobros?room_id=eq.${encodeURIComponent(rid)}&select=monto&limit=1`
+        )
+        comision = gc?.monto ?? null
+      }
+      const comisionFmt = comision != null
+        ? new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 })
+            .format(Number(comision) || 0)
+        : null
+
+      // Solo el primer nombre del cliente (privacidad).
+      const referido = room?.client_nombre
+        ? String(room.client_nombre).trim().split(/\s+/)[0]
+        : 'Tu referido'
+
+      const payload = {
+        gestorNombre: gestor.username
+          ? `@${gestor.username}`
+          : [gestor.nombre, gestor.apellido].filter(Boolean).join(' ') || null,
+        referido,
+        profesional: prof ? `${prof.nombre || ''} ${prof.apellido || ''}`.trim() : '',
+        profesionalRol: prof?.rol || room?.tipo_profesional || 'abogado',
+        area: room?.area_derecho || '',
+        estado: evento,
+        resultado: evento === 'cierre' ? 'exitosa' : null,
+        codigo: codigo || undefined,
+        comision: comisionFmt || undefined,
+      }
+
+      await transporter.sendMail({
+        from: `"Parada Bridge" <${process.env.GMAIL_USER}>`,
+        to: gestor.email,
+        subject: asuntoTrazabilidad(payload),
+        html: renderTrazabilidadEmail(payload),
+      })
+
+      // Sella la etapa en la sala (best-effort; 'pago' es por cobro, no por sala,
+      // pero también se sella para que el orden quede registrado).
+      if (rid) {
+        try {
+          await fetch(`${SUPABASE_URL}/rest/v1/chat_rooms?id=eq.${encodeURIComponent(rid)}`, {
+            method: 'PATCH',
+            headers: svcHeaders({ Prefer: 'return=minimal' }),
+            body: JSON.stringify({ traza_gestor: evento }),
+          })
+        } catch { /* noop */ }
+      }
+
+      return res.status(200).json({ ok: true, sent: `gestor_${evento}` })
     }
 
     // ── Notificación al abogado cuando llega consulta nueva ──

@@ -431,6 +431,99 @@
 .statTile[data-tone="ok"]   .moneyValue,
 .statTile[data-tone="ok"]   .numValue   { color: #1f7a4d; }
 
+/* ── Acumulado: tile clickeable + modal de detalle ── */
+.acumTile {
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  background: linear-gradient(135deg, #472f29, #6d3c1b);
+  border-color: rgba(201,168,76, 0.55);
+  position: relative;
+  transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.22s ease;
+}
+.acumTile .moneyValue { color: #e8c96a; }
+.acumTile .statLabel  { color: rgba(255,255,255, 0.82); }
+.acumTile:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 12px 28px rgba(71,47,41, 0.32);
+}
+.acumTile:focus-visible { outline: 2px solid #c9a84c; outline-offset: 3px; }
+.acumHint {
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: rgba(232,201,106, 0.85);
+}
+@media (prefers-reduced-motion: reduce) { .acumTile { transition: none; } }
+
+.acumModal { max-width: 420px; }
+.acumEyebrow {
+  margin: 0 0 10px;
+  font-family: 'Poppins', sans-serif;
+  font-size: 0.66rem; font-weight: 700;
+  letter-spacing: 0.16em; text-transform: uppercase;
+  color: #9a7a2c;
+}
+.acumTotal {
+  margin: 0;
+  font-family: 'Poppins', sans-serif;
+  font-size: 2.1rem; font-weight: 800; line-height: 1;
+  font-variant-numeric: tabular-nums lining-nums;
+  color: #472f29;
+}
+.acumTotalLbl { margin: 6px 0 18px; font-size: 0.82rem; color: #8a735f; }
+.acumRows { display: flex; flex-direction: column; gap: 8px; text-align: left; }
+.acumRow {
+  display: flex; align-items: center; gap: 10px;
+  background: #faf6f0;
+  border: 1px solid rgba(109,60,27, 0.08);
+  border-radius: 11px;
+  padding: 10px 13px;
+}
+.acumDot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+.acumDot[data-tone="gold"] { background: #c9a84c; }
+.acumDot[data-tone="wait"] { background: #b98a3f; }
+.acumDot[data-tone="ok"]   { background: #1f7a4d; }
+.acumRowLbl { flex: 1; font-size: 0.82rem; font-weight: 600; color: #5b4633; }
+.acumRowVal {
+  font-family: 'Poppins', sans-serif;
+  font-size: 0.9rem; font-weight: 800;
+  font-variant-numeric: tabular-nums; color: #472f29;
+}
+.acumMeta {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
+  margin-top: 14px; padding-top: 14px;
+  border-top: 1px solid rgba(109,60,27, 0.1);
+}
+.acumMetaItem { display: flex; flex-direction: column; gap: 2px; }
+.acumMetaVal {
+  font-family: 'Poppins', sans-serif;
+  font-size: 0.95rem; font-weight: 800; color: #472f29;
+}
+.acumMetaLbl { font-size: 0.66rem; font-weight: 600; letter-spacing: 0.03em; color: #8a735f; }
+.acumClose {
+  margin-top: 18px; width: 100%;
+  border: 1px solid rgba(109,60,27, 0.18); background: #fff; cursor: pointer;
+  font-family: 'Poppins', sans-serif; font-size: 0.84rem; font-weight: 600; color: #5b4633;
+  padding: 10px 16px; border-radius: 11px;
+  transition: background 0.15s ease;
+}
+.acumClose:hover { background: #faf6f1; }
+
+/* ── Comprobante de pago (cupón cobrado) ── */
+.cuponPagadoRow {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; flex-wrap: wrap; width: 100%;
+}
+.comprobanteBtn {
+  display: inline-flex; align-items: center; gap: 6px;
+  border: 1px solid rgba(31,122,77, 0.35); background: #eefbf3; cursor: pointer;
+  font-family: 'Poppins', sans-serif; font-size: 0.74rem; font-weight: 700; color: #1f7a4d;
+  padding: 7px 12px; border-radius: 9px; white-space: nowrap;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.comprobanteBtn:hover { background: #e2f6ea; border-color: rgba(31,122,77, 0.55); }
+
 /* ══════════════════════════════════════════
    Gráfica (dona) + historial de consultas
    ══════════════════════════════════════════ */

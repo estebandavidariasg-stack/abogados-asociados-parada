@@ -45,11 +45,11 @@ export default function Footer() {
               <span className={styles.contactSub}>Respondemos en menos de 24 horas</span>
             </div>
           </a>
-          <a href="https://wa.me/573108886571" target="_blank" rel="noopener noreferrer" className={styles.contactItem}>
+          <a href="https://wa.me/573124086734" target="_blank" rel="noopener noreferrer" className={styles.contactItem}>
             <span className={styles.contactIcon}><IconPhone /></span>
             <div>
               <span className={styles.contactLabel}>¿Tienes dudas?</span>
-              <span className={styles.contactValue}>+57 310 888 6571</span>
+              <span className={styles.contactValue}>+57 312 408 6734</span>
               <span className={styles.contactSub}>Escríbenos por WhatsApp</span>
             </div>
           </a>

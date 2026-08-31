@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { supabase, getAuthHeaders } from '../../lib/supabase'
 import { IconCheck } from '../shared/Icons'
 import styles from './PagosCobrosAdmin.module.css'
@@ -281,25 +282,80 @@ export default function PagosCobrosAdmin() {
       : (p.nombre || p.apellido ? [p.nombre, p.apellido].filter(Boolean).join(' ') : null) ||
         (p.username ? `@${p.username}` : null) || null
 
-  // Marca una comisión de gestor como pagada (RPC segura → notifica al gestor).
-  async function pagarComision(cobroId) {
-    setCobros(cs => cs.map(c => c.id === cobroId ? { ...c, estado: 'pagado' } : c))
+  // ── Marcar comisión pagada CON comprobante (obligatorio) ──
+  // El pago al gestor es manual: el admin adjunta el comprobante (PNG/JPG/PDF),
+  // se sube al bucket privado `comprobantes` y la RPC guarda el path para que
+  // el gestor lo vea en su panel. Luego se dispara el correo de trazabilidad.
+  const [payModal, setPayModal] = useState(null)   // { cobro } | null
+  const [payFile, setPayFile]   = useState(null)
+  const [payBusy, setPayBusy]   = useState(false)
+  const [payError, setPayError] = useState('')
+  const payFileRef = useRef(null)
+
+  function abrirPagoModal(cobro) {
+    setPayFile(null); setPayError(''); setPayModal({ cobro })
+  }
+
+  function elegirComprobante(e) {
+    const f = e.target.files?.[0]
+    if (!f) return
+    const ok = ['image/png', 'image/jpeg', 'application/pdf'].includes(f.type)
+    if (!ok) { setPayError('Formato no permitido. Adjunta PNG, JPG o PDF.'); setPayFile(null); return }
+    if (f.size / (1024 * 1024) > 10) { setPayError('El comprobante no puede superar 10 MB.'); setPayFile(null); return }
+    setPayError(''); setPayFile(f)
+  }
+
+  async function confirmarPagoComision() {
+    const cobro = payModal?.cobro
+    if (!cobro || payBusy) return
+    if (!payFile) { setPayError('Adjunta el comprobante de pago (PNG, JPG o PDF).'); return }
+    setPayBusy(true); setPayError('')
     try {
       const headers = await getAuthHeaders()
+      // 1) Subir el comprobante: <gestor_id>/<cobro_id>.<ext> (RLS del bucket:
+      //    el primer segmento es el gestor dueño → él puede leerlo).
+      const ext  = (payFile.name.split('.').pop() || 'pdf').toLowerCase().replace(/[^a-z0-9]/g, '') || 'pdf'
+      const path = `${cobro.gestor_id}/${cobro.id}.${ext}`
+      const up = await fetch(`${SUPABASE_URL}/storage/v1/object/comprobantes/${path}`, {
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': payFile.type, 'x-upsert': 'true' },
+        body: payFile,
+      })
+      if (!up.ok) throw new Error('No se pudo subir el comprobante.')
+
+      // 2) RPC segura: marca pagado + guarda el path + notifica al gestor.
       const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/pagar_comision_gestor`, {
         method: 'POST',
         headers: { ...headers, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ p_cobro_id: cobroId }),
+        body: JSON.stringify({ p_cobro_id: cobro.id, p_comprobante_path: path }),
       })
-      if (!res.ok) throw new Error('rpc')
+      if (!res.ok) throw new Error('No se pudo marcar la comisión como pagada.')
       const ok = await res.json()
-      if (ok === false) throw new Error('rechazado')
-      flash('Comisión marcada como pagada. Se notificó al gestor.')
+      if (ok === false) throw new Error('La operación fue rechazada.')
+
+      // 3) Correo de trazabilidad al gestor (best-effort).
+      fetch('/api/notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: headers.Authorization },
+        body: JSON.stringify({ type: 'gestor_trazabilidad', data: { evento: 'pago', cobroId: cobro.id } }),
+      }).catch(() => {})
+
+      setPayModal(null); setPayFile(null)
+      flash('Comisión pagada con comprobante. Se notificó al gestor.')
       await cargar()
-    } catch {
-      setCobros(cs => cs.map(c => c.id === cobroId ? { ...c, estado: 'solicitado' } : c))
-      flash('No se pudo marcar la comisión como pagada.')
+    } catch (err) {
+      setPayError(err.message || 'No se pudo completar el pago.')
+    } finally {
+      setPayBusy(false)
     }
+  }
+
+  // Abre el comprobante de un cobro pagado (bucket privado → signed URL).
+  async function verComprobante(c) {
+    if (!c.comprobante_path) return
+    const { data } = await supabase.storage.from('comprobantes').createSignedUrl(c.comprobante_path, 3600)
+    if (data?.signedUrl) window.open(data.signedUrl, '_blank', 'noopener')
+    else flash('No se pudo abrir el comprobante.')
   }
 
   // Guarda la config de comisión (pct_empresa / pct_gestor) en plataforma_config.
@@ -847,11 +903,19 @@ export default function PagosCobrosAdmin() {
                         <td><EstadoPill estado={c._estadoUI} /></td>
                         <td>
                           {c._estadoUI === 'solicitado' ? (
-                            <button className={styles.payBtn} onClick={() => pagarComision(c.id)}>
+                            <button className={styles.payBtn} onClick={() => abrirPagoModal(c)}>
                               <IconCheck /> Marcar pagado
                             </button>
+                          ) : c._estadoUI === 'pagado' ? (
+                            c.comprobante_path ? (
+                              <button className={styles.proofBtn} onClick={() => verComprobante(c)}>
+                                Ver comprobante
+                              </button>
+                            ) : (
+                              <span className={styles.muted}>Sin comprobante</span>
+                            )
                           ) : (
-                            <span className={styles.muted}>{c._estadoUI === 'pagado' ? '—' : 'Sin solicitar'}</span>
+                            <span className={styles.muted}>Sin solicitar</span>
                           )}
                         </td>
                       </tr>
@@ -896,8 +960,10 @@ export default function PagosCobrosAdmin() {
               {savingCfg ? 'Guardando…' : 'Guardar porcentajes'}
             </button>
             <p className={styles.sub} style={{ margin: 0, flexBasis: '100%' }}>
-              Al confirmarse una asesoría, el profesional debe pagar a la empresa el
-              <strong> {pctEmpresa || '—'}%</strong> de lo cobrado (más {pctGestor || '—'}% si hay gestor).
+              Al confirmarse una asesoría, el profesional paga a la empresa el
+              <strong> {pctEmpresa || '—'}%</strong> de lo cobrado. Si la consulta trae gestor,
+              su comisión es el <strong>{pctGestor || '—'}%</strong> de esa parte de la empresa
+              (sale de la tajada de la empresa, no se le suma al profesional).
             </p>
           </div>
 
@@ -998,6 +1064,70 @@ export default function PagosCobrosAdmin() {
             </div>
           )}
         </section>
+      )}
+
+      {/* ── Modal: marcar comisión pagada + comprobante obligatorio ── */}
+      {payModal && createPortal(
+        <div
+          className={styles.payOverlay}
+          role="dialog" aria-modal="true" aria-labelledby="payModalTitle"
+          onClick={() => !payBusy && setPayModal(null)}
+        >
+          <div className={styles.payModal} onClick={(e) => e.stopPropagation()}>
+            <h3 id="payModalTitle" className={styles.payTitle}>Pagar comisión al gestor</h3>
+            <p className={styles.paySub}>
+              {payModal.cobro._nombre !== '—' ? <strong>{payModal.cobro._nombre}</strong> : 'Gestor'} ·{' '}
+              <strong>{fmtCOP(payModal.cobro.monto)}</strong>
+              {payModal.cobro.codigo ? ` · ${payModal.cobro.codigo}` : ''}
+            </p>
+            <p className={styles.payHint}>
+              El pago es manual: realiza la transferencia y adjunta aquí el comprobante
+              (PNG, JPG o PDF). El gestor lo verá en su panel.
+            </p>
+
+            <input
+              ref={payFileRef}
+              type="file"
+              accept=".png,.jpg,.jpeg,.pdf,image/png,image/jpeg,application/pdf"
+              style={{ display: 'none' }}
+              onChange={elegirComprobante}
+            />
+            <button
+              type="button"
+              className={styles.attachBtn}
+              onClick={() => payFileRef.current?.click()}
+              disabled={payBusy}
+            >
+              {payFile ? 'Cambiar comprobante' : 'Adjuntar comprobante'}
+            </button>
+            {payFile && (
+              <p className={styles.payFileName} title={payFile.name}>
+                📎 {payFile.name} · {(payFile.size / (1024 * 1024)).toFixed(1)} MB
+              </p>
+            )}
+            {payError && <p className={styles.payError} role="alert">{payError}</p>}
+
+            <div className={styles.payActions}>
+              <button
+                type="button"
+                className={styles.payCancel}
+                onClick={() => setPayModal(null)}
+                disabled={payBusy}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className={styles.payConfirm}
+                onClick={confirmarPagoComision}
+                disabled={payBusy || !payFile}
+              >
+                {payBusy ? 'Enviando…' : 'Confirmar pago'}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
     </div>
   )

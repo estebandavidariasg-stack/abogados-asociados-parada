@@ -87,6 +87,8 @@
 
 .track {
   display: flex;
+  /* Solo la tarjeta expandida crece (sin estirar sus vecinas). */
+  align-items: flex-start;
   width: max-content;
   /* Espacio vertical para que la sombra de las tarjetas NO se recorte
      con el overflow del contenedor (incluida la sombra del hover). */
@@ -99,7 +101,9 @@
 .tarjeta {
   flex: 0 0 auto;
   width: 328px;
-  height: 328px;
+  /* min-height (no height fija): permite que "Más opiniones" despliegue
+     comentarios adicionales dentro de la tarjeta sin romper el carrusel. */
+  min-height: 328px;
   margin-right: 1.6rem;   /* el margen va en la tarjeta para un bucle perfecto */
   display: flex;
   flex-direction: column;
@@ -172,6 +176,71 @@
   line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+/* ── "Más opiniones" — desplegable de comentarios adicionales ── */
+.verMasBtn {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin: 0 0 0.75rem;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-family: 'Poppins', sans-serif;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #8a6a28;
+  transition: color 0.18s ease;
+}
+.verMasBtn:hover { color: var(--navy); }
+.verMasBtn:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; border-radius: 4px; }
+.verMasChevron { transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1); }
+.verMasChevronUp { transform: rotate(180deg); }
+@media (prefers-reduced-motion: reduce) { .verMasChevron { transition: none; } }
+
+.extraList {
+  list-style: none;
+  margin: 0 0 0.9rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+.extraItem {
+  background: rgba(109,60,27, 0.04);
+  border: 1px solid rgba(109,60,27, 0.07);
+  border-radius: 10px;
+  padding: 0.6rem 0.7rem;
+}
+.extraHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 3px;
+}
+.extraHead .estrellas { margin: 0; }
+.extraHead .estrella,
+.extraHead .estrella svg,
+.extraHead .estrellaFill svg { width: 11px; height: 10px; }
+.extraNombre {
+  font-family: 'Poppins', sans-serif;
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: var(--navy);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.extraTexto {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: #5e4d3f;
 }
 
 .pie {
@@ -326,7 +395,7 @@
 /* ── RESPONSIVE ───────────────────────────────────────── */
 @media (max-width: 640px) {
   .section { padding: 5rem 0; }
-  .tarjeta { width: 270px; height: 388px; margin-right: 1rem; }
+  .tarjeta { width: 270px; min-height: 388px; margin-right: 1rem; }
   .filas { gap: 1.1rem; }
 }
 

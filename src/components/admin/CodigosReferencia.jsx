@@ -385,7 +385,7 @@ export default function CodigosReferencia() {
 
                     <div className={styles.qrCardHeader}>
                       <span className={styles.qrCardDespacho}>Despacho Jurídico</span>
-                      <span className={styles.qrCardFirm}><span style={{ color: '#ffffff' }}>PARADA</span> BRIDGE</span>
+                      <span className={styles.qrCardFirm}>PARADA <span style={{ color: '#9a7a2c' }}>BRIDGE</span></span>
                     </div>
 
                     <div className={styles.qrDivider} />

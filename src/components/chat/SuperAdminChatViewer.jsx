@@ -659,7 +659,7 @@ export default function SuperAdminChatViewer({ initialRoomId = null }) {
     const pctGes = Number(cfgPctGes)
     if (!(total > 0)) { setPagoError('Ingresa un total válido para la consulta.'); return }
     if (!(pctEmp >= 0) || !(pctGes >= 0)) { setPagoError('Los porcentajes no pueden ser negativos.'); return }
-    if (pctEmp + pctGes > 100) { setPagoError('La suma de % empresa y % gestor no puede superar 100%.'); return }
+    if (pctEmp > 100 || pctGes > 100) { setPagoError('Los porcentajes deben estar entre 0 y 100.'); return }
     setPagoGenerando(true); setPagoOk(false); setPagoError('')
     try {
       const headers = await getAuthHeaders()
@@ -700,6 +700,15 @@ export default function SuperAdminChatViewer({ initialRoomId = null }) {
       setPagoOk(true)
       loadPago(activeRoom.id)
       setTimeout(() => setPagoOk(false), 4000)
+      // Trazabilidad del gestor: caso exitoso → correo "comisión disponible".
+      // Best-effort: si falla el correo, el cobro ya quedó creado.
+      try {
+        fetch('/api/notify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: headers.Authorization },
+          body: JSON.stringify({ type: 'gestor_trazabilidad', data: { evento: 'cierre', roomId: activeRoom.id } }),
+        }).catch(() => {})
+      } catch { /* noop */ }
     } catch (err) {
       setPagoError('Error de red al generar el cobro: ' + err.message)
     } finally {
@@ -1372,7 +1381,7 @@ export default function SuperAdminChatViewer({ initialRoomId = null }) {
                         </tr>
                         <tr>
                           <td className={styles.cobroTd}>
-                            Gestor ({pago.pct_gestor}%)
+                            Gestor ({pago.pct_gestor}% de la parte empresa)
                             {!pago.gestor_id && !pago.codigo && (
                               <span className={styles.cobroSinGestor}> · sin gestor</span>
                             )}
@@ -1582,12 +1591,13 @@ export default function SuperAdminChatViewer({ initialRoomId = null }) {
           const total  = Number(cfgTotal)  || 0
           const pctEmp = Number(cfgPctEmp) || 0
           const pctGes = Number(cfgPctGes) || 0
-          const montoEmp = total * pctEmp / 100
-          const montoGes = roomTraeGestor ? (total * pctGes / 100) : 0
-          const pagaPro  = montoEmp + montoGes
-          const quedaPro = total - pagaPro
-          const sumaPct  = pctEmp + pctGes
-          const pctInvalido = sumaPct > 100
+          const montoEmp = Math.round(total * pctEmp / 100)
+          // La comisión del gestor se calcula SOBRE la parte de la empresa
+          // (no sobre el total): sale de la tajada de la empresa.
+          const montoGes = roomTraeGestor ? Math.round(montoEmp * pctGes / 100) : 0
+          const pagaPro  = montoEmp
+          const quedaPro = total - montoEmp
+          const pctInvalido = pctEmp > 100 || pctGes > 100
           return (
             <div
               className={styles.confirmOverlay}
@@ -1638,7 +1648,7 @@ export default function SuperAdminChatViewer({ initialRoomId = null }) {
 
                 {pctInvalido && (
                   <p className={styles.cobroValidacion}>
-                    La suma de porcentajes ({sumaPct}%) no puede superar 100%.
+                    Los porcentajes deben estar entre 0 y 100.
                   </p>
                 )}
 
@@ -1651,7 +1661,7 @@ export default function SuperAdminChatViewer({ initialRoomId = null }) {
                     </tr>
                     <tr>
                       <td className={styles.cobroTd}>
-                        Monto gestor ({pctGes || 0}%)
+                        Monto gestor ({pctGes || 0}% de la parte empresa)
                         {!roomTraeGestor && (
                           <span className={styles.cobroSinGestor}> · solo si la consulta trae gestor</span>
                         )}
@@ -1659,7 +1669,7 @@ export default function SuperAdminChatViewer({ initialRoomId = null }) {
                       <td className={styles.cobroTdNum}>{formatCOP(montoGes)}</td>
                     </tr>
                     <tr className={styles.cobroTrPaga}>
-                      <td className={styles.cobroTd}>El profesional paga (empresa + gestor)</td>
+                      <td className={styles.cobroTd}>El profesional paga (parte empresa)</td>
                       <td className={styles.cobroTdNum}>{formatCOP(pagaPro)}</td>
                     </tr>
                     <tr>
@@ -1669,9 +1679,13 @@ export default function SuperAdminChatViewer({ initialRoomId = null }) {
                   </tbody>
                 </table>
 
-                {!roomTraeGestor && (
+                {!roomTraeGestor ? (
                   <p className={styles.cobroNota}>
                     Esta consulta no proviene de un gestor: el monto gestor será $0.
+                  </p>
+                ) : (
+                  <p className={styles.cobroNota}>
+                    La comisión del gestor sale de la parte de la empresa (no se le suma al profesional).
                   </p>
                 )}
 

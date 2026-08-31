@@ -48,9 +48,12 @@ const IconRedSocial = (props) => (
 
 function Tarjeta({
   texto, imagen, nombre, rol, rating = 5, oculto, redSocial,
-  profesional, onAbrirProfesional,
+  profesional, extras = [], onAbrirProfesional,
   onMouseEnter, onMouseLeave,
 }) {
+  // Comentarios adicionales desplegables (otras opiniones del mismo profesional).
+  const [expandido, setExpandido] = useState(false)
+  const tieneExtras = extras.length > 0
   const tieneProfesional = !oculto && !!profesional
   const nombreProf = profesional
     ? `${profesional.nombre || ''} ${profesional.apellido || ''}`.trim()
@@ -76,6 +79,43 @@ function Tarjeta({
       <IconComillas className={styles.comillas} />
       <Estrellas rating={rating} />
       <p className={styles.texto}>{texto}</p>
+
+      {/* ── Más opiniones del mismo profesional (desplegable) ── */}
+      {tieneExtras && (
+        <>
+          <button
+            type="button"
+            className={styles.verMasBtn}
+            aria-expanded={expandido}
+            onClick={(e) => { e.stopPropagation(); setExpandido(v => !v) }}
+            onKeyDown={(e) => e.stopPropagation()}
+            tabIndex={oculto ? -1 : 0}
+          >
+            {expandido ? 'Ocultar opiniones' : `Más opiniones (${extras.length})`}
+            <svg
+              className={`${styles.verMasChevron} ${expandido ? styles.verMasChevronUp : ''}`}
+              viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor"
+              strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"
+            >
+              <path d="m6 9 6 6 6-6" />
+            </svg>
+          </button>
+          {expandido && (
+            <ul className={styles.extraList}>
+              {extras.map((ex, i) => (
+                <li key={i} className={styles.extraItem}>
+                  <div className={styles.extraHead}>
+                    <span className={styles.extraNombre}>{ex.nombre}</span>
+                    <Estrellas rating={ex.rating} />
+                  </div>
+                  <p className={styles.extraTexto}>{ex.texto}</p>
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
+      )}
+
       <div className={styles.pie}>
         {imagen ? (
           <img
@@ -172,6 +212,18 @@ const MOCK_TESTIMONIOS = [
   { texto: 'Consulté por un tema de derecho de familia bastante delicado. El trato fue humano y profesional, y siempre supe cuáles eran mis opciones reales según la ley.', nombre: 'Carlos Mendoza', rol: 'Cliente · Barranquilla', rating: 5, imagen: null, profRefIndex: 2, profRefRol: 'abogado' },
   { texto: 'La plataforma me conectó con un abogado de derecho penal que respondió mis dudas con paciencia. Todo transparente, incluido el costo antes de empezar.', nombre: 'Diana Vargas', rol: 'Cliente · Bucaramanga', rating: 4.5, imagen: null, profRefIndex: 3, profRefRol: 'abogado' },
   { texto: 'Manejo varios locales y necesitaba poner al día la contabilidad. El profesional fue puntual, ordenado y me dejó todo claro para el cierre del año fiscal.', nombre: 'Jorge Patiño', rol: 'Cliente · Pereira', rating: 5, imagen: null, profRefIndex: 1, profRefRol: 'contador' },
+]
+
+// Opiniones adicionales de PRUEBA para el desplegable "Más opiniones" de cada
+// tarjeta. Solo acompañan a los testimonios de ejemplo (cuando no hay reseñas
+// reales); con reseñas reales, el desplegable muestra otras reseñas REALES del
+// mismo profesional (nunca se mezclan ejemplos con datos reales).
+const MOCK_EXTRAS = [
+  { nombre: 'Camila Torres', rating: 5, texto: 'Atención impecable de principio a fin. Volvería a consultar sin dudarlo.' },
+  { nombre: 'Felipe Naranjo', rating: 4.5, texto: 'Respuesta rápida y honesta sobre mis opciones. Muy profesional.' },
+  { nombre: 'Marcela Duarte', rating: 5, texto: 'Me guiaron paso a paso y el costo fue claro desde el inicio.' },
+  { nombre: 'Ricardo Salas', rating: 4.5, texto: 'Excelente disposición y conocimiento. Todo fue más simple de lo que creí.' },
+  { nombre: 'Paola Cifuentes', rating: 5, texto: 'Resolvieron mi duda tributaria en una sola sesión. Muy organizados.' },
 ]
 
 // Mínimo de tarjetas por fila para que una copia desborde el ancho visible y el
@@ -293,6 +345,20 @@ export default function TestimoniosSection() {
               profesional: real || siguienteProf(), // siempre hay profesional → siempre clickeable
             }
           })
+          // "Más opiniones": otras reseñas REALES del mismo profesional, para el
+          // desplegable de la tarjeta (máx. 3, sin duplicar la principal).
+          const porProf = new Map()
+          for (const r of reales) {
+            const pid = r.profesional?.id
+            if (pid == null) continue
+            if (!porProf.has(pid)) porProf.set(pid, [])
+            porProf.get(pid).push(r)
+          }
+          for (const r of reales) {
+            const pid = r.profesional?.id
+            const otras = pid != null ? (porProf.get(pid) || []).filter(x => x !== r) : []
+            r.extras = otras.slice(0, 3).map(x => ({ nombre: x.nombre, rating: x.rating, texto: x.texto }))
+          }
         }
       } catch { /* sin reseñas reales → ejemplos */ }
 
@@ -303,10 +369,14 @@ export default function TestimoniosSection() {
       if (reales.length) {
         finales = rellenar(reales, MIN_TARJETAS)
       } else {
-        finales = MOCK_TESTIMONIOS.map(t => {
+        finales = MOCK_TESTIMONIOS.map((t, i) => {
           const lista = porRol[t.profRefRol] || combinados
           const prof = (lista.length ? lista[t.profRefIndex % lista.length] : null) || siguienteProf()
-          return { texto: t.texto, nombre: t.nombre, rol: t.rol, rating: t.rating, imagen: t.imagen, profesional: prof }
+          return {
+            texto: t.texto, nombre: t.nombre, rol: t.rol, rating: t.rating, imagen: t.imagen, profesional: prof,
+            // Opiniones de prueba plegadas (2 por tarjeta, rotando la lista).
+            extras: [MOCK_EXTRAS[i % MOCK_EXTRAS.length], MOCK_EXTRAS[(i + 2) % MOCK_EXTRAS.length]],
+          }
         })
         finales = rellenar(finales, MIN_TARJETAS)
       }

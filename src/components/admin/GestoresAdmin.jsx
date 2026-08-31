@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { supabase, getAuthHeaders } from '../../lib/supabase'
 import { IconCheck, IconX, IconQR } from '../shared/Icons'
@@ -183,26 +183,65 @@ export default function GestoresAdmin({ onChange }) {
     return true
   }
 
-  async function marcarPagado(cobroId) {
-    // RPC segura (pagar_comision_gestor): valida superadmin, setea pagado_at y
-    // notifica al gestor. Antes se hacía un PATCH directo que dejaba pagado_at
-    // en null (fecha errónea en el panel del gestor) y no enviaba la notificación.
-    const prev = cobros.find(c => c.id === cobroId)?.estado ?? 'pendiente'
-    setCobros(cs => cs.map(c => c.id === cobroId ? { ...c, estado: 'pagado' } : c))
+  // ── Marcar pagado CON comprobante (obligatorio) ──
+  // El pago al gestor es manual: al pulsar "Marcar pagado" se abre el selector
+  // de archivo (PNG/JPG/PDF); el comprobante sube al bucket privado
+  // `comprobantes` y la RPC guarda el path para que el gestor lo vea.
+  const comprobanteRef = useRef(null)
+  const cobroPorPagarRef = useRef(null)
+
+  function marcarPagado(cobroId) {
+    cobroPorPagarRef.current = cobros.find(c => c.id === cobroId) || { id: cobroId }
+    comprobanteRef.current?.click()
+  }
+
+  async function onComprobanteElegido(e) {
+    const file = e.target.files?.[0]
+    if (comprobanteRef.current) comprobanteRef.current.value = ''
+    const cobro = cobroPorPagarRef.current
+    cobroPorPagarRef.current = null
+    if (!file || !cobro?.id) return
+    if (!['image/png', 'image/jpeg', 'application/pdf'].includes(file.type)) {
+      flash('Formato no permitido: adjunta el comprobante en PNG, JPG o PDF.')
+      return
+    }
+    if (file.size / (1024 * 1024) > 10) { flash('El comprobante no puede superar 10 MB.'); return }
+
+    const prev = cobro.estado ?? 'pendiente'
+    setCobros(cs => cs.map(c => c.id === cobro.id ? { ...c, estado: 'pagado' } : c))
     try {
       const headers = await getAuthHeaders()
+      // 1) Subir comprobante: <gestor_id>/<cobro_id>.<ext> (RLS: el gestor lee su carpeta).
+      const ext  = (file.name.split('.').pop() || 'pdf').toLowerCase().replace(/[^a-z0-9]/g, '') || 'pdf'
+      const path = `${cobro.gestor_id}/${cobro.id}.${ext}`
+      const up = await fetch(`${SUPABASE_URL}/storage/v1/object/comprobantes/${path}`, {
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': file.type, 'x-upsert': 'true' },
+        body: file,
+      })
+      if (!up.ok) throw new Error('upload')
+
+      // 2) RPC segura: marca pagado + guarda el path + notifica al gestor.
       const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/pagar_comision_gestor`, {
         method: 'POST',
         headers: { ...headers, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ p_cobro_id: cobroId }),
+        body: JSON.stringify({ p_cobro_id: cobro.id, p_comprobante_path: path }),
       })
       if (!res.ok) throw new Error('rpc')
       const ok = await res.json()
       if (ok === false) throw new Error('rechazado')
-      flash('Cobro marcado como pagado. Se notificó al gestor.')
+
+      // 3) Correo de trazabilidad al gestor (best-effort).
+      fetch('/api/notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: headers.Authorization },
+        body: JSON.stringify({ type: 'gestor_trazabilidad', data: { evento: 'pago', cobroId: cobro.id } }),
+      }).catch(() => {})
+
+      flash('Cobro pagado con comprobante. Se notificó al gestor.')
       await cargar()
     } catch {
-      setCobros(cs => cs.map(c => c.id === cobroId ? { ...c, estado: prev } : c))
+      setCobros(cs => cs.map(c => c.id === cobro.id ? { ...c, estado: prev } : c))
       flash('No se pudo marcar el cobro como pagado.')
     }
   }
@@ -459,6 +498,15 @@ export default function GestoresAdmin({ onChange }) {
           />
         )
       })()}
+
+      {/* Selector oculto del comprobante de pago (PNG/JPG/PDF, obligatorio). */}
+      <input
+        ref={comprobanteRef}
+        type="file"
+        accept=".png,.jpg,.jpeg,.pdf,image/png,image/jpeg,application/pdf"
+        style={{ display: 'none' }}
+        onChange={onComprobanteElegido}
+      />
 
     </div>
   )

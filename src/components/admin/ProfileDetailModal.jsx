@@ -100,8 +100,14 @@ export default function ProfileDetailModal({ profile, onClose }) {
 
   if (!profile) return null
 
-  const initials = (profile.nombre?.[0] || '?') + (profile.apellido?.[0] || '')
-  const rolLabel = profile.rol === 'contador' ? 'Contador' : 'Abogado'
+  const esGestor = profile.rol === 'gestor'
+  // El gestor se registra solo con usuario (sin nombre/apellido) → iniciales y
+  // nombre caen al @username para que el modal no quede vacío.
+  const initials = (profile.nombre?.[0] || profile.username?.[0] || '?').toUpperCase() + (profile.apellido?.[0] || '')
+  const rolLabel = profile.rol === 'contador' ? 'Contador' : esGestor ? 'Gestor' : 'Abogado'
+  const rolPillClass = profile.rol === 'contador'
+    ? styles.rolPillContador
+    : esGestor ? styles.rolPillGestor : styles.rolPillAbogado
   const ciudadDB = profile.ciudad || ''
   const tieneBarrio = ciudadDB.includes(' - ')
   const ciudadVisible = tieneBarrio ? ciudadDB.split(' - ')[0] : ciudadDB
@@ -141,8 +147,9 @@ export default function ProfileDetailModal({ profile, onClose }) {
               </p>
             )}
             <h2 className={styles.modalName}>
-              {profile.nombre} {profile.apellido}
-              <span className={`${styles.rolPill} ${profile.rol === 'contador' ? styles.rolPillContador : styles.rolPillAbogado}`}>
+              {[profile.nombre, profile.apellido].filter(Boolean).join(' ') ||
+                (profile.username ? `@${profile.username}` : '—')}
+              <span className={`${styles.rolPill} ${rolPillClass}`}>
                 {rolLabel}
               </span>
             </h2>
@@ -192,7 +199,20 @@ export default function ProfileDetailModal({ profile, onClose }) {
           <InfoRow icon={ICONS.user}  label="Usuario"  value={profile.username ? `@${profile.username}` : null} />
           <InfoRow icon={ICONS.email} label="Email"    value={profile.email}    isLink href={`mailto:${profile.email}`} />
           <InfoRow icon={ICONS.phone} label="Teléfono" value={profile.telefono} />
+          {/* El gestor se registra con cédula (los profesionales no la traen aquí). */}
+          <InfoRow icon={ICONS.card}  label="Cédula"   value={profile.cedula} />
         </div>
+
+        {/* Comunidad del gestor (su "hoja de vida" para aprobarlo) */}
+        {esGestor && profile.comunidad_descripcion && (
+          <>
+            <div className={styles.modalDivider} />
+            <div className={styles.modalSection}>
+              <h4 className={styles.modalSectionTitle}>Comunidad que maneja</h4>
+              <p className={styles.modalDesc}>{profile.comunidad_descripcion}</p>
+            </div>
+          </>
+        )}
 
         <div className={styles.modalDivider} />
 

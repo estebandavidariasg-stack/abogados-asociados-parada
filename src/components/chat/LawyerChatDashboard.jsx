@@ -567,6 +567,13 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
             body: JSON.stringify({ status: 'active' }),
           }
         )
+        // Trazabilidad al gestor: el caso pasó a "en desarrollo". Best-effort,
+        // el endpoint dedupea por sala y solo aplica si la sala trae código.
+        fetch('/api/notify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: headers.Authorization },
+          body: JSON.stringify({ type: 'gestor_trazabilidad', data: { evento: 'en_curso', roomId: room.id } }),
+        }).catch(() => {})
       }
       fetchRooms()
     }

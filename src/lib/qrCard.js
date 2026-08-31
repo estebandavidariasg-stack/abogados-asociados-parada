@@ -55,20 +55,21 @@ export async function downloadQRCard({
   const ctx = canvas.getContext('2d')
   ctx.scale(SCALE, SCALE)
 
-  // Fondo degradado navy (tono de marca).
+  // Fondo claro (marfil de marca) — la tarjeta se lee y se imprime mejor que
+  // la versión café oscura anterior, y el QR contrasta más.
   const bg = ctx.createLinearGradient(0, 0, 0, H)
-  bg.addColorStop(0,   '#6b3d15')
-  bg.addColorStop(0.5, '#864e1d')
-  bg.addColorStop(1,   '#6b3d15')
+  bg.addColorStop(0,   '#fffdf6')
+  bg.addColorStop(0.5, '#f7eedf')
+  bg.addColorStop(1,   '#fdf8ee')
   ctx.fillStyle = bg
   ctx.fillRect(0, 0, W, H)
 
   // Textura sutil.
-  ctx.fillStyle = 'rgba(255,255,255,0.013)'
+  ctx.fillStyle = 'rgba(109,60,27,0.015)'
   for (let y = 0; y < H; y += 4) ctx.fillRect(0, y, W, 1)
 
   // Marco exterior.
-  ctx.strokeStyle = 'rgba(201,168,76,0.3)'
+  ctx.strokeStyle = 'rgba(169,132,47,0.4)'
   ctx.lineWidth = 1
   ctx.strokeRect(24, 24, W - 48, H - 48)
 
@@ -81,7 +82,7 @@ export async function downloadQRCard({
   // Esquinas decorativas.
   const corners = [[44,44],[W-44,44],[44,H-44],[W-44,H-44]]
   const dirs    = [[1,1],[-1,1],[1,-1],[-1,-1]]
-  ctx.strokeStyle = 'rgba(201,168,76,0.65)'
+  ctx.strokeStyle = 'rgba(169,132,47,0.7)'
   ctx.lineWidth = 2
   corners.forEach(([cx,cy], i) => {
     const [dx,dy] = dirs[i]
@@ -91,30 +92,30 @@ export async function downloadQRCard({
 
   // Cabecera firma.
   ctx.textAlign = 'center'
-  ctx.fillStyle = 'rgba(232,201,106,0.85)'
+  ctx.fillStyle = '#9a7a2c'
   ctx.font = '600 9px sans-serif'
   ctx.fillText('─── DESPACHO JURÍDICO ───', W / 2, 74)
 
   ctx.font = 'bold 24px serif'
-  ctx.fillStyle = '#ffffff'
+  ctx.fillStyle = '#472f29'
   const wParada = ctx.measureText('PARADA ').width
   const wBridge = ctx.measureText('BRIDGE').width
   const startX = W / 2 - (wParada + wBridge) / 2
   ctx.textAlign = 'left'
   ctx.fillText('PARADA ', startX, 118)
-  ctx.fillStyle = '#C9A84C'
+  ctx.fillStyle = '#9a7a2c'
   ctx.fillText('BRIDGE', startX + wParada, 118)
   ctx.textAlign = 'center'
 
   // Separador 1.
-  ctx.strokeStyle = 'rgba(201,168,76,0.2)'
+  ctx.strokeStyle = 'rgba(169,132,47,0.3)'
   ctx.lineWidth = 1
   ctx.beginPath(); ctx.moveTo(100,148); ctx.lineTo(W-100,148); ctx.stroke()
-  ctx.fillStyle = 'rgba(201,168,76,0.55)'
+  ctx.fillStyle = 'rgba(169,132,47,0.6)'
   ctx.beginPath(); ctx.moveTo(W/2,143); ctx.lineTo(W/2+5,148); ctx.lineTo(W/2,153); ctx.lineTo(W/2-5,148); ctx.closePath(); ctx.fill()
 
   // Etiqueta.
-  ctx.fillStyle = 'rgba(255,255,255,0.62)'
+  ctx.fillStyle = 'rgba(71,47,41,0.6)'
   ctx.font = '600 10px sans-serif'
   ctx.fillText(etiqueta, W / 2, 178)
 
@@ -126,8 +127,8 @@ export async function downloadQRCard({
 
   // Fondo blanco redondeado para el QR.
   const qrX = 148, qrY = 196, qrSize = 304, r = 10
-  ctx.fillStyle = '#FAFAFA'
-  ctx.shadowColor = 'rgba(201,168,76,0.2)'
+  ctx.fillStyle = '#ffffff'
+  ctx.shadowColor = 'rgba(109,60,27,0.18)'
   ctx.shadowBlur = 24
   ctx.beginPath()
   ctx.moveTo(qrX+r,qrY)
@@ -145,41 +146,38 @@ export async function downloadQRCard({
   ctx.drawImage(qrImg, qrX+10, qrY+10, qrSize-20, qrSize-20)
 
   // Código.
-  ctx.fillStyle = '#C9A84C'
+  ctx.fillStyle = '#6d3c1b'
   ctx.font = 'bold 26px monospace'
-  ctx.shadowColor = 'rgba(201,168,76,0.35)'
-  ctx.shadowBlur = 12
   ctx.fillText(codigo, W/2, 562)
-  ctx.shadowBlur = 0
 
   // Separador 2.
-  ctx.strokeStyle = 'rgba(201,168,76,0.18)'
+  ctx.strokeStyle = 'rgba(169,132,47,0.28)'
   ctx.lineWidth = 1
   ctx.beginPath(); ctx.moveTo(100,582); ctx.lineTo(W-100,582); ctx.stroke()
-  ctx.fillStyle = 'rgba(201,168,76,0.45)'
+  ctx.fillStyle = 'rgba(169,132,47,0.55)'
   ctx.beginPath(); ctx.moveTo(W/2,577); ctx.lineTo(W/2+4,582); ctx.lineTo(W/2,587); ctx.lineTo(W/2-4,582); ctx.closePath(); ctx.fill()
 
   // Nombre.
   const titular = `${nombre} ${apellido}`.trim()
   if (titular) {
-    ctx.fillStyle = '#fbf7ec'
+    ctx.fillStyle = '#472f29'
     ctx.font = 'bold 20px serif'
     ctx.fillText(titular, W/2, 632)
   }
 
   if (subtitulo) {
-    ctx.fillStyle = 'rgba(232,201,106,0.8)'
+    ctx.fillStyle = 'rgba(109,60,27,0.7)'
     ctx.font = '600 9.5px sans-serif'
     ctx.fillText(subtitulo.toUpperCase(), W/2, titular ? 656 : 636)
   }
 
   // Instrucción.
-  ctx.fillStyle = 'rgba(255,255,255,0.6)'
+  ctx.fillStyle = 'rgba(71,47,41,0.6)'
   ctx.font = '11px sans-serif'
   ctx.fillText(instruccion, W/2, 722)
 
   // URL de marca.
-  ctx.fillStyle = 'rgba(232,201,106,0.85)'
+  ctx.fillStyle = '#9a7a2c'
   ctx.font = '600 12px sans-serif'
   ctx.fillText('paradabridge.com', W/2, 806)
 

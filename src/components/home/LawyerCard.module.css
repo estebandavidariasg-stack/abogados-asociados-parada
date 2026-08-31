@@ -662,3 +662,9 @@
   color: var(--gold-dk, #8a6a28);
   border: 1px solid rgba(201, 168, 76, 0.45);
 }
+
+.rolPillGestor {
+  background: rgba(31, 122, 77, 0.12);
+  color: #1f7a4d;
+  border: 1px solid rgba(31, 122, 77, 0.35);
+}

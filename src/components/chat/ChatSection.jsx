@@ -582,6 +582,19 @@ async function notificarAbogado({ lawyerId, roomId }) {
   } catch (err) { console.error('Error notificando abogado:', err) }
 }
 
+// Trazabilidad del gestor — etapa 'inicio' (alguien usó su código QR). El
+// endpoint resuelve el gestor desde la sala real y dedupea por sala, así que
+// es fire-and-forget e inofensivo si la sala no trae código.
+function notificarGestorInicio(roomId) {
+  try {
+    fetch('/api/notify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'gestor_trazabilidad', data: { evento: 'inicio', roomId } }),
+    }).catch(() => {})
+  } catch { /* noop */ }
+}
+
 const CARDS_LEFT = [
   {
     icon: (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>),
@@ -1591,6 +1604,8 @@ export default function ChatSection() {
       // así el browser nunca descarga correos de profesionales.
       await notificarAbogado({ lawyerId: abogado.id, roomId: room.id })
     }
+    // Correo de trazabilidad al gestor: su QR fue usado (solo si trae código).
+    if (room.codigo_referencia) notificarGestorInicio(room.id)
     setRoomId(room.id); setRoomStatus(room.status || 'waiting'); setRoomArea(areas.join(', '))
     setRoomCodigo(codigoRef || ''); setPicked([])
     setStep('chat'); setSending(false)
@@ -1632,6 +1647,8 @@ export default function ChatSection() {
         setSending(false)
         return
       }
+      // Trazabilidad al gestor también en el flujo de solicitud abierta.
+      if (codigoRef) notificarGestorInicio(data.roomId)
       setRoomId(data.roomId); setRoomStatus('open'); setRoomArea(areas.join(', '))
       setRoomCodigo(codigoRef || ''); setPicked([])
       setStep('esperando'); setSending(false)

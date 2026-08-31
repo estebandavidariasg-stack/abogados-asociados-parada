@@ -415,7 +415,7 @@ export default function MisPagos({ userId }) {
                       <span className={styles.bdStatValue}>{COP.format(Number(pago.monto_empresa || 0))}</span>
                     </div>
                     <div className={styles.bdStat}>
-                      <span className={styles.bdStatLabel}>Gestor</span>
+                      <span className={styles.bdStatLabel}>Gestor (de la parte empresa)</span>
                       <span className={styles.bdStatValue}>{COP.format(Number(pago.comision_gestor || 0))}</span>
                     </div>
                     <div className={`${styles.bdStat} ${styles.bdStatStrong}`}>
