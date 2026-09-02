@@ -169,18 +169,28 @@ export default function AdminPage() {
 
   async function rejectProfile(id) {
     const headers = await getAuthHeaders()
-    await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${id}`, {
-      method: 'PATCH', headers,
-      body: JSON.stringify({ aprobado: false }),
-    })
-    // Avisar al profesional (best-effort; el endpoint valida superadmin).
+    // Rechazar una SOLICITUD pendiente = avisar por correo Y ELIMINAR la
+    // cuenta (perfil + usuario de auth, server-side con service-role): así el
+    // correo queda libre y la persona puede registrarse de nuevo corrigiendo
+    // sus datos. El endpoint solo borra si aprobado=false (revocar NO borra).
+    let eliminada = false
     try {
-      await fetch('/api/notify', {
+      const res = await fetch('/api/notify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: headers.Authorization },
-        body: JSON.stringify({ type: 'account_rejected', data: { lawyerId: id } }),
+        body: JSON.stringify({ type: 'account_rejected', data: { lawyerId: id, eliminarCuenta: true } }),
       })
-    } catch { /* el correo es secundario */ }
+      const j = await res.json().catch(() => ({}))
+      eliminada = j?.deleted === true
+    } catch { /* sin /api (dev local): cae al marcado clásico */ }
+    // Fallback: si el endpoint no pudo borrar, al menos queda marcada como no
+    // aprobada (comportamiento anterior).
+    if (!eliminada) {
+      await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${id}`, {
+        method: 'PATCH', headers,
+        body: JSON.stringify({ aprobado: false }),
+      })
+    }
     fetchAll()
     fetchGestores()
   }

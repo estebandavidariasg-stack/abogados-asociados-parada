@@ -13,7 +13,7 @@
 ──────────────────────────────────────────────────────────────────────── */
 
 import { SUPABASE_URL, serviceHeaders, getCallerProfile } from './_lib/adminAuth.js'
-import { sendReassignEmail } from './_lib/mailer.js'
+import { sendReassignEmail, sendClientReassignEmail } from './_lib/mailer.js'
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -51,13 +51,15 @@ export default async function handler(req, res) {
   //     a un abogado; una de contador, a un contador). El filtrado de la lista
   //     de candidatos vive en el frontend; acá se refuerza en el servidor.
   let roomTipo = null
+  let roomInfo = null // client_email / client_nombre para el correo al cliente
   try {
     const rr = await fetch(
-      `${SUPABASE_URL}/rest/v1/chat_rooms?id=eq.${roomId}&select=tipo_profesional&limit=1`,
+      `${SUPABASE_URL}/rest/v1/chat_rooms?id=eq.${roomId}&select=tipo_profesional,client_email,client_nombre&limit=1`,
       { headers: serviceHeaders() }
     )
     const [rw] = await rr.json()
     roomTipo = rw?.tipo_profesional || null
+    roomInfo = rw || null
   } catch { /* roomTipo queda null */ }
   // Solo bloqueamos cuando ambos valores existen y difieren. Si la sala no
   // declara tipo_profesional (dato legacy nulo), no inventamos un rechazo.
@@ -101,12 +103,13 @@ export default async function handler(req, res) {
     // 6) Mensaje de sistema en la sala (no hay sender_type 'system' en el
     //    esquema → usamos 'lawyer' con prefijo claro; el cliente lo ve al
     //    instante por Realtime).
+    const nombreNuevo = `${nuevo.nombre || ''} ${nuevo.apellido || ''}`.trim()
     await fetch(`${SUPABASE_URL}/rest/v1/chat_messages`, {
       method: 'POST',
       headers: serviceHeaders({ Prefer: 'return=minimal' }),
       body: JSON.stringify({
         room_id: roomId, sender_type: 'lawyer', lawyer_id: null,
-        content: 'ℹ️ El administrador te está reasignando a otro profesional disponible. En breve te atenderá.',
+        content: `ℹ️ El administrador reasignó tu consulta a ${nombreNuevo || 'otro profesional disponible'}. En breve te atenderá; no necesitas hacer nada más.`,
         message_type: 'text',
       }),
     })
@@ -125,6 +128,21 @@ export default async function handler(req, res) {
       })
     } catch (e) {
       console.error('[reassign] correo al abogado nuevo falló:', e?.message || e)
+    }
+  }
+
+  // 7b) Avisar por correo al CLIENTE que su consulta fue reasignada y sigue en
+  //     marcha (best-effort; solo si la sala guardó su correo).
+  if (roomInfo?.client_email) {
+    try {
+      await sendClientReassignEmail({
+        email: roomInfo.client_email,
+        nombreCliente: (roomInfo.client_nombre || '').trim().split(/\s+/)[0] || '',
+        nombreProfesional: `${nuevo.nombre || ''} ${nuevo.apellido || ''}`.trim(),
+        rolProfesional: nuevo.rol || roomTipo || 'abogado',
+      })
+    } catch (e) {
+      console.error('[reassign] correo al cliente falló:', e?.message || e)
     }
   }
 

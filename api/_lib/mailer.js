@@ -64,6 +64,34 @@ export async function sendVerificationEmail({ nombreAbogado, nombreCliente, area
   })
 }
 
+// Aviso al CLIENTE cuando su consulta es reasignada a otro profesional
+// (el anterior no respondió). Le confirma que su caso sigue en marcha y lo
+// invita a volver al chat. Datos escapados con esc().
+export async function sendClientReassignEmail({ email, nombreCliente, nombreProfesional, rolProfesional }) {
+  const subjectLine = 'Tu consulta sigue en marcha'
+  const trato = rolProfesional === 'contador' ? 'el contador' : 'el abogado'
+  const saludo = nombreCliente ? `Hola ${em(esc(nombreCliente))},` : 'Hola,'
+  const inner =
+    `<p style="margin:0 0 18px;font-size:16px;line-height:1.6;color:${C.navy};">${saludo}</p>
+     <p style="margin:0 0 26px;font-size:15px;line-height:1.75;color:${C.body};text-align:justify;">
+       Notamos que tu consulta llevaba un tiempo sin respuesta, así que el equipo
+       administrativo la reasignó a ${trato} ${em(esc(nombreProfesional || 'un nuevo profesional'))},
+       que la atenderá a la brevedad. No tienes que hacer nada más:
+       vuelve al chat con tu número de cédula y continúa donde ibas.
+     </p>
+     <div style="text-align:center;">${emailButton('Volver a mi consulta', 'https://paradabridge.com/#chat')}</div>`
+  await transporter.sendMail({
+    from: `"Parada Bridge" <${process.env.GMAIL_USER}>`,
+    to: email,
+    subject: subjectLine,
+    html: renderShell({
+      subjectLine,
+      preheader: 'Reasignamos tu consulta a un nuevo profesional.',
+      innerHtml: inner,
+    }),
+  })
+}
+
 // Aviso al profesional cuando el admin le reasigna una consulta inactiva.
 export async function sendReassignEmail({ email, nombreAbogado, ctaUrl }) {
   const subjectLine = 'Te asignaron una consulta'

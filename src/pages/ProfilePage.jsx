@@ -11,6 +11,7 @@ import LawyerInternalChat from '../components/chat/LawyerInternalChat'
 import AsistenteIA from '../components/chat/AsistenteIA'
 import UbicacionSelector from '../components/profile/UbicacionSelector'
 import TarjetaPreview from '../components/profile/TarjetaPreview'
+import { useProBadges, CampanaPro } from '../components/profile/NotificacionesPro'
 import { getAuthHeaders } from '../lib/supabase'
 import { AREAS_DERECHO } from '../lib/areasDerecho'
 import { compressImage } from '../utils/compressMedia'
@@ -89,6 +90,10 @@ export default function ProfilePage() {
 
   const [seccion, setSeccion]     = useState('perfil')
   const [consultasKey, setConsultasKey] = useState(0) // fuerza recargar el dashboard al tomar un caso
+  // Contadores del centro de notificaciones (badges del riel + campana).
+  const { badges, notis, notisNoLeidas, notiSeenTs, marcarNotisLeidas, refresh: refreshBadges } =
+    useProBadges(user?.id, { activo: !!profile?.aprobado })
+  const badgePorSeccion = { consultas: badges.consultas, interno: badges.interno, pagos: badges.pagos }
   const [saving, setSaving]       = useState(false)
   const [deleting, setDeleting]   = useState(false)
   const [msg, setMsg]             = useState(null)
@@ -428,19 +433,23 @@ export default function ProfilePage() {
             </div>
 
             <nav className={styles.sideNav} aria-label="Secciones del panel">
-              {SECCIONES.map(({ id, label, Icon }) => (
-                <button
-                  key={id}
-                  type="button"
-                  className={`${styles.navItem} ${seccion === id ? styles.navItemActive : ''}`}
-                  onClick={() => setSeccion(id)}
-                  aria-current={seccion === id ? 'page' : undefined}
-                  title={label}
-                >
-                  <Icon className={styles.navIcon} aria-hidden="true" />
-                  <span className={styles.navLabel}>{label}</span>
-                </button>
-              ))}
+              {SECCIONES.map(({ id, label, Icon }) => {
+                const n = badgePorSeccion[id] || 0
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    className={`${styles.navItem} ${seccion === id ? styles.navItemActive : ''}`}
+                    onClick={() => { setSeccion(id); if (n) refreshBadges() }}
+                    aria-current={seccion === id ? 'page' : undefined}
+                    title={n ? `${label} · ${n} sin leer` : label}
+                  >
+                    <Icon className={styles.navIcon} aria-hidden="true" />
+                    <span className={styles.navLabel}>{label}</span>
+                    {n > 0 && <span className={styles.navBadge}>{n > 9 ? '9+' : n}</span>}
+                  </button>
+                )
+              })}
             </nav>
 
             <div className={styles.sideFoot}>
@@ -463,6 +472,19 @@ export default function ProfilePage() {
 
         {/* ── Contenido por sección ── */}
         <main className={styles.content}>
+
+        {/* Campana de notificaciones — cabecera del contenido, como en el
+            panel del admin (en el flujo: empuja, no tapa). */}
+        {profile?.aprobado && (
+          <CampanaPro
+            badges={badges}
+            notis={notis}
+            notisNoLeidas={notisNoLeidas}
+            notiSeenTs={notiSeenTs}
+            onMarcarLeidas={marcarNotisLeidas}
+            onGoSection={(id) => setSeccion(id)}
+          />
+        )}
 
         {seccion === 'perfil' && (
         <section className={styles.panel}>

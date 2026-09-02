@@ -707,6 +707,7 @@ select.input option {
 .sideNav { display: flex; flex-direction: column; gap: 0.25rem; }
 
 .navItem {
+  position: relative; /* ancla del badge numérico */
   display: flex;
   align-items: center;
   justify-content: center;
@@ -737,6 +738,36 @@ select.input option {
   box-shadow: 0 6px 16px rgba(109,60,27, 0.28);
 }
 .navItemActive .navIcon { color: #e7c977; }
+
+/* ── Badge numérico del riel (mismo lenguaje que el panel del admin) ──
+   Colapsado: pill dorada anclada a la esquina del ícono. Expandido: se
+   desplaza al borde derecho, alineada con la etiqueta. */
+.navBadge {
+  position: absolute;
+  top: 5px;
+  right: 9px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--gold, #c9a84c);
+  color: #472f29;
+  font-size: 0.62rem;
+  font-weight: 800;
+  line-height: 1;
+  box-shadow: 0 0 0 2px rgba(255,255,255, 0.9);
+  pointer-events: none;
+}
+.sidebar:hover .navBadge {
+  top: 50%;
+  transform: translateY(-50%);
+  right: 10px;
+  box-shadow: none;
+}
+.navItemActive .navBadge { box-shadow: 0 0 0 2px #6d3c1b; }
+.sidebar:hover .navItemActive .navBadge { box-shadow: none; }
 
 .sideFoot {
   margin-top: auto;

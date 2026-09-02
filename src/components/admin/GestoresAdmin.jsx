@@ -94,17 +94,39 @@ export default function GestoresAdmin({ onChange }) {
 
   async function setAprobado(id, valor) {
     const headers = await getAuthHeaders()
-    await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${id}`, {
-      method: 'PATCH', headers, body: JSON.stringify({ aprobado: valor }),
-    })
-    try {
-      await fetch('/api/notify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: headers.Authorization },
-        body: JSON.stringify({ type: valor ? 'account_approved' : 'account_rejected', data: { lawyerId: id } }),
+    // Rechazar a un gestor PENDIENTE elimina la cuenta completa (correo libre
+    // para re-registrarse); revocar a uno APROBADO solo lo desaprueba.
+    const gestorActual = gestores.find(g => g.id === id)
+    const esRechazoPendiente = valor === false && gestorActual?.aprobado !== true
+
+    let eliminada = false
+    if (esRechazoPendiente) {
+      try {
+        const res = await fetch('/api/notify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: headers.Authorization },
+          body: JSON.stringify({ type: 'account_rejected', data: { lawyerId: id, eliminarCuenta: true } }),
+        })
+        const j = await res.json().catch(() => ({}))
+        eliminada = j?.deleted === true
+      } catch { /* sin /api (dev local): cae al marcado clásico */ }
+    }
+
+    if (!eliminada) {
+      await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${id}`, {
+        method: 'PATCH', headers, body: JSON.stringify({ aprobado: valor }),
       })
-    } catch { /* secundario */ }
-    flash(valor ? 'Gestor aprobado.' : 'Gestor rechazado.')
+      if (!esRechazoPendiente) {
+        try {
+          await fetch('/api/notify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: headers.Authorization },
+            body: JSON.stringify({ type: valor ? 'account_approved' : 'account_rejected', data: { lawyerId: id } }),
+          })
+        } catch { /* secundario */ }
+      }
+    }
+    flash(valor ? 'Gestor aprobado.' : eliminada ? 'Gestor rechazado y cuenta eliminada.' : 'Gestor rechazado.')
     await cargar(); onChange?.()
   }
 

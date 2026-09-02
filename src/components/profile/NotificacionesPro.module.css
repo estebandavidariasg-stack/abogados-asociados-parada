@@ -1,0 +1,162 @@
+/* Campana del profesional — en la CABECERA del contenido (mismo patrón que
+   la campana del panel del admin): una barra en el flujo de la página,
+   alineada a la derecha, que empuja el contenido en vez de taparlo. El
+   dropdown se monta por portal en <body> (position:fixed bajo el botón). */
+
+.notiBar {
+  display: flex;
+  justify-content: flex-end;
+  margin: 0 0 0.4rem;
+}
+
+.bellBtn {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border-radius: 13px;
+  border: 1px solid rgba(109,60,27, 0.14);
+  background: #ffffff;
+  color: #6d3c1b;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(109,60,27, 0.1);
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+.bellBtn:hover { border-color: rgba(201,168,76, 0.6); box-shadow: 0 6px 20px rgba(109,60,27, 0.16); }
+.bellBtn:focus-visible { outline: 2px solid #c9a84c; outline-offset: 2px; }
+
+.bellBadge {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  min-width: 19px;
+  height: 19px;
+  padding: 0 5px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: #c9a84c;
+  color: #472f29;
+  font-family: 'Poppins', sans-serif;
+  font-size: 0.66rem;
+  font-weight: 800;
+  line-height: 1;
+  box-shadow: 0 0 0 2px #fff;
+}
+
+
+.panel {
+  position: fixed;
+  z-index: 1200; /* sobre el riel (4) y el contenido; bajo modales (1300) */
+  max-height: min(520px, calc(100vh - 40px));
+  overflow-y: auto;
+  background: #ffffff;
+  border: 1px solid rgba(109,60,27, 0.12);
+  border-radius: 16px;
+  box-shadow: 0 24px 60px rgba(71,47,41, 0.25);
+  padding: 14px;
+  animation: notiPop 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes notiPop { from { opacity: 0; transform: translateX(-6px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .panel { animation: none; } }
+
+.panelHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.panelTitle {
+  font-family: 'Poppins', sans-serif;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #6d3c1b;
+}
+.markRead {
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-family: 'Poppins', sans-serif;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #9a7a2c;
+  padding: 2px 4px;
+}
+.markRead:hover { color: #6d3c1b; }
+
+/* Accesos con contador */
+.quickList { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+.quickItem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  border: 1px solid rgba(201,168,76, 0.4);
+  background: #fdf9f1;
+  border-radius: 11px;
+  padding: 9px 11px;
+  cursor: pointer;
+  font-family: 'Poppins', sans-serif;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.quickItem:hover { background: #fbf3e2; border-color: rgba(201,168,76, 0.7); }
+.quickCount {
+  flex-shrink: 0;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: #c9a84c;
+  color: #472f29;
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+.quickLabel { flex: 1; font-size: 0.8rem; font-weight: 600; color: #472f29; }
+.quickGo { flex-shrink: 0; font-size: 0.68rem; font-weight: 700; color: #9a7a2c; white-space: nowrap; }
+
+/* Feed de avisos */
+.feed { display: flex; flex-direction: column; }
+.empty {
+  margin: 6px 2px;
+  font-family: 'Poppins', sans-serif;
+  font-size: 0.8rem;
+  line-height: 1.6;
+  color: #7a6655;
+}
+.item {
+  display: flex;
+  gap: 10px;
+  padding: 9px 6px;
+  border-top: 1px solid rgba(109,60,27, 0.07);
+}
+.item[data-unread] { background: rgba(201,168,76, 0.07); border-radius: 9px; }
+.itemDot {
+  flex-shrink: 0;
+  width: 9px;
+  height: 9px;
+  margin-top: 6px;
+  border-radius: 50%;
+  background: #b8a08a;
+}
+.itemDot[data-tipo="pago"], .itemDot[data-tipo="cobro"] { background: #1f7a4d; }
+.itemDot[data-tipo="inactividad"], .itemDot[data-tipo="reasignacion_obligatoria"] { background: #d94444; }
+.itemDot[data-tipo="verificacion"] { background: #c9a84c; }
+.itemBody { min-width: 0; font-family: 'Poppins', sans-serif; }
+.itemTipo {
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #9a7a2c;
+}
+.itemMsg { margin: 2px 0 3px; font-size: 0.8rem; line-height: 1.5; color: #472f29; }
+.itemMsg strong { color: #1f7a4d; }
+.itemWhen { font-size: 0.68rem; color: #8a735f; }
+

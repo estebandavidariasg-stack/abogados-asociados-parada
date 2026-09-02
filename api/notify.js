@@ -153,8 +153,8 @@ function emailAprobado({ nombreAbogado, rol, ctaUrl }) {
   }
 }
 
-function emailRechazado({ nombreAbogado, rol, ctaUrl }) {
-  const rolLabel = rol === 'contador' ? 'contador' : 'abogado'
+function emailRechazado({ nombreAbogado, rol, ctaUrl, cuentaEliminada }) {
+  const rolLabel = rol === 'contador' ? 'contador' : rol === 'gestor' ? 'gestor' : 'abogado'
   const subjectLine = 'Sobre tu solicitud de registro'
   return {
     subject: subjectLine,
@@ -164,6 +164,9 @@ function emailRechazado({ nombreAbogado, rol, ctaUrl }) {
       greetingHtml: `Estimado/a <strong style="color:#6d3c1b;font-weight:700;">${esc(nombreAbogado)}</strong>,`,
       bodyHtml:
         `Revisamos tu solicitud de registro como <strong style="color:#6d3c1b;font-weight:700;">${rolLabel}</strong> en Parada Bridge y, por ahora, no fue aprobada. ` +
+        (cuentaEliminada
+          ? `Si hubo un error en los datos, puedes <strong style="color:#6d3c1b;font-weight:700;">registrarte de nuevo con el mismo correo</strong> corrigiendo la información. `
+          : '') +
         `Si consideras que se trata de un error o deseas enviar información adicional, puedes escribirnos por los canales oficiales que encuentras en nuestro sitio.`,
       ctaLabel: 'Visitar el sitio',
       ctaUrl,
@@ -501,32 +504,81 @@ export default async function handler(req, res) {
     }
 
     // ── Aviso al profesional cuando el admin rechaza su solicitud ──
-    // También sensible → exige superadmin.
+    // También sensible → exige superadmin. Con `data.eliminarCuenta: true`
+    // (rechazo de una SOLICITUD PENDIENTE), además borra el perfil y el
+    // usuario de auth con la service-role: así el correo queda libre y la
+    // persona puede registrarse de nuevo corrigiendo sus datos. Defensa:
+    // NUNCA se borra una cuenta con aprobado=true (revocar ≠ rechazar).
     if (type === 'account_rejected') {
       const caller = await getCallerProfile(req)
       if (caller?.rol !== 'superadmin') {
         return res.status(401).json({ error: 'No autorizado.' })
       }
-      const { lawyerId } = data || {}
+      const { lawyerId, eliminarCuenta } = data || {}
       if (!lawyerId) {
         return res.status(400).json({ error: 'Falta lawyerId.' })
       }
-      const pro = await resolveProfessionalEmail(lawyerId)
-      if (!pro?.email) {
-        return res.status(400).json({ error: 'No se pudo resolver el correo del profesional.' })
+
+      // Perfil completo (incluye aprobado) con service-role.
+      let perfil = null
+      try {
+        const r = await fetch(
+          `${SUPABASE_URL}/rest/v1/profiles?id=eq.${encodeURIComponent(lawyerId)}` +
+          `&select=id,email,nombre,apellido,username,rol,aprobado&limit=1`,
+          { headers: svcHeaders() }
+        )
+        const rows = await r.json()
+        perfil = Array.isArray(rows) && rows[0] ? rows[0] : null
+      } catch { /* perfil queda null */ }
+      if (!perfil) {
+        return res.status(404).json({ error: 'Perfil no encontrado.' })
       }
-      const { subject, html } = emailRechazado({
-        nombreAbogado: `${pro.nombre || ''} ${pro.apellido || ''}`.trim() || 'profesional',
-        rol: pro.rol,
-        ctaUrl: SITE_BASE,
-      })
-      await transporter.sendMail({
-        from: `"Parada Bridge" <${process.env.GMAIL_USER}>`,
-        to: pro.email,
-        subject,
-        html,
-      })
-      return res.status(200).json({ ok: true, sent: 'account_rejected' })
+
+      // Correo de rechazo (best-effort: si no hay email, el borrado igual procede).
+      const borrar = eliminarCuenta === true && perfil.aprobado !== true
+      if (perfil.email) {
+        try {
+          const { subject, html } = emailRechazado({
+            nombreAbogado:
+              `${perfil.nombre || ''} ${perfil.apellido || ''}`.trim() ||
+              (perfil.username ? `@${perfil.username}` : 'profesional'),
+            rol: perfil.rol,
+            ctaUrl: SITE_BASE,
+            cuentaEliminada: borrar,
+          })
+          await transporter.sendMail({
+            from: `"Parada Bridge" <${process.env.GMAIL_USER}>`,
+            to: perfil.email,
+            subject,
+            html,
+          })
+        } catch (e) {
+          console.error('[notify] correo de rechazo falló:', e?.message || e)
+        }
+      }
+
+      // Borrado de la cuenta rechazada (perfil + usuario de auth).
+      let deleted = false
+      if (borrar) {
+        try {
+          await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${encodeURIComponent(lawyerId)}`, {
+            method: 'DELETE',
+            headers: svcHeaders({ Prefer: 'return=minimal' }),
+          })
+          const delAuth = await fetch(
+            `${SUPABASE_URL}/auth/v1/admin/users/${encodeURIComponent(lawyerId)}`,
+            { method: 'DELETE', headers: svcHeaders() }
+          )
+          deleted = delAuth.ok
+          if (!delAuth.ok) {
+            console.error('[notify] borrar auth user falló:', delAuth.status)
+          }
+        } catch (e) {
+          console.error('[notify] eliminar cuenta rechazada falló:', e?.message || e)
+        }
+      }
+
+      return res.status(200).json({ ok: true, sent: 'account_rejected', deleted })
     }
 
     // ── PQR del cliente → correo al equipo administrativo ──
