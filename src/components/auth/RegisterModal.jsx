@@ -268,7 +268,7 @@ export default function RegisterModal({ onClose }) {
       // Username único — chequeo previo al envío del código.
       if (username) {
         const res = await fetch(
-          `${SUPABASE_URL}/rest/v1/profiles?username=eq.${username}&select=id`,
+          `${SUPABASE_URL}/rest/v1/profiles?username=eq.${encodeURIComponent(username)}&select=id`,
           { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } }
         )
         const data = await res.json()

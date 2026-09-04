@@ -199,7 +199,7 @@ export default function AuthModal({ initialTab = 'login', onClose, onRegister })
       // fallar más tarde, mejor que el usuario lo sepa antes del OTP).
       if (username) {
         const res = await fetch(
-          `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/profiles?username=eq.${username}&select=id`,
+          `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/profiles?username=eq.${encodeURIComponent(username)}&select=id`,
           { headers: { 'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY, 'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` } }
         )
         const data = await res.json()
