@@ -297,6 +297,80 @@ async function firmaFinalizar(req, res) {
   res.status(200).json({ ok: true, firmante: Array.isArray(out) ? out[0] : out });
 }
 
+// ── POST docs_profesional: documentos de confianza del profesional asignado ──
+// El CLIENTE (anónimo) los consulta desde su chat: tarjeta profesional,
+// certificado bancario y certificado disciplinario + cédula del profesional.
+// Valida que la sala pertenezca al hash del cliente. Devuelve signed URLs de
+// vida corta (10 min) — el visor del chat las muestra SOLO-VER (sin descarga).
+async function docsProfesional(req, res) {
+  const b = req.body || {};
+  const cedulaHash = String(b.cedulaHash || '').toLowerCase();
+  const roomId = cap(b.roomId, 64);
+  if (!/^[a-f0-9]{64}$/.test(cedulaHash) || !roomId) {
+    res.status(400).json({ error: 'Solicitud inválida.' });
+    return;
+  }
+  const rid = encodeURIComponent(roomId);
+
+  // 1. La sala debe ser del cliente que pregunta.
+  const rRoom = await fetch(
+    `${SUPABASE_URL}/rest/v1/chat_rooms?id=eq.${rid}&client_cedula=eq.${cedulaHash}&select=id&limit=1`,
+    { headers: serviceHeaders() }
+  );
+  const rooms = await rRoom.json().catch(() => []);
+  if (!Array.isArray(rooms) || rooms.length === 0) {
+    res.status(403).json({ error: 'No autorizado.' });
+    return;
+  }
+
+  // 2. Profesional asignado a la sala.
+  const rAsg = await fetch(
+    `${SUPABASE_URL}/rest/v1/chat_room_lawyers?room_id=eq.${rid}&select=lawyer_id,status&limit=5`,
+    { headers: serviceHeaders() }
+  );
+  const asigs = await rAsg.json().catch(() => []);
+  const lawyerId = (Array.isArray(asigs) && asigs.length)
+    ? (asigs.find(a => a.status === 'active') || asigs[0]).lawyer_id
+    : null;
+  if (!lawyerId) { res.status(200).json({ ok: false, motivo: 'sin_profesional' }); return; }
+
+  // 3. Documentos + cédula del perfil.
+  const rProf = await fetch(
+    `${SUPABASE_URL}/rest/v1/profiles?id=eq.${encodeURIComponent(lawyerId)}` +
+    `&select=nombre,apellido,cedula,tarjeta_archivo_url,certificado_bancario_url,certificado_disciplinario_url&limit=1`,
+    { headers: serviceHeaders() }
+  );
+  const profs = await rProf.json().catch(() => []);
+  const prof = Array.isArray(profs) ? profs[0] : null;
+  if (!prof) { res.status(200).json({ ok: false, motivo: 'sin_profesional' }); return; }
+
+  // 4. Firmar cada path (bucket privado tarjetas-profesionales, 10 min).
+  async function firmar(path) {
+    if (!path) return null;
+    if (/^https?:\/\//.test(path)) return path;   // compat: URLs viejas completas
+    try {
+      const r = await fetch(
+        `${SUPABASE_URL}/storage/v1/object/sign/tarjetas-profesionales/${path}`,
+        { method: 'POST', headers: serviceHeaders(), body: JSON.stringify({ expiresIn: 600 }) }
+      );
+      const d = await r.json().catch(() => null);
+      return d?.signedURL ? `${SUPABASE_URL}/storage/v1${d.signedURL}` : null;
+    } catch { return null; }
+  }
+  const [tarjeta, certBancario, certDisciplinario] = await Promise.all([
+    firmar(prof.tarjeta_archivo_url),
+    firmar(prof.certificado_bancario_url),
+    firmar(prof.certificado_disciplinario_url),
+  ]);
+
+  res.status(200).json({
+    ok: true,
+    profesional: `${prof.nombre || ''} ${prof.apellido || ''}`.trim(),
+    cedula: prof.cedula || null,
+    docs: { tarjeta, certBancario, certDisciplinario },
+  });
+}
+
 export default async function handler(req, res) {
   if (req.method === 'GET') return listar(req, res);
   if (req.method === 'POST') {
@@ -305,6 +379,7 @@ export default async function handler(req, res) {
     if (accion === 'firma_finalizar') return firmaFinalizar(req, res);
     if (accion === 'publicar') return publicar(req, res);
     if (accion === 'tomar') return tomar(req, res);
+    if (accion === 'docs_profesional') return docsProfesional(req, res);
     res.status(400).json({ error: 'Acción no soportada' });
     return;
   }

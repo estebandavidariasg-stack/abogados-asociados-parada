@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../../context/AuthContext'
 import { supabase, getAuthHeaders } from '../../lib/supabase'
+import { compressImage } from '../../utils/compressMedia'
 // Reutilizamos EXACTAMENTE la estética del AuthModal (overlay, tarjeta, campos,
 // checklist de contraseña, términos, captcha, etc.).
 import styles from './AuthModal.module.css'
@@ -54,7 +55,7 @@ function FieldHint({ valid, msg, touched }) {
   )
 }
 
-// Cédula colombiana: 6–12 dígitos (usada por el gestor).
+// Cédula colombiana: 6–12 dígitos (obligatoria para los 3 roles).
 function validarCedula(v) {
   const raw = String(v || '').trim()
   if (!raw) return { valid: null, msg: '' }
@@ -132,10 +133,25 @@ export default function RegisterModal({ onClose }) {
   const recaptchaRef = useRef()
 
   // ── Flujo OTP ──────────────────────────────────────────────────────────
-  const [verificationStep, setVerificationStep] = useState('form') // 'form' | 'verify' | 'done'
+  // 'docs' = paso post-OTP del profesional: foto + certificados + oficina.
+  const [verificationStep, setVerificationStep] = useState('form') // 'form' | 'verify' | 'docs' | 'done'
   const [otpError, setOtpError]                 = useState('')
   const [otpSubmitting, setOtpSubmitting]       = useState(false)
   const [emailErrorInline, setEmailErrorInline] = useState('')
+
+  // ── Paso 'docs' (solo abogado/contador, con la sesión temporal viva) ────
+  const [newUserId, setNewUserId]         = useState(null)
+  const [fotoFile, setFotoFile]           = useState(null)   // File comprimido
+  const [fotoPreview, setFotoPreview]     = useState(null)
+  const [certBancFile, setCertBancFile]   = useState(null)
+  const [certDiscFile, setCertDiscFile]   = useState(null)
+  const [direccionOficina, setDireccionOficina] = useState('')
+  const [paginaWeb, setPaginaWeb]         = useState('')
+  const [docsSubmitting, setDocsSubmitting] = useState(false)
+  const [docsError, setDocsError]         = useState('')
+  const fotoInputRef     = useRef(null)
+  const certBancInputRef = useRef(null)
+  const certDiscInputRef = useRef(null)
 
   // Validaciones derivadas
   const pwRules    = PASSWORD_RULES.map(r => ({ ...r, ok: r.test(regPassword) }))
@@ -152,20 +168,22 @@ export default function RegisterModal({ onClose }) {
     const base = pwValid && emailVal.valid === true && aceptaTerminos && captchaValue && !loading
     if (!base) return false
     if (rol === 'gestor') return cedulaVal.valid === true && !!username.trim()
-    return true
+    // Profesional: nombre, apellido, cédula, celular y tarjeta son obligatorios.
+    return !!nombre.trim() && !!apellido.trim() && !!username.trim()
+      && cedulaVal.valid === true && telVal.valid === true && !!tarjetaFile
   })()
 
   const AREAS_LIST = rol === 'contador' ? AREAS_CONTADURIA : AREAS_DERECHO
 
   useEffect(() => {
-    const handleKey = (e) => { if (e.key === 'Escape') onClose() }
+    const handleKey = (e) => { if (e.key === 'Escape') handleClose() }
     document.addEventListener('keydown', handleKey)
     document.body.style.overflow = 'hidden'
     return () => {
       document.removeEventListener('keydown', handleKey)
       document.body.style.overflow = ''
     }
-  }, [onClose])
+  })
 
   function borderFor(valid, touched, value) {
     if (!touched || !value) return {}
@@ -211,6 +229,11 @@ export default function RegisterModal({ onClose }) {
     if (rol === 'gestor') {
       if (!username.trim())         { setError('Elige un nombre de usuario'); return }
       if (cedulaVal.valid !== true) { setError('Ingresa una cédula válida (6–12 dígitos)'); setCedulaTouched(true); return }
+    }
+    if (isPro) {
+      if (cedulaVal.valid !== true) { setError('Ingresa una cédula válida (6–12 dígitos)'); setCedulaTouched(true); return }
+      if (telVal.valid !== true)    { setError('Ingresa un celular válido (10 dígitos, empieza por 3)'); setTelTouched(true); return }
+      if (!tarjetaFile)             { setError('Adjunta tu tarjeta profesional (PDF o imagen)'); return }
     }
     if (!pwValid)        { setError('La contraseña no cumple los requisitos'); setPwTouched(true); return }
     if (!emailVal.valid) { setError('El correo no es válido'); setEmailTouched(true); return }
@@ -282,7 +305,9 @@ export default function RegisterModal({ onClose }) {
 
       // Verificación OK — recién ahora creamos la cuenta.
       await actuallyCreateAccount()
-      setVerificationStep('done')
+      // Profesional: sigue el paso de foto + certificados (sesión temporal
+      // viva). Gestor: directo a la pantalla final.
+      setVerificationStep(isPro ? 'docs' : 'done')
     } catch (err) {
       setOtpError(err.message || 'Código inválido o expirado')
     } finally {
@@ -360,7 +385,7 @@ export default function RegisterModal({ onClose }) {
 
     if (isPro) {
       Object.assign(payload, {
-        nombre, apellido, telefono,
+        nombre, apellido, telefono, cedula,
         // area_derecho guarda la lista separada por comas (para contador
         // significa especialidades contables — misma columna, ver CLAUDE.md).
         area_derecho: areas.length ? areas.join(', ') : null,
@@ -391,25 +416,124 @@ export default function RegisterModal({ onClose }) {
       throw new Error(errBody.message || 'No se pudo crear el perfil')
     }
 
-    // 5. signOut — el usuario iniciará sesión formalmente cuando lo apruebe el
-    //    administrador.
-    await supabase.auth.signOut()
+    // 5. Profesional: la sesión temporal se conserva para el paso 'docs'
+    //    (foto + certificados suben con RLS auth.uid() = folder). El signOut
+    //    ocurre al terminar ese paso. Gestor: cierra sesión de una vez.
+    setNewUserId(userId)
+    if (!isPro) await supabase.auth.signOut()
+  }
+
+  // ── Paso 'docs': foto + certificados + oficina → PATCH perfil → signOut ──
+  function onFotoChange(e) {
+    const raw = e.target.files?.[0]
+    e.target.value = ''
+    if (!raw) return
+    if (!raw.type.startsWith('image/')) { setDocsError('La foto debe ser una imagen.'); return }
+    setDocsError('')
+    // Comprime de una vez (≤1200px, JPEG) — mismo criterio que ProfilePage.
+    compressImage(raw, 1200, 0.85, 'image/jpeg')
+      .then(f => {
+        setFotoFile(f)
+        setFotoPreview(prev => { if (prev) URL.revokeObjectURL(prev); return URL.createObjectURL(f) })
+      })
+      .catch(() => setDocsError('No se pudo procesar la foto. Intenta con otra imagen.'))
+  }
+
+  function onDocChange(e, set) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    const allowed = ['application/pdf', 'image/png', 'image/jpeg', 'image/webp']
+    if (!allowed.includes(file.type)) { setDocsError('Formato no permitido. Usa PDF, PNG, JPG o WEBP.'); return }
+    if (file.size / (1024 * 1024) > 10) { setDocsError('El archivo no puede superar 10 MB.'); return }
+    setDocsError('')
+    set(file)
+  }
+
+  const canFinishDocs = !!fotoFile && !!certBancFile && !!certDiscFile && !docsSubmitting
+
+  async function handleDocsSubmit(e) {
+    e.preventDefault()
+    if (!canFinishDocs || !newUserId) return
+    setDocsSubmitting(true); setDocsError('')
+    try {
+      const headers = await getAuthHeaders()
+
+      // 1. Foto de perfil → profile-photos/avatars/<uid>.jpg (bucket público).
+      const fotoPath = `avatars/${newUserId}.jpg`
+      const fotoRes = await fetch(
+        `${SUPABASE_URL}/storage/v1/object/profile-photos/${fotoPath}`,
+        { method: 'POST', headers: { ...headers, 'Content-Type': fotoFile.type, 'x-upsert': 'true' }, body: fotoFile }
+      )
+      if (!fotoRes.ok) throw new Error('No se pudo subir la foto de perfil.')
+      const fotoUrl = `${SUPABASE_URL}/storage/v1/object/public/profile-photos/${fotoPath}?t=${Date.now()}`
+
+      // 2. Certificados → tarjetas-profesionales/<uid>/… (bucket privado).
+      async function subirDoc(file, nombreBase) {
+        const ext  = file.name.split('.').pop().toLowerCase()
+        const path = `${newUserId}/${nombreBase}.${ext}`
+        const res  = await fetch(
+          `${SUPABASE_URL}/storage/v1/object/tarjetas-profesionales/${path}`,
+          { method: 'POST', headers: { ...headers, 'Content-Type': file.type, 'x-upsert': 'true' }, body: file }
+        )
+        if (!res.ok) throw new Error(`No se pudo subir ${nombreBase.replace(/-/g, ' ')}.`)
+        return path
+      }
+      const certBancPath = await subirDoc(certBancFile, 'certificados/certificado')
+      const certDiscPath = await subirDoc(certDiscFile, 'certificado-disciplinario')
+
+      // 3. PATCH del perfil con todo lo del paso.
+      const patchRes = await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${newUserId}`, {
+        method: 'PATCH',
+        headers: { ...(await getAuthHeaders()), Prefer: 'return=minimal' },
+        body: JSON.stringify({
+          foto_url: fotoUrl,
+          certificado_bancario_url: certBancPath,
+          certificado_disciplinario_url: certDiscPath,
+          direccion_oficina: direccionOficina.trim() || null,
+          pagina_web: paginaWeb.trim() || null,
+        }),
+      })
+      if (!patchRes.ok) throw new Error('No se pudo guardar la información del perfil.')
+
+      // 4. Fin: cerrar la sesión temporal y mostrar la pantalla final.
+      await supabase.auth.signOut()
+      setVerificationStep('done')
+    } catch (err) {
+      setDocsError(err.message || 'No se pudo completar el paso. Intenta de nuevo.')
+    } finally {
+      setDocsSubmitting(false)
+    }
+  }
+
+  // Cerrar durante 'docs' dejaría el registro incompleto — confirmar y cerrar
+  // la sesión temporal para no dejarla viva.
+  async function handleClose() {
+    if (verificationStep === 'docs') {
+      const seguro = window.confirm(
+        'Tu registro quedará incompleto sin la foto y los certificados. ' +
+        'Podrás completarlos luego desde tu perfil, pero el administrador no podrá revisarte hasta entonces. ¿Salir de todas formas?'
+      )
+      if (!seguro) return
+      try { await supabase.auth.signOut() } catch (_) { /* noop */ }
+    }
+    onClose()
   }
 
   return (
-    <div className={styles.overlay} onClick={(e) => e.target === e.currentTarget && onClose()}>
+    <div className={styles.overlay} onClick={(e) => e.target === e.currentTarget && handleClose()}>
       <div className={styles.modal}>
-        <button className={styles.close} onClick={onClose} aria-label="Cerrar"><IconX /></button>
+        <button className={styles.close} onClick={handleClose} aria-label="Cerrar"><IconX /></button>
 
         <p className={styles.eyebrow}><span style={{ color: 'var(--navy)' }}>Parada</span> Bridge</p>
         <h3 className={styles.title}>
-          {rol ? ROLE_TITLE[rol] : 'Registrarse'}
+          {verificationStep === 'docs' ? 'Completa tu perfil' : rol ? ROLE_TITLE[rol] : 'Registrarse'}
         </h3>
 
         {error && <p className={styles.msgError}>{error}</p>}
 
         {/* ══════════════════ SELECTOR DE ROL ══════════════════ */}
-        <div className={extra.roleSelector}>
+        <div className={extra.roleSelector} style={verificationStep === 'docs' ? { display: 'none' } : undefined}>
           {ROLES.map(({ key, label, Icon }) => (
             <button
               key={key}
@@ -440,6 +564,117 @@ export default function RegisterModal({ onClose }) {
             onResend={handleResendCode}
             onBack={() => { setVerificationStep('form'); setOtpError('') }}
           />
+        )}
+
+        {/* ══════════ REGISTRO — Paso 'docs' (foto + certificados) ══════════ */}
+        {rol && verificationStep === 'docs' && (
+          <form className={styles.form} onSubmit={handleDocsSubmit}>
+            <p className={styles.hint} style={{ marginTop: 0 }}>
+              Correo verificado ✓ — Sube lo que el administrador revisará para
+              aprobar tu perfil. Así no tendrás que esperar una segunda revisión.
+            </p>
+
+            {/* Foto de perfil */}
+            <div className={styles.field}>
+              <label className={styles.label}>Foto de perfil <span className={styles.req}>*</span></label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                <div
+                  aria-hidden="true"
+                  style={{
+                    width: 72, height: 72, borderRadius: '50%', flex: '0 0 auto',
+                    background: fotoPreview
+                      ? `center / cover no-repeat url(${fotoPreview})`
+                      : 'rgba(120,120,120,0.08)',
+                    border: fotoPreview ? '2px solid #c9a84c' : '2px dashed rgba(120,120,120,0.4)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}
+                >
+                  {!fotoPreview && (
+                    <svg viewBox="0 0 24 24" width="34" height="34" fill="none"
+                      stroke="#9a938c" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="12" cy="8" r="4" />
+                      <path d="M4 21c0-4 3.6-7 8-7s8 3 8 7" />
+                    </svg>
+                  )}
+                </div>
+                <div style={{ display: 'grid', gap: 4 }}>
+                  <button type="button" className={extra.uploadBtn}
+                    onClick={() => fotoInputRef.current?.click()}>
+                    {fotoFile ? 'Cambiar foto' : 'Subir foto'}
+                  </button>
+                  <span style={{ fontSize: '0.68rem', opacity: 0.65 }}>
+                    Aparecerá en tu tarjeta pública. JPG/PNG.
+                  </span>
+                </div>
+              </div>
+              <input ref={fotoInputRef} type="file" accept="image/*"
+                style={{ display: 'none' }} onChange={onFotoChange} />
+            </div>
+
+            {/* Certificado bancario */}
+            <div className={styles.field}>
+              <label className={styles.label}>
+                Cuenta bancaria certificada <span className={styles.req}>*</span> <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0, opacity: 0.6 }}>(PDF o imagen)</span>
+              </label>
+              <button type="button" className={extra.uploadBtn}
+                onClick={() => certBancInputRef.current?.click()}>
+                {certBancFile ? 'Cambiar archivo' : 'Subir certificado bancario'}
+              </button>
+              <input ref={certBancInputRef} type="file"
+                accept="application/pdf,image/png,image/jpeg,image/webp"
+                style={{ display: 'none' }} onChange={(e) => onDocChange(e, setCertBancFile)} />
+              {certBancFile && <div className={extra.fileName}>✓ {certBancFile.name}</div>}
+            </div>
+
+            {/* Certificado disciplinario */}
+            <div className={styles.field}>
+              <label className={styles.label}>
+                Certificado disciplinario <span className={styles.req}>*</span> <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0, opacity: 0.6 }}>(PDF o imagen)</span>
+              </label>
+              <button type="button" className={extra.uploadBtn}
+                onClick={() => certDiscInputRef.current?.click()}>
+                {certDiscFile ? 'Cambiar archivo' : 'Subir certificado disciplinario'}
+              </button>
+              <input ref={certDiscInputRef} type="file"
+                accept="application/pdf,image/png,image/jpeg,image/webp"
+                style={{ display: 'none' }} onChange={(e) => onDocChange(e, setCertDiscFile)} />
+              {certDiscFile && <div className={extra.fileName}>✓ {certDiscFile.name}</div>}
+              <span style={{ fontSize: '0.68rem', opacity: 0.65, marginTop: 4, display: 'block' }}>
+                Los clientes podrán consultarlo dentro del chat para confiar en ti.
+              </span>
+            </div>
+
+            {/* Dirección de oficina (opcional) */}
+            <div className={styles.field}>
+              <label className={styles.label}>
+                Dirección de oficina <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0, opacity: 0.6 }}>(opcional)</span>
+              </label>
+              <input type="text" className={styles.input}
+                placeholder="Cra 7 # 12-34, oficina 501, Bogotá"
+                value={direccionOficina}
+                onChange={(e) => setDireccionOficina(e.target.value)} />
+            </div>
+
+            {/* Página web (opcional) */}
+            <div className={styles.field}>
+              <label className={styles.label}>
+                Página web <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0, opacity: 0.6 }}>(opcional)</span>
+              </label>
+              <input type="url" className={styles.input}
+                placeholder="https://tusitio.com"
+                value={paginaWeb}
+                onChange={(e) => setPaginaWeb(e.target.value)} />
+            </div>
+
+            {docsError && <p className={styles.msgError}>{docsError}</p>}
+
+            <button type="submit" className={`btn-solid ${styles.submit}`} disabled={!canFinishDocs}>
+              {docsSubmitting ? 'Enviando…' : 'Enviar para revisión →'}
+            </button>
+            <p className={styles.hint}>
+              El administrador revisará tu perfil completo y te avisaremos por correo.
+            </p>
+          </form>
         )}
 
         {/* ══════════════════ REGISTRO — Paso C (cuenta creada) ══════════════════ */}
@@ -500,8 +735,8 @@ export default function RegisterModal({ onClose }) {
                 onChange={(e) => setUsername(e.target.value.replace(/\s/g, '').toLowerCase())} required />
             </div>
 
-            {/* Cédula (solo gestor) */}
-            {rol === 'gestor' && (
+            {/* Cédula (obligatoria para los 3 roles) */}
+            {rol && (
               <div className={styles.field}>
                 <label className={styles.label}>Cédula <span className={styles.req}>*</span></label>
                 <input
@@ -523,7 +758,7 @@ export default function RegisterModal({ onClose }) {
             {/* Teléfono (solo profesional) */}
             {isPro && (
               <div className={styles.field}>
-                <label className={styles.label}>Celular</label>
+                <label className={styles.label}>Celular <span className={styles.req}>*</span></label>
                 <input
                   type="tel"
                   inputMode="numeric"
@@ -533,6 +768,7 @@ export default function RegisterModal({ onClose }) {
                   onChange={(e) => setTelefono(normalizarCelular(e.target.value))}
                   onBlur={() => setTelTouched(true)}
                   maxLength={10}
+                  required
                   style={borderFor(telVal.valid, telTouched, telefono)}
                 />
                 <FieldHint valid={telVal.valid} msg={telVal.msg} touched={telTouched && !!telefono} />
@@ -657,7 +893,7 @@ export default function RegisterModal({ onClose }) {
                 {/* Tarjeta profesional */}
                 <div className={styles.field}>
                   <label className={styles.label}>
-                    Tarjeta profesional <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0, opacity: 0.6 }}>(PDF o imagen)</span>
+                    Tarjeta profesional <span className={styles.req}>*</span> <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0, opacity: 0.6 }}>(PDF o imagen)</span>
                   </label>
                   <button type="button" className={extra.uploadBtn}
                     onClick={() => tarjetaInputRef.current?.click()}>

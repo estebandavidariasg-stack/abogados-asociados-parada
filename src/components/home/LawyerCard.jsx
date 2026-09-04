@@ -252,31 +252,30 @@ export default function LawyerCard({
                     {[lawyer.ciudad, lawyer.departamento].filter(Boolean).join(', ')}
                   </p>
                 )}
-                {/* Calificación en el modal — clicable: despliega los comentarios */}
-                {rating && (
-                  <div style={{ marginTop: 8 }}>
-                    <button
-                      type="button"
-                      className={styles.ratingBtn}
-                      onClick={toggleReviews}
-                      aria-expanded={reviewsOpen}
-                      aria-label={reviewsOpen ? 'Ocultar comentarios de clientes' : 'Ver comentarios de clientes'}
-                    >
-                      <StarDisplay rating={rating.promedio} total={rating.total} dark={true} />
-                      <span className={styles.ratingHint}>
-                        {reviewsOpen ? 'Ocultar comentarios' : 'Ver comentarios'}
-                        <svg
-                          className={`${styles.ratingChevron}${reviewsOpen ? ' ' + styles.ratingChevronUp : ''}`}
-                          viewBox="0 0 24 24" width="12" height="12" fill="none"
-                          stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"
-                          aria-hidden="true"
-                        >
-                          <path d="M6 9l6 6 6-6" />
-                        </svg>
-                      </span>
-                    </button>
-                  </div>
-                )}
+                {/* Comentarios de clientes — SIEMPRE disponible en el modal
+                    (con o sin calificación previa). */}
+                <div style={{ marginTop: 8 }}>
+                  <button
+                    type="button"
+                    className={styles.ratingBtn}
+                    onClick={toggleReviews}
+                    aria-expanded={reviewsOpen}
+                    aria-label={reviewsOpen ? 'Ocultar comentarios de clientes' : 'Ver comentarios de clientes'}
+                  >
+                    {rating && <StarDisplay rating={rating.promedio} total={rating.total} dark={true} />}
+                    <span className={styles.ratingHint}>
+                      {reviewsOpen ? 'Ocultar comentarios' : 'Ver más comentarios'}
+                      <svg
+                        className={`${styles.ratingChevron}${reviewsOpen ? ' ' + styles.ratingChevronUp : ''}`}
+                        viewBox="0 0 24 24" width="12" height="12" fill="none"
+                        stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"
+                        aria-hidden="true"
+                      >
+                        <path d="M6 9l6 6 6-6" />
+                      </svg>
+                    </span>
+                  </button>
+                </div>
               </div>
             </div>
 

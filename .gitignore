@@ -15,3 +15,15 @@ dist/
 # Previews de correo y PDFs de muestra (artefactos generados)
 .preview-email-*.html
 docs/ejemplo-firmado.pdf
+
+# Capturas de QA/diseño en la raíz (artefactos de sesiones de prueba —
+# las imágenes legítimas del sitio viven en public/ y assets-source/)
+/*.png
+/*.jpg
+/*.jpeg
+docs/sql/
+docs/backup-diseno-anterior/
+docs/superpowers/
+docs/*.pdf
+scripts/diag-*.mjs
+scripts/rebrand-*.mjs

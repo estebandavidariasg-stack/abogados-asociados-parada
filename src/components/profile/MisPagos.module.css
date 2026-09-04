@@ -269,7 +269,9 @@
   align-items: flex-start;
   gap: 0.4rem;
   margin: 0;
-  max-width: 70ch;
+  /* A lo ancho de la tarjeta: aprovecha toda la línea. */
+  width: 100%;
+  max-width: none;
   font-size: 0.82rem;
   line-height: 1.45;
   color: #256a45;

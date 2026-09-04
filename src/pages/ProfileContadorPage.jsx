@@ -6,6 +6,7 @@ import { useNavigate } from 'react-router-dom'
 // componente NO lo modifica; las clases siguen siendo scoped al archivo.
 import styles from './ProfilePage.module.css'
 import MisContratos from '../components/profile/MisContratos'
+import DocumentosConfianza from '../components/profile/DocumentosConfianza'
 import MisPagos from '../components/profile/MisPagos'
 import LawyerInternalChat from '../components/chat/LawyerInternalChat'
 import AsistenteIA from '../components/chat/AsistenteIA'
@@ -691,6 +692,11 @@ export default function ProfileContadorPage() {
                 style={{ display: 'none' }}
                 onChange={handleTarjetaArchivoChange}
               />
+            </div>
+
+            {/* ── Documentos de confianza (cédula, certificados, oficina, web) ── */}
+            <div className={`${styles.field} ${styles.fullWidth}`}>
+              <DocumentosConfianza userId={user?.id} />
             </div>
 
             {/* Mensajes */}

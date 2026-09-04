@@ -153,6 +153,25 @@ function emailAprobado({ nombreAbogado, rol, ctaUrl }) {
   }
 }
 
+// El administrador escribió por el chat interno → aviso al profesional.
+function emailMensajeInterno({ nombreProfesional, ctaUrl }) {
+  const subjectLine = 'El administrador te escribió en Parada Bridge'
+  return {
+    subject: subjectLine,
+    html: renderEmailHtml({
+      subjectLine,
+      preheader: 'Tienes un mensaje nuevo en tu chat interno.',
+      greetingHtml: `Estimado/a <strong style="color:#6d3c1b;font-weight:700;">${esc(nombreProfesional)}</strong>,`,
+      bodyHtml:
+        `El equipo administrativo de Parada Bridge te envió un mensaje por el ` +
+        `<strong style="color:#6d3c1b;font-weight:700;">chat interno</strong> de la plataforma. ` +
+        `Ingresa a tu perfil para leerlo y responder.`,
+      ctaLabel: 'Leer mensaje',
+      ctaUrl,
+    }),
+  }
+}
+
 function emailRechazado({ nombreAbogado, rol, ctaUrl, cuentaEliminada }) {
   const rolLabel = rol === 'contador' ? 'contador' : rol === 'gestor' ? 'gestor' : 'abogado'
   const subjectLine = 'Sobre tu solicitud de registro'
@@ -501,6 +520,48 @@ export default async function handler(req, res) {
         html,
       })
       return res.status(200).json({ ok: true, sent: 'account_approved' })
+    }
+
+    // ── "El administrador te escribió" (chat interno) ──
+    // Exige superadmin. Throttle server-side: máx. 1 correo por hora por
+    // destinatario — si en la última hora el admin ya le había escrito otro
+    // mensaje, se asume avisado y NO se reenvía (el chat interno es de ráfagas).
+    if (type === 'internal_message') {
+      const caller = await getCallerProfile(req)
+      if (caller?.rol !== 'superadmin') {
+        return res.status(401).json({ error: 'No autorizado.' })
+      }
+      const { toId } = data || {}
+      if (!toId) return res.status(400).json({ error: 'Falta toId.' })
+
+      try {
+        const desde = new Date(Date.now() - 60 * 60 * 1000).toISOString()
+        const r = await fetch(
+          `${SUPABASE_URL}/rest/v1/mensajes_internos` +
+          `?from_id=eq.${encodeURIComponent(caller.id)}&to_id=eq.${encodeURIComponent(toId)}` +
+          `&created_at=gte.${encodeURIComponent(desde)}&select=id&limit=2`,
+          { headers: svcHeaders() }
+        )
+        const rows = await r.json()
+        // El mensaje recién insertado ya cuenta: >1 = ya hubo aviso reciente.
+        if (Array.isArray(rows) && rows.length > 1) {
+          return res.status(200).json({ ok: true, throttled: true })
+        }
+      } catch { /* si el chequeo falla, se envía igual (best-effort) */ }
+
+      const pro = await resolveProfessionalEmail(toId)
+      if (!pro?.email) return res.status(200).json({ ok: true, sent: false })
+      const { subject, html } = emailMensajeInterno({
+        nombreProfesional: `${pro.nombre || ''} ${pro.apellido || ''}`.trim() || 'profesional',
+        ctaUrl: `${SITE_BASE}/?loginModal=true`,
+      })
+      await transporter.sendMail({
+        from: `"Parada Bridge" <${process.env.GMAIL_USER}>`,
+        to: pro.email,
+        subject,
+        html,
+      })
+      return res.status(200).json({ ok: true, sent: 'internal_message' })
     }
 
     // ── Aviso al profesional cuando el admin rechaza su solicitud ──

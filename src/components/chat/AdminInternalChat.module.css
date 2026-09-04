@@ -209,6 +209,9 @@
   text-overflow: ellipsis;
 }
 .itemCiudad {
+  /* Misma tipografía del cuerpo de la página (antes heredaba otra letra). */
+  font-family: 'Poppins', sans-serif;
+  font-style: normal;
   font-size: 0.6rem;
   color: #90735a;
   margin: 4px 0 0;

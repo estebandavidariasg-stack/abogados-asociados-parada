@@ -59,6 +59,8 @@ const ICONS = {
 export default function ProfileDetailModal({ profile, onClose }) {
   const [rating, setRating] = useState(null)
   const [tarjetaDisplayUrl, setTarjetaDisplayUrl] = useState(null)
+  const [certBancUrl, setCertBancUrl] = useState(null)
+  const [certDiscUrl, setCertDiscUrl] = useState(null)
 
   useEffect(() => {
     document.body.style.overflow = 'hidden'
@@ -97,6 +99,22 @@ export default function ProfileDetailModal({ profile, onClose }) {
     })()
     return () => { cancelled = true }
   }, [profile?.tarjeta_archivo_url])
+
+  /* Certificados bancario y disciplinario — mismo bucket privado, mismo patrón. */
+  useEffect(() => {
+    let cancelled = false
+    async function firmar(path, set) {
+      if (!path) { set(null); return }
+      if (/^https?:\/\//.test(path)) { set(path); return }
+      const { data } = await supabase.storage
+        .from('tarjetas-profesionales')
+        .createSignedUrl(path, 3600)
+      if (!cancelled && data?.signedUrl) set(data.signedUrl)
+    }
+    firmar(profile?.certificado_bancario_url, setCertBancUrl)
+    firmar(profile?.certificado_disciplinario_url, setCertDiscUrl)
+    return () => { cancelled = true }
+  }, [profile?.certificado_bancario_url, profile?.certificado_disciplinario_url])
 
   if (!profile) return null
 
@@ -225,7 +243,8 @@ export default function ProfileDetailModal({ profile, onClose }) {
           <InfoRow icon={ICONS.pin}      label="Ciudad"        value={ciudadVisible} />
           {barrioVisible && <InfoRow icon={ICONS.pin} label="Barrio / Comuna" value={barrioVisible} />}
           <InfoRow icon={ICONS.building} label="Departamento"  value={profile.departamento} />
-          <InfoRow icon={ICONS.home}     label="Dirección de oficina" value={profile.direccion} />
+          <InfoRow icon={ICONS.home}     label="Dirección de oficina" value={profile.direccion_oficina || profile.direccion} />
+          <InfoRow icon={ICONS.building} label="Página web"           value={profile.pagina_web} isLink />
           <InfoRow icon={ICONS.clock}    label="Años de experiencia"  value={profile.experiencia} />
           <InfoRow icon={ICONS.card}
             label="Tarjeta profesional (número)"
@@ -237,6 +256,30 @@ export default function ProfileDetailModal({ profile, onClose }) {
                 <span className={styles.infoLabel}>Tarjeta profesional (archivo)</span>
                 {tarjetaDisplayUrl
                   ? <TarjetaPreview displayUrl={tarjetaDisplayUrl} storagePath={profile.tarjeta_archivo_url} />
+                  : <span style={{ display: 'block', fontSize: '0.82rem', color: '#888', marginTop: 4 }}>Generando enlace seguro…</span>
+                }
+              </div>
+            </div>
+          )}
+          {profile.certificado_bancario_url && (
+            <div className={styles.infoRow}>
+              <span className={styles.infoIcon}>{ICONS.paperclip}</span>
+              <div>
+                <span className={styles.infoLabel}>Cuenta bancaria certificada</span>
+                {certBancUrl
+                  ? <TarjetaPreview displayUrl={certBancUrl} storagePath={profile.certificado_bancario_url} />
+                  : <span style={{ display: 'block', fontSize: '0.82rem', color: '#888', marginTop: 4 }}>Generando enlace seguro…</span>
+                }
+              </div>
+            </div>
+          )}
+          {profile.certificado_disciplinario_url && (
+            <div className={styles.infoRow}>
+              <span className={styles.infoIcon}>{ICONS.paperclip}</span>
+              <div>
+                <span className={styles.infoLabel}>Certificado disciplinario</span>
+                {certDiscUrl
+                  ? <TarjetaPreview displayUrl={certDiscUrl} storagePath={profile.certificado_disciplinario_url} />
                   : <span style={{ display: 'block', fontSize: '0.82rem', color: '#888', marginTop: 4 }}>Generando enlace seguro…</span>
                 }
               </div>

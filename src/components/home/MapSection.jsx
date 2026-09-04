@@ -117,6 +117,8 @@ export default function MapSection() {
   const sectionRef = useRef(null)
   const [landPath,    setLandPath]    = useState(null)   // todo el territorio (merge de países)
   const [bordersPath, setBordersPath] = useState(null)   // fronteras internas tenues
+  const [graticulePath, setGraticulePath] = useState(null) // retícula (meridianos/paralelos)
+  const [spherePath,  setSpherePath]  = useState(null)   // contorno del planeta (océano)
   const [projected,   setProjected]   = useState([])
   const [paths,       setPaths]       = useState([])
   const [clientPts,   setClientPts]   = useState([])   // puntos de clientes (azul)
@@ -150,6 +152,10 @@ export default function MapSection() {
 
         setLandPath(pathGen(land))
         setBordersPath(pathGen(borders))
+        // Retícula cartográfica (meridianos/paralelos cada 20°) + esfera del
+        // planeta — dan el acabado de carta náutica sobre el océano oscuro.
+        setGraticulePath(pathGen(d3.geoGraticule().step([20, 20])()))
+        setSpherePath(pathGen({ type: 'Sphere' }))
 
         const pts = CITIES.map(c => {
           const [x, y] = projection(c.coords) || [0, 0]
@@ -310,11 +316,18 @@ export default function MapSection() {
                 <feGaussianBlur stdDeviation="1.2" result="blur" />
                 <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
               </filter>
+              {/* Continentes en azul acero medio (elegido de la lámina de
+                  variantes): presencia sin oscurecer, misma familia del borde
+                  navy, y las rutas doradas contrastan limpio encima. */}
+              <linearGradient id="landGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%"   stopColor="#9db4cf" />
+                <stop offset="100%" stopColor="#7f9cbe" />
+              </linearGradient>
             </defs>
 
             {/* Fill base del territorio mundial */}
             {!loading && landPath && (
-              <path d={landPath} className={styles.land} filter="url(#mapGlow)" />
+              <path d={landPath} className={styles.land} />
             )}
 
             {/* Fronteras internas entre países */}
@@ -322,9 +335,14 @@ export default function MapSection() {
               <path d={bordersPath} className={styles.countryBorder} />
             )}
 
-            {/* Contorno dorado difuminado — encima de todo, sin filtro nítido */}
+            {/* Contorno costero con pluma: dos halos anchos y tenues debajo
+                del trazo principal — borde suave, nada rígido. */}
             {!loading && landPath && (
-              <path d={landPath} className={styles.worldOutline} />
+              <>
+                <path d={landPath} className={styles.coastFeatherWide} />
+                <path d={landPath} className={styles.coastFeather} />
+                <path d={landPath} className={styles.worldOutline} />
+              </>
             )}
 
             {/* Líneas base estáticas */}

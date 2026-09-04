@@ -944,14 +944,15 @@ export default function PagosCobrosAdmin() {
             <button className={styles.refresh} onClick={cargar}>↻ Actualizar</button>
           </header>
 
-          {/* Config de comisión */}
-          <div className={styles.toolbar} style={{ display: 'flex', flexWrap: 'wrap', gap: 16, alignItems: 'flex-end' }}>
-            <div className={styles.dateField} style={{ maxWidth: 160 }}>
+          {/* Config de comisión — controles a la izquierda, explicación al lado
+              (rellena el espacio; en pantallas angostas baja debajo). */}
+          <div className={styles.toolbar} style={{ display: 'flex', flexDirection: 'row', flexWrap: 'wrap', gap: 16, alignItems: 'flex-end', justifyContent: 'flex-start' }}>
+            <div className={styles.dateField} style={{ maxWidth: 150 }}>
               <span>% Empresa (comisión)</span>
               <input type="number" min="0" max="100" className={styles.dateInput}
                 value={pctEmpresa} onChange={e => setPctEmpresa(e.target.value)} />
             </div>
-            <div className={styles.dateField} style={{ maxWidth: 160 }}>
+            <div className={styles.dateField} style={{ maxWidth: 120 }}>
               <span>% Gestor</span>
               <input type="number" min="0" max="100" className={styles.dateInput}
                 value={pctGestor} onChange={e => setPctGestor(e.target.value)} />
@@ -959,7 +960,7 @@ export default function PagosCobrosAdmin() {
             <button className={styles.payBtn} onClick={guardarConfig} disabled={savingCfg}>
               {savingCfg ? 'Guardando…' : 'Guardar porcentajes'}
             </button>
-            <p className={styles.sub} style={{ margin: 0, flexBasis: '100%' }}>
+            <p className={styles.sub} style={{ margin: 0, flex: '1 1 340px', minWidth: 260, alignSelf: 'center' }}>
               Al confirmarse una asesoría, el profesional paga a la empresa el
               <strong> {pctEmpresa || '—'}%</strong> de lo cobrado. Si la consulta trae gestor,
               su comisión es el <strong>{pctGestor || '—'}%</strong> de esa parte de la empresa
@@ -983,7 +984,7 @@ export default function PagosCobrosAdmin() {
             </div>
             <div className={styles.tile} data-tone="navy">
               <span className={styles.tileVal}>{resumenA.count}</span>
-              <span className={styles.tileLbl}>Asesorías (filtro)</span>
+              <span className={styles.tileLbl}>Total Asesorías</span>
             </div>
           </div>
 

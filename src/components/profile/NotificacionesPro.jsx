@@ -129,9 +129,15 @@ export function useProBadges(userId, { activo = true } = {}) {
         pagos:   (pagos || []).length,
       })
 
-      // Avisos del admin (requiere la política de SELECT; si no está, queda []).
+      // Avisos PROPIOS del profesional (requiere la política de SELECT).
+      // Solo tipos de sus funciones (pagos/cobros de sus consultas): las filas
+      // de gestión del admin (inactividad, verificación, reasignación, reportes)
+      // también llevan lawyer_id, así que se excluyen por tipo. Además se
+      // descartan los avisos "espejo" dirigidos al admin ("Un profesional …").
       const filas = await get(
         `notificaciones?lawyer_id=eq.${userId}` +
+        `&tipo=in.(pago)` +
+        `&mensaje=not.ilike.${encodeURIComponent('Un profesional*')}` +
         `&select=id,tipo,mensaje,monto,created_at&order=created_at.desc&limit=30`
       )
       setNotis(filas || [])

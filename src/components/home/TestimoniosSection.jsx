@@ -80,41 +80,8 @@ function Tarjeta({
       <Estrellas rating={rating} />
       <p className={styles.texto}>{texto}</p>
 
-      {/* ── Más opiniones del mismo profesional (desplegable) ── */}
-      {tieneExtras && (
-        <>
-          <button
-            type="button"
-            className={styles.verMasBtn}
-            aria-expanded={expandido}
-            onClick={(e) => { e.stopPropagation(); setExpandido(v => !v) }}
-            onKeyDown={(e) => e.stopPropagation()}
-            tabIndex={oculto ? -1 : 0}
-          >
-            {expandido ? 'Ocultar opiniones' : `Más opiniones (${extras.length})`}
-            <svg
-              className={`${styles.verMasChevron} ${expandido ? styles.verMasChevronUp : ''}`}
-              viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor"
-              strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"
-            >
-              <path d="m6 9 6 6 6-6" />
-            </svg>
-          </button>
-          {expandido && (
-            <ul className={styles.extraList}>
-              {extras.map((ex, i) => (
-                <li key={i} className={styles.extraItem}>
-                  <div className={styles.extraHead}>
-                    <span className={styles.extraNombre}>{ex.nombre}</span>
-                    <Estrellas rating={ex.rating} />
-                  </div>
-                  <p className={styles.extraTexto}>{ex.texto}</p>
-                </li>
-              ))}
-            </ul>
-          )}
-        </>
-      )}
+      {/* Las demás opiniones del profesional se ven al ABRIR la tarjeta
+          (modal del profesional → "Ver más comentarios"), no aquí. */}
 
       <div className={styles.pie}>
         {imagen ? (

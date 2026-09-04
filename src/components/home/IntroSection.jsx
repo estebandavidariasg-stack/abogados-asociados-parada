@@ -35,7 +35,7 @@ export default function IntroSection({ onUnirse }) {
 
         <p className={styles.subtitle}>
           Conecta con profesionales verificados y de experiencia confiable, de
-          forma simple y sin barreras geográficas — en Colombia y el exterior.
+          forma simple y sin barreras geográficas, en Colombia y el exterior.
         </p>
 
         <div className={styles.actions}>

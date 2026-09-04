@@ -104,15 +104,45 @@ export async function fetchCobroCliente(roomId, clientToken) {
   } catch { return null }
 }
 
-// El cliente marca "Ya pagué". Devuelve true si quedó registrado.
-export async function clienteMarcoPago(roomId, clientToken) {
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/cliente_marco_pago`, {
+// El cliente marca "Ya pagué" adjuntando su comprobante (path en chat-files).
+// Devuelve true si quedó registrado. El comprobante es obligatorio en la UI
+// (transparencia cliente ↔ profesional); la RPC lo persiste en la fila.
+export async function clienteMarcoPago(roomId, clientToken, comprobantePath = null) {
+  const body = { p_client_token: clientToken, p_room_id: roomId }
+  if (comprobantePath) body.p_comprobante_path = comprobantePath
+  let res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/cliente_marco_pago`, {
     method: 'POST',
     headers: anonHeaders(),
-    body: JSON.stringify({ p_client_token: clientToken, p_room_id: roomId }),
+    body: JSON.stringify(body),
   })
+  // Compat: si la RPC de 3 args aún no está aplicada, reintenta con la de 2.
+  if (!res.ok && comprobantePath) {
+    res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/cliente_marco_pago`, {
+      method: 'POST',
+      headers: anonHeaders(),
+      body: JSON.stringify({ p_client_token: clientToken, p_room_id: roomId }),
+    })
+  }
   if (!res.ok) throw new Error('No se pudo registrar tu pago')
   return await res.json() === true
+}
+
+// Sube el comprobante de pago del cliente al bucket chat-files (misma ruta y
+// permisos que los adjuntos del chat). Devuelve el path o null.
+export async function subirComprobanteCliente(roomId, file) {
+  try {
+    const safe = (file.name || 'comprobante').replace(/[^\w.\-]+/g, '_').slice(0, 60)
+    const path = `chats/${roomId}/comprobante_${Date.now()}_${safe}`
+    const res = await fetch(`${SUPABASE_URL}/storage/v1/object/chat-files/${path}`, {
+      method: 'POST',
+      headers: {
+        apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`,
+        'Content-Type': file.type || 'application/octet-stream', 'x-upsert': 'true',
+      },
+      body: file,
+    })
+    return res.ok ? path : null
+  } catch { return null }
 }
 
 // ── Recibo PDF (pdf-lib, import dinámico) ───────────────────────────────────

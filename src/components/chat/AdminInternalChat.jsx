@@ -47,51 +47,52 @@ export function parseRevision(m) {
     profesional: campos['profesional'] || '',
     cliente: campos['cliente'] || '',
     areas: campos['áreas de derecho'] || campos['areas de derecho'] || campos['consulta'] || '',
+    // Id de la sala (mensajes nuevos de verify-request; los viejos no lo traen).
+    roomId: campos['sala'] || '',
   }
 }
 
-// Tarjeta de "Solicitud de revisión" compartida por ambos lados del chat interno.
-export function RevisionCard({ rev, fecha, styles }) {
+// Tarjeta COMPACTA de "Solicitud de revisión" compartida por ambos lados del
+// chat interno: una sola tarjeta chica con los datos en línea. Si se pasa
+// `onVerConversacion` (lado admin) y el mensaje trae la sala, muestra el botón
+// que salta directo a esa conversación en el historial.
+export function RevisionCard({ rev, fecha, styles, onVerConversacion }) {
   return (
-    <div className={styles.revisionCard}>
-      <div className={styles.revisionHead}>
+    <div className={styles.revisionCard} style={{ padding: '10px 14px', maxWidth: 420 }}>
+      <div className={styles.revisionHead} style={{ marginBottom: 4 }}>
         <span className={styles.revisionIcon} aria-hidden="true">
-          <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6" />
             <path d="m9 15 2 2 4-4" />
           </svg>
         </span>
         <span className={styles.revisionTitle}>Solicitud de revisión</span>
+        <span style={{ marginLeft: 'auto', fontSize: '0.66rem', opacity: 0.6, whiteSpace: 'nowrap' }}>{fecha}</span>
       </div>
-      <dl className={styles.revisionRows}>
-        <div className={styles.revisionRow}>
-          <dt className={styles.revisionLabel}>Fecha</dt>
-          <dd className={styles.revisionValue}>{fecha}</dd>
-        </div>
-        {rev.profesional && (
-          <div className={styles.revisionRow}>
-            <dt className={styles.revisionLabel}>Profesional</dt>
-            <dd className={styles.revisionValue}>{rev.profesional}</dd>
-          </div>
-        )}
-        {rev.cliente && (
-          <div className={styles.revisionRow}>
-            <dt className={styles.revisionLabel}>Cliente</dt>
-            <dd className={styles.revisionValue}>{rev.cliente}</dd>
-          </div>
-        )}
-        {rev.areas && (
-          <div className={styles.revisionRow}>
-            <dt className={styles.revisionLabel}>Áreas de derecho</dt>
-            <dd className={styles.revisionValue}>{rev.areas}</dd>
-          </div>
-        )}
-      </dl>
+      <p style={{ margin: 0, fontSize: '0.76rem', lineHeight: 1.5 }}>
+        {rev.profesional && <><strong>{rev.profesional}</strong> pide revisar </>}
+        {rev.cliente ? <>la consulta de <strong>{rev.cliente}</strong></> : 'una consulta'}
+        {rev.areas && <span style={{ opacity: 0.7 }}> · {rev.areas}</span>}
+      </p>
+      {onVerConversacion && rev.roomId && (
+        <button
+          type="button"
+          onClick={() => onVerConversacion(rev.roomId)}
+          style={{
+            marginTop: 8, border: 'none', cursor: 'pointer',
+            background: 'linear-gradient(135deg,#f2d580,#c9a84c 60%,#b8942f)',
+            color: '#4a330f', fontWeight: 700, fontSize: '0.72rem',
+            borderRadius: 8, padding: '6px 12px',
+          }}
+        >
+          Ver conversación →
+        </button>
+      )}
     </div>
   )
 }
 
-export default function AdminInternalChat({ miId }) {
+export default function AdminInternalChat({ miId, initialSelectedId, onOpenRoom }) {
   const [abogados, setAbogados]         = useState([])
   const [selected, setSelected]         = useState(null)
   const [messages, setMessages]         = useState([])
@@ -103,6 +104,11 @@ export default function AdminInternalChat({ miId }) {
   // ── Filtro sidebar (instantáneo, sin botón) ──────────────────────────────
   const [rolFilter, setRolFilter] = useState('todos')   // todos | abogado | contador | gestor
   const [busqueda, setBusqueda]   = useState('')
+  const [depFilter, setDepFilter] = useState('todos')   // departamento del profesional
+  const [ciuFilter, setCiuFilter] = useState('todos')   // municipio / localidad (si es Bogotá)
+
+  // ── Error visible al enviar (antes se silenciaba y "no pasaba nada") ─────
+  const [sendError, setSendError] = useState('')
 
   // ── Voz ──────────────────────────────────────────────────────────────────
   const [recording, setRecording]         = useState(false)
@@ -114,6 +120,10 @@ export default function AdminInternalChat({ miId }) {
 
   // ── Adjuntos ─────────────────────────────────────────────────────────────
   const [uploadingFile, setUploadingFile] = useState(false)
+  // Previsualización ANTES de enviar: el archivo elegido queda en espera hasta
+  // que el usuario confirma (Enviar) o lo descarta/cambia.
+  const [pendingFile, setPendingFile]       = useState(null)   // File | null
+  const [pendingPreview, setPendingPreview] = useState(null)   // objectURL si es imagen
   const fileInputRef = useRef(null)
 
   // ── Lightbox para imágenes ──
@@ -138,6 +148,14 @@ export default function AdminInternalChat({ miId }) {
     fetchAbogados()
     return () => clearInterval(pollRef.current)
   }, [])
+
+  // Deep-link desde la campanita: abrir directo la conversación indicada
+  // (también si ya había otra abierta — la campanita manda).
+  useEffect(() => {
+    if (!initialSelectedId || !abogados.length) return
+    const target = abogados.find(a => a.id === initialSelectedId)
+    if (target) setSelected(prev => (prev?.id === target.id ? prev : target))
+  }, [initialSelectedId, abogados])
 
   useEffect(() => {
     clearInterval(pollRef.current)
@@ -203,7 +221,7 @@ export default function AdminInternalChat({ miId }) {
       // el admin). Se piden username/email/cedula para la búsqueda del sidebar;
       // los gestores traen menos campos, por eso se accede con guardas más abajo.
       const res = await fetch(
-        `${SUPABASE_URL}/rest/v1/profiles?aprobado=eq.true&rol=in.(abogado,contador,gestor)&select=id,nombre,apellido,foto_url,ciudad,rol,username,email,cedula&order=nombre.asc`,
+        `${SUPABASE_URL}/rest/v1/profiles?aprobado=eq.true&rol=in.(abogado,contador,gestor)&select=id,nombre,apellido,foto_url,ciudad,departamento,rol,username,email,cedula&order=nombre.asc`,
         { headers }
       )
       const data = await res.json()
@@ -275,9 +293,22 @@ export default function AdminInternalChat({ miId }) {
     }
   }
 
+  // Aviso por correo al profesional (best-effort, con throttle server-side en
+  // api/notify — máx. 1 correo/hora por conversación para no saturar).
+  function notificarPorCorreo(toId) {
+    getAuthHeaders()
+      .then(headers => fetch('/api/notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: headers.Authorization },
+        body: JSON.stringify({ type: 'internal_message', data: { toId } }),
+      }))
+      .catch(() => { /* el mensaje ya quedó en la plataforma */ })
+  }
+
   async function enviar() {
     if (!texto.trim() || !selected || sending) return
-    setSending(true)
+    if (!miId) { setSendError('Sesión no lista. Recarga la página e intenta de nuevo.'); return }
+    setSending(true); setSendError('')
     try {
       const headers = await getAuthHeaders()
       const res = await fetch(`${SUPABASE_URL}/rest/v1/mensajes_internos`, {
@@ -285,12 +316,20 @@ export default function AdminInternalChat({ miId }) {
         headers: { ...headers, Prefer: 'return=representation' },
         body: JSON.stringify({ from_id: miId, to_id: selected.id, mensaje: texto.trim() }),
       })
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      if (!res.ok) {
+        const detail = await res.text().catch(() => '')
+        console.error('Error enviando mensaje interno:', res.status, detail)
+        throw new Error(res.status === 401 || res.status === 403
+          ? 'Sin permiso para enviar (revisa las políticas de mensajes_internos).'
+          : `No se pudo enviar (HTTP ${res.status}). Intenta de nuevo.`)
+      }
       // Solo limpiar tras confirmar el insert — si falló, el texto se conserva.
       setTexto('')
+      notificarPorCorreo(selected.id)
       await fetchMessages()
-    } catch (_) {
-      // El texto queda en el campo para reintentar.
+    } catch (err) {
+      // El texto queda en el campo para reintentar, con el motivo visible.
+      setSendError(err.message || 'No se pudo enviar. Revisa tu conexión.')
     } finally {
       // Sin esto, un fallo de red dejaba el botón ➤ bloqueado para siempre.
       setSending(false)
@@ -414,6 +453,7 @@ export default function AdminInternalChat({ miId }) {
         console.error('Error insertando mensaje de audio:', insRes.status, detail)
         return
       }
+      notificarPorCorreo(selected.id)
       await fetchMessages()
     } catch (err) {
       console.error('Error en uploadAudio:', err)
@@ -423,7 +463,9 @@ export default function AdminInternalChat({ miId }) {
   }
 
   /* ── Adjuntar archivo ─────────────────────────────────────────────────
-     Mismo patrón que uploadAudio. Bucket 'chat-files' compartido. */
+     Mismo patrón que uploadAudio. Bucket 'chat-files' compartido.
+     El archivo elegido NO se envía directo: queda en previsualización y el
+     usuario confirma, lo cambia o lo descarta. */
   function handleFileSelect(e) {
     const file = e.target.files?.[0]
     e.target.value = ''
@@ -432,7 +474,20 @@ export default function AdminInternalChat({ miId }) {
       alert(`El archivo supera el límite de ${MAX_FILE_BYTES / 1024 / 1024} MB.`)
       return
     }
-    uploadFile(file)
+    setPendingPreview(prev => { if (prev) URL.revokeObjectURL(prev); return isImage(file.name) ? URL.createObjectURL(file) : null })
+    setPendingFile(file)
+  }
+
+  function descartarPendiente() {
+    setPendingPreview(prev => { if (prev) URL.revokeObjectURL(prev); return null })
+    setPendingFile(null)
+  }
+
+  async function confirmarEnvioArchivo() {
+    if (!pendingFile || uploadingFile) return
+    const file = pendingFile
+    await uploadFile(file)
+    descartarPendiente()
   }
 
   async function uploadFile(file) {
@@ -499,11 +554,14 @@ export default function AdminInternalChat({ miId }) {
       if (!insRes.ok) {
         const detail = await insRes.text().catch(() => '')
         console.error('Error insertando mensaje de archivo:', insRes.status, detail)
+        setSendError('El archivo se subió pero no se pudo registrar el mensaje. Intenta de nuevo.')
         return
       }
+      notificarPorCorreo(selected.id)
       await fetchMessages()
     } catch (err) {
       console.error('Error en uploadFile:', err)
+      setSendError('No se pudo enviar el archivo. Revisa tu conexión.')
     } finally {
       setUploadingFile(false)
     }
@@ -522,14 +580,34 @@ export default function AdminInternalChat({ miId }) {
     if (qDigits && soloDigitos(a.cedula).includes(qDigits)) return true
     return false
   }
+  // Municipio (o localidad, si la ciudad viene como "Municipio - Barrio").
+  const municipioDe = a => (a.ciudad || '').split(' - ')[0].trim()
+
   const abogadosFiltrados = abogados.filter(a => {
     if (rolFilter !== 'todos' && a.rol !== rolFilter) return false
+    if (depFilter !== 'todos' && (a.departamento || '') !== depFilter) return false
+    if (ciuFilter !== 'todos' && municipioDe(a) !== ciuFilter) return false
     return coincide(a)
   })
 
   // Chips de rol disponibles: solo se muestran los que existen en la lista para
   // no ofrecer un filtro que devuelve 0 resultados.
   const rolesPresentes = new Set(abogados.map(a => a.rol))
+  // Departamentos presentes (para el filtro de ubicación).
+  const departamentos = [...new Set(abogados.map(a => a.departamento).filter(Boolean))].sort()
+  // Municipios/localidades del departamento elegido (o de todos).
+  const municipios = [...new Set(
+    abogados
+      .filter(a => depFilter === 'todos' || (a.departamento || '') === depFilter)
+      .map(municipioDe)
+      .filter(Boolean)
+  )].sort()
+
+  // Ubicación visible del profesional: "Ciudad · Departamento".
+  const ubicacionDe = a => {
+    const ciudad = (a.ciudad || '').split(' - ')[0]
+    return [ciudad, a.departamento].filter(Boolean).join(' · ')
+  }
 
   const nombreRol = rol => rol === 'contador' ? 'Contador' : rol === 'gestor' ? 'Gestor' : 'Abogado'
 
@@ -581,6 +659,32 @@ export default function AdminInternalChat({ miId }) {
               </button>
             )}
           </div>
+          {departamentos.length > 0 && (
+            <select
+              className={styles.searchInput}
+              value={depFilter}
+              onChange={e => { setDepFilter(e.target.value); setCiuFilter('todos') }}
+              aria-label="Filtrar por departamento"
+              style={{ paddingLeft: 12, cursor: 'pointer' }}
+            >
+              <option value="todos">Todos los departamentos</option>
+              {departamentos.map(d => <option key={d} value={d}>{d}</option>)}
+            </select>
+          )}
+          {municipios.length > 0 && (
+            <select
+              className={styles.searchInput}
+              value={ciuFilter}
+              onChange={e => setCiuFilter(e.target.value)}
+              aria-label="Filtrar por municipio o localidad"
+              style={{ paddingLeft: 12, cursor: 'pointer', marginTop: 6 }}
+            >
+              <option value="todos">
+                {depFilter === 'Bogotá D.C.' ? 'Todas las localidades' : 'Todos los municipios'}
+              </option>
+              {municipios.map(m => <option key={m} value={m}>{m}</option>)}
+            </select>
+          )}
           <div className={styles.searchWrap}>
             <svg className={styles.searchIcon} viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" />
@@ -631,7 +735,7 @@ export default function AdminInternalChat({ miId }) {
                   <span className={`${styles.rolPill} ${a.rol === 'contador' ? styles.rolPillContador : a.rol === 'gestor' ? styles.rolPillGestor : styles.rolPillAbogado}`}>
                     {nombreRol(a.rol)}
                   </span>
-                  {a.ciudad && <span className={styles.itemCiudadTxt}> · {a.ciudad}</span>}
+                  {ubicacionDe(a) && <span className={styles.itemCiudadTxt}> · {ubicacionDe(a)}</span>}
                 </p>
               </div>
               {noLeidos[a.id] > 0 && (
@@ -673,6 +777,7 @@ export default function AdminInternalChat({ miId }) {
                 </p>
                 <p className={styles.chatHeadSub}>
                   Chat interno · Visible solo para ti y el {nombreRol(selected.rol).toLowerCase()}
+                  {ubicacionDe(selected) && <> · {ubicacionDe(selected)}</>}
                 </p>
               </div>
             </div>
@@ -687,7 +792,8 @@ export default function AdminInternalChat({ miId }) {
                 const rev = parseRevision(m)
                 if (rev) {
                   return (
-                    <RevisionCard key={m.id} rev={rev} fecha={fmtFechaHora(m.created_at)} styles={styles} />
+                    <RevisionCard key={m.id} rev={rev} fecha={fmtFechaHora(m.created_at)} styles={styles}
+                      onVerConversacion={onOpenRoom} />
                   )
                 }
                 return (
@@ -729,6 +835,63 @@ export default function AdminInternalChat({ miId }) {
               })}
               <div ref={bottomRef} />
             </div>
+
+            {/* Error de envío visible (el motivo, no un fallo silencioso) */}
+            {sendError && (
+              <div role="alert" style={{
+                margin: '0 12px 6px', padding: '8px 12px', borderRadius: 10,
+                background: 'rgba(200,72,58,0.10)', border: '1px solid rgba(200,72,58,0.35)',
+                color: '#8f2f22', fontSize: '0.78rem',
+                display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'space-between',
+              }}>
+                <span>⚠ {sendError}</span>
+                <button type="button" onClick={() => setSendError('')} aria-label="Cerrar aviso"
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', fontSize: '0.9rem' }}>✕</button>
+              </div>
+            )}
+
+            {/* Previsualización del archivo pendiente — confirmar antes de enviar */}
+            {pendingFile && (
+              <div style={{
+                margin: '0 12px 6px', padding: 10, borderRadius: 12,
+                background: 'rgba(201,168,76,0.08)', border: '1px solid rgba(201,168,76,0.35)',
+                display: 'flex', alignItems: 'center', gap: 12,
+              }}>
+                {pendingPreview ? (
+                  <img src={pendingPreview} alt="Vista previa" style={{
+                    width: 64, height: 64, objectFit: 'cover', borderRadius: 8, flex: '0 0 auto',
+                  }} />
+                ) : (
+                  <span style={{
+                    width: 44, height: 44, borderRadius: 10, flex: '0 0 auto',
+                    background: 'rgba(201,168,76,0.15)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}><IconPaperclip size={18} /></span>
+                )}
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <p style={{ margin: 0, fontSize: '0.8rem', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {pendingFile.name}
+                  </p>
+                  <p style={{ margin: '2px 0 0', fontSize: '0.7rem', opacity: 0.65 }}>{fmtFileSize(pendingFile.size)}</p>
+                </div>
+                <div style={{ display: 'flex', gap: 6, flex: '0 0 auto' }}>
+                  <button type="button" onClick={() => fileInputRef.current?.click()} disabled={uploadingFile}
+                    style={{ border: '1px solid rgba(201,168,76,0.5)', background: 'none', borderRadius: 8, padding: '6px 10px', fontSize: '0.72rem', cursor: 'pointer' }}>
+                    Cambiar
+                  </button>
+                  <button type="button" onClick={descartarPendiente} disabled={uploadingFile}
+                    style={{ border: '1px solid rgba(200,72,58,0.4)', background: 'none', borderRadius: 8, padding: '6px 10px', fontSize: '0.72rem', cursor: 'pointer', color: '#8f2f22' }}>
+                    Descartar
+                  </button>
+                  <button type="button" onClick={confirmarEnvioArchivo} disabled={uploadingFile}
+                    className={styles.btnEnviar}
+                    aria-label="Enviar archivo"
+                    title={uploadingFile ? 'Enviando…' : 'Enviar archivo'}>
+                    {uploadingFile ? '…' : '➤'}
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Input */}
             <div className={styles.inputArea}>

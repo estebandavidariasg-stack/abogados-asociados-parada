@@ -90,7 +90,10 @@ export default async function handler(req, res) {
             `Solicitud de revisión de proceso\n` +
             `Profesional: ${nombreAbogado}\n` +
             `Cliente: ${cliente}\n` +
-            `Áreas de derecho: ${areaTxt}`,
+            `Áreas de derecho: ${areaTxt}\n` +
+            // La sala permite al admin saltar directo a la conversación desde
+            // la tarjeta del chat interno (botón "Ver conversación").
+            `Sala: ${roomId}`,
         }),
       })
     } catch { /* no bloquea */ }

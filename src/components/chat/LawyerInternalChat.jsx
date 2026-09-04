@@ -82,6 +82,9 @@ export default function LawyerInternalChat({ miId }) {
 
   // ── Adjuntos ─────────────────────────────────────────────────────────────
   const [uploadingFile, setUploadingFile] = useState(false)
+  // Previsualización antes de enviar (confirmar / cambiar / descartar).
+  const [pendingFile, setPendingFile]       = useState(null)
+  const [pendingPreview, setPendingPreview] = useState(null)
   const fileInputRef = useRef(null)
 
   // ── Lightbox para imágenes ──
@@ -358,7 +361,21 @@ export default function LawyerInternalChat({ miId }) {
       alert(`El archivo supera el límite de ${MAX_FILE_BYTES / 1024 / 1024} MB.`)
       return
     }
-    uploadFile(file)
+    // No se envía directo: queda en previsualización hasta confirmar.
+    setPendingPreview(prev => { if (prev) URL.revokeObjectURL(prev); return isImage(file.name) ? URL.createObjectURL(file) : null })
+    setPendingFile(file)
+  }
+
+  function descartarPendiente() {
+    setPendingPreview(prev => { if (prev) URL.revokeObjectURL(prev); return null })
+    setPendingFile(null)
+  }
+
+  async function confirmarEnvioArchivo() {
+    if (!pendingFile || uploadingFile) return
+    const file = pendingFile
+    await uploadFile(file)
+    descartarPendiente()
   }
 
   async function uploadFile(file) {
@@ -508,6 +525,49 @@ export default function LawyerInternalChat({ miId }) {
           )
         })}
       </div>
+
+      {/* Previsualización del archivo pendiente — confirmar antes de enviar */}
+      {pendingFile && (
+        <div style={{
+          margin: '0 12px 6px', padding: 10, borderRadius: 12,
+          background: 'rgba(201,168,76,0.08)', border: '1px solid rgba(201,168,76,0.35)',
+          display: 'flex', alignItems: 'center', gap: 12,
+        }}>
+          {pendingPreview ? (
+            <img src={pendingPreview} alt="Vista previa" style={{
+              width: 64, height: 64, objectFit: 'cover', borderRadius: 8, flex: '0 0 auto',
+            }} />
+          ) : (
+            <span style={{
+              width: 44, height: 44, borderRadius: 10, flex: '0 0 auto',
+              background: 'rgba(201,168,76,0.15)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}><IconPaperclip size={18} /></span>
+          )}
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <p style={{ margin: 0, fontSize: '0.8rem', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {pendingFile.name}
+            </p>
+            <p style={{ margin: '2px 0 0', fontSize: '0.7rem', opacity: 0.65 }}>{fmtFileSize(pendingFile.size)}</p>
+          </div>
+          <div style={{ display: 'flex', gap: 6, flex: '0 0 auto' }}>
+            <button type="button" onClick={() => fileInputRef.current?.click()} disabled={uploadingFile}
+              style={{ border: '1px solid rgba(201,168,76,0.5)', background: 'none', borderRadius: 8, padding: '6px 10px', fontSize: '0.72rem', cursor: 'pointer' }}>
+              Cambiar
+            </button>
+            <button type="button" onClick={descartarPendiente} disabled={uploadingFile}
+              style={{ border: '1px solid rgba(200,72,58,0.4)', background: 'none', borderRadius: 8, padding: '6px 10px', fontSize: '0.72rem', cursor: 'pointer', color: '#8f2f22' }}>
+              Descartar
+            </button>
+            <button type="button" onClick={confirmarEnvioArchivo} disabled={uploadingFile}
+              className={styles.btnEnviar}
+              aria-label="Enviar archivo"
+              title={uploadingFile ? 'Enviando…' : 'Enviar archivo'}>
+              {uploadingFile ? '…' : '➤'}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Input */}
       <div className={styles.inputArea}>

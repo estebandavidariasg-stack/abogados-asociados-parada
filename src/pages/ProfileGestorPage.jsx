@@ -781,13 +781,16 @@ function EstadoPill({ estado }) {
 function SeccionCobros({ aprobado, userId }) {
   const [cobros, setCobros] = useState([])
   const [estado, setEstado] = useState('loading') // loading | ready | error
-  const [pidiendo, setPidiendo] = useState(null)   // id del cobro en proceso de solicitud
+  const [pidiendoSemanal, setPidiendoSemanal] = useState(false)
+  const [proximaSolicitud, setProximaSolicitud] = useState(null) // fecha en que puede volver a pedir
   const [aviso, setAviso] = useState(null)         // {tone:'ok'|'error', text}
   const [showAcumulado, setShowAcumulado] = useState(false) // modal del acumulado
-  // Filtro (código/nota + rango de fechas).
+  // Filtro (cliente/profesional/código + rango de fechas) + paginación semanal.
   const [cQuery, setCQuery] = useState('')
   const [cDesde, setCDesde] = useState('')
   const [cHasta, setCHasta] = useState('')
+  const [semPage, setSemPage] = useState(1)
+  const SEMANAS_POR_PAG = 8
 
   // Abre el comprobante de pago adjuntado por el admin (bucket privado
   // `comprobantes`; la RLS permite al gestor leer su propia carpeta).
@@ -803,12 +806,23 @@ function SeccionCobros({ aprobado, userId }) {
     if (!silencioso) setEstado('loading')
     try {
       const headers = await getAuthHeaders()
-      const res = await fetch(
-        `${SUPABASE_URL}/rest/v1/gestor_cobros?gestor_id=eq.${userId}&select=*&order=created_at.desc`,
-        { headers }
-      )
-      if (!res.ok) throw new Error('fetch')
-      const data = await res.json()
+      // RPC con nombres de cliente/profesional (para los filtros). Fallback al
+      // listado plano si la RPC aún no está aplicada en la BD.
+      let data = null
+      try {
+        const rpc = await fetch(`${SUPABASE_URL}/rest/v1/rpc/gestor_cobros_detalle`, {
+          method: 'POST', headers: { ...headers, 'Content-Type': 'application/json' }, body: '{}',
+        })
+        if (rpc.ok) data = await rpc.json()
+      } catch { /* cae al fallback */ }
+      if (!Array.isArray(data)) {
+        const res = await fetch(
+          `${SUPABASE_URL}/rest/v1/gestor_cobros?gestor_id=eq.${userId}&select=*&order=created_at.desc`,
+          { headers }
+        )
+        if (!res.ok) throw new Error('fetch')
+        data = await res.json()
+      }
       setCobros(Array.isArray(data) ? data : [])
       setEstado('ready')
     } catch {
@@ -823,29 +837,43 @@ function SeccionCobros({ aprobado, userId }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aprobado, userId])
 
-  // Solicita el pago de una comisión propia (pendiente → solicitado).
-  async function solicitarPago(cobroId) {
-    setPidiendo(cobroId); setAviso(null)
-    // Optimista: la fila pasa a "solicitado" al instante.
-    setCobros(cs => cs.map(c => c.id === cobroId ? { ...c, estado: 'solicitado' } : c))
+  // Solicita el pago ACUMULADO de todas las comisiones disponibles.
+  // Regla: 1 solicitud cada 7 días; el pago llega dentro de 5 días hábiles.
+  async function solicitarSemanal() {
+    if (pidiendoSemanal) return
+    setPidiendoSemanal(true); setAviso(null)
     try {
       const headers = await getAuthHeaders()
-      const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/solicitar_pago_gestor`, {
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/solicitar_pago_semanal_gestor`, {
         method: 'POST',
         headers: { ...headers, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ p_cobro_id: cobroId }),
+        body: '{}',
       })
       if (!res.ok) throw new Error('rpc')
-      const ok = await res.json()
-      if (ok === false) throw new Error('rechazado')
-      setAviso({ tone: 'ok', text: 'Solicitud enviada. El administrador revisará tu pago.' })
-      await cargar(true) // refresca fechas reales (solicitado_at)
+      const r = await res.json()
+      if (r?.ok) {
+        setProximaSolicitud(r.proxima || null)
+        setAviso({
+          tone: 'ok',
+          text: `Solicitud enviada por ${fmtCOP(r.total)} (${r.count} comisión${r.count === 1 ? '' : 'es'}). ` +
+                'El administrador realizará el pago dentro de los próximos 5 días hábiles.',
+        })
+        await cargar(true)
+      } else if (r?.error === 'semanal') {
+        setProximaSolicitud(r.proxima || null)
+        setAviso({
+          tone: 'error',
+          text: `Solo puedes solicitar el pago una vez por semana. Podrás volver a solicitarlo el ${fmtFechaHora(r.proxima)}.`,
+        })
+      } else if (r?.error === 'vacio') {
+        setAviso({ tone: 'error', text: 'No tienes comisiones disponibles para solicitar.' })
+      } else {
+        throw new Error('rechazado')
+      }
     } catch {
-      // Revertir el optimismo si la RPC falló.
-      setCobros(cs => cs.map(c => c.id === cobroId ? { ...c, estado: 'pendiente' } : c))
       setAviso({ tone: 'error', text: 'No se pudo enviar la solicitud. Intenta de nuevo.' })
     } finally {
-      setPidiendo(null)
+      setPidiendoSemanal(false)
     }
   }
 
@@ -861,9 +889,38 @@ function SeccionCobros({ aprobado, userId }) {
     if (!enRango(c.created_at, cDesde, cHasta)) return false
     const q = norm(cQuery)
     if (!q) return true
-    return norm(`${c.codigo || ''} ${c.nota || ''}`).includes(q)
+    // Filtro por fecha (rango) + texto libre: cliente, profesional o código.
+    return norm(`${c.codigo || ''} ${c.nota || ''} ${c.client_nombre || ''} ${c.profesional_nombre || ''}`).includes(q)
   })
   const hayFiltroCobros = cQuery || cDesde || cHasta
+
+  // ── Vista semana a semana: agrupa las comisiones por semana (lunes) ──────
+  const inicioSemana = (iso) => {
+    const d = new Date(iso)
+    const off = (d.getDay() + 6) % 7   // lunes = 0
+    d.setDate(d.getDate() - off); d.setHours(0, 0, 0, 0)
+    return d
+  }
+  const semanasMap = new Map()
+  for (const c of cobrosFiltrados) {
+    const ini = inicioSemana(c.created_at)
+    const key = ini.getTime()
+    if (!semanasMap.has(key)) semanasMap.set(key, { ini, cobros: [] })
+    semanasMap.get(key).cobros.push(c)
+  }
+  const semanas = [...semanasMap.values()]
+    .sort((a, b) => b.ini - a.ini)
+    .map(s => ({
+      ...s,
+      fin: new Date(s.ini.getTime() + 6 * 86400_000),
+      total:      s.cobros.reduce((t, c) => t + (Number(c.monto) || 0), 0),
+      disponible: s.cobros.filter(c => c.estado === 'pendiente').reduce((t, c) => t + (Number(c.monto) || 0), 0),
+      casos:      s.cobros.reduce((t, c) => t + (Number(c.casos_exitosos) || 0), 0),
+    }))
+  const semTotalPags = Math.max(1, Math.ceil(semanas.length / SEMANAS_POR_PAG))
+  const semPagSegura = Math.min(semPage, semTotalPags)
+  const semanasPag   = semanas.slice((semPagSegura - 1) * SEMANAS_POR_PAG, semPagSegura * SEMANAS_POR_PAG)
+  const fmtDia = (d) => d.toLocaleDateString('es-CO', { day: 'numeric', month: 'short' })
 
   return (
     <section className={styles.panel}>
@@ -888,23 +945,15 @@ function SeccionCobros({ aprobado, userId }) {
         </div>
       ) : (
         <>
-          {/* Tiles resumen — numerales tabulares (Raleway) */}
+          {/* Tiles resumen — solicitados / pendientes / acumulado */}
           <div className={styles.statGrid}>
-            <div className={styles.statTile} data-tone="gold">
-              <span className={styles.moneyValue}>{fmtCOP(totalDisponible)}</span>
-              <span className={styles.statLabel}>Disponible para solicitar</span>
-            </div>
             <div className={styles.statTile} data-tone="navy">
               <span className={styles.moneyValue}>{fmtCOP(totalProceso)}</span>
-              <span className={styles.statLabel}>Pendiente</span>
+              <span className={styles.statLabel}>Pagos solicitados</span>
             </div>
-            <div className={styles.statTile} data-tone="ok">
-              <span className={styles.moneyValue}>{fmtCOP(totalPagado)}</span>
-              <span className={styles.statLabel}>Cobrado</span>
-            </div>
-            <div className={styles.statTile} data-tone="navy">
-              <span className={styles.numValue}>{totalCasos}</span>
-              <span className={styles.statLabel}>Casos exitosos</span>
+            <div className={styles.statTile} data-tone="gold">
+              <span className={styles.moneyValue}>{fmtCOP(totalDisponible)}</span>
+              <span className={styles.statLabel}>Pagos pendientes por solicitar</span>
             </div>
             {/* Acumulado: TODO lo generado. Al tocarla se abre el detalle. */}
             <button
@@ -917,6 +966,36 @@ function SeccionCobros({ aprobado, userId }) {
               <span className={styles.statLabel}>Acumulado</span>
               <span className={styles.acumHint}>Toca para ver el detalle</span>
             </button>
+          </div>
+
+          {/* ── Solicitud de pago SEMANAL (acumulada, 1 vez cada 7 días) ── */}
+          <div className={styles.cardGlass} style={{ marginTop: '1.1rem', padding: '16px 18px' }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 14, justifyContent: 'space-between' }}>
+              <div style={{ minWidth: 220, flex: 1 }}>
+                <p style={{ margin: 0, fontWeight: 700, fontSize: '0.95rem' }}>Solicitud de pago semanal</p>
+                <p style={{ margin: '4px 0 0', fontSize: '0.78rem', opacity: 0.75, lineHeight: 1.5 }}>
+                  La solicitud ya no es por caso: se envía el <strong>acumulado</strong> de tus
+                  comisiones disponibles ({fmtCOP(totalDisponible)}). Puedes solicitarla
+                  <strong> una vez por semana</strong> y el pago se realiza dentro de
+                  <strong> 5 días hábiles</strong>.
+                </p>
+                {proximaSolicitud && (
+                  <p style={{ margin: '6px 0 0', fontSize: '0.74rem', opacity: 0.65 }}>
+                    Próxima solicitud disponible: {fmtFechaHora(proximaSolicitud)}
+                  </p>
+                )}
+              </div>
+              <button
+                type="button"
+                className={styles.solicitarBtn}
+                onClick={solicitarSemanal}
+                disabled={pidiendoSemanal || totalDisponible <= 0}
+                style={totalDisponible <= 0 ? { opacity: 0.5, cursor: 'default' } : undefined}
+              >
+                <IconWallet />
+                {pidiendoSemanal ? 'Enviando…' : 'Solicitar pago semanal'}
+              </button>
+            </div>
           </div>
 
           {aviso && (
@@ -946,107 +1025,105 @@ function SeccionCobros({ aprobado, userId }) {
             <>
               <div className={styles.cobrosFilterWrap} style={{ marginTop: '1.25rem' }}>
                 <GestorFilterBar
-                  query={cQuery} onQuery={setCQuery}
-                  desde={cDesde} onDesde={setCDesde}
-                  hasta={cHasta} onHasta={setCHasta}
-                  placeholder="Buscar por código o nota…"
-                  onClear={() => { setCQuery(''); setCDesde(''); setCHasta('') }}
+                  query={cQuery} onQuery={v => { setCQuery(v); setSemPage(1) }}
+                  desde={cDesde} onDesde={v => { setCDesde(v); setSemPage(1) }}
+                  hasta={cHasta} onHasta={v => { setCHasta(v); setSemPage(1) }}
+                  placeholder="Buscar por cliente, profesional o código…"
+                  onClear={() => { setCQuery(''); setCDesde(''); setCHasta(''); setSemPage(1) }}
                   hayFiltro={hayFiltroCobros}
                 />
               </div>
 
-              {cobrosFiltrados.length === 0 ? (
+              {semanas.length === 0 ? (
                 <p className={styles.estadoDesc} style={{ margin: '1rem 0 0' }}>
                   Ninguna comisión coincide con el filtro.
                 </p>
               ) : (
                 <div className={styles.cuponList} style={{ marginTop: '1rem' }}>
-                  {cobrosFiltrados.map(c => (
-                    <article key={c.id} className={styles.cupon} data-estado={c.estado}>
-                      {/* Cabecera del cupón: código + monto + estado */}
+                  {/* Recorrido SEMANA A SEMANA: cuánto acumuló cada semana */}
+                  {semanasPag.map(s => (
+                    <article key={s.ini.getTime()} className={styles.cupon}>
                       <div className={styles.cuponHead}>
                         <div className={styles.cuponMeta}>
-                          <span className={styles.cuponCodigo}>{c.codigo || 'Comisión'}</span>
-                          <span className={styles.cuponFecha}>{fmtFechaHora(c.created_at)}</span>
-                          {(c.casos_exitosos ?? 0) > 0 && (
-                            <span className={styles.cuponCasos}>{c.casos_exitosos} caso{c.casos_exitosos === 1 ? '' : 's'}</span>
-                          )}
+                          {/* Sin la fuente monoespaciada de los códigos: esto es texto. */}
+                          <span className={styles.cuponCodigo} style={{ fontFamily: 'inherit', letterSpacing: 'normal' }}>
+                            Semana del {fmtDia(s.ini)} al {fmtDia(s.fin)}
+                          </span>
+                          <span className={styles.cuponFecha}>
+                            {s.cobros.length} comisión{s.cobros.length === 1 ? '' : 'es'}
+                            {s.casos > 0 && ` · ${s.casos} caso${s.casos === 1 ? '' : 's'} exitoso${s.casos === 1 ? '' : 's'}`}
+                          </span>
                         </div>
                         <div className={styles.cuponMontoWrap}>
-                          <span className={styles.cuponMonto}>{fmtCOP(c.monto)}</span>
-                          <EstadoPill estado={c.estado} />
+                          <span className={styles.cuponMonto}>{fmtCOP(s.total)}</span>
+                          {s.disponible > 0 && (
+                            <span className={styles.pillDisponible}>{fmtCOP(s.disponible)} por solicitar</span>
+                          )}
                         </div>
                       </div>
 
-                      {c.nota && <p className={styles.cuponNota}>{c.nota}</p>}
-
-                      {/* Desglose transparente: cómo se calculó la comisión */}
-                      {c.total_consulta != null && (
-                        <div className={styles.desglose}>
-                          <div className={styles.desItem}>
-                            <span className={styles.desLabel}>Total de la consulta</span>
-                            <span className={styles.desVal}>{fmtCOP(c.total_consulta)}</span>
-                          </div>
-                          {c.monto_empresa != null && (
-                            <div className={styles.desItem}>
-                              <span className={styles.desLabel}>
-                                Parte de la empresa{c.pct_empresa != null ? ` · ${c.pct_empresa}%` : ''}
-                              </span>
-                              <span className={styles.desVal}>{fmtCOP(c.monto_empresa)}</span>
+                      {/* Detalle de la semana: cada comisión en una fila compacta */}
+                      <div style={{ display: 'grid', gap: 8, marginTop: 10 }}>
+                        {s.cobros.map(c => (
+                          <div key={c.id} style={{
+                            display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10,
+                            padding: '9px 12px', borderRadius: 10,
+                            background: 'rgba(109,60,27,0.04)', border: '1px solid rgba(109,60,27,0.08)',
+                          }}>
+                            <div style={{ minWidth: 0, flex: 1 }}>
+                              <p style={{ margin: 0, fontSize: '0.82rem', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {c.client_nombre || c.codigo || 'Comisión'}
+                                {c.profesional_nombre && (
+                                  <span style={{ fontWeight: 400, opacity: 0.7 }}> · {c.profesional_nombre}</span>
+                                )}
+                              </p>
+                              <p style={{ margin: '2px 0 0', fontSize: '0.7rem', opacity: 0.6 }}>
+                                {fmtFechaHora(c.created_at)}
+                                {c.total_consulta != null && ` · Consulta ${fmtCOP(c.total_consulta)}`}
+                                {c.pct_gestor != null && ` · ${c.pct_gestor}% de la parte empresa`}
+                              </p>
                             </div>
-                          )}
-                          <div className={`${styles.desItem} ${styles.desItemStrong}`}>
-                            <span className={styles.desLabel}>
-                              Tu comisión{c.pct_gestor != null ? ` · ${c.pct_gestor}% de la parte empresa` : ''}
-                            </span>
-                            <span className={styles.desVal}>{fmtCOP(c.monto)}</span>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Recorrido del pago */}
-                      <PagoProgreso estado={c.estado} />
-
-                      {/* Acción / mensaje según estado (con fecha y hora de cada hito) */}
-                      <div className={styles.cuponFoot}>
-                        {c.estado === 'pendiente' && (
-                          <button
-                            type="button"
-                            className={styles.solicitarBtn}
-                            onClick={() => solicitarPago(c.id)}
-                            disabled={pidiendo === c.id}
-                          >
-                            <IconWallet />
-                            {pidiendo === c.id ? 'Enviando…' : 'Solicitar pago'}
-                          </button>
-                        )}
-                        {c.estado === 'solicitado' && (
-                          <p className={styles.cuponHint} data-tone="wait">
-                            Pendiente — solicitado el {fmtFechaHora(c.solicitado_at || c.created_at)}. El pago se envía en 24-48h.
-                          </p>
-                        )}
-                        {c.estado === 'pagado' && (
-                          <div className={styles.cuponPagadoRow}>
-                            <p className={styles.cuponHint} data-tone="ok">
-                              Cobrado el {fmtFechaHora(c.pagado_at || c.solicitado_at || c.created_at)}.
-                            </p>
-                            {c.comprobante_path && (
+                            <span style={{ fontWeight: 700, fontSize: '0.85rem' }}>{fmtCOP(c.monto)}</span>
+                            <EstadoPill estado={c.estado} />
+                            {c.estado === 'pagado' && c.comprobante_path && (
                               <button
                                 type="button"
                                 className={styles.comprobanteBtn}
                                 onClick={() => verComprobante(c)}
+                                title="Ver comprobante de pago"
                               >
                                 <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                                   <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6" />
                                 </svg>
-                                Ver comprobante de pago
+                                Comprobante
                               </button>
                             )}
                           </div>
-                        )}
+                        ))}
                       </div>
                     </article>
                   ))}
+
+                  {/* Paginación de semanas */}
+                  {semanas.length > SEMANAS_POR_PAG && (
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 14, marginTop: 4 }}>
+                      <button type="button" className={styles.comprobanteBtn}
+                        onClick={() => setSemPage(p => Math.max(1, p - 1))}
+                        disabled={semPagSegura <= 1}
+                        style={semPagSegura <= 1 ? { opacity: 0.4, cursor: 'default' } : undefined}>
+                        ← Anteriores
+                      </button>
+                      <span style={{ fontSize: '0.78rem', opacity: 0.7, fontWeight: 600 }}>
+                        Página {semPagSegura} de {semTotalPags}
+                      </span>
+                      <button type="button" className={styles.comprobanteBtn}
+                        onClick={() => setSemPage(p => Math.min(semTotalPags, p + 1))}
+                        disabled={semPagSegura >= semTotalPags}
+                        style={semPagSegura >= semTotalPags ? { opacity: 0.4, cursor: 'default' } : undefined}>
+                        Siguientes →
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
             </>

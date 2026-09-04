@@ -23,7 +23,9 @@ import styles from './FirmaSigner.module.css'
 
 const PASOS = ['Revisar', 'Verificar', 'Firmar', 'Listo']
 
-export default function FirmaSigner({ pdfBytes, firmante = {}, onComplete, onCancel, posicion, initialStep = 0 }) {
+// firmaGuardada: dataURL PNG de la firma guardada del usuario (se precarga en
+// el lienzo del paso 3 para no dibujarla otra vez; siempre puede borrarla).
+export default function FirmaSigner({ pdfBytes, firmante = {}, onComplete, onCancel, posicion, initialStep = 0, firmaGuardada = null }) {
   const [paso, setPaso] = useState(initialStep)
   const [pdfUrl, setPdfUrl] = useState('')
   const [error, setError] = useState('')
@@ -80,6 +82,7 @@ export default function FirmaSigner({ pdfBytes, firmante = {}, onComplete, onCan
             firmante={firmante}
             pdfBytes={pdfBytes}
             posicion={posicion}
+            firmaGuardada={firmaGuardada}
             onError={setError}
             onDone={async (signedBytes, pie, firmaPng) => {
               setError('')
@@ -232,7 +235,7 @@ function OtpInput({ value, onChange, disabled }) {
 }
 
 /* ── Paso 3 · Firmar (lienzo + pie de firma) ──────────────────────────────── */
-function PasoFirmar({ firmante, pdfBytes, posicion, onDone, onBack, onError }) {
+function PasoFirmar({ firmante, pdfBytes, posicion, onDone, onBack, onError, firmaGuardada }) {
   const [pie, setPie] = useState({
     nombre: firmante.nombre || '', cedula: firmante.cedula || '',
     telefono: firmante.telefono || '', correo: firmante.correo || '',
@@ -266,7 +269,7 @@ function PasoFirmar({ firmante, pdfBytes, posicion, onDone, onBack, onError }) {
       <div className={styles.signGrid}>
         <div>
           <label className={styles.fieldLabel}>Tu firma</label>
-          <SignaturePad onChange={setFirmaPng} />
+          <SignaturePad onChange={setFirmaPng} initialPng={firmaGuardada} />
         </div>
         <div className={styles.pieForm}>
           <label className={styles.fieldLabel}>Datos del pie de firma</label>
@@ -308,8 +311,10 @@ function Field({ label, ...rest }) {
   )
 }
 
-/* Lienzo de firma con puntero/touch. Exporta PNG recortado y detecta vacío. */
-function SignaturePad({ onChange }) {
+/* Lienzo de firma con puntero/touch. Exporta PNG recortado y detecta vacío.
+   `initialPng` (dataURL): firma guardada del usuario — se precarga en el
+   lienzo para reutilizarla; "Borrar" la quita y deja dibujar una nueva. */
+function SignaturePad({ onChange, initialPng }) {
   const canvasRef = useRef(null)
   const drawing = useRef(false)
   const dirty = useRef(false)
@@ -333,6 +338,20 @@ function SignaturePad({ onChange }) {
       ctx.lineCap = 'round'
       ctx.lineJoin = 'round'
       ctx.strokeStyle = '#6d3c1b'
+
+      // Precarga de la firma guardada (dataURL → sin taint del canvas).
+      if (initialPng) {
+        const img = new Image()
+        img.onload = () => {
+          if (dirty.current) return
+          const escala = Math.min(rect.width / img.width, rect.height / img.height, 1)
+          const w = img.width * escala, h = img.height * escala
+          ctx.drawImage(img, (rect.width - w) / 2, (rect.height - h) / 2, w, h)
+          dirty.current = true
+          onChange(canvas.toDataURL('image/png'))
+        }
+        img.src = initialPng
+      }
     }
 
     // Medir DESPUÉS de que el modal termine su animación de ancho/entrada.

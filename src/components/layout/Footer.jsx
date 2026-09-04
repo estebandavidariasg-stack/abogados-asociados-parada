@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import styles from './Footer.module.css'
 
 const SOCIALS = [
@@ -22,7 +23,33 @@ const IconMapPin = () => (
   </svg>
 )
 
+// ── Documentos legales (PDFs en public/legal) — se ven en la misma página ──
+const DOCS_LEGALES = [
+  { titulo: 'Términos y condiciones',                    href: '/terminos' },
+  { titulo: 'Política de privacidad',                    href: '/privacidad' },
+  { titulo: 'Política de cookies',                       pdf: '/legal/politica-cookies.pdf' },
+  { titulo: 'Política de devoluciones',                  pdf: '/legal/politica-devoluciones.pdf' },
+  { titulo: 'Licencia de usuario final (EULA)',          pdf: '/legal/eula.pdf' },
+  { titulo: 'Autorización y tratamiento de datos',       pdf: '/legal/tratamiento-datos.pdf' },
+]
+
 export default function Footer() {
+  // PDF abierto en el visor de la misma página ({ titulo, pdf } | null).
+  const [docAbierto, setDocAbierto] = useState(null)
+
+  // Esc cierra el visor y bloquea el scroll del fondo mientras está abierto.
+  useEffect(() => {
+    if (!docAbierto) return
+    const onKey = (e) => { if (e.key === 'Escape') setDocAbierto(null) }
+    document.addEventListener('keydown', onKey)
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      document.body.style.overflow = prev
+    }
+  }, [docAbierto])
+
   return (
     <footer className={styles.footer}>
       {/* Glow de fondo */}
@@ -80,12 +107,42 @@ export default function Footer() {
         ))}
       </div>
 
+      {/* ── Documentos legales ── */}
+      <nav aria-label="Documentos legales" style={{
+        display: 'flex', flexWrap: 'wrap', justifyContent: 'center',
+        gap: '6px 22px', padding: '10px 20px 0', position: 'relative', zIndex: 1,
+      }}>
+        {/* Café tinta sobre el fondo claro del footer (antes iba en crema y
+            se volvía invisible: solo se veían los subrayados). */}
+        {DOCS_LEGALES.map(d => d.pdf ? (
+          <button
+            key={d.titulo}
+            type="button"
+            onClick={() => setDocAbierto(d)}
+            style={{
+              background: 'none', border: 'none', cursor: 'pointer', padding: 0,
+              fontSize: '0.76rem', color: '#68584a',
+              textDecoration: 'underline', textUnderlineOffset: 3,
+              textDecorationColor: 'rgba(201,168,76,0.55)',
+            }}
+          >
+            {d.titulo}
+          </button>
+        ) : (
+          <a key={d.titulo} href={d.href} style={{
+            fontSize: '0.76rem', color: '#68584a',
+            textDecoration: 'underline', textUnderlineOffset: 3,
+            textDecorationColor: 'rgba(201,168,76,0.55)',
+          }}>
+            {d.titulo}
+          </a>
+        ))}
+      </nav>
+
       {/* ── Marca gigante ── */}
       <div className={styles.bigBrand}>
-        <span className={styles.bigBrace}>{'{'}</span>
         <span className={styles.bigText}>PARADA</span>
         <span className={styles.bigTextGold}>BRIDGE</span>
-        <span className={styles.bigBrace}>{'}'}</span>
       </div>
 
       {/* ── Bottom bar ── */}
@@ -94,6 +151,67 @@ export default function Footer() {
         <span className={styles.bottomDot}>·</span>
         <span>Bogotá, Colombia</span>
       </div>
+
+      {/* ── Visor del documento en la misma página ── */}
+      {docAbierto && (
+        <div
+          role="dialog" aria-modal="true" aria-label={docAbierto.titulo}
+          onClick={() => setDocAbierto(null)}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 1000,
+            background: 'rgba(30,20,12,0.62)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: 16,
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: '#fffdf6', borderRadius: 16, overflow: 'hidden',
+              width: 'min(880px, 96vw)', height: 'min(88dvh, 1000px)',
+              display: 'flex', flexDirection: 'column',
+              boxShadow: '0 26px 80px rgba(0,0,0,0.45)',
+            }}
+          >
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 10,
+              padding: '12px 16px', background: '#472f29', color: '#fffef1',
+            }}>
+              <h3 style={{
+                margin: 0, fontSize: '0.95rem', fontWeight: 700, flex: 1, minWidth: 0,
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              }}>
+                {docAbierto.titulo}
+              </h3>
+              <a
+                href={docAbierto.pdf} target="_blank" rel="noopener noreferrer"
+                style={{
+                  fontSize: '0.72rem', fontWeight: 700, color: '#f2d580',
+                  textDecoration: 'none', whiteSpace: 'nowrap',
+                  border: '1px solid rgba(242,213,128,0.45)', borderRadius: 8, padding: '5px 10px',
+                }}
+              >
+                Abrir en pestaña nueva ↗
+              </a>
+              <button
+                type="button" onClick={() => setDocAbierto(null)} aria-label="Cerrar documento"
+                style={{
+                  border: 'none', background: 'rgba(255,255,255,0.12)', color: '#fffef1',
+                  width: 30, height: 30, borderRadius: 8, cursor: 'pointer', fontSize: 15, lineHeight: 1,
+                }}
+              >
+                ✕
+              </button>
+            </div>
+            {/* El PDF se rinde con el visor nativo del navegador */}
+            <iframe
+              src={`${docAbierto.pdf}#view=FitH`}
+              title={docAbierto.titulo}
+              style={{ border: 'none', width: '100%', flex: 1, background: '#fff' }}
+            />
+          </div>
+        </div>
+      )}
     </footer>
   )
 }

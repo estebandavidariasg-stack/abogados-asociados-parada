@@ -124,27 +124,58 @@
 /* ── Territorio mundial — croquis AZUL OSCURO (diseño original recuperado).
    Fill navy tenue + borde navy definido: se lee como un mapa cartográfico
    clásico sobre el papel claro, y los arcos dorados/azules brillan encima. ── */
+/* ── CROQUIS puro sin fondo: solo líneas navy sobre el papel de la página.
+   El borde costero lleva PLUMA (dos halos anchos translúcidos bajo el trazo
+   principal) para que no se vea rígido — suavidad sin blur() costoso. ── */
 .land {
-  fill: rgba(13, 45, 94, 0.16);
+  fill: url(#landGrad);
   stroke: none;
 }
 
-/* Fronteras internas entre países — trazo navy fino (aire de croquis) */
+/* Fronteras internas — línea navy fina y clara de croquis. */
 .countryBorder {
   fill: none;
-  stroke: rgba(13, 45, 94, 0.32);
-  stroke-width: 0.45;
+  stroke: rgba(13, 45, 94, 0.4);
+  stroke-width: 0.55;
+  stroke-linejoin: round;
   pointer-events: none;
 }
 
-/* Contorno exterior del territorio — navy oscuro, definido con un halo mínimo */
+/* Pluma exterior del litoral (halo ancho, muy tenue). */
+.coastFeatherWide {
+  fill: none;
+  stroke: rgba(13, 45, 94, 0.10);
+  stroke-width: 4;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  pointer-events: none;
+}
+
+/* Pluma media del litoral. */
+.coastFeather {
+  fill: none;
+  stroke: rgba(13, 45, 94, 0.20);
+  stroke-width: 2.2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  pointer-events: none;
+}
+
+/* Trazo principal del litoral — navy, apenas más suave que antes. */
 .worldOutline {
   fill: none;
   stroke: rgba(13, 45, 94, 0.78);
-  stroke-width: 1.4;
+  stroke-width: 1.05;
   stroke-linejoin: round;
+  stroke-linecap: round;
   pointer-events: none;
-  filter: blur(0.5px);
+}
+
+/* (Sin uso.) */
+.coastHalo {
+  fill: none;
+  stroke-width: 0;
+  pointer-events: none;
 }
 
 /* ── Líneas animadas ── */

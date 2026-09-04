@@ -6,7 +6,7 @@ import styles from './ChatSection.module.css'
 import AudioPlayer from './AudioPlayer'
 import TriagePanel from './TriagePanel'
 import { ChatImage, ChatLightbox, openChatFile } from '../../lib/chatFiles'
-import { COP, fetchCobroCliente, clienteMarcoPago, descargarReciboPDF } from '../../lib/cobroAsesoria'
+import { COP, fetchCobroCliente, clienteMarcoPago, subirComprobanteCliente, descargarReciboPDF } from '../../lib/cobroAsesoria'
 // Lazy: arrastra ~30 kB de datos geográficos (32 departamentos + ~1.100
 // municipios) que solo se usan en el paso del formulario, nunca en el
 // primer render de la home.
@@ -529,13 +529,38 @@ const ANON_ROOM_COLS =
 async function fetchMisSalas(hash) {
   const { data } = await supabase.from('chat_rooms')
     .select(ANON_ROOM_COLS).eq('client_cedula', hash).order('created_at', { ascending: false })
-  return data || []
+  if (Array.isArray(data) && data.length) return data
+  // Fallback: si el select directo no ve nada (p. ej. el JWT del cliente no se
+  // pudo emitir y la RLS oculta las salas), la RPC mis_salas (SECURITY DEFINER)
+  // devuelve las salas del hash igual. Crítico para el tope multi-chat.
+  const { ok, data: viaRpc } = await rpcCliente('mis_salas', { p_client_token: hash })
+  return ok && Array.isArray(viaRpc) ? viaRpc : (data || [])
 }
 
 // Estado de una sala del cliente (acotada por RLS con el JWT del cliente).
+// Fallback: RPC estado_sala (SECURITY DEFINER) cuando el select directo no ve
+// la fila (JWT ausente).
 async function fetchEstadoSala(hash, roomId) {
   const { data } = await supabase.from('chat_rooms').select('status').eq('id', roomId).maybeSingle()
-  return data?.status || null
+  if (data?.status) return data.status
+  const { ok, data: viaRpc } = await rpcCliente('estado_sala', { p_client_token: hash, p_room_id: roomId })
+  const fila = Array.isArray(viaRpc) ? viaRpc[0] : viaRpc
+  return (ok && fila?.status) || null
+}
+
+// Mensajes de la sala del cliente con respaldo por RPC. El SELECT directo usa
+// el JWT del cliente; si falta, mis_mensajes (SECURITY DEFINER) devuelve lo
+// mismo validando el hash — sin esto el chat se veía VACÍO (ni el mensaje
+// inicial) cuando /api/chat_token no estaba disponible.
+async function fetchMensajesCliente(hash, roomId, limit = 300) {
+  const { data } = await supabase.from('chat_messages').select('*')
+    .eq('room_id', roomId).order('created_at', { ascending: false }).limit(limit)
+  if (Array.isArray(data) && data.length) return data
+  const { ok, data: viaRpc } = await rpcCliente('mis_mensajes', {
+    p_client_token: hash, p_room_id: roomId, p_limit: limit,
+  })
+  if (ok && Array.isArray(viaRpc)) return viaRpc
+  return Array.isArray(data) ? data : []
 }
 
 // Crea la sala del cliente. Mantiene el manejo de colisión de codigo_referencia
@@ -553,6 +578,90 @@ async function crearSalaCliente(hash, baseRoom, codigoRef) {
     error    = retry.error
   }
   return { room: inserted, error }
+}
+
+// Creación ROBUSTA de la sala: intenta el INSERT directo (rápido, usa el JWT
+// del cliente) y, si la RLS lo rechaza (JWT ausente/expirado — p. ej.
+// /api/chat_token caído), cae a la RPC crear_sala_completa (SECURITY DEFINER)
+// que crea sala + asignación + primer mensaje en una sola llamada y hace
+// cumplir el tope de 5 casos en el servidor.
+async function crearSalaRobusta(hash, baseRoom, codigoRef, lawyerId, mensaje) {
+  const { room, error } = await crearSalaCliente(hash, baseRoom, codigoRef)
+  if (room && !error) return { room, viaRpc: false, error: null }
+  console.warn('[crearSalaRobusta] INSERT directo rechazado — usando RPC crear_sala_completa:', error?.message)
+  const { ok, data, errText } = await rpcCliente('crear_sala_completa', {
+    p_client_token:      hash,
+    p_area_derecho:      baseRoom.area_derecho,
+    p_client_email:      baseRoom.client_email,
+    p_client_nombre:     baseRoom.client_nombre,
+    p_client_celular:    baseRoom.client_celular,
+    p_client_genero:     baseRoom.client_genero,
+    p_tipo_profesional:  baseRoom.tipo_profesional,
+    p_codigo_referencia: codigoRef,
+    p_lawyer_id:         lawyerId || null,
+    p_mensaje:           mensaje || null,
+  })
+  if (ok && data?.id) return { room: data, viaRpc: true, error: null }
+  if ((errText || '').includes('tope_casos_abiertos')) {
+    return { room: null, viaRpc: false, error: { message: 'tope_casos_abiertos' } }
+  }
+  return { room: null, viaRpc: false, error: error || { message: 'No se pudo crear la sala' } }
+}
+
+// ── Multi-chat del cliente ─────────────────────────────────────────────────
+// Un cliente puede tener hasta 5 casos abiertos a la vez; para abrir otro
+// debe eliminar (cerrar) alguno. Las RPC nuevas viven en
+// docs/sql/correcciones-2026-09-03.sql; hay fallback si aún no están aplicadas.
+const MAX_CASOS_ABIERTOS = 5
+const esSalaAbierta = s => s === 'waiting' || s === 'active' || s === 'open'
+
+async function rpcCliente(fn, body) {
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${fn}`, {
+      method: 'POST',
+      headers: {
+        apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    })
+    if (!res.ok) {
+      const errText = await res.text().catch(() => '')
+      return { ok: false, data: null, errText }
+    }
+    return { ok: true, data: await res.json().catch(() => null), errText: '' }
+  } catch { return { ok: false, data: null, errText: 'red' } }
+}
+
+// Casos del cliente CON el profesional asignado (nombre/foto/áreas) y la fecha
+// del último mensaje. Fallback: listado plano sin profesional.
+async function fetchMisSalasDetalle(hash) {
+  const { ok, data } = await rpcCliente('mis_salas_detalle', { p_client_token: hash })
+  if (ok && Array.isArray(data)) return data
+  const rooms = await fetchMisSalas(hash)
+  return (rooms || []).map(r => ({
+    ...r, prof_nombre: null, prof_foto: null, prof_areas: null,
+    last_msg_at: r.updated_at || r.created_at,
+  }))
+}
+
+// El cliente elimina (cierra) una conversación para liberar cupo.
+async function cerrarSalaComoCliente(hash, roomId) {
+  const { ok, data } = await rpcCliente('cerrar_sala_cliente', { p_client_token: hash, p_room_id: roomId })
+  return ok && data === true
+}
+
+// Datos personales del cliente guardados tras su primera consulta — así una
+// nueva consulta con otro profesional no obliga a rellenar todo de nuevo.
+function guardarDatosCliente(form) {
+  try {
+    const { nombre, apellido, ciudad, departamento, barrio, correo, celular, genero } = form
+    localStorage.setItem('chat_form_data', JSON.stringify({ nombre, apellido, ciudad, departamento, barrio, correo, celular, genero }))
+    if (form.descripcion) localStorage.setItem('chat_last_desc', form.descripcion)
+  } catch { /* almacenamiento lleno/privado: sin drama */ }
+}
+function leerDatosCliente() {
+  try { return JSON.parse(localStorage.getItem('chat_form_data') || 'null') } catch { return null }
 }
 
 function formatSize(bytes) {
@@ -870,7 +979,7 @@ function RatingPanel({ roomId, onDone }) {
   )
 }
 
-function StepCedula({ onNew, onResume }) {
+function StepCedula({ onNew, onCasos }) {
   const urlParams = new URLSearchParams(window.location.hash.split('?')[1] || '')
   const codigoURL = urlParams.get('codigo') || ''
   // Deep-link desde LawyerCard: #chat?abogado=<id>&tipo=<abogado|contador>.
@@ -901,17 +1010,18 @@ function StepCedula({ onNew, onResume }) {
     // chat_messages por RLS. Best-effort: si falla, sigue con la anon key.
     await ensureChatToken(hash)
     const rooms = await fetchMisSalas(hash)
-    const existing = rooms?.find(r => r.status === 'waiting' || r.status === 'active')
-    if (existing) onResume(existing)
-    else {
-      // Releer el deep-link en el momento del envío: si el cliente pulsó una
-      // tarjeta de profesional mientras estaba en este paso, el hash ya cambió
-      // aunque el componente no se haya re-renderizado.
-      const p = new URLSearchParams(window.location.hash.split('?')[1] || '')
-      const abg = p.get('abogado') || abogadoURL
-      const tp  = (p.get('tipo') || tipoURL) === 'contador' ? 'contador' : 'abogado'
-      onNew(abg ? { abogadoId: abg, tipo: tp } : null)
-    }
+    const abiertas = (rooms || []).filter(r => esSalaAbierta(r.status))
+    // Releer el deep-link en el momento del envío: si el cliente pulsó una
+    // tarjeta de profesional mientras estaba en este paso, el hash ya cambió
+    // aunque el componente no se haya re-renderizado.
+    const p = new URLSearchParams(window.location.hash.split('?')[1] || '')
+    const abg = p.get('abogado') || abogadoURL
+    const tp  = (p.get('tipo') || tipoURL) === 'contador' ? 'contador' : 'abogado'
+    const deepLink = abg ? { abogadoId: abg, tipo: tp } : null
+    // Con casos abiertos → lista de casos (multi-chat, máx 5). Sin casos →
+    // flujo normal de nueva consulta.
+    if (abiertas.length > 0) onCasos(deepLink)
+    else onNew(deepLink)
     setLoading(false)
   }
 
@@ -967,13 +1077,130 @@ function StepCedula({ onNew, onResume }) {
   )
 }
 
+// ── Modal "Nueva consulta" (multi-chat) ────────────────────────────────────
+// Aparece cuando el cliente, con casos abiertos, elige otro profesional desde
+// la página. Muestra al profesional (áreas incluidas) y deja conservar o
+// editar la descripción del caso antes de abrir la nueva conversación.
+function NuevaConsultaModal({ prof, sending, error, onCancel, onConfirm }) {
+  const [desc, setDesc] = useState(() => {
+    try { return localStorage.getItem('chat_last_desc') || '' } catch { return '' }
+  })
+  const nombre = `${prof.nombre || ''} ${prof.apellido || ''}`.trim()
+  return (
+    <div role="dialog" aria-modal="true" aria-label={`Nueva consulta con ${nombre}`}
+      onClick={e => { if (e.target === e.currentTarget && !sending) onCancel() }}
+      style={{ position:'fixed', inset:0, zIndex:1000, display:'flex', alignItems:'center', justifyContent:'center', background:'rgba(30,20,10,0.55)', padding:16 }}>
+      <div style={{ background:'#fffef7', borderRadius:18, padding:'22px 20px', maxWidth:440, width:'100%', boxShadow:'0 18px 50px rgba(0,0,0,0.3)', maxHeight:'88vh', overflowY:'auto' }}>
+        <h4 style={{ margin:'0 0 14px', color:'#6d3c1b', fontSize:'1.02rem' }}>Nueva consulta</h4>
+
+        {/* Profesional elegido */}
+        <div style={{ display:'flex', alignItems:'center', gap:12, padding:'12px 14px', borderRadius:14, background:'rgba(201,168,76,0.1)', border:'1px solid rgba(201,168,76,0.35)' }}>
+          <img
+            src={prof.foto_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(nombre)}&background=0d2d5e&color=c9a84c`}
+            alt={nombre} width="52" height="52" loading="lazy" decoding="async"
+            style={{ width:52, height:52, borderRadius:'50%', objectFit:'cover', flexShrink:0 }}
+          />
+          <div style={{ minWidth:0 }}>
+            <p style={{ margin:0, fontWeight:700, color:'#6d3c1b', fontSize:'0.92rem' }}>{nombre}</p>
+            {prof.area_derecho && (
+              <p style={{ margin:'3px 0 0', fontSize:'0.74rem', color:'rgba(109,60,27,0.7)', lineHeight:1.4 }}>
+                {prof.area_derecho}
+              </p>
+            )}
+            {(prof.ciudad || prof.departamento) && (
+              <p style={{ margin:'2px 0 0', fontSize:'0.7rem', color:'rgba(109,60,27,0.55)' }}>
+                {[prof.ciudad, prof.departamento].filter(Boolean).join(', ')}
+              </p>
+            )}
+          </div>
+        </div>
+
+        {/* Descripción del caso: dejar la anterior o editarla */}
+        <label style={{ display:'block', margin:'16px 0 6px', fontSize:'0.76rem', fontWeight:700, color:'#6d3c1b', letterSpacing:'0.03em' }}>
+          Descripción del caso
+        </label>
+        <textarea
+          value={desc}
+          onChange={e => setDesc(e.target.value)}
+          rows={4}
+          placeholder="Cuéntale brevemente tu caso a este profesional…"
+          style={{ width:'100%', boxSizing:'border-box', borderRadius:12, border:'1px solid rgba(109,60,27,0.25)', padding:'10px 12px', fontSize:'0.85rem', fontFamily:'inherit', resize:'vertical', minHeight:90, background:'#fff' }}
+        />
+        <p style={{ margin:'6px 0 0', fontSize:'0.7rem', color:'rgba(109,60,27,0.55)' }}>
+          Puedes dejar la descripción de tu caso anterior o escribir una nueva.
+        </p>
+
+        {error && <p style={{ margin:'10px 0 0', color:'#8f2f22', fontSize:'0.8rem' }}>{error}</p>}
+
+        <div style={{ display:'flex', gap:8, justifyContent:'flex-end', marginTop:18 }}>
+          <button type="button" disabled={sending} onClick={onCancel}
+            style={{ border:'1px solid rgba(109,60,27,0.3)', background:'none', borderRadius:10, padding:'10px 14px', cursor:'pointer', fontSize:'0.8rem', fontWeight:600, color:'#6d3c1b' }}>
+            Cancelar
+          </button>
+          <button type="button" disabled={sending}
+            onClick={() => onConfirm(desc)}
+            className={undefined}
+            style={{ border:'none', background:'linear-gradient(135deg,#f2d580,#c9a84c 55%,#9a7a2c)', color:'#5a3d12', borderRadius:10, padding:'10px 16px', cursor: sending ? 'wait' : 'pointer', fontSize:'0.82rem', fontWeight:700 }}>
+            {sending ? 'Creando consulta…' : 'Iniciar consulta'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Visor SOLO-LECTURA de documentos del profesional ───────────────────────
+// Muestra tarjeta profesional / certificados dentro de un modal sin
+// affordances de descarga: PDFs en iframe sin toolbar; imágenes sin menú
+// contextual ni arrastre. (La URL firmada expira en 10 minutos.)
+function VisorDocumento({ titulo, url, onClose }) {
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', onKey)
+    document.body.style.overflow = 'hidden'
+    return () => { document.removeEventListener('keydown', onKey); document.body.style.overflow = '' }
+  }, [onClose])
+  const esPdf = /\.pdf(\?|$)/i.test((url || '').split('#')[0])
+  return (
+    <div role="dialog" aria-modal="true" aria-label={titulo}
+      onClick={e => { if (e.target === e.currentTarget) onClose() }}
+      onContextMenu={e => e.preventDefault()}
+      style={{ position:'fixed', inset:0, zIndex:1200, background:'rgba(20,14,8,0.78)', display:'flex', flexDirection:'column', padding:16 }}>
+      <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:10, color:'#f5ecd8' }}>
+        <strong style={{ fontSize:'0.95rem' }}>{titulo}</strong>
+        <span style={{ fontSize:'0.7rem', opacity:0.75, border:'1px solid rgba(245,236,216,0.4)', borderRadius:999, padding:'2px 10px' }}>
+          Solo lectura
+        </span>
+        <button type="button" onClick={onClose} aria-label="Cerrar visor"
+          style={{ marginLeft:'auto', background:'rgba(255,255,255,0.12)', border:'none', color:'#f5ecd8', borderRadius:10, padding:'8px 14px', cursor:'pointer', fontWeight:700 }}>
+          ✕ Cerrar
+        </button>
+      </div>
+      <div style={{ flex:1, minHeight:0, borderRadius:14, overflow:'hidden', background:'#2a211a', display:'flex', alignItems:'center', justifyContent:'center', userSelect:'none' }}>
+        {esPdf ? (
+          <iframe title={titulo} src={`${url}#toolbar=0&navpanes=0&scrollbar=0`}
+            style={{ width:'100%', height:'100%', border:'none', background:'#fff' }} />
+        ) : (
+          <img src={url} alt={titulo} draggable={false}
+            onContextMenu={e => e.preventDefault()}
+            style={{ maxWidth:'100%', maxHeight:'100%', objectFit:'contain', pointerEvents:'none' }} />
+        )}
+      </div>
+    </div>
+  )
+}
+
 // Tarjeta de cobro de la asesoría (cliente). Aparece dentro del chat cuando el
 // profesional fijó un cobro o marcó la consulta gratuita. El pago es MANUAL y
 // directo al profesional — Parada Bridge no intermedia el dinero.
-function CobroClienteCard({ roomId, clientToken, profesionalNombre }) {
+function CobroClienteCard({ roomId, clientToken, profesionalNombre, onVerCertificado }) {
   const [cobro, setCobro]   = useState(null)
   const [busy, setBusy]     = useState(false)
   const [copied, setCopied] = useState(false)
+  // Comprobante de pago del cliente (obligatorio antes de "Ya realicé el pago").
+  const [comprobanteFile, setComprobanteFile] = useState(null)
+  const [comprobanteError, setComprobanteError] = useState('')
+  const comprobanteRef = useRef(null)
 
   useEffect(() => {
     if (!roomId || !clientToken) return
@@ -987,12 +1214,25 @@ function CobroClienteCard({ roomId, clientToken, profesionalNombre }) {
   if (!cobro) return null
 
   const marcar = async () => {
-    setBusy(true)
+    if (!comprobanteFile) { setComprobanteError('Adjunta el comprobante de tu pago para continuar.'); return }
+    setBusy(true); setComprobanteError('')
     try {
-      await clienteMarcoPago(roomId, clientToken)
+      const path = await subirComprobanteCliente(roomId, comprobanteFile)
+      if (!path) { setComprobanteError('No se pudo subir el comprobante. Intenta de nuevo.'); setBusy(false); return }
+      await clienteMarcoPago(roomId, clientToken, path)
       const c = await fetchCobroCliente(roomId, clientToken)
       setCobro(c)
-    } catch { /* noop */ } finally { setBusy(false) }
+    } catch { setComprobanteError('No se pudo registrar tu pago. Intenta de nuevo.') } finally { setBusy(false) }
+  }
+  const onComprobanteChange = (e) => {
+    const f = e.target.files?.[0]
+    e.target.value = ''
+    if (!f) return
+    const allowed = ['application/pdf', 'image/png', 'image/jpeg', 'image/webp']
+    if (!allowed.includes(f.type)) { setComprobanteError('Usa PDF, PNG, JPG o WEBP.'); return }
+    if (f.size / (1024 * 1024) > 10) { setComprobanteError('El comprobante no puede superar 10 MB.'); return }
+    setComprobanteError('')
+    setComprobanteFile(f)
   }
   const copiar = () => {
     navigator.clipboard?.writeText(cobro.datos_pago || '')
@@ -1023,16 +1263,18 @@ function CobroClienteCard({ roomId, clientToken, profesionalNombre }) {
   }
 
   if (cobro.estado === 'pagado') {
+    // Pago cerrado → el chat queda limpio: solo una línea discreta con el recibo.
     return (
-      <div style={{ ...wrap, borderColor: 'rgba(46,158,95,0.45)', background: 'linear-gradient(180deg,#f3faf5,#eaf6ee)' }}>
-        <strong style={{ color: '#1f5e3c' }}>Pago confirmado ✓</strong>
-        <div style={{ marginTop: 2, color: '#3d5a49' }}>
-          El profesional confirmó tu pago de <strong>{COP.format(Number(cobro.monto) || 0)}</strong>.
-          {cobro.recibo_num ? ` Recibo ${cobro.recibo_num}.` : ''}
-        </div>
+      <div style={{
+        margin: '8px 16px', padding: '6px 12px', borderRadius: 999,
+        display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
+        background: 'rgba(46,158,95,0.08)', border: '1px solid rgba(46,158,95,0.25)',
+        fontSize: '0.74rem', color: '#2b6a48',
+      }}>
+        <span>✓ Asesoría pagada{cobro.recibo_num ? ` · Recibo ${cobro.recibo_num}` : ''}</span>
         <button type="button" onClick={recibo}
-          style={{ marginTop: 10, background: 'linear-gradient(135deg,#f2d580,#c9a84c 55%,#9a7a2c)', color: '#5a3d12', border: 'none', borderRadius: 9, padding: '9px 16px', fontWeight: 700, fontSize: '0.82rem', cursor: 'pointer' }}>
-          Descargar recibo (PDF)
+          style={{ background: 'none', border: 'none', color: '#1f5e3c', fontWeight: 700, cursor: 'pointer', fontSize: '0.74rem', textDecoration: 'underline', padding: 0 }}>
+          Descargar recibo
         </button>
       </div>
     )
@@ -1046,7 +1288,6 @@ function CobroClienteCard({ roomId, clientToken, profesionalNombre }) {
         <strong style={{ color: '#6d3c1b', fontSize: '1.02rem' }}>Pago de la asesoría</strong>
         <span style={{ fontWeight: 800, fontSize: '1.1rem', color: '#472F29' }}>{COP.format(Number(cobro.monto) || 0)}</span>
       </div>
-      {cobro.nota && <div style={{ marginTop: 2, color: '#634f3d' }}>Concepto: {cobro.nota}</div>}
 
       {cobro.datos_pago && (
         <div style={{ marginTop: 10, padding: '10px 12px', background: 'rgba(109,60,27,0.05)', borderRadius: 10 }}>
@@ -1061,19 +1302,42 @@ function CobroClienteCard({ roomId, clientToken, profesionalNombre }) {
         </div>
       )}
 
+      {/* Cuenta certificada del profesional: el cliente consigna con confianza. */}
+      {onVerCertificado && (
+        <button type="button" onClick={onVerCertificado}
+          style={{ marginTop: 10, background: 'none', border: '1px solid rgba(109,60,27,0.3)', borderRadius: 10, padding: '8px 12px', fontSize: '0.78rem', fontWeight: 600, color: '#6d3c1b', cursor: 'pointer', width: '100%' }}>
+          Ver la cuenta bancaria certificada del profesional
+        </button>
+      )}
+
       <p style={{ margin: '10px 0 0', fontSize: '0.74rem', color: 'rgba(109,60,27,0.7)' }}>
         El pago es directo al profesional. Parada Bridge no intermedia el dinero.
       </p>
 
       {informado ? (
         <div style={{ marginTop: 10, color: '#8a6a28', fontWeight: 600, fontSize: '0.82rem' }}>
-          ✓ Pago informado — esperando que el profesional lo confirme.
+          ✓ Pago informado con comprobante — esperando que el profesional lo confirme.
         </div>
       ) : (
-        <button type="button" onClick={marcar} disabled={busy}
-          style={{ marginTop: 12, width: '100%', background: 'linear-gradient(135deg,#f2d580,#c9a84c 55%,#9a7a2c)', color: '#5a3d12', border: 'none', borderRadius: 10, padding: '11px 16px', fontWeight: 700, fontSize: '0.88rem', cursor: busy ? 'not-allowed' : 'pointer' }}>
-          {busy ? 'Registrando…' : 'Ya realicé el pago'}
-        </button>
+        <>
+          {/* Comprobante obligatorio: transparencia para ambas partes */}
+          <div style={{ marginTop: 12 }}>
+            <button type="button" onClick={() => comprobanteRef.current?.click()}
+              style={{ width: '100%', background: '#fff', border: '1px dashed rgba(109,60,27,0.4)', borderRadius: 10, padding: '10px 12px', fontSize: '0.8rem', fontWeight: 600, color: '#6d3c1b', cursor: 'pointer' }}>
+              {comprobanteFile ? `✓ ${comprobanteFile.name}` : 'Adjuntar comprobante de pago (obligatorio)'}
+            </button>
+            <input ref={comprobanteRef} type="file"
+              accept="application/pdf,image/png,image/jpeg,image/webp"
+              style={{ display: 'none' }} onChange={onComprobanteChange} />
+            {comprobanteError && (
+              <p style={{ margin: '6px 0 0', color: '#8f2f22', fontSize: '0.75rem' }}>{comprobanteError}</p>
+            )}
+          </div>
+          <button type="button" onClick={marcar} disabled={busy || !comprobanteFile}
+            style={{ marginTop: 10, width: '100%', background: comprobanteFile ? 'linear-gradient(135deg,#f2d580,#c9a84c 55%,#9a7a2c)' : 'rgba(201,168,76,0.35)', color: '#5a3d12', border: 'none', borderRadius: 10, padding: '11px 16px', fontWeight: 700, fontSize: '0.88rem', cursor: busy || !comprobanteFile ? 'not-allowed' : 'pointer' }}>
+            {busy ? 'Registrando…' : 'Ya realicé el pago'}
+          </button>
+        </>
       )}
     </div>
   )
@@ -1088,6 +1352,12 @@ export default function ChatSection() {
   const [profesionalIA, setProfesionalIA] = useState(null) // profesional recomendado por la IA (para notificar)
   const [costoIA, setCostoIA] = useState('')               // costo sugerido por la IA (recordatorio en el form)
   const [profesionalDeepLink, setProfesionalDeepLink] = useState(null) // profesional pre-seleccionado desde LawyerCard
+  // ── Multi-chat: casos abiertos del cliente (máx 5) ──
+  const [misCasos, setMisCasos]           = useState([])
+  const [casosLoading, setCasosLoading]   = useState(false)
+  const [casoEliminando, setCasoEliminando] = useState(null)  // caso a confirmar eliminación
+  const [eliminandoBusy, setEliminandoBusy] = useState(false)
+  const [nuevaConsulta, setNuevaConsulta] = useState(null)    // { prof, tipo } → modal de nueva consulta
   const prefersReducedMotion = useReducedMotion()
   const [form, setForm]         = useState({
     nombre:'', apellido:'', ciudad:'', departamento:'', barrio:'',
@@ -1183,6 +1453,20 @@ export default function ChatSection() {
   useEffect(() => {
     if (messagesRef.current) messagesRef.current.scrollTop = messagesRef.current.scrollHeight
   }, [messages])
+
+  // QR del gestor / deep-links: el hash llega como "#chat?codigo=PB-XXXX" y el
+  // navegador NO encuentra un ancla con ese nombre → se quedaba arriba de la
+  // página. Al montar, si el hash apunta al chat, bajamos a la sección (el
+  // código ya se prellenó en StepCedula desde ese mismo hash).
+  useEffect(() => {
+    if (window.location.hash.startsWith('#chat')) {
+      // Pequeño delay: deja que el layout (hero, imágenes) se asiente primero.
+      const t = setTimeout(() => {
+        document.getElementById('chat')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      }, 350)
+      return () => clearTimeout(t)
+    }
+  }, [])
 
   // Cuando se abre el listado, el cierre del chat o la pantalla de espera,
   // llevar la vista a la sección correspondiente.
@@ -1337,10 +1621,9 @@ export default function ChatSection() {
         if (status === 'active') setStep(s => s === 'esperando' ? 'chat' : s)
         if (status === 'closed') { await handleRoomClosed(roomId); return }
       }
-      const { data } = await supabase.from('chat_messages').select('*')
-        .eq('room_id', roomId).order('created_at', { ascending: false }).limit(50)
+      const data = await fetchMensajesCliente(hash, roomId, 50)
       if (stop || !Array.isArray(data) || !data.length) return
-      const recientes = data.reverse()
+      const recientes = [...data].reverse()
       setMessages(prev => {
         const ids = new Set(prev.map(m => m.id))
         const nuevos = recientes.filter(m => !ids.has(m.id))
@@ -1352,6 +1635,116 @@ export default function ChatSection() {
     return () => { stop = true; clearInterval(id) }
   }, [roomId, roomStatus])
 
+  // ── Documentos de confianza del profesional (solo-ver) ───────────────────
+  // Tarjeta profesional, cuenta bancaria certificada y certificado
+  // disciplinario + cédula. URLs firmadas de 10 min vía /api/solicitudes.
+  const [docsInfo, setDocsInfo]   = useState(null)
+  const [docViewer, setDocViewer] = useState(null)   // { titulo, url }
+  const docsFetchedAt = useRef(0)
+  const docsRoomRef   = useRef(null)
+
+  async function cargarDocsProfesional(force = false) {
+    if (!roomId) return null
+    const fresco = docsInfo && docsRoomRef.current === roomId &&
+      Date.now() - docsFetchedAt.current < 8 * 60 * 1000
+    if (!force && fresco) return docsInfo
+    try {
+      const res = await fetch('/api/solicitudes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          accion: 'docs_profesional',
+          cedulaHash: localStorage.getItem('chat_cedula_hash'),
+          roomId,
+        }),
+      })
+      const data = await res.json().catch(() => null)
+      if (data?.ok) {
+        docsFetchedAt.current = Date.now()
+        docsRoomRef.current = roomId
+        setDocsInfo(data)
+        return data
+      }
+    } catch { /* la fila simplemente no se muestra */ }
+    return null
+  }
+
+  useEffect(() => {
+    if (step === 'chat' && roomStatus === 'active' && roomId) cargarDocsProfesional(true)
+    else if (!roomId) setDocsInfo(null)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [roomId, roomStatus, step])
+
+  async function abrirDoc(key, titulo) {
+    const d = await cargarDocsProfesional(false)
+    const url = d?.docs?.[key]
+    if (url) setDocViewer({ titulo, url })
+  }
+
+  // ── Multi-chat: lista de casos abiertos del cliente ──────────────────────
+  async function cargarCasos() {
+    const hash = localStorage.getItem('chat_cedula_hash')
+    if (!hash) return []
+    setCasosLoading(true)
+    const casos = await fetchMisSalasDetalle(hash)
+    const abiertos = (casos || []).filter(c => esSalaAbierta(c.status))
+    setMisCasos(abiertos)
+    setCasosLoading(false)
+    return abiertos
+  }
+
+  // Entrada al paso 'casos' (desde la cédula). Si además viene un profesional
+  // por deep-link, abre el modal de nueva consulta con él.
+  async function abrirMisCasos(deepLink) {
+    setStep('casos')
+    const abiertos = await cargarCasos()
+    if (deepLink?.abogadoId) {
+      limpiarDeepLinkHash()
+      const tipo = deepLink.tipo === 'contador' ? 'contador' : 'abogado'
+      const prof = await resolverProfesional(deepLink.abogadoId, tipo)
+      if (!prof) return
+      // ¿Ya hay una conversación abierta con ESTE profesional? → retomarla
+      // (nunca dos consultas con el mismo profesional). Compara por id y, si
+      // la RPC vieja no trae prof_id, por nombre.
+      const nombreProf = `${prof.nombre || ''} ${prof.apellido || ''}`.trim().toLowerCase()
+      const dup = abiertos.find(c =>
+        (c.prof_id && String(c.prof_id) === String(prof.id)) ||
+        (nombreProf && c.prof_nombre && c.prof_nombre.trim().toLowerCase() === nombreProf)
+      )
+      if (dup) { handleResume(dup); return }
+      if (abiertos.length >= MAX_CASOS_ABIERTOS) return   // el aviso de tope lo pinta la lista
+      setNuevaConsulta({ prof, tipo })
+    }
+  }
+
+  // Volver del chat a la lista de casos (sin perder nada).
+  function volverAMisCasos() {
+    setRoomId(null); setMessages([]); setRoomStatus('waiting'); setRoomArea(''); setRoomCodigo('')
+    setStep('casos')
+    cargarCasos()
+  }
+
+  // Resuelve un profesional aprobado por id (CDN → fallback directo a Supabase).
+  async function resolverProfesional(abogadoId, tipo) {
+    let prof = null
+    try {
+      const res = await fetch(`/api/professionals?rol=${tipo}`)
+      if (res.ok) {
+        const lista = await res.json()
+        prof = (Array.isArray(lista) ? lista : []).find(p => String(p.id) === String(abogadoId)) || null
+      }
+    } catch { /* cae al fallback directo */ }
+    if (!prof) {
+      try {
+        const { data } = await supabase.from('profiles')
+          .select('id,nombre,apellido,rol,area_derecho,foto_url,video_url,descripcion,ciudad,departamento,experiencia,universidad,instagram,linkedin,facebook,twitter,whatsapp,tiktok')
+          .eq('id', abogadoId).eq('rol', tipo).eq('aprobado', true).single()
+        if (data && data.id) prof = data
+      } catch { /* prof queda null */ }
+    }
+    return prof
+  }
+
   // Tras la cédula: si viene un profesional por deep-link (LawyerCard →
   // #chat?abogado=<id>&tipo=<rol>), lo buscamos en la lista pública (cacheada
   // en el CDN, misma data del home) y saltamos al formulario con él bloqueado.
@@ -1359,26 +1752,7 @@ export default function ChatSection() {
   async function handleNew(deepLink) {
     if (!deepLink?.abogadoId) { setProfesionalDeepLink(null); setStep('metodo'); return }
     const tipo = deepLink.tipo === 'contador' ? 'contador' : 'abogado'
-    let prof = null
-    try {
-      const res = await fetch(`/api/professionals?rol=${tipo}`)
-      if (res.ok) {
-        const lista = await res.json()
-        prof = (Array.isArray(lista) ? lista : []).find(p => String(p.id) === String(deepLink.abogadoId)) || null
-      }
-    } catch { /* cae al fallback directo */ }
-
-    // Fallback directo a Supabase: en `vite dev` /api sirve el código fuente (no
-    // JSON) y en prod el CDN podría fallar. El cliente anon puede leer a los
-    // profesionales aprobados, así que resolvemos el profesional igualmente.
-    if (!prof) {
-      try {
-        const { data } = await supabase.from('profiles')
-          .select('id,nombre,apellido,rol,area_derecho,foto_url,video_url,descripcion,ciudad,departamento,experiencia,universidad,instagram,linkedin,facebook,twitter,whatsapp,tiktok')
-          .eq('id', deepLink.abogadoId).eq('rol', tipo).eq('aprobado', true).single()
-        if (data && data.id) prof = data
-      } catch { /* prof queda null */ }
-    }
+    const prof = await resolverProfesional(deepLink.abogadoId, tipo)
 
     if (!prof) {
       // El profesional ya no existe o no está aprobado → limpiar el param y
@@ -1431,12 +1805,19 @@ export default function ChatSection() {
   // directo al formulario con ese profesional ya elegido, sin importar el paso.
   useEffect(() => {
     const REDIRIGIBLES = new Set(['metodo', 'triage', 'form', 'lawyers', 'choose_another'])
+    // Con casos abiertos (o dentro de un chat), elegir otro profesional abre el
+    // modal de nueva consulta (multi-chat) en lugar de rehacer el flujo.
+    const MULTICHAT = new Set(['casos', 'chat', 'esperando'])
     function onHashChange() {
-      if (!REDIRIGIBLES.has(step)) return
       const params = new URLSearchParams(window.location.hash.split('?')[1] || '')
       const abg = params.get('abogado')
       if (!abg) return
       const tipo = params.get('tipo') === 'contador' ? 'contador' : 'abogado'
+      if (MULTICHAT.has(step)) {
+        abrirMisCasos({ abogadoId: abg, tipo })
+        return
+      }
+      if (!REDIRIGIBLES.has(step)) return
       handleNew({ abogadoId: abg, tipo })
     }
     window.addEventListener('hashchange', onHashChange)
@@ -1461,7 +1842,9 @@ export default function ChatSection() {
     setTriageResumen(''); setSolicitudAbierta(false); setAreasBloqueadas(false)
     setDesdeIA(false); setProfesionalIA(null); setCostoIA('')
     setProfesionalDeepLink(null)
+    setMisCasos([]); setNuevaConsulta(null); setCasoEliminando(null)
     localStorage.removeItem('chat_cedula_hash'); localStorage.removeItem('chat_cedula_raw'); localStorage.removeItem('chat_nombre'); localStorage.removeItem('chat_codigo_ref')
+    localStorage.removeItem('chat_form_data'); localStorage.removeItem('chat_last_desc')
   }
 
   async function handleFormSubmit() {
@@ -1480,6 +1863,9 @@ export default function ChatSection() {
     }
     setSubmitting(true); setFormError('')
     localStorage.setItem('chat_nombre', `${nombre.trim()} ${apellido.trim()}`)
+    // Guardar los datos APENAS pasan la validación (no solo al crear la sala):
+    // así una nueva consulta con otro profesional nunca pide rellenar todo.
+    guardarDatosCliente(form)
 
     // Flujo "solicitud abierta": no hay profesional del área → publicar directo
     // y pasar a la pantalla de espera (sin paso de selección ni segundo botón).
@@ -1534,48 +1920,48 @@ export default function ChatSection() {
     setPicked(prev => prev.includes(id) ? [] : [id])
   }
 
-  async function startChat() {
-    if (!picked.length) return
+  // overrides: { form, picked, profDirecto } — usados por el modal de nueva
+  // consulta (multi-chat), donde el estado de React aún no se ha asentado.
+  async function startChat(overrides = {}) {
+    const formData  = overrides.form   || form
+    const pickedIds = overrides.picked || picked
+    if (!pickedIds.length) return
     setSending(true)
     const hash      = localStorage.getItem('chat_cedula_hash')
     const codigoRef = localStorage.getItem('chat_codigo_ref') || null
-    const { nombre, apellido, areas, descripcion, ciudad, departamento, barrio, correo, celular, genero } = form
+    const { nombre, apellido, areas, descripcion, ciudad, departamento, barrio, correo, celular, genero } = formData
     const ubicacionTxt = barrio ? `${ciudad} - ${barrio}, ${departamento}` : `${ciudad}, ${departamento}`
 
-    // Reutilizar room existente waiting/active si ya hay uno (evita 409 por UNIQUE)
-    const existingRooms = await fetchMisSalas(hash)
-    let room = existingRooms?.find(r => r.status === 'waiting' || r.status === 'active') || null
-
-    if (!room) {
-      const baseRoom = {
-        area_derecho:     areas.join(', '),
-        client_token:     hash,
-        client_cedula:    hash,
-        client_email:     correo || null,
-        client_nombre:    `${nombre} ${apellido}`,
-        client_celular:   celular || null,
-        client_genero:    genero || null,
-        tipo_profesional: form.tipo_profesional || 'abogado',
-        status:           'waiting',
-      }
-
-      // Crea la sala vía RPC crear_sala (o INSERT directo como fallback). El
-      // manejo de colisión de codigo_referencia (UNIQUE legacy) va dentro.
-      const { room: inserted, error } = await crearSalaCliente(hash, baseRoom, codigoRef)
-
-      if (error || !inserted) {
-        console.error('[startChat] Error insertando chat_rooms:', error)
-        setFormError(`No se pudo crear la consulta: ${error?.message || 'error desconocido'}. Revisa la consola.`)
-        setSending(false)
-        return
-      }
-      room = inserted
+    // Multi-chat: cada consulta abre SU sala. Tope de 5 casos abiertos — para
+    // hablar con otro profesional hay que eliminar alguna conversación.
+    const detalleSalas = await fetchMisSalasDetalle(hash)
+    const abiertas = (detalleSalas || []).filter(r => esSalaAbierta(r.status))
+    if (abiertas.length >= MAX_CASOS_ABIERTOS) {
+      setFormError('Ya tienes 5 casos abiertos. Si quieres hablar con más profesionales, tienes que eliminar alguna conversación de los casos abiertos.')
+      setSending(false)
+      return
     }
-
-    await supabase.from('chat_room_lawyers').insert(picked.map(lid => ({ room_id: room.id, lawyer_id: lid, status:'invited' })))
+    // Nunca DOS consultas con el MISMO profesional: si ya hay una abierta con
+    // él, se retoma esa conversación en vez de crear un duplicado. Compara por
+    // id y, como respaldo, por nombre del profesional elegido.
+    const profElegido = overrides.profDirecto || profesionalDeepLink || profesionalIA ||
+      [...lawyers.cercanos, ...lawyers.porArea].find(l => l.id === pickedIds[0]) || null
+    const nombreElegido = profElegido
+      ? `${profElegido.nombre || ''} ${profElegido.apellido || ''}`.trim().toLowerCase() : ''
+    const dup = pickedIds[0] && abiertas.find(c =>
+      (c.prof_id && String(c.prof_id) === String(pickedIds[0])) ||
+      (nombreElegido && c.prof_nombre && c.prof_nombre.trim().toLowerCase() === nombreElegido)
+    )
+    if (dup) {
+      setSending(false); setNuevaConsulta(null); setFormError('')
+      handleResume(dup)
+      cargarCasos()
+      return
+    }
+    // ── Primer mensaje del cliente (se arma ANTES de crear la sala: el
+    //    respaldo por RPC lo necesita en la misma llamada) ──────────────────
     // En el flujo guiado por IA la descripción YA es el resumen del asistente,
-    // así que solo adjuntamos el bloque de resumen cuando aporta algo distinto
-    // (evita que el primer mensaje repita el mismo texto dos veces).
+    // así que solo adjuntamos el bloque de resumen cuando aporta algo distinto.
     const resumenBloque = (triageResumen && triageResumen.trim() && triageResumen.trim() !== descripcion.trim())
       ? `\n\n📋 Resumen del asistente IA:\n${triageResumen}`
       : ''
@@ -1584,10 +1970,45 @@ export default function ChatSection() {
     // identificador anónimo (client_cedula) sigue siendo el hash SHA-256.
     const cedulaRaw   = localStorage.getItem('chat_cedula_raw') || ''
     const cedulaLinea = cedulaRaw ? `\n**Cédula: ${formatCedula(cedulaRaw)}**` : ''
-    await supabase.from('chat_messages').insert({
-      room_id: room.id, sender_type:'client', lawyer_id: null,
-      content: `Hola, mi nombre es ${nombre} ${apellido}.${cedulaLinea}\n\n**Ubicación:** ${ubicacionTxt}\n**Área(s):** ${areas.join(', ')}\n\n**Descripción del caso:**\n${descripcion}${resumenBloque}`,
-    })
+    const primerMensaje =
+      `Hola, mi nombre es ${nombre} ${apellido}.${cedulaLinea}\n\n**Ubicación:** ${ubicacionTxt}\n**Área(s):** ${areas.join(', ')}\n\n**Descripción del caso:**\n${descripcion}${resumenBloque}`
+
+    const baseRoom = {
+      area_derecho:     areas.join(', '),
+      client_token:     hash,
+      client_cedula:    hash,
+      client_email:     correo || null,
+      client_nombre:    `${nombre} ${apellido}`,
+      client_celular:   celular || null,
+      client_genero:    genero || null,
+      tipo_profesional: formData.tipo_profesional || 'abogado',
+      status:           'waiting',
+    }
+
+    // INSERT directo (con el JWT del cliente) o, si la RLS lo rechaza, la RPC
+    // crear_sala_completa — que crea sala + asignación + mensaje de una vez.
+    const { room, viaRpc, error } = await crearSalaRobusta(
+      hash, baseRoom, codigoRef, pickedIds[0] || null, primerMensaje
+    )
+
+    if (error || !room) {
+      console.error('[startChat] Error creando la sala:', error)
+      setFormError(error?.message === 'tope_casos_abiertos'
+        ? 'Ya tienes 5 casos abiertos. Si quieres hablar con más profesionales, tienes que eliminar alguna conversación de los casos abiertos.'
+        : `No se pudo crear la consulta: ${error?.message || 'error desconocido'}. Revisa la consola.`)
+      setSending(false)
+      return
+    }
+
+    // Camino directo: asignación + primer mensaje van por REST (el respaldo
+    // por RPC ya los dejó escritos server-side).
+    if (!viaRpc) {
+      await supabase.from('chat_room_lawyers').insert(pickedIds.map(lid => ({ room_id: room.id, lawyer_id: lid, status:'invited' })))
+      await supabase.from('chat_messages').insert({
+        room_id: room.id, sender_type:'client', lawyer_id: null,
+        content: primerMensaje,
+      })
+    }
     // En el flujo guiado por IA no pasamos por la lista (`lawyers` queda vacío),
     // así que sumamos el profesional recomendado por la IA para poder notificarlo.
     const todosAbogados = [...lawyers.cercanos, ...lawyers.porArea]
@@ -1599,16 +2020,61 @@ export default function ChatSection() {
     if (profesionalDeepLink && !todosAbogados.some(l => l.id === profesionalDeepLink.id)) {
       todosAbogados.push(profesionalDeepLink)
     }
-    for (const abogado of todosAbogados.filter(l => picked.includes(l.id))) {
+    // Modal de nueva consulta (multi-chat): profesional pasado por override.
+    if (overrides.profDirecto && !todosAbogados.some(l => l.id === overrides.profDirecto.id)) {
+      todosAbogados.push(overrides.profDirecto)
+    }
+    for (const abogado of todosAbogados.filter(l => pickedIds.includes(l.id))) {
       // El email lo resuelve /api/notify server-side a partir del lawyerId,
       // así el browser nunca descarga correos de profesionales.
       await notificarAbogado({ lawyerId: abogado.id, roomId: room.id })
     }
     // Correo de trazabilidad al gestor: su QR fue usado (solo si trae código).
     if (room.codigo_referencia) notificarGestorInicio(room.id)
+    // Recuerda los datos del cliente: la próxima consulta no repite el formulario.
+    guardarDatosCliente({ ...formData, descripcion })
     setRoomId(room.id); setRoomStatus(room.status || 'waiting'); setRoomArea(areas.join(', '))
     setRoomCodigo(codigoRef || ''); setPicked([])
+    setNuevaConsulta(null)
     setStep('chat'); setSending(false)
+    cargarCasos()   // refresca la lista (habilita el botón "← Mis casos")
+  }
+
+  // Confirmación del modal de nueva consulta (multi-chat): crea la sala con el
+  // profesional elegido usando los datos guardados del cliente + la descripción
+  // que dejó/edito en el modal. Si no hay datos guardados, cae al formulario
+  // completo con el profesional bloqueado.
+  async function confirmarNuevaConsulta(descripcion) {
+    if (!nuevaConsulta?.prof) return
+    const { prof, tipo } = nuevaConsulta
+    const saved = leerDatosCliente()
+    const areasProf = normalizarAreas(prof.area_derecho || '', tipo)
+
+    if (!saved?.nombre) {
+      // Sin datos previos → formulario completo (profesional pre-seleccionado).
+      setNuevaConsulta(null)
+      setDesdeIA(false); setProfesionalIA(null); setTriageResumen(''); setCostoIA('')
+      setSolicitudAbierta(false)
+      setProfesionalDeepLink(prof)
+      setPicked([prof.id])
+      setAreasBloqueadas(areasProf.length > 0)
+      setForm(f => ({
+        ...f, tipo_profesional: tipo,
+        areas: areasProf.length ? areasProf : f.areas,
+        descripcion: descripcion || f.descripcion,
+      }))
+      setStep('form')
+      return
+    }
+
+    const fd = {
+      ...saved,
+      tipo_profesional: tipo,
+      areas: areasProf.length ? areasProf : ['Consulta general'],
+      descripcion: (descripcion || '').trim() || 'El cliente inicia una nueva consulta.',
+    }
+    setForm(f => ({ ...f, ...fd }))
+    await startChat({ form: fd, picked: [prof.id], profDirecto: prof })
   }
 
   // ── Publicar "solicitud abierta" (modelo claim tipo Uber/DiDi) ──────────
@@ -1620,6 +2086,14 @@ export default function ChatSection() {
     setSending(true); setFormError('')
     const hash      = localStorage.getItem('chat_cedula_hash')
     const codigoRef = localStorage.getItem('chat_codigo_ref') || null
+
+    // Mismo tope de 5 casos abiertos que en startChat.
+    const existentes = await fetchMisSalas(hash)
+    if ((existentes || []).filter(r => esSalaAbierta(r.status)).length >= MAX_CASOS_ABIERTOS) {
+      setFormError('Ya tienes 5 casos abiertos. Si quieres hablar con más profesionales, tienes que eliminar alguna conversación de los casos abiertos.')
+      setSending(false)
+      return
+    }
     const { nombre, apellido, areas, descripcion, ciudad, departamento, barrio, correo, celular, genero } = form
     const ubicacionTxt = barrio ? `${ciudad} - ${barrio}, ${departamento}` : `${ciudad}, ${departamento}`
 
@@ -1649,6 +2123,7 @@ export default function ChatSection() {
       }
       // Trazabilidad al gestor también en el flujo de solicitud abierta.
       if (codigoRef) notificarGestorInicio(data.roomId)
+      guardarDatosCliente(form)
       setRoomId(data.roomId); setRoomStatus('open'); setRoomArea(areas.join(', '))
       setRoomCodigo(codigoRef || ''); setPicked([])
       setStep('esperando'); setSending(false)
@@ -1659,10 +2134,11 @@ export default function ChatSection() {
   }
 
   async function loadMessages(rid) {
-    // Últimos 300 en vez del historial completo (salas largas/reabiertas); si
-    // la respuesta es un error, conserva lo visible en pantalla.
-    const { data } = await supabase.from('chat_messages').select('*').eq('room_id', rid).order('created_at', { ascending: false }).limit(300)
-    if (Array.isArray(data)) setMessages(data.reverse())
+    // Últimos 300 en vez del historial completo (salas largas/reabiertas).
+    // Con respaldo por RPC si el select directo no ve nada (JWT ausente).
+    const hash = localStorage.getItem('chat_cedula_hash')
+    const data = await fetchMensajesCliente(hash, rid, 300)
+    if (Array.isArray(data)) setMessages([...data].reverse())
   }
 
   async function sendMessage() {
@@ -1676,10 +2152,17 @@ export default function ChatSection() {
     setInput('')
     const { error } = await supabase.from('chat_messages').insert({ room_id: roomId, sender_type:'client', lawyer_id: null, content })
     if (error) {
-      // Antes el texto desaparecía en silencio si el insert fallaba (red móvil,
-      // sala recién cerrada). Se restaura (si no escribió otra cosa) y se avisa.
-      setInput(prev => prev ? prev : content)
-      setSendError('No se pudo enviar el mensaje. Revisa tu conexión e intenta de nuevo.')
+      // Respaldo por RPC (SECURITY DEFINER): cubre el caso sin JWT de cliente.
+      const hash = localStorage.getItem('chat_cedula_hash')
+      const { ok } = await rpcCliente('enviar_mensaje_cliente', {
+        p_client_token: hash, p_room_id: roomId, p_content: content,
+      })
+      if (!ok) {
+        // Antes el texto desaparecía en silencio si el insert fallaba (red móvil,
+        // sala recién cerrada). Se restaura (si no escribió otra cosa) y se avisa.
+        setInput(prev => prev ? prev : content)
+        setSendError('No se pudo enviar el mensaje. Revisa tu conexión e intenta de nuevo.')
+      }
     }
   }
 
@@ -1905,27 +2388,47 @@ export default function ChatSection() {
 
           <div className={styles.centerContent}>
             {step === 'cedula' && (
-              <StepCedula onNew={handleNew} onResume={handleResume} />
+              <StepCedula onNew={handleNew} onCasos={abrirMisCasos} />
             )}
 
             {step === 'chat' && (
               <div className={styles.chatWrap}>
 
                 <div className={styles.chatHeader}>
-                  <div>
-                    <p className={styles.chatTitle}>Consulta — {roomArea || form.areas.join(', ')}</p>
-                    <p className={styles.chatStatus}>
-                      {roomStatus === 'waiting' ? 'Esperando que un abogado se una…'
-                        : roomStatus === 'active' ? (profesionalNombre ? `Chat activo · ${profesionalNombre}` : 'Chat activo')
-                        : 'Consulta finalizada'}
-                    </p>
-                    {/* ── Código de referencia visible ── */}
-                    {roomCodigo && (
-                      <p style={{ fontSize:'0.68rem', color:'var(--gold)', letterSpacing:'0.12em',
-                        fontFamily:"'Courier New', monospace", marginTop:4, opacity:0.8 }}>
-                        Ref: {roomCodigo}
-                      </p>
+                  <div style={{ display:'flex', alignItems:'flex-start', gap:12 }}>
+                    {/* Volver a la lista de casos (multi-chat) sin perder nada */}
+                    {misCasos.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={volverAMisCasos}
+                        aria-label="Volver a mis casos"
+                        title="Volver a mis casos"
+                        style={{
+                          background:'linear-gradient(135deg,#f2d580,#c9a84c 60%,#b8942f)',
+                          border:'none', color:'#4a330f',
+                          borderRadius:10, padding:'7px 12px', cursor:'pointer',
+                          fontSize:'0.74rem', fontWeight:800, whiteSpace:'nowrap', flexShrink:0,
+                          boxShadow:'0 2px 8px rgba(0,0,0,0.25)',
+                        }}
+                      >
+                        ← Mis casos
+                      </button>
                     )}
+                    <div>
+                      <p className={styles.chatTitle}>Consulta — {roomArea || form.areas.join(', ')}</p>
+                      <p className={styles.chatStatus}>
+                        {roomStatus === 'waiting' ? 'Esperando que un abogado se una…'
+                          : roomStatus === 'active' ? (profesionalNombre ? `Chat activo · ${profesionalNombre}` : 'Chat activo')
+                          : 'Consulta finalizada'}
+                      </p>
+                      {/* ── Código de referencia visible ── */}
+                      {roomCodigo && (
+                        <p style={{ fontSize:'0.68rem', color:'var(--gold)', letterSpacing:'0.12em',
+                          fontFamily:"'Courier New', monospace", marginTop:4, opacity:0.8 }}>
+                          Ref: {roomCodigo}
+                        </p>
+                      )}
+                    </div>
                   </div>
                 </div>
 
@@ -1942,11 +2445,45 @@ export default function ChatSection() {
                   <a href="/terminos" target="_blank" rel="noopener noreferrer" style={{ color:'#6d3c1b', fontWeight:700 }}>términos</a>.
                 </div>
 
+                {/* ── Confianza: documentos del profesional (solo-ver) + cédula ── */}
+                {roomStatus === 'active' && docsInfo?.ok &&
+                  (docsInfo.docs?.tarjeta || docsInfo.docs?.certBancario || docsInfo.docs?.certDisciplinario || docsInfo.cedula) && (
+                  <div style={{
+                    padding: '8px 16px', borderBottom: '1px solid rgba(109,60,27,0.08)',
+                    display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center',
+                    background: 'rgba(201,168,76,0.06)',
+                  }}>
+                    {[
+                      docsInfo.docs?.tarjeta          && { key: 'tarjeta',          label: 'Tarjeta profesional' },
+                      docsInfo.docs?.certBancario     && { key: 'certBancario',     label: 'Cuenta bancaria certificada' },
+                      docsInfo.docs?.certDisciplinario && { key: 'certDisciplinario', label: 'Certificado disciplinario' },
+                    ].filter(Boolean).map(d => (
+                      <button key={d.key} type="button"
+                        onClick={() => abrirDoc(d.key, d.label)}
+                        style={{
+                          border: '1px solid rgba(109,60,27,0.25)', background: '#fff',
+                          borderRadius: 999, padding: '5px 12px', fontSize: '0.72rem',
+                          fontWeight: 600, color: '#6d3c1b', cursor: 'pointer',
+                        }}>
+                        {d.label}
+                      </button>
+                    ))}
+                    {docsInfo.cedula && (
+                      <span style={{ fontSize: '0.72rem', color: 'rgba(109,60,27,0.75)', fontWeight: 600, marginLeft: 'auto' }}>
+                        C.C. {formatCedula(docsInfo.cedula)}
+                      </span>
+                    )}
+                  </div>
+                )}
+
                 {/* Cobro de la asesoría (manual, directo al profesional) */}
                 <CobroClienteCard
                   roomId={roomId}
                   clientToken={localStorage.getItem('chat_cedula_hash')}
                   profesionalNombre={profesionalNombre}
+                  onVerCertificado={docsInfo?.docs?.certBancario
+                    ? () => abrirDoc('certBancario', 'Cuenta bancaria certificada')
+                    : null}
                 />
 
                 <div
@@ -2141,6 +2678,196 @@ export default function ChatSection() {
         </div>
       )}
 
+      {/* ── Mis casos abiertos (multi-chat, máx 5) ─────────────────────────
+          El cliente puede tener varias consultas a la vez. Desde aquí abre,
+          elimina o inicia una nueva (si tiene cupo). */}
+      {step === 'casos' && (
+        <div className={styles.floatingLayout}>
+          <SideCards cards={CARDS_LEFT} side="left" />
+          <div className={styles.centerContent}>
+            <div className={`${styles.card} aap-card-casos`} style={{ boxSizing:'border-box' }}>
+              <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:10, flexWrap:'wrap', marginBottom:2 }}>
+                <p className={styles.cedulaTitle} style={{ marginBottom:0 }}>Tus casos abiertos</p>
+                <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                  <span style={{
+                    fontSize:'0.74rem', fontWeight:700, padding:'3px 10px', borderRadius:999,
+                    background: misCasos.length >= MAX_CASOS_ABIERTOS ? 'rgba(163,58,42,0.12)' : 'rgba(201,168,76,0.16)',
+                    color: misCasos.length >= MAX_CASOS_ABIERTOS ? '#a33a2a' : '#8a6a28',
+                  }}>
+                    {misCasos.length}/{MAX_CASOS_ABIERTOS}
+                  </span>
+                  {/* Salir: arriba a la derecha, como acción secundaria clara */}
+                  <button type="button" onClick={resetToStart}
+                    aria-label="Salir de mis casos"
+                    style={{
+                      border:'1px solid rgba(109,60,27,0.3)', background:'#fff',
+                      color:'#6d3c1b', borderRadius:999, padding:'6px 14px',
+                      fontSize:'0.74rem', fontWeight:700, cursor:'pointer',
+                    }}>
+                    Salir ✕
+                  </button>
+                </div>
+              </div>
+              <p className={styles.cedulaHint} style={{ marginBottom:14 }}>
+                Retoma una conversación o inicia una nueva con otro profesional.
+              </p>
+
+              {casosLoading && <p style={{ color:'rgba(109,60,27,0.6)', fontSize:'0.85rem' }}>Cargando tus casos…</p>}
+
+              {!casosLoading && misCasos.length === 0 && (
+                <p style={{ color:'rgba(109,60,27,0.6)', fontSize:'0.85rem' }}>
+                  No tienes casos abiertos. Inicia una nueva consulta cuando quieras.
+                </p>
+              )}
+
+              <div style={{ display:'grid', gap:10, minWidth:0 }}>
+                {misCasos.map(c => {
+                  const nombreProf = c.prof_nombre || 'Esperando profesional'
+                  const fecha = c.last_msg_at || c.created_at
+                  return (
+                    <div key={c.id} style={{
+                      display:'flex', alignItems:'center', gap:10, flexWrap:'wrap',
+                      width:'100%', boxSizing:'border-box', minWidth:0, overflow:'hidden',
+                      padding:'12px 14px', borderRadius:14,
+                      border:'1px solid rgba(109,60,27,0.15)', background:'rgba(255,255,255,0.6)',
+                    }}>
+                      <div aria-hidden="true" style={{
+                        width:44, height:44, borderRadius:'50%', flexShrink:0,
+                        background: c.prof_foto
+                          ? `center / cover no-repeat url(${c.prof_foto})`
+                          : 'rgba(201,168,76,0.18)',
+                        display:'flex', alignItems:'center', justifyContent:'center',
+                        color:'#8a6a28', fontWeight:700,
+                      }}>
+                        {!c.prof_foto && (c.prof_nombre ? c.prof_nombre[0] : '…')}
+                      </div>
+                      <div style={{ minWidth:0, flex:'1 1 140px' }}>
+                        <p style={{ margin:0, fontWeight:700, color:'#6d3c1b', fontSize:'0.9rem', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                          {nombreProf}
+                          <span style={{
+                            marginLeft:8, fontSize:'0.64rem', fontWeight:700, letterSpacing:'0.04em',
+                            padding:'2px 8px', borderRadius:999, verticalAlign:'middle',
+                            background: c.status === 'active' ? 'rgba(47,133,90,0.14)' : 'rgba(201,168,76,0.18)',
+                            color: c.status === 'active' ? '#2f855a' : '#8a6a28',
+                          }}>
+                            {c.status === 'active' ? 'Activo' : c.status === 'open' ? 'Publicada' : 'En espera'}
+                          </span>
+                        </p>
+                        <p style={{ margin:'3px 0 0', fontSize:'0.74rem', color:'rgba(109,60,27,0.6)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                          {c.area_derecho || 'Consulta'}
+                          {fecha && ` · ${new Date(fecha).toLocaleDateString('es-CO', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' })}`}
+                        </p>
+                      </div>
+                      {/* flex-grow + justify-end: en pantallas angostas los botones
+                          bajan a su propia línea alineados a la derecha (no se
+                          salen del recuadro). */}
+                      <div style={{ display:'flex', gap:6, flex:'1 0 150px', justifyContent:'flex-end', minWidth:0 }}>
+                        <button type="button" className={styles.btnGold}
+                          style={{ padding:'8px 14px', fontSize:'0.78rem' }}
+                          onClick={() => handleResume(c)}>
+                          Abrir
+                        </button>
+                        <button type="button"
+                          onClick={() => setCasoEliminando(c)}
+                          aria-label={`Eliminar conversación con ${nombreProf}`}
+                          title="Eliminar conversación"
+                          style={{
+                            border:'1px solid rgba(163,58,42,0.35)', background:'none', color:'#a33a2a',
+                            borderRadius:10, padding:'8px 10px', cursor:'pointer', fontSize:'0.78rem', fontWeight:600,
+                          }}>
+                          Eliminar
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+
+              {misCasos.length >= MAX_CASOS_ABIERTOS ? (
+                <p style={{
+                  marginTop:14, padding:'10px 14px', borderRadius:12,
+                  background:'rgba(163,58,42,0.08)', border:'1px solid rgba(163,58,42,0.25)',
+                  color:'#8f2f22', fontSize:'0.8rem', lineHeight:1.5,
+                }}>
+                  Si quieres hablar con más profesionales, tienes que eliminar alguna
+                  conversación de los casos abiertos.
+                </p>
+              ) : (
+                <button className={styles.btnGold} style={{ marginTop:16, width:'100%' }}
+                  onClick={() => {
+                    setProfesionalDeepLink(null); setDesdeIA(false); setProfesionalIA(null)
+                    setTriageResumen(''); setCostoIA(''); setSolicitudAbierta(false)
+                    setAreasBloqueadas(false); setPicked([])
+                    setStep('metodo')
+                  }}>
+                  + Nueva consulta
+                </button>
+              )}
+            </div>
+          </div>
+          <SideCards cards={CARDS_RIGHT} side="right" />
+        </div>
+      )}
+
+      {/* Confirmación: eliminar (cerrar) una conversación para liberar cupo */}
+      {casoEliminando && (
+        <div className={styles.contactoOverlay} role="dialog" aria-modal="true"
+          onClick={e => { if (e.target === e.currentTarget && !eliminandoBusy) setCasoEliminando(null) }}
+          style={{ position:'fixed', inset:0, zIndex:1000, display:'flex', alignItems:'center', justifyContent:'center', background:'rgba(30,20,10,0.55)', padding:16 }}>
+          <div style={{ background:'#fffef7', borderRadius:18, padding:'24px 22px', maxWidth:400, width:'100%', boxShadow:'0 18px 50px rgba(0,0,0,0.3)', textAlign:'center' }}>
+            <h4 style={{ margin:'0 0 8px', color:'#6d3c1b', fontSize:'1.02rem' }}>Eliminar conversación</h4>
+            <p style={{ margin:'0 0 18px', fontSize:'0.85rem', lineHeight:1.55, color:'#634f3d' }}>
+              Se cerrará tu conversación
+              {casoEliminando.prof_nombre ? <> con <strong>{casoEliminando.prof_nombre}</strong></> : null} y
+              liberarás un cupo. El profesional conservará el historial. ¿Deseas continuar?
+            </p>
+            <div style={{ display:'flex', gap:8, justifyContent:'center' }}>
+              <button type="button" disabled={eliminandoBusy}
+                onClick={() => setCasoEliminando(null)}
+                style={{ border:'1px solid rgba(109,60,27,0.3)', background:'none', borderRadius:10, padding:'9px 14px', cursor:'pointer', fontSize:'0.8rem', fontWeight:600, color:'#6d3c1b' }}>
+                Cancelar
+              </button>
+              <button type="button" disabled={eliminandoBusy}
+                onClick={async () => {
+                  setEliminandoBusy(true)
+                  const hash = localStorage.getItem('chat_cedula_hash')
+                  const ok = await cerrarSalaComoCliente(hash, casoEliminando.id)
+                  if (!ok) {
+                    // Fallback si la RPC aún no existe: intento directo (RLS mediante).
+                    await supabase.from('chat_rooms').update({ status: 'closed' }).eq('id', casoEliminando.id)
+                  }
+                  setEliminandoBusy(false)
+                  setCasoEliminando(null)
+                  cargarCasos()
+                }}
+                style={{ border:'none', background:'#a33a2a', color:'#fff', borderRadius:10, padding:'9px 14px', cursor:'pointer', fontSize:'0.8rem', fontWeight:700 }}>
+                {eliminandoBusy ? 'Eliminando…' : 'Eliminar conversación'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de nueva consulta con un profesional elegido (multi-chat) */}
+      {nuevaConsulta?.prof && (
+        <NuevaConsultaModal
+          prof={nuevaConsulta.prof}
+          sending={sending}
+          error={formError}
+          onCancel={() => { setNuevaConsulta(null); setFormError('') }}
+          onConfirm={confirmarNuevaConsulta}
+        />
+      )}
+
+      {/* Visor SOLO-LECTURA de documentos del profesional (confianza) */}
+      {docViewer && (
+        <VisorDocumento
+          titulo={docViewer.titulo}
+          url={docViewer.url}
+          onClose={() => setDocViewer(null)}
+        />
+      )}
+
       {/* ── Paso intermedio: ¿cómo elegir profesional? ──
           Tras la cédula, el cliente decide si quiere ayuda de la IA para
           encontrar profesional o prefiere elegirlo él mismo. El resto del
@@ -2150,7 +2877,7 @@ export default function ChatSection() {
           <SideCards cards={CARDS_LEFT} side="left" />
           <div className={styles.centerContent}>
             <div className={`${styles.card} aap-card-cedula`}>
-              <button className={styles.btnBack} onClick={() => setStep('cedula')}>
+              <button className={styles.btnBack} onClick={() => setStep(misCasos.length ? 'casos' : 'cedula')}>
                 ← Volver
               </button>
               <p className={styles.cedulaTitle}>¿Cómo quieres elegir tu profesional?</p>
@@ -2269,7 +2996,8 @@ export default function ChatSection() {
       {step === 'form' && (
         <div className={styles.form}>
           <div className={`${styles.formCard} aap-card-form`}>
-            <button className={styles.btnBack} onClick={() => setStep('cedula')}>← Volver</button>
+            {/* Volver SIN perder lo escrito: el estado del formulario se conserva. */}
+            <button className={styles.btnBack} onClick={() => setStep(misCasos.length ? 'casos' : 'metodo')}>← Volver</button>
 
             {/* ── Deep-link desde la tarjeta del profesional: viene ya elegido y
                 se muestra BLOQUEADO. El cliente completa sus datos + descripción
@@ -2605,7 +3333,12 @@ export default function ChatSection() {
             </div>
 
             <p className={styles.esperandoHint}>Puedes dejar esta ventana abierta, no necesitas recargar.</p>
-            <button className={styles.esperandoCancel} onClick={resetToStart}>Cancelar</button>
+            {/* Con otros casos abiertos: volver a la lista sin cancelar nada. */}
+            {misCasos.length > 0 ? (
+              <button className={styles.esperandoCancel} onClick={volverAMisCasos}>← Volver a mis casos</button>
+            ) : (
+              <button className={styles.esperandoCancel} onClick={resetToStart}>Cancelar</button>
+            )}
           </motion.div>
         </div>
       )}

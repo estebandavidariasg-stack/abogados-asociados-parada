@@ -99,8 +99,23 @@ function IconFlag() {
   )
 }
 
+function IconChat() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+    </svg>
+  )
+}
+
 /* Config declarativa por tipo: icono, clase de color, etiqueta y si reasigna. */
 const TIPOS = {
+  mensaje_interno: {
+    label: 'Chat interno',
+    Icon: IconChat,
+    iconClass: 'iconReview',
+    abreInterno: true,
+  },
   inactividad: {
     label: 'Inactividad',
     Icon: IconWarn,
@@ -145,7 +160,7 @@ const TIPOS = {
    en la campana de alertas. Se filtra en cliente tras el fetch. */
 const TIPOS_DINERO = ['pago', 'cobro']
 
-export default function NotificationBell({ onOpenRoom, modo = 'alertas' }) {
+export default function NotificationBell({ onOpenRoom, onOpenInterno, miId, modo = 'alertas' }) {
   const esDinero = modo === 'dinero'
   const [open, setOpen]         = useState(false)
   const [items, setItems]       = useState([])
@@ -183,9 +198,55 @@ export default function NotificationBell({ onOpenRoom, modo = 'alertas' }) {
         { headers }
       )
       const data = await res.json()
-      if (Array.isArray(data)) setItems(data)
+      const notifs = Array.isArray(data) ? data : []
+
+      // La campana de alertas suma los mensajes internos sin leer, agrupados
+      // por remitente (así el admin se entera sin tener la pestaña abierta).
+      let internos = []
+      if (!esDinero && miId) {
+        try {
+          const mRes = await fetch(
+            `${SUPABASE_URL}/rest/v1/mensajes_internos?to_id=eq.${miId}&leido=eq.false&select=from_id,created_at&order=created_at.desc&limit=200`,
+            { headers }
+          )
+          const msgs = await mRes.json()
+          if (Array.isArray(msgs) && msgs.length) {
+            const porRemitente = new Map()
+            msgs.forEach(m => {
+              const g = porRemitente.get(m.from_id)
+              if (g) g.count += 1
+              else porRemitente.set(m.from_id, { count: 1, latest: m.created_at })
+            })
+            const ids = [...porRemitente.keys()]
+            const pRes = await fetch(
+              `${SUPABASE_URL}/rest/v1/profiles?id=in.(${ids.join(',')})&select=id,nombre,apellido,username,rol`,
+              { headers }
+            )
+            const profs = await pRes.json()
+            const byId = new Map((Array.isArray(profs) ? profs : []).map(p => [p.id, p]))
+            internos = ids.map(fid => {
+              const p = byId.get(fid)
+              const nombre = p
+                ? (`${p.nombre || ''} ${p.apellido || ''}`.trim() || `@${p.username}`)
+                : 'Profesional'
+              const g = porRemitente.get(fid)
+              return {
+                id: `mi_${fid}`,
+                tipo: 'mensaje_interno',
+                created_at: g.latest,
+                client_nombre: nombre,
+                area: p?.rol === 'contador' ? 'Contador' : p?.rol === 'gestor' ? 'Gestor' : 'Abogado',
+                mensaje: g.count === 1 ? '1 mensaje sin leer' : `${g.count} mensajes sin leer`,
+                _fromId: fid,
+              }
+            })
+          }
+        } catch { /* silencioso: la campana sigue con las notificaciones */ }
+      }
+
+      setItems([...internos, ...notifs].sort((a, b) => new Date(b.created_at) - new Date(a.created_at)))
     } catch { /* silencioso */ }
-  }, [esDinero])
+  }, [esDinero, miId])
 
   useEffect(() => {
     fetchItems()
@@ -226,36 +287,62 @@ export default function NotificationBell({ onOpenRoom, modo = 'alertas' }) {
     }
   }, [open, updateCoords])
 
-  async function markRead(id) {
-    setItems(prev => prev.filter(n => n.id !== id))   // optimista
+  async function markRead(n) {
+    const item = typeof n === 'object' ? n : items.find(x => x.id === n)
+    if (!item) return
+    setItems(prev => prev.filter(x => x.id !== item.id))   // optimista
     try {
       const headers = await getAuthHeaders()
-      await fetch(`${SUPABASE_URL}/rest/v1/notificaciones?id=eq.${id}`, {
-        method: 'PATCH',
-        headers: { ...headers, Prefer: 'return=minimal' },
-        body: JSON.stringify({ leido: true }),
-      })
+      if (item.tipo === 'mensaje_interno') {
+        // Sintética: marca leídos los mensajes de ese remitente.
+        await fetch(
+          `${SUPABASE_URL}/rest/v1/mensajes_internos?to_id=eq.${miId}&from_id=eq.${item._fromId}&leido=eq.false`,
+          { method: 'PATCH', headers: { ...headers, Prefer: 'return=minimal' }, body: JSON.stringify({ leido: true }) }
+        )
+      } else {
+        await fetch(`${SUPABASE_URL}/rest/v1/notificaciones?id=eq.${item.id}`, {
+          method: 'PATCH',
+          headers: { ...headers, Prefer: 'return=minimal' },
+          body: JSON.stringify({ leido: true }),
+        })
+      }
     } catch { fetchItems() }   // si falla, re-sincroniza
   }
 
   async function markAll() {
     if (items.length === 0) return
-    const ids = items.map(n => n.id)
+    const notifIds = items.filter(n => n.tipo !== 'mensaje_interno').map(n => n.id)
+    const internos = items.filter(n => n.tipo === 'mensaje_interno')
     setItems([])
     try {
       const headers = await getAuthHeaders()
-      await fetch(`${SUPABASE_URL}/rest/v1/notificaciones?id=in.(${ids.join(',')})`, {
-        method: 'PATCH',
-        headers: { ...headers, Prefer: 'return=minimal' },
-        body: JSON.stringify({ leido: true }),
-      })
+      if (notifIds.length) {
+        await fetch(`${SUPABASE_URL}/rest/v1/notificaciones?id=in.(${notifIds.join(',')})`, {
+          method: 'PATCH',
+          headers: { ...headers, Prefer: 'return=minimal' },
+          body: JSON.stringify({ leido: true }),
+        })
+      }
+      if (internos.length && miId) {
+        await fetch(
+          `${SUPABASE_URL}/rest/v1/mensajes_internos?to_id=eq.${miId}&leido=eq.false`,
+          { method: 'PATCH', headers: { ...headers, Prefer: 'return=minimal' }, body: JSON.stringify({ leido: true }) }
+        )
+      }
     } catch { fetchItems() }
   }
 
   function verConversacion(n) {
-    markRead(n.id)
+    markRead(n)
     setOpen(false)
     onOpenRoom?.(n.room_id)
+  }
+
+  function abrirInterno(n) {
+    // No marca leído: el chat interno lo hace al abrir la conversación.
+    setItems(prev => prev.filter(x => x.id !== n.id))
+    setOpen(false)
+    onOpenInterno?.(n._fromId)
   }
 
   const count = items.length
@@ -306,7 +393,7 @@ export default function NotificationBell({ onOpenRoom, modo = 'alertas' }) {
           const monto = cfg.conMonto ? fmtCOP(n.monto) : ''
           // Contexto: los pagos/cobros muestran el actor (gestor o profesional);
           // los demás muestran al cliente.
-          const contextoLabel = cfg.esGestor ? 'Gestor' : 'Cliente'
+          const contextoLabel = cfg.abreInterno ? 'Profesional' : cfg.esGestor ? 'Gestor' : 'Cliente'
           return (
             <div key={n.id} className={`${styles.card} ${cfg.cardClass ? styles[cfg.cardClass] : ''}`}>
               <div className={`${styles.cardIcon} ${styles[cfg.iconClass]}`}>
@@ -337,7 +424,11 @@ export default function NotificationBell({ onOpenRoom, modo = 'alertas' }) {
                 {n.mensaje && <p className={styles.cardMsg}>{n.mensaje}</p>}
 
                 <div className={styles.cardActions}>
-                  {cfg.reasigna ? (
+                  {cfg.abreInterno ? (
+                    <button className={styles.btnPrimary} onClick={() => abrirInterno(n)}>
+                      Abrir chat interno
+                    </button>
+                  ) : cfg.reasigna ? (
                     <button
                       className={`${styles.btnPrimary} ${cfg.cardClass ? styles.btnCriticalAction : ''}`}
                       onClick={() => setReassign(n)}

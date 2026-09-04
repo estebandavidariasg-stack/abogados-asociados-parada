@@ -49,6 +49,21 @@ export async function downloadQRCard({
   const SCALE = 2
   const W = 600, H = 860
 
+  // Las MISMAS tipografías de la página (Cinzel para marca/nombre, Poppins
+  // para el resto). El canvas solo las usa si ya están cargadas en el
+  // documento — se fuerzan aquí; si alguna falla, cae a serif/sans genérica.
+  try {
+    await Promise.all([
+      document.fonts.load('700 24px Cinzel'),
+      document.fonts.load('700 20px Cinzel'),
+      document.fonts.load('600 10px Poppins'),
+      document.fonts.load('700 26px Poppins'),
+      document.fonts.load('400 11px Poppins'),
+    ])
+  } catch { /* fuentes genéricas como respaldo */ }
+  const F_DISPLAY = 'Cinzel, Georgia, serif'
+  const F_BODY    = 'Poppins, Arial, sans-serif'
+
   const canvas = document.createElement('canvas')
   canvas.width  = W * SCALE
   canvas.height = H * SCALE
@@ -90,21 +105,17 @@ export async function downloadQRCard({
     ctx.beginPath(); ctx.moveTo(cx,cy); ctx.lineTo(cx,cy+dy*24); ctx.stroke()
   })
 
-  // Cabecera firma.
+  // Cabecera firma (solo la marca — sin el rótulo "Despacho jurídico").
   ctx.textAlign = 'center'
-  ctx.fillStyle = '#9a7a2c'
-  ctx.font = '600 9px sans-serif'
-  ctx.fillText('─── DESPACHO JURÍDICO ───', W / 2, 74)
-
-  ctx.font = 'bold 24px serif'
+  ctx.font = `700 26px ${F_DISPLAY}`
   ctx.fillStyle = '#472f29'
   const wParada = ctx.measureText('PARADA ').width
   const wBridge = ctx.measureText('BRIDGE').width
   const startX = W / 2 - (wParada + wBridge) / 2
   ctx.textAlign = 'left'
-  ctx.fillText('PARADA ', startX, 118)
+  ctx.fillText('PARADA ', startX, 108)
   ctx.fillStyle = '#9a7a2c'
-  ctx.fillText('BRIDGE', startX + wParada, 118)
+  ctx.fillText('BRIDGE', startX + wParada, 108)
   ctx.textAlign = 'center'
 
   // Separador 1.
@@ -115,8 +126,8 @@ export async function downloadQRCard({
   ctx.beginPath(); ctx.moveTo(W/2,143); ctx.lineTo(W/2+5,148); ctx.lineTo(W/2,153); ctx.lineTo(W/2-5,148); ctx.closePath(); ctx.fill()
 
   // Etiqueta.
-  ctx.fillStyle = 'rgba(71,47,41,0.6)'
-  ctx.font = '600 10px sans-serif'
+  ctx.fillStyle = 'rgba(71,47,41,0.65)'
+  ctx.font = `600 10px ${F_BODY}`
   ctx.fillText(etiqueta, W / 2, 178)
 
   // QR a 700px — nítido en canvas 2x.
@@ -145,10 +156,18 @@ export async function downloadQRCard({
   ctx.stroke()
   ctx.drawImage(qrImg, qrX+10, qrY+10, qrSize-20, qrSize-20)
 
-  // Código.
+  // Código — Poppins con tracking (dibujado letra a letra), nada de monospace.
   ctx.fillStyle = '#6d3c1b'
-  ctx.font = 'bold 26px monospace'
-  ctx.fillText(codigo, W/2, 562)
+  ctx.font = `700 26px ${F_BODY}`
+  {
+    const chars = String(codigo).split('')
+    const TRACK = 3   // px extra entre caracteres (legibilidad del código)
+    const total = chars.reduce((s, c) => s + ctx.measureText(c).width, 0) + TRACK * (chars.length - 1)
+    let x = W / 2 - total / 2
+    ctx.textAlign = 'left'
+    chars.forEach(c => { ctx.fillText(c, x, 562); x += ctx.measureText(c).width + TRACK })
+    ctx.textAlign = 'center'
+  }
 
   // Separador 2.
   ctx.strokeStyle = 'rgba(169,132,47,0.28)'
@@ -161,24 +180,24 @@ export async function downloadQRCard({
   const titular = `${nombre} ${apellido}`.trim()
   if (titular) {
     ctx.fillStyle = '#472f29'
-    ctx.font = 'bold 20px serif'
+    ctx.font = `700 21px ${F_DISPLAY}`
     ctx.fillText(titular, W/2, 632)
   }
 
   if (subtitulo) {
-    ctx.fillStyle = 'rgba(109,60,27,0.7)'
-    ctx.font = '600 9.5px sans-serif'
-    ctx.fillText(subtitulo.toUpperCase(), W/2, titular ? 656 : 636)
+    ctx.fillStyle = 'rgba(109,60,27,0.75)'
+    ctx.font = `600 9.5px ${F_BODY}`
+    ctx.fillText(subtitulo.toUpperCase(), W/2, titular ? 658 : 636)
   }
 
   // Instrucción.
-  ctx.fillStyle = 'rgba(71,47,41,0.6)'
-  ctx.font = '11px sans-serif'
+  ctx.fillStyle = 'rgba(71,47,41,0.65)'
+  ctx.font = `400 11px ${F_BODY}`
   ctx.fillText(instruccion, W/2, 722)
 
   // URL de marca.
   ctx.fillStyle = '#9a7a2c'
-  ctx.font = '600 12px sans-serif'
+  ctx.font = `600 12px ${F_BODY}`
   ctx.fillText('paradabridge.com', W/2, 806)
 
   // Descargar.

@@ -6,6 +6,7 @@ import styles from './ProfilePage.module.css'
 import LawyerChatDashboard from '../components/chat/LawyerChatDashboard'
 import SolicitudesAbiertas from '../components/chat/SolicitudesAbiertas'
 import MisContratos from '../components/profile/MisContratos'
+import DocumentosConfianza from '../components/profile/DocumentosConfianza'
 import MisPagos from '../components/profile/MisPagos'
 import LawyerInternalChat from '../components/chat/LawyerInternalChat'
 import AsistenteIA from '../components/chat/AsistenteIA'
@@ -741,6 +742,11 @@ export default function ProfilePage() {
                 style={{ display: 'none' }}
                 onChange={handleTarjetaArchivoChange}
               />
+            </div>
+
+            {/* ── Documentos de confianza (cédula, certificados, oficina, web) ── */}
+            <div className={`${styles.field} ${styles.fullWidth}`}>
+              <DocumentosConfianza userId={user?.id} />
             </div>
 
             {/* Mensajes */}

@@ -429,8 +429,8 @@ export default function MisPagos({ userId }) {
                   <p className={styles.paidNote}>
                     <span>
                       {pago.pagado_at
-                        ? `Pagado el ${fmtFechaHora(pago.pagado_at)}. `
-                        : 'Pago confirmado. '}
+                        ? `Pagado el ${fmtFechaHora(pago.pagado_at)} · `
+                        : 'Pago confirmado · '}
                       Se habilitaron los datos de contacto y la descarga de archivos de esa consulta.
                     </span>
                   </p>

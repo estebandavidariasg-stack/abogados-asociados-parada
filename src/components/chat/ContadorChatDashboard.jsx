@@ -174,6 +174,25 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
   const [buscar,     setBuscar]     = useState('')
   const [fechaDesde, setFechaDesde] = useState('')
   const [fechaHasta, setFechaHasta] = useState('')
+  // Filtro "Verificadas": salas cuya revisión ya fue ATENDIDA por el admin.
+  const [soloVerificadas, setSoloVerificadas] = useState(false)
+  const [salasVerificadas, setSalasVerificadas] = useState(() => new Set())
+  useEffect(() => {
+    if (!lawyerId) return
+    let cancel = false
+    ;(async () => {
+      try {
+        const headers = await getAuthHeaders()
+        const r = await fetch(
+          `${SUPABASE_URL}/rest/v1/notificaciones?lawyer_id=eq.${lawyerId}&tipo=eq.verificacion&atendida=eq.true&select=room_id&limit=500`,
+          { headers }
+        )
+        const d = await r.json()
+        if (!cancel && Array.isArray(d)) setSalasVerificadas(new Set(d.map(n => n.room_id).filter(Boolean)))
+      } catch { /* sin política de SELECT → el filtro queda vacío */ }
+    })()
+    return () => { cancel = true }
+  }, [lawyerId])
 
   const fileRef      = useRef(null)
   const mensajesRef  = useRef(null)
@@ -235,6 +254,21 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
   const [adjuntarMenu, setAdjuntarMenu] = useState(false)
   const [dragging, setDragging] = useState(false)
   const [ubicarFirma, setUbicarFirma] = useState(null)
+  // Modelo contractual del perfil (uno solo, disponible en todos los chats).
+  const [modeloPath, setModeloPath] = useState(null)
+  useEffect(() => {
+    if (!lawyerId) return
+    let cancel = false
+    ;(async () => {
+      try {
+        const headers = await getAuthHeaders()
+        const r = await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${lawyerId}&select=modelo_contrato_path`, { headers })
+        const d = await r.json()
+        if (!cancel) setModeloPath(d?.[0]?.modelo_contrato_path || null)
+      } catch { /* sin modelo */ }
+    })()
+    return () => { cancel = true }
+  }, [lawyerId])
 
   // Genera y descarga el certificado de firma (PDF) al vuelo desde la traza.
   async function descargarCertificado(solicitudId) {
@@ -831,15 +865,16 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
     if (!cobroGratis) {
       const m = parseMiles(cobroMonto)
       if (!m || m <= 0) { setCobroErr('Ingresa un valor mayor a 0, o marca la asesoría como gratuita.'); return }
-      if (!cobroDatos.trim()) { setCobroErr('Ingresa tus datos de pago (Nequi, cuenta…) para que el cliente pueda pagarte.'); return }
     }
     setCobroBusy(true); setCobroErr('')
     try {
+      // Solo el precio: los datos bancarios salen del certificado bancario del
+      // perfil (el cliente lo consulta en el chat) y el concepto se eliminó.
       const row = await fijarCobro({
         roomId: activeRoom.id,
         monto: cobroGratis ? 0 : parseMiles(cobroMonto),
-        nota: cobroNota.trim() || null,
-        datosPago: cobroGratis ? null : cobroDatos.trim(),
+        nota: null,
+        datosPago: cobroGratis ? null : (cobroDatos.trim() || null),
       })
       setCobro(row)
       setCobroOpen(false)
@@ -954,6 +989,7 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
   const hastaTs = fechaHasta ? new Date(`${fechaHasta}T23:59:59.999`).getTime() : null
   const filtroActivo = !!(buscar.trim() || fechaDesde || fechaHasta)
   const filteredRooms = rooms.filter(room => {
+    if (soloVerificadas && !salasVerificadas.has(room.id)) return false
     if (buscarNorm && !normaliza(room.client_nombre).includes(buscarNorm)) return false
     if (desdeTs || hastaTs) {
       const ts = new Date(room.lastMsg?.created_at || room.created_at).getTime()
@@ -1019,10 +1055,30 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
               <button
                 type="button"
                 className={styles.clearAll}
-                onClick={() => { setBuscar(''); setFechaDesde(''); setFechaHasta('') }}
+                onClick={() => { setBuscar(''); setFechaDesde(''); setFechaHasta(''); setSoloVerificadas(false) }}
               >Limpiar</button>
             )}
           </div>
+
+          {/* Historial de verificaciones: solo las que el admin YA revisó */}
+          <button
+            type="button"
+            onClick={() => setSoloVerificadas(v => !v)}
+            aria-pressed={soloVerificadas}
+            title="Ver solo las conversaciones cuya revisión ya atendió el administrador"
+            style={{
+              marginTop: 8, alignSelf: 'flex-start',
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+              padding: '5px 12px', borderRadius: 999, cursor: 'pointer',
+              fontSize: '0.72rem', fontWeight: 600,
+              border: soloVerificadas ? '1px solid #2e9e5f' : '1px solid rgba(109,60,27,0.25)',
+              background: soloVerificadas ? 'rgba(46,158,95,0.12)' : 'transparent',
+              color: soloVerificadas ? '#1f5e3c' : 'rgba(109,60,27,0.75)',
+            }}
+          >
+            ✓ Verificadas por el admin
+            {salasVerificadas.size > 0 && <span>({salasVerificadas.size})</span>}
+          </button>
         </div>
 
         <div>
@@ -1137,16 +1193,28 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
                   )}
                   {!confirmClose && (
                     cobro?.estado === 'pendiente' && cobro?.marcado_cliente_at ? (
-                      <button
-                        type="button"
-                        className={styles.btnVerificar}
-                        style={{ background: '#e8f5ec', borderColor: '#2e9e5f', color: '#1f5e3c', fontWeight: 700 }}
-                        disabled={cobroBusy}
-                        onClick={confirmarRecibido}
-                        title="El cliente marcó que ya pagó — confirma que recibiste el pago"
-                      >
-                        {cobroBusy ? 'Confirmando…' : '✓ Confirmar pago recibido'}
-                      </button>
+                      <>
+                        {cobro?.comprobante_path && (
+                          <button
+                            type="button"
+                            className={styles.btnVerificar}
+                            onClick={() => openChatFile(cobro.comprobante_path)}
+                            title="Ver el comprobante de pago que adjuntó el cliente"
+                          >
+                            📎 Comprobante del cliente
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          className={styles.btnVerificar}
+                          style={{ background: '#e8f5ec', borderColor: '#2e9e5f', color: '#1f5e3c', fontWeight: 700 }}
+                          disabled={cobroBusy}
+                          onClick={confirmarRecibido}
+                          title="El cliente marcó que ya pagó — confirma que recibiste el pago"
+                        >
+                          {cobroBusy ? 'Confirmando…' : '✓ Confirmar pago recibido'}
+                        </button>
+                      </>
                     ) : (
                       <button type="button" className={styles.btnVerificar} onClick={abrirCobro}
                         title="Fijar el valor de la asesoría o marcarla gratuita">
@@ -1484,6 +1552,7 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
           modo="chat"
           roomId={activeRoom.id}
           abogadoId={activeRoom.id}
+          modeloPath={modeloPath}
           cliente={{
             nombre: activeRoom.client_nombre,
             correo: activeRoom.client_email,
@@ -1538,8 +1607,8 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
             style={{ textAlign: 'left', maxHeight: 'calc(100dvh - 40px)', overflowY: 'auto' }}>
             <h3 id="modalCobroTitleContador" className={styles.modalTitle} style={{ textAlign: 'center' }}>Cobro de la asesoría</h3>
             <p className={styles.modalText} style={{ textAlign: 'center' }}>
-              Define si esta asesoría se cobra o es gratuita. El cliente paga
-              directamente a tus datos de pago; Parada Bridge no intermedia el dinero.
+              Define si esta asesoría se cobra o es gratuita. El cliente te paga
+              directamente; Parada Bridge no intermedia el dinero.
             </p>
 
             <label className={styles.cobroCheck}>
@@ -1549,30 +1618,17 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
             </label>
 
             {!cobroGratis && (
-              <>
-                <div className={styles.cobroField}>
-                  <label className={styles.cobroLabel}>Valor a cobrar (COP)</label>
-                  <input type="text" inputMode="numeric" value={cobroMonto}
-                    onChange={e => { setCobroMonto(formatMiles(e.target.value)); setCobroErr('') }}
-                    placeholder="Ej: 80.000"
-                    className={`${styles.cobroInput} ${styles.cobroAmount}`} />
-                </div>
-                <div className={styles.cobroField}>
-                  <label className={styles.cobroLabel}>Tus datos de pago</label>
-                  <textarea value={cobroDatos} rows={2}
-                    onChange={e => { setCobroDatos(e.target.value); setCobroErr('') }}
-                    placeholder="Ej: Nequi 300 123 4567 · Bancolombia ahorros 123-456789-00"
-                    className={styles.cobroTextarea} />
-                  <p className={styles.cobroHint}>Se guardan en tu perfil para reutilizarlos.</p>
-                </div>
-                <div className={styles.cobroField}>
-                  <label className={styles.cobroLabel}>Concepto (opcional)</label>
-                  <input type="text" value={cobroNota} maxLength={120}
-                    onChange={e => setCobroNota(e.target.value)}
-                    placeholder="Ej: Concepto contable / tributario"
-                    className={styles.cobroInput} />
-                </div>
-              </>
+              <div className={styles.cobroField}>
+                <label className={styles.cobroLabel}>Valor a cobrar (COP)</label>
+                <input type="text" inputMode="numeric" value={cobroMonto}
+                  onChange={e => { setCobroMonto(formatMiles(e.target.value)); setCobroErr('') }}
+                  placeholder="Ej: 80.000"
+                  className={`${styles.cobroInput} ${styles.cobroAmount}`} />
+                <p className={styles.cobroHint}>
+                  El cliente verá tu cuenta bancaria certificada (la del registro)
+                  para consignarte y adjuntará su comprobante de pago.
+                </p>
+              </div>
             )}
 
             {cobroErr && <p className={styles.cobroErr}>{cobroErr}</p>}

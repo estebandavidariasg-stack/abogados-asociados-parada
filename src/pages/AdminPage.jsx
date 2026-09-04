@@ -73,6 +73,14 @@ export default function AdminPage() {
   const [recuperarSearch, setRecuperarSearch] = useState('')
   const [alertasTipo, setAlertasTipo]         = useState('todos')
   const [alertasSearch, setAlertasSearch]     = useState('')
+  // Registro de Inactividades: sub-pestaña (24h sin notificar / barrera 4h) + página.
+  const [alertasSub, setAlertasSub]           = useState('inactividad') // 'inactividad' | 'reasignacion'
+  const [alertasPage, setAlertasPage]         = useState(1)
+  // Recuperar chats: paginación (10 por página).
+  const [recupPage, setRecupPage]             = useState(1)
+  // Chat interno: mensajes sin leer (badge del riel + campana) y deep-link.
+  const [internosNoLeidos, setInternosNoLeidos] = useState(0)
+  const [internoToOpen, setInternoToOpen]     = useState(null)
   // Vista detalle del perfil (modal)
   const [previewProfile, setPreviewProfile]   = useState(null)
   // Sala a abrir en el visor (deep-link desde la campanita / correo)
@@ -105,6 +113,32 @@ export default function AdminPage() {
     setActiveTab('chats')
     setChatRoomToOpen(roomId)
   }
+
+  // Abrir el chat interno con un profesional (desde la campanita).
+  function handleOpenInterno(fromId) {
+    setInternoToOpen(fromId)
+    setActiveTab('chat_interno')
+  }
+
+  // Mensajes internos sin leer → badge del riel (poll 30s, pausado en oculto).
+  useEffect(() => {
+    if (loading || !user?.id || profile?.rol !== 'superadmin') return
+    let alive = true
+    async function tick() {
+      try {
+        const headers = await getAuthHeaders()
+        const res = await fetch(
+          `${SUPABASE_URL}/rest/v1/mensajes_internos?to_id=eq.${user.id}&leido=eq.false&select=id`,
+          { headers: { ...headers, Prefer: 'count=exact', Range: '0-0' } }
+        )
+        const total = parseInt((res.headers.get('content-range') || '').split('/')[1], 10)
+        if (alive && Number.isFinite(total)) setInternosNoLeidos(total)
+      } catch { /* poll siguiente */ }
+    }
+    tick()
+    const id = setInterval(() => { if (!document.hidden) tick() }, 30_000)
+    return () => { alive = false; clearInterval(id) }
+  }, [user?.id, profile?.rol, loading, activeTab])
 
   async function fetchAll() {
     setLoadingData(true)
@@ -148,51 +182,75 @@ export default function AdminPage() {
     setApproved(Array.isArray(data) ? data : [])
   }
 
+  // Solicitudes en proceso (aprobación o rechazo): la tarjeta se pinta en
+  // gris con un pulso suave mientras el servidor termina, y luego sale de la
+  // lista — el admin siempre ve que algo está ocurriendo.
+  // Map id → 'aprobando' | 'rechazando'.
+  const [procesandoIds, setProcesandoIds] = useState(() => new Map())
+  const marcarProcesando = (id, modo) => setProcesandoIds(prev => new Map(prev).set(id, modo))
+  const quitarProcesando = (id) => setProcesandoIds(prev => { const m = new Map(prev); m.delete(id); return m })
+
   async function approveProfile(id) {
-    const headers = await getAuthHeaders()
-    await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${id}`, {
-      method: 'PATCH', headers,
-      body: JSON.stringify({ aprobado: true }),
-    })
-    // Avisar al profesional por correo (best-effort: no bloquea la aprobación).
-    // El endpoint valida superadmin con este mismo token.
+    if (procesandoIds.has(id)) return
+    marcarProcesando(id, 'aprobando')
     try {
-      await fetch('/api/notify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: headers.Authorization },
-        body: JSON.stringify({ type: 'account_approved', data: { lawyerId: id } }),
+      const headers = await getAuthHeaders()
+      await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${id}`, {
+        method: 'PATCH', headers,
+        body: JSON.stringify({ aprobado: true }),
       })
-    } catch { /* el correo es secundario; la aprobación ya quedó */ }
-    fetchAll()
-    fetchGestores()
+      // Avisar al profesional por correo (best-effort: no bloquea la aprobación).
+      // El endpoint valida superadmin con este mismo token.
+      try {
+        await fetch('/api/notify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: headers.Authorization },
+          body: JSON.stringify({ type: 'account_approved', data: { lawyerId: id } }),
+        })
+      } catch { /* el correo es secundario; la aprobación ya quedó */ }
+      // Salida optimista de Solicitudes (fetchAll confirma después).
+      setPending(prev => prev.filter(p => p.id !== id))
+      await fetchAll()
+      fetchGestores()
+    } finally {
+      quitarProcesando(id)
+    }
   }
 
   async function rejectProfile(id) {
-    const headers = await getAuthHeaders()
-    // Rechazar una SOLICITUD pendiente = avisar por correo Y ELIMINAR la
-    // cuenta (perfil + usuario de auth, server-side con service-role): así el
-    // correo queda libre y la persona puede registrarse de nuevo corrigiendo
-    // sus datos. El endpoint solo borra si aprobado=false (revocar NO borra).
-    let eliminada = false
+    if (procesandoIds.has(id)) return
+    marcarProcesando(id, 'rechazando')
     try {
-      const res = await fetch('/api/notify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: headers.Authorization },
-        body: JSON.stringify({ type: 'account_rejected', data: { lawyerId: id, eliminarCuenta: true } }),
-      })
-      const j = await res.json().catch(() => ({}))
-      eliminada = j?.deleted === true
-    } catch { /* sin /api (dev local): cae al marcado clásico */ }
-    // Fallback: si el endpoint no pudo borrar, al menos queda marcada como no
-    // aprobada (comportamiento anterior).
-    if (!eliminada) {
-      await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${id}`, {
-        method: 'PATCH', headers,
-        body: JSON.stringify({ aprobado: false }),
-      })
+      const headers = await getAuthHeaders()
+      // Rechazar una SOLICITUD pendiente = avisar por correo Y ELIMINAR la
+      // cuenta (perfil + usuario de auth, server-side con service-role): así el
+      // correo queda libre y la persona puede registrarse de nuevo corrigiendo
+      // sus datos. El endpoint solo borra si aprobado=false (revocar NO borra).
+      let eliminada = false
+      try {
+        const res = await fetch('/api/notify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: headers.Authorization },
+          body: JSON.stringify({ type: 'account_rejected', data: { lawyerId: id, eliminarCuenta: true } }),
+        })
+        const j = await res.json().catch(() => ({}))
+        eliminada = j?.deleted === true
+      } catch { /* sin /api (dev local): cae al marcado clásico */ }
+      // Fallback: si el endpoint no pudo borrar, al menos queda marcada como no
+      // aprobada (comportamiento anterior).
+      if (!eliminada) {
+        await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${id}`, {
+          method: 'PATCH', headers,
+          body: JSON.stringify({ aprobado: false }),
+        })
+      }
+      // Salida optimista de la lista (fetchAll confirma después).
+      setPending(prev => prev.filter(p => p.id !== id))
+      await fetchAll()
+      fetchGestores()
+    } finally {
+      quitarProcesando(id)
     }
-    fetchAll()
-    fetchGestores()
   }
 
   async function removeApproved(id) {
@@ -222,13 +280,19 @@ export default function AdminPage() {
       // Limit explícito: sin él PostgREST trunca en max-rows en silencio.
       // En paralelo: salas abiertas + notificaciones de reasignación
       // obligatoria (barrera de 4h superada) aún sin atender.
-      const [roomsRes, notifRes] = await Promise.all([
+      const [roomsRes, notifRes, notificadasRes] = await Promise.all([
         fetch(
           `${SUPABASE_URL}/rest/v1/chat_rooms?status=in.(waiting,active)&select=*&order=created_at.desc&limit=1000`,
           { headers }
         ),
         fetch(
           `${SUPABASE_URL}/rest/v1/notificaciones?tipo=eq.reasignacion_obligatoria&atendida=eq.false&select=id,room_id&order=created_at.desc&limit=1000`,
+          { headers }
+        ).catch(() => null),
+        // Salas ya notificadas por inactividad (correo enviado, sello puesto):
+        // salen de la sub-pestaña "Inactividad" y esperan la barrera de 4h.
+        fetch(
+          `${SUPABASE_URL}/rest/v1/notificaciones?tipo=eq.inactividad&atendida=eq.false&notificado_at=not.is.null&select=room_id&limit=1000`,
           { headers }
         ).catch(() => null),
       ])
@@ -243,6 +307,11 @@ export default function AdminPage() {
           }
         }
       } catch { /* sin notificaciones de escalada */ }
+      const notificadaRooms = new Set()
+      try {
+        const stamped = notificadasRes ? await notificadasRes.json() : []
+        if (Array.isArray(stamped)) stamped.forEach(n => n.room_id && notificadaRooms.add(n.room_id))
+      } catch { /* sin sellos */ }
       if (!Array.isArray(rooms) || rooms.length === 0) { setAlertas([]); return }
       const hace24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
 
@@ -291,6 +360,7 @@ export default function AdminPage() {
         ...r,
         lawyer_ids: lawyersByRoom[r.id] || [],
         escalada:   esEscalada(r),
+        notificada: notificadaRooms.has(r.id),
         notifId:    notifByRoom[r.id] || null,
       }))
       // Las salas escaladas (barrera 4h superada) van SIEMPRE arriba para que
@@ -307,7 +377,7 @@ export default function AdminPage() {
     try {
       const headers = await getAuthHeaders()
       const res = await fetch(
-        `${SUPABASE_URL}/rest/v1/chat_rooms?status=eq.closed&select=*&order=created_at.desc&limit=50`,
+        `${SUPABASE_URL}/rest/v1/chat_rooms?status=eq.closed&select=*&order=created_at.desc&limit=500`,
         { headers }
       )
       const data = await res.json()
@@ -351,9 +421,43 @@ export default function AdminPage() {
     setExtraCounts({ contratos, firmas, resenasTotal, resenasAprob, codigos, codigosActivos })
   }
 
+  // ── Revisión de un chat cerrado ANTES de reabrirlo ───────────────────────
+  // Click en la tarjeta de Recuperar → modal con los datos del cliente, el
+  // profesional asignado y el hilo completo (solo lectura) + botón Reabrir.
+  const [revisarChat, setRevisarChat]         = useState(null)  // fila de chat_rooms
+  const [revisarMsgs, setRevisarMsgs]         = useState([])
+  const [revisarProfs, setRevisarProfs]       = useState([])   // profesionales asignados
+  const [revisarLoading, setRevisarLoading]   = useState(false)
+
+  async function abrirRevisionChat(room) {
+    setRevisarChat(room); setRevisarMsgs([]); setRevisarProfs([]); setRevisarLoading(true)
+    try {
+      const headers = await getAuthHeaders()
+      const [msgsRes, asigRes] = await Promise.all([
+        fetch(`${SUPABASE_URL}/rest/v1/chat_messages?room_id=eq.${room.id}&select=id,sender_type,content,message_type,file_name,created_at&order=created_at.asc&limit=300`, { headers }),
+        fetch(`${SUPABASE_URL}/rest/v1/chat_room_lawyers?room_id=eq.${room.id}&select=lawyer_id,status`, { headers }),
+      ])
+      const msgs = await msgsRes.json().catch(() => [])
+      const asig = await asigRes.json().catch(() => [])
+      if (Array.isArray(msgs)) setRevisarMsgs(msgs)
+      if (Array.isArray(asig) && asig.length) {
+        const ids = asig.map(a => a.lawyer_id).join(',')
+        const pr = await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=in.(${ids})&select=id,nombre,apellido,rol,email,ciudad`, { headers })
+        const profs = await pr.json().catch(() => [])
+        if (Array.isArray(profs)) {
+          setRevisarProfs(profs.map(p => ({ ...p, asignacion: asig.find(a => a.lawyer_id === p.id)?.status })))
+        }
+      }
+    } finally {
+      setRevisarLoading(false)
+    }
+  }
+
   async function reabrirChat(id) {
     const headers = await getAuthHeaders()
     // Reabrir = volver a 'waiting' para que un profesional pueda retomarla.
+    // Sale de la lista al instante (optimista); el refetch confirma.
+    setChatsCerrados(prev => prev.filter(r => r.id !== id))
     await fetch(`${SUPABASE_URL}/rest/v1/chat_rooms?id=eq.${id}`, {
       method: 'PATCH', headers,
       body: JSON.stringify({ status: 'waiting' }),
@@ -399,6 +503,9 @@ export default function AdminPage() {
       )
       const allOk = results.every(r => r.ok)
       setNotifEstado(s => ({ ...s, [room.id]: allOk ? 'sent' : 'error' }))
+      // Notificada → sale de la sub-pestaña "Inactividad" (reaparecerá en
+      // "Reasignación" si tras 4h sigue sin actividad).
+      if (allOk) setAlertas(prev => prev.map(a => a.id === room.id ? { ...a, notificada: true } : a))
     } catch (err) {
       console.error('[notificarInactividad] error:', err)
       setNotifEstado(s => ({ ...s, [room.id]: 'error' }))
@@ -582,7 +689,26 @@ export default function AdminPage() {
   // Listas de salas filtradas. `filtrarSalas` preserva el orden de entrada, así
   // que las alertas escaladas (ya ordenadas primero en fetchAlertas) siguen arriba.
   const recuperarFiltrados = filtrarSalas(chatsCerrados, recuperarTipo, recuperarSearch)
+  // Paginación de Recuperar chats (10/página, clamp por si el filtro encoge la lista).
+  const RECUP_POR_PAG    = 10
+  const recupTotalPags   = Math.max(1, Math.ceil(recuperarFiltrados.length / RECUP_POR_PAG))
+  const recupPagSegura   = Math.min(recupPage, recupTotalPags)
+  const recuperarPagina  = recuperarFiltrados.slice((recupPagSegura - 1) * RECUP_POR_PAG, recupPagSegura * RECUP_POR_PAG)
   const alertasFiltradas   = filtrarSalas(alertas, alertasTipo, alertasSearch)
+
+  // ── Registro de Inactividades: partición en 2 sub-pestañas ──────────────
+  //  · Inactividad (24h): aún SIN notificar. Al notificar desaparece de aquí.
+  //  · Reasignación (4h): barrera superada (cron marcó la escalada).
+  //  Las notificadas que aún no escalan quedan "en espera" (no saturan la vista).
+  const alertasInactividad  = alertasFiltradas.filter(r => !r.escalada && !r.notificada)
+  const alertasReasignacion = alertasFiltradas.filter(r => r.escalada)
+  const ALERTAS_POR_PAG     = 10
+  const alertasLista        = alertasSub === 'reasignacion' ? alertasReasignacion : alertasInactividad
+  const alertasTotalPags    = Math.max(1, Math.ceil(alertasLista.length / ALERTAS_POR_PAG))
+  const alertasPagSegura    = Math.min(alertasPage, alertasTotalPags)
+  const alertasPagina       = alertasLista.slice((alertasPagSegura - 1) * ALERTAS_POR_PAG, alertasPagSegura * ALERTAS_POR_PAG)
+  // Badge del riel: solo lo accionable (sin las "en espera de barrera").
+  const alertasAccionables  = alertas.filter(r => r.escalada || !r.notificada).length
 
   // Enlaces sociales de un perfil (usado en tarjetas de gestor). Solo renderiza
   // los que existan; guarda campos ausentes.
@@ -737,8 +863,8 @@ export default function AdminPage() {
     { key: 'pagos',        label: 'Pagos y cobros',                                    Icon: IconWallet },
     { key: 'chats',        label: 'Historial chats',                                   Icon: IconChat },
     { key: 'recuperar',    label: 'Recuperar chats',      count: chatsCerrados.length, Icon: IconRecover },
-    { key: 'alertas',      label: 'Alertas',              count: alertas.length, alert: true, Icon: IconAlert },
-    { key: 'chat_interno', label: 'Chat interno',                                      Icon: IconShield },
+    { key: 'alertas',      label: 'Inactividades',        count: alertasAccionables, alert: true, Icon: IconAlert },
+    { key: 'chat_interno', label: 'Chat interno',         count: internosNoLeidos,   Icon: IconShield },
     { key: 'contratos',    label: 'Contratos',                                         Icon: IconDoc },
     { key: 'resenas',      label: 'Reseñas',                                           Icon: IconStar },
     { key: 'proyectos',    label: 'Proyectos de ley',                                  Icon: IconLey },
@@ -815,7 +941,8 @@ export default function AdminPage() {
                     a la derecha. Ambas van portaleadas/fijas: sus dropdowns se
                     anclan a su propio botón, así que no se solapan. */}
                 <NotificationBell modo="dinero" />
-                <NotificationBell modo="alertas" onOpenRoom={handleOpenRoom} />
+                <NotificationBell modo="alertas" onOpenRoom={handleOpenRoom}
+                  onOpenInterno={handleOpenInterno} miId={user?.id} />
               </div>
             </div>
 
@@ -858,15 +985,17 @@ export default function AdminPage() {
                 </div>
               ) : pendingFiltered.map(p => {
                 const esGestor = p.rol === 'gestor'
+                const procesando = procesandoIds.get(p.id) || null   // 'aprobando' | 'rechazando' | null
                 return (
                 <div
                   key={p.id}
-                  className={styles.card}
-                  onClick={() => setPreviewProfile(p)}
+                  className={`${styles.card} ${procesando ? 'aap-procesando' : ''}`}
+                  onClick={() => { if (!procesando) setPreviewProfile(p) }}
                   role="button"
                   tabIndex={0}
-                  onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setPreviewProfile(p) } }}
-                  title="Click para ver perfil completo"
+                  onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (!procesando) setPreviewProfile(p) } }}
+                  title={procesando ? (procesando === 'aprobando' ? 'Aprobando solicitud…' : 'Rechazando solicitud…') : 'Click para ver perfil completo'}
+                  style={{ transition: 'opacity 0.35s ease-out, transform 0.35s ease-out, filter 0.35s ease-out' }}
                 >
                   <div className={styles.cardPhoto}>
                     {p.foto_url
@@ -911,15 +1040,17 @@ export default function AdminPage() {
                   <div className={styles.cardActions}>
                     <button
                       className={styles.btnApprove}
+                      disabled={!!procesando}
                       onClick={e => { e.stopPropagation(); approveProfile(p.id) }}
                     >
-                      <IconCheck /> Aprobar
+                      {procesando === 'aprobando' ? 'Aprobando…' : <><IconCheck /> Aprobar</>}
                     </button>
                     <button
                       className={styles.btnReject}
+                      disabled={!!procesando}
                       onClick={e => { e.stopPropagation(); rejectProfile(p.id) }}
                     >
-                      <IconX /> Rechazar
+                      {procesando === 'rechazando' ? 'Rechazando…' : <><IconX /> Rechazar</>}
                     </button>
                   </div>
                 </div>
@@ -1059,8 +1190,13 @@ export default function AdminPage() {
                     {recuperarSearch.trim() ? ` "${recuperarSearch.trim()}"` : ''}
                   </p>
                 </div>
-              ) : recuperarFiltrados.map(r => (
-                <div key={r.id} className={styles.alertaCard}>
+              ) : recuperarPagina.map(r => (
+                <div key={r.id} className={styles.alertaCard}
+                  role="button" tabIndex={0}
+                  title="Revisar la conversación antes de reabrirla"
+                  style={{ cursor: 'pointer' }}
+                  onClick={() => abrirRevisionChat(r)}
+                  onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); abrirRevisionChat(r) } }}>
                   <span className={styles.alertaIcono} style={{ color: '#c9a84c' }}><IconChat width={22} height={22} /></span>
                   <div className={styles.alertaInfo}>
                     <p className={styles.alertaNombre}>
@@ -1080,46 +1216,104 @@ export default function AdminPage() {
                   </div>
                   <button
                     className={styles.btnReabrir}
-                    onClick={() => setConfirmAction({
+                    onClick={e => { e.stopPropagation(); setConfirmAction({
                       title: 'Reabrir chat',
                       message: `La conversación de ${r.client_nombre || 'el cliente'} volverá a estado "en espera" para que un profesional la retome. ¿Reabrir?`,
                       confirmLabel: 'Reabrir',
                       toneClass: 'cfOkGold',
                       onConfirm: () => reabrirChat(r.id),
-                    })}
+                    }) }}
                   >
                     ↩ Reabrir
                   </button>
                 </div>
               ))}
+
+              {/* Paginación (10 por página) */}
+              {recuperarFiltrados.length > RECUP_POR_PAG && (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 14, marginTop: 16 }}>
+                  <button type="button" className={styles.btnRefresh}
+                    onClick={() => setRecupPage(p => Math.max(1, p - 1))}
+                    disabled={recupPagSegura <= 1}
+                    style={recupPagSegura <= 1 ? { opacity: 0.4, cursor: 'default' } : undefined}>
+                    ← Anterior
+                  </button>
+                  <span style={{ fontSize: '0.8rem', color: 'rgba(109,60,27,0.75)', fontWeight: 600 }}>
+                    Página {recupPagSegura} de {recupTotalPags}
+                  </span>
+                  <button type="button" className={styles.btnRefresh}
+                    onClick={() => setRecupPage(p => Math.min(recupTotalPags, p + 1))}
+                    disabled={recupPagSegura >= recupTotalPags}
+                    style={recupPagSegura >= recupTotalPags ? { opacity: 0.4, cursor: 'default' } : undefined}>
+                    Siguiente →
+                  </button>
+                </div>
+              )}
             </div>
           )}
 
-          {/* ── Alertas de inactividad ── */}
+          {/* ── Registro de Inactividades (Inactividad 24h / Reasignación 4h) ── */}
           {activeTab === 'alertas' && (
             <div className={styles.section}>
               <div className={styles.sectionHeader}>
-                <h3 className={styles.sectionTitle}>Chats sin actividad · +24 horas</h3>
+                <h3 className={styles.sectionTitle}>Registro de Inactividades</h3>
                 <button className={styles.btnRefresh} onClick={fetchAlertas}>↻ Actualizar</button>
               </div>
+
+              {/* Sub-pestañas: cada etapa del protocolo en su propia lista */}
+              <div role="tablist" aria-label="Etapas de inactividad" style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
+                {[
+                  { key: 'inactividad',  label: 'Inactividad · +24 h',  n: alertasInactividad.length },
+                  { key: 'reasignacion', label: 'Reasignación · barrera 4 h', n: alertasReasignacion.length },
+                ].map(t => (
+                  <button
+                    key={t.key}
+                    type="button"
+                    role="tab"
+                    aria-selected={alertasSub === t.key}
+                    onClick={() => { setAlertasSub(t.key); setAlertasPage(1) }}
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 8,
+                      padding: '8px 16px', borderRadius: 999, cursor: 'pointer',
+                      fontSize: '0.8rem', fontWeight: 600,
+                      border: alertasSub === t.key ? '1px solid #b8841c' : '1px solid rgba(109,60,27,0.25)',
+                      background: alertasSub === t.key ? 'rgba(201,168,76,0.16)' : 'transparent',
+                      color: alertasSub === t.key ? '#6d3c1b' : 'rgba(109,60,27,0.7)',
+                    }}
+                  >
+                    {t.label}
+                    <span style={{
+                      minWidth: 20, height: 20, borderRadius: 999, padding: '0 6px',
+                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: '0.68rem', fontWeight: 700,
+                      background: t.key === 'reasignacion' && t.n > 0 ? '#c0392b' : 'rgba(109,60,27,0.12)',
+                      color: t.key === 'reasignacion' && t.n > 0 ? '#fff' : 'inherit',
+                    }}>{t.n}</span>
+                  </button>
+                ))}
+              </div>
+
               {RoomFilterBar({
                 tipo: alertasTipo, setTipo: setAlertasTipo,
                 search: alertasSearch, setSearch: setAlertasSearch,
               })}
-              {alertas.length === 0 ? (
-                <div className={styles.alertaOk}>
-                  <span style={{ color: '#2f855a', display: 'inline-flex' }}><IconCheck size={20} /></span>
-                  <p>Todos los chats activos tienen actividad reciente. ¡Todo en orden!</p>
-                </div>
-              ) : alertasFiltradas.length === 0 ? (
-                <div className={styles.emptyState}>
-                  <span className={styles.emptyIcon} style={{ color: '#c9a84c' }}><IconAlert width={40} height={40} /></span>
-                  <p className={styles.emptyTxt}>
-                    Ninguna alerta coincide con el filtro
-                    {alertasSearch.trim() ? ` "${alertasSearch.trim()}"` : ''}
-                  </p>
-                </div>
-              ) : alertasFiltradas.map(r => {
+              {alertasLista.length === 0 ? (
+                alertasSub === 'inactividad' ? (
+                  <div className={styles.alertaOk}>
+                    <span style={{ color: '#2f855a', display: 'inline-flex' }}><IconCheck size={20} /></span>
+                    <p>
+                      {alertas.length > alertasReasignacion.length && alertasInactividad.length === 0 && alertasFiltradas.length !== 0
+                        ? 'Las consultas inactivas ya fueron notificadas. Si en 4 horas siguen sin actividad, aparecerán en Reasignación.'
+                        : 'Todos los chats activos tienen actividad reciente. ¡Todo en orden!'}
+                    </p>
+                  </div>
+                ) : (
+                  <div className={styles.alertaOk}>
+                    <span style={{ color: '#2f855a', display: 'inline-flex' }}><IconCheck size={20} /></span>
+                    <p>No hay consultas con la barrera de 4 horas superada.</p>
+                  </div>
+                )
+              ) : alertasPagina.map(r => {
                 const estado = notifEstado[r.id]
                 const sinAbogados = !r.lawyer_ids || r.lawyer_ids.length === 0
                 const escalada = !!r.escalada
@@ -1189,6 +1383,36 @@ export default function AdminPage() {
                   </div>
                 )
               })}
+
+              {/* Paginación (10 por página) */}
+              {alertasLista.length > ALERTAS_POR_PAG && (
+                <div style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  gap: 14, marginTop: 16,
+                }}>
+                  <button
+                    type="button"
+                    className={styles.btnRefresh}
+                    onClick={() => setAlertasPage(p => Math.max(1, p - 1))}
+                    disabled={alertasPagSegura <= 1}
+                    style={alertasPagSegura <= 1 ? { opacity: 0.4, cursor: 'default' } : undefined}
+                  >
+                    ← Anterior
+                  </button>
+                  <span style={{ fontSize: '0.8rem', color: 'rgba(109,60,27,0.75)', fontWeight: 600 }}>
+                    Página {alertasPagSegura} de {alertasTotalPags}
+                  </span>
+                  <button
+                    type="button"
+                    className={styles.btnRefresh}
+                    onClick={() => setAlertasPage(p => Math.min(alertasTotalPags, p + 1))}
+                    disabled={alertasPagSegura >= alertasTotalPags}
+                    style={alertasPagSegura >= alertasTotalPags ? { opacity: 0.4, cursor: 'default' } : undefined}
+                  >
+                    Siguiente →
+                  </button>
+                </div>
+              )}
             </div>
           )}
 
@@ -1198,7 +1422,7 @@ export default function AdminPage() {
               <div className={styles.sectionHeader}>
                 <h3 className={styles.sectionTitle}>Chat interno con profesionales</h3>
               </div>
-              <AdminInternalChat miId={user?.id} />
+              <AdminInternalChat miId={user?.id} initialSelectedId={internoToOpen} onOpenRoom={handleOpenRoom} />
             </div>
           )}
 
@@ -1437,6 +1661,108 @@ export default function AdminPage() {
       )}
 
       {/* ── Modal de confirmación reutilizable (quitar / reabrir / notificar) ── */}
+      {/* ── Revisión de chat cerrado (Recuperar) — solo lectura + Reabrir ── */}
+      {revisarChat && (
+        <div className={styles.logoutOverlay} role="dialog" aria-modal="true" aria-label="Revisar conversación cerrada"
+          onClick={() => setRevisarChat(null)}>
+          <div onClick={e => e.stopPropagation()}
+            style={{
+              background: '#fffdf6', borderRadius: 18, width: 'min(680px, 94vw)',
+              maxHeight: '86dvh', display: 'flex', flexDirection: 'column',
+              boxShadow: '0 24px 70px rgba(0,0,0,0.35)', overflow: 'hidden',
+            }}>
+            {/* Cabecera: cliente + profesional */}
+            <div style={{ padding: '16px 20px 12px', borderBottom: '1px solid rgba(109,60,27,0.14)', background: '#f9f3e6' }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }}>
+                <div style={{ minWidth: 0 }}>
+                  <h3 style={{ margin: 0, fontSize: '1.02rem', color: '#472f29' }}>
+                    {revisarChat.client_nombre || 'Cliente'}
+                    {revisarChat.codigo_referencia && (
+                      <span style={{ marginLeft: 8, fontSize: '0.68rem', fontWeight: 700, color: '#8a6a28', background: 'rgba(201,168,76,0.16)', padding: '2px 8px', borderRadius: 999 }}>
+                        {revisarChat.codigo_referencia}
+                      </span>
+                    )}
+                  </h3>
+                  <p style={{ margin: '4px 0 0', fontSize: '0.76rem', color: 'rgba(71,47,41,0.75)' }}>
+                    {revisarChat.client_email || 'sin correo'}{revisarChat.client_celular ? ` · ${revisarChat.client_celular}` : ''}
+                    {revisarChat.area_derecho ? ` · ${revisarChat.area_derecho}` : ''}
+                  </p>
+                  <p style={{ margin: '3px 0 0', fontSize: '0.74rem', color: 'rgba(71,47,41,0.75)' }}>
+                    {revisarProfs.length
+                      ? <>Profesional: <strong>{revisarProfs.map(p => `${p.nombre || ''} ${p.apellido || ''}`.trim() || p.email).join(', ')}</strong>
+                          {revisarProfs[0]?.rol ? ` (${revisarProfs[0].rol})` : ''}</>
+                      : 'Sin profesional asignado'}
+                  </p>
+                </div>
+                <button type="button" onClick={() => setRevisarChat(null)} aria-label="Cerrar revisión"
+                  style={{ border: 'none', background: 'transparent', fontSize: 20, cursor: 'pointer', color: '#6d3c1b', lineHeight: 1 }}>
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            {/* Hilo (solo lectura) */}
+            <div style={{ flex: 1, overflowY: 'auto', padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: 8, background: '#fdfaf2' }}>
+              {revisarLoading && <p style={{ textAlign: 'center', color: 'rgba(71,47,41,0.6)', fontSize: '0.8rem' }}>Cargando conversación…</p>}
+              {!revisarLoading && revisarMsgs.length === 0 && (
+                <p style={{ textAlign: 'center', color: 'rgba(71,47,41,0.6)', fontSize: '0.8rem' }}>Esta conversación no tiene mensajes.</p>
+              )}
+              {revisarMsgs.map(m => {
+                if (m.message_type === 'system') {
+                  return (
+                    <p key={m.id} style={{ alignSelf: 'center', textAlign: 'center', fontSize: '0.7rem', color: 'rgba(71,47,41,0.55)', fontStyle: 'italic', margin: '2px 0' }}>
+                      {m.content}
+                    </p>
+                  )
+                }
+                const esCliente = m.sender_type === 'client'
+                const cuerpo = m.message_type === 'audio' ? '🎙 Mensaje de voz'
+                  : m.message_type === 'file' ? `📎 ${m.file_name || 'Archivo adjunto'}`
+                  : (m.content || '')
+                return (
+                  <div key={m.id} style={{
+                    alignSelf: esCliente ? 'flex-start' : 'flex-end',
+                    maxWidth: '78%',
+                    background: esCliente ? '#ffffff' : '#6d3c1b',
+                    color: esCliente ? '#472f29' : '#fdf6e3',
+                    border: esCliente ? '1px solid rgba(109,60,27,0.15)' : 'none',
+                    borderRadius: esCliente ? '12px 12px 12px 4px' : '12px 12px 4px 12px',
+                    padding: '8px 12px', fontSize: '0.8rem', lineHeight: 1.5,
+                    whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                  }}>
+                    {cuerpo}
+                    <span style={{ display: 'block', marginTop: 3, fontSize: '0.62rem', opacity: 0.6 }}>
+                      {esCliente ? 'Cliente' : 'Profesional'} · {new Date(m.created_at).toLocaleString('es-CO', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+
+            {/* Acciones */}
+            <div style={{ padding: '12px 18px', borderTop: '1px solid rgba(109,60,27,0.14)', display: 'flex', justifyContent: 'flex-end', gap: 8, background: '#f9f3e6' }}>
+              <button type="button" className={styles.logoutCancel} onClick={() => setRevisarChat(null)}>
+                Cerrar
+              </button>
+              <button type="button" className={styles.btnReabrir}
+                onClick={() => {
+                  const r = revisarChat
+                  setRevisarChat(null)
+                  setConfirmAction({
+                    title: 'Reabrir chat',
+                    message: `La conversación de ${r.client_nombre || 'el cliente'} volverá a estado "en espera" para que un profesional la retome. ¿Reabrir?`,
+                    confirmLabel: 'Reabrir',
+                    toneClass: 'cfOkGold',
+                    onConfirm: () => reabrirChat(r.id),
+                  })
+                }}>
+                ↩ Reabrir este chat
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {confirmAction && (
         <div className={styles.logoutOverlay} role="dialog" aria-modal="true" aria-labelledby="cfTitle" onClick={() => setConfirmAction(null)}>
           <div className={styles.logoutModal} onClick={(e) => e.stopPropagation()}>
