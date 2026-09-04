@@ -14,6 +14,7 @@ import TarjetaPreview from '../components/profile/TarjetaPreview'
 import NotificationBell from '../components/admin/NotificationBell'
 import ResenasAdmin from '../components/admin/ResenasAdmin'
 import ProyectosLeyAdmin from '../components/admin/ProyectosLeyAdmin'
+import CamposRegistro from '../components/admin/CamposRegistro'
 import AdminStats from '../components/admin/AdminStats'
 import { IconCheck, IconX } from '../components/shared/Icons'
 
@@ -868,6 +869,10 @@ export default function AdminPage() {
     { key: 'contratos',    label: 'Contratos',                                         Icon: IconDoc },
     { key: 'resenas',      label: 'Reseñas',                                           Icon: IconStar },
     { key: 'proyectos',    label: 'Proyectos de ley',                                  Icon: IconLey },
+    // Solo el ADMIN MAESTRO puede configurar el formulario de registro.
+    ...(profile?.es_admin_maestro
+      ? [{ key: 'campos', label: 'Campos de registro', Icon: IconDoc }]
+      : []),
   ]
 
   return (
@@ -946,16 +951,19 @@ export default function AdminPage() {
               </div>
             </div>
 
-        {/* Stats contextuales por sección + gráfica histórica */}
-        <AdminStats
-          activeTab={activeTab}
-          pending={pending}
-          approved={approved}
-          alertas={alertas}
-          chatsCerrados={chatsCerrados}
-          allRooms={allRooms}
-          extra={extraCounts}
-        />
+        {/* Stats contextuales por sección + gráfica histórica.
+            En "Campos de registro" no aportan: la pestaña es de configuración. */}
+        {activeTab !== 'campos' && (
+          <AdminStats
+            activeTab={activeTab}
+            pending={pending}
+            approved={approved}
+            alertas={alertas}
+            chatsCerrados={chatsCerrados}
+            allRooms={allRooms}
+            extra={extraCounts}
+          />
+        )}
 
         {/* Contenido de la sección activa (transición framer-motion) */}
         <div className={styles.tabContent}>
@@ -1549,6 +1557,16 @@ export default function AdminPage() {
           {activeTab === 'proyectos' && (
             <div className={styles.section}>
               <ProyectosLeyAdmin />
+            </div>
+          )}
+
+          {/* ── Campos de registro (solo admin maestro) ── */}
+          {activeTab === 'campos' && profile?.es_admin_maestro && (
+            <div className={styles.section}>
+              <div className={styles.sectionHeader}>
+                <h3 className={styles.sectionTitle}>Campos de registro</h3>
+              </div>
+              <CamposRegistro />
             </div>
           )}
 

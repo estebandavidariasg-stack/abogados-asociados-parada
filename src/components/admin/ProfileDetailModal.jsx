@@ -246,6 +246,12 @@ export default function ProfileDetailModal({ profile, onClose }) {
           <InfoRow icon={ICONS.home}     label="Dirección de oficina" value={profile.direccion_oficina || profile.direccion} />
           <InfoRow icon={ICONS.building} label="Página web"           value={profile.pagina_web} isLink />
           <InfoRow icon={ICONS.clock}    label="Años de experiencia"  value={profile.experiencia} />
+          {/* Respuestas a los campos personalizados del admin maestro */}
+          {profile.datos_adicionales && typeof profile.datos_adicionales === 'object' &&
+            Object.entries(profile.datos_adicionales).map(([etiqueta, valor]) => (
+              <InfoRow key={etiqueta} icon={ICONS.card} label={etiqueta} value={String(valor)}
+                isLink={/^https?:\/\//i.test(String(valor))} />
+            ))}
           <InfoRow icon={ICONS.card}
             label="Tarjeta profesional (número)"
             value={profile.tarjeta_profesional} />

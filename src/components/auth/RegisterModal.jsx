@@ -132,6 +132,22 @@ export default function RegisterModal({ onClose }) {
 
   const recaptchaRef = useRef()
 
+  // ── Campos adicionales configurados por el admin maestro ───────────────
+  // (tabla registro_campos; las respuestas van a profiles.datos_adicionales)
+  const [camposExtra, setCamposExtra]         = useState([])
+  const [respuestasExtra, setRespuestasExtra] = useState({})
+
+  async function cargarCamposExtra(r) {
+    try {
+      const res = await fetch(
+        `${SUPABASE_URL}/rest/v1/registro_campos?activo=eq.true&or=(rol.eq.todos,rol.eq.${r})&select=id,etiqueta,tipo,opciones,requerido&order=orden.asc`,
+        { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } }
+      )
+      const data = await res.json()
+      setCamposExtra(Array.isArray(data) ? data : [])
+    } catch { setCamposExtra([]) } // sin tabla / sin red → registro normal
+  }
+
   // ── Flujo OTP ──────────────────────────────────────────────────────────
   // 'docs' = paso post-OTP del profesional: foto + certificados + oficina.
   const [verificationStep, setVerificationStep] = useState('form') // 'form' | 'verify' | 'docs' | 'done'
@@ -220,6 +236,8 @@ export default function RegisterModal({ onClose }) {
     setAreas([]); setExperiencia(''); setTarjetaFile(null)
     setVerificationStep('form'); setOtpError('')
     setCaptchaValue(null); recaptchaRef.current?.reset()
+    setRespuestasExtra({})
+    cargarCamposExtra(r)   // campos personalizados del admin maestro
   }
 
   // ── Paso A: validar formulario y enviar el código de verificación ────────
@@ -237,6 +255,12 @@ export default function RegisterModal({ onClose }) {
     }
     if (!pwValid)        { setError('La contraseña no cumple los requisitos'); setPwTouched(true); return }
     if (!emailVal.valid) { setError('El correo no es válido'); setEmailTouched(true); return }
+    // Campos personalizados obligatorios (configurados por el admin maestro).
+    const extraFaltante = camposExtra.find(c =>
+      c.requerido && c.tipo !== 'checkbox' &&
+      !String(respuestasExtra[c.id] ?? '').trim()
+    )
+    if (extraFaltante) { setError(`Completa el campo "${extraFaltante.etiqueta}"`); return }
     if (!aceptaTerminos) { setError('Debes aceptar los términos y condiciones'); return }
 
     setError(null); setEmailErrorInline(''); setLoading(true)
@@ -375,12 +399,21 @@ export default function RegisterModal({ onClose }) {
 
     // 4. UPSERT en profiles con el rol y campos correctos.
     const headers = await getAuthHeaders()
+    // Respuestas a los campos personalizados → jsonb {etiqueta: valor}
+    // (solo los respondidos; el admin las ve al revisar la solicitud).
+    const datosAdicionales = {}
+    for (const c of camposExtra) {
+      const v = respuestasExtra[c.id]
+      if (c.tipo === 'checkbox') { datosAdicionales[c.etiqueta] = v ? 'Sí' : 'No' }
+      else if (String(v ?? '').trim()) { datosAdicionales[c.etiqueta] = String(v).trim() }
+    }
     const payload = {
       id: userId,
       username,
       email: regEmail,
       rol,
       aprobado: false,
+      ...(Object.keys(datosAdicionales).length ? { datos_adicionales: datosAdicionales } : {}),
     }
 
     if (isPro) {
@@ -506,17 +539,22 @@ export default function RegisterModal({ onClose }) {
     }
   }
 
-  // Cerrar durante 'docs' dejaría el registro incompleto — confirmar y cerrar
-  // la sesión temporal para no dejarla viva.
+  // Cerrar durante 'docs' dejaría el registro incompleto — modal de marca de
+  // confirmación (no el diálogo nativo del navegador) y cierre de la sesión
+  // temporal para no dejarla viva.
+  const [confirmSalir, setConfirmSalir] = useState(false)
+
   async function handleClose() {
     if (verificationStep === 'docs') {
-      const seguro = window.confirm(
-        'Tu registro quedará incompleto sin la foto y los certificados. ' +
-        'Podrás completarlos luego desde tu perfil, pero el administrador no podrá revisarte hasta entonces. ¿Salir de todas formas?'
-      )
-      if (!seguro) return
-      try { await supabase.auth.signOut() } catch (_) { /* noop */ }
+      setConfirmSalir(true)
+      return
     }
+    onClose()
+  }
+
+  async function salirSinCompletar() {
+    setConfirmSalir(false)
+    try { await supabase.auth.signOut() } catch (_) { /* noop */ }
     onClose()
   }
 
@@ -965,6 +1003,42 @@ export default function RegisterModal({ onClose }) {
               </>
             )}
 
+            {/* ── Campos personalizados (configurados por el admin maestro) ── */}
+            {camposExtra.map(c => (
+              <div key={c.id} className={styles.field}>
+                <label className={styles.label}>
+                  {c.etiqueta} {c.requerido && <span className={styles.req}>*</span>}
+                </label>
+                {c.tipo === 'checkbox' ? (
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.85rem', cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={!!respuestasExtra[c.id]}
+                      onChange={e => setRespuestasExtra(r => ({ ...r, [c.id]: e.target.checked }))}
+                    />
+                    Sí
+                  </label>
+                ) : c.tipo === 'opciones' ? (
+                  <select
+                    className={styles.input}
+                    value={respuestasExtra[c.id] || ''}
+                    onChange={e => setRespuestasExtra(r => ({ ...r, [c.id]: e.target.value }))}
+                  >
+                    <option value="">Selecciona…</option>
+                    {(c.opciones || []).map(o => <option key={o} value={o}>{o}</option>)}
+                  </select>
+                ) : (
+                  <input
+                    type={c.tipo === 'numero' ? 'number' : c.tipo === 'url' ? 'url' : 'text'}
+                    className={styles.input}
+                    placeholder={c.tipo === 'url' ? 'https://…' : ''}
+                    value={respuestasExtra[c.id] || ''}
+                    onChange={e => setRespuestasExtra(r => ({ ...r, [c.id]: e.target.value }))}
+                  />
+                )}
+              </div>
+            ))}
+
             {/* Términos y condiciones */}
             <label className={styles.terminosRow}>
               <input
@@ -1004,6 +1078,64 @@ export default function RegisterModal({ onClose }) {
           </form>
         )}
       </div>
+
+      {/* ── Confirmación de salida del paso de documentos (modal de marca) ── */}
+      {confirmSalir && (
+        <div
+          role="dialog" aria-modal="true" aria-label="Salir sin completar el registro"
+          onClick={() => setConfirmSalir(false)}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 1200,
+            background: 'rgba(30,20,12,0.55)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
+          }}
+        >
+          <div onClick={e => e.stopPropagation()} style={{
+            background: '#fffdf6', borderRadius: 18, padding: '26px 24px',
+            maxWidth: 420, width: '100%', textAlign: 'center',
+            boxShadow: '0 20px 60px rgba(0,0,0,0.35)',
+          }}>
+            <div aria-hidden="true" style={{
+              width: 52, height: 52, margin: '0 auto 14px', borderRadius: '50%',
+              background: 'rgba(201,168,76,0.14)', border: '1.5px solid rgba(201,168,76,0.5)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              <svg viewBox="0 0 24 24" width="24" height="24" fill="none"
+                stroke="#b8942f" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                <line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
+              </svg>
+            </div>
+            <h4 style={{
+              margin: '0 0 8px', color: '#472f29', fontSize: '1.05rem',
+              fontFamily: "'Cinzel', Georgia, serif", letterSpacing: '0.02em',
+            }}>
+              ¿Salir sin completar?
+            </h4>
+            <p style={{ margin: '0 0 20px', fontSize: '0.85rem', lineHeight: 1.6, color: '#5a4a3d' }}>
+              Tu registro quedará incompleto sin la foto y los certificados.
+              Podrás completarlos luego desde tu perfil, pero el administrador
+              no podrá revisarte hasta entonces.
+            </p>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+              <button type="button" onClick={() => setConfirmSalir(false)}
+                className={`btn-solid ${styles.submit}`}
+                style={{ width: 'auto', padding: '0.55rem 1.3rem' }}>
+                Seguir completando
+              </button>
+              <button type="button" onClick={salirSinCompletar}
+                style={{
+                  border: '1px solid rgba(109,60,27,0.35)', background: '#fff',
+                  color: '#6d3c1b', borderRadius: 4, padding: '0.55rem 1.3rem',
+                  fontSize: '0.7rem', fontWeight: 600, letterSpacing: '0.14em',
+                  textTransform: 'uppercase', cursor: 'pointer',
+                }}>
+                Salir de todas formas
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

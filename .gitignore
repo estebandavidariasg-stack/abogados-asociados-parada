@@ -27,3 +27,4 @@ docs/superpowers/
 docs/*.pdf
 scripts/diag-*.mjs
 scripts/rebrand-*.mjs
+scripts/crear-superadmin.mjs
