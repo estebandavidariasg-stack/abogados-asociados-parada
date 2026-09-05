@@ -101,6 +101,7 @@ function emailAbogado({ nombreAbogado, nombreCliente, area, ctaUrl }) {
     subject: subjectLine,
     html: renderEmailHtml({
       subjectLine,
+      preheader: `${esc(nombreCliente)} espera tu respuesta.`,
       greetingHtml: `Estimado/a <strong style="color:#6d3c1b;font-weight:700;">${esc(nombreAbogado)}</strong>,`,
       bodyHtml: `Tienes una nueva consulta pendiente por parte de <strong style="color:#6d3c1b;font-weight:700;">${esc(nombreCliente)}</strong> en el área de <strong style="color:#6d3c1b;font-weight:700;">${esc(area)}</strong>. Ingresa a la plataforma para atenderla a la brevedad posible.`,
       ctaLabel: 'Ver consulta',
@@ -120,6 +121,7 @@ function emailInactividad({ nombreAbogado, nombreCliente, area, createdAt, ctaUr
     subject: subjectLine,
     html: renderEmailHtml({
       subjectLine,
+      preheader: `${esc(nombreCliente)} lleva +24 h sin respuesta.`,
       greetingHtml: `Estimado/a <strong style="color:#6d3c1b;font-weight:700;">${esc(nombreAbogado)}</strong>,`,
       bodyHtml:
         `Tienes una consulta de <strong style="color:#6d3c1b;font-weight:700;">${esc(nombreCliente)}</strong>` +
@@ -179,7 +181,7 @@ function emailRechazado({ nombreAbogado, rol, ctaUrl, cuentaEliminada }) {
     subject: subjectLine,
     html: renderEmailHtml({
       subjectLine,
-      preheader: 'Información sobre tu solicitud de registro.',
+      preheader: 'Ya revisamos tu cuenta; te contamos el resultado.',
       greetingHtml: `Estimado/a <strong style="color:#6d3c1b;font-weight:700;">${esc(nombreAbogado)}</strong>,`,
       bodyHtml:
         `Revisamos tu solicitud de registro como <strong style="color:#6d3c1b;font-weight:700;">${rolLabel}</strong> en Parada Bridge y, por ahora, no fue aprobada. ` +

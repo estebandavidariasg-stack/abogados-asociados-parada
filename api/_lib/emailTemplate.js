@@ -69,6 +69,12 @@ export function codeBox(code) {
    slot de cuerpo y pie. `innerHtml` controla la alineación de su contenido. */
 export function renderShell({ subjectLine, preheader, innerHtml }) {
   const pre = preheader || subjectLine || 'Parada Bridge'
+  // Espaciador invisible: tras el preheader llenamos el "buffer" que Gmail usa
+  // para la vista previa de la notificación con caracteres de ancho cero /
+  // no-visibles. Así la notificación (colapsada o expandida) muestra SOLO el
+  // asunto + la línea central del preheader, sin arrastrar "Parada Bridge / …"
+  // ni el cuerpo del correo. Es texto oculto: la tarjeta abierta no cambia.
+  const spacer = '&#847;&zwnj;&nbsp;&#8199;&#65279;'.repeat(40)
   return `<!DOCTYPE html>
 <html lang="es" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
 <head>
@@ -91,6 +97,7 @@ export function renderShell({ subjectLine, preheader, innerHtml }) {
 </head>
 <body style="margin:0;padding:0;background-color:#ffffff;">
   <div style="display:none;max-height:0;overflow:hidden;opacity:0;mso-hide:all;">${pre}</div>
+  <div style="display:none;max-height:0;overflow:hidden;opacity:0;mso-hide:all;">${spacer}</div>
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#ffffff;">
     <tr>
       <td align="center" style="padding:32px 16px;">

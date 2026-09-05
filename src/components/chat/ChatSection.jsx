@@ -1470,10 +1470,45 @@ export default function ChatSection() {
   const fileRef     = useRef(null)
   const messagesRef = useRef(null)
   const lawyersRef  = useRef(null)
+  const chatWrapRef = useRef(null)
 
   useEffect(() => {
     if (messagesRef.current) messagesRef.current.scrollTop = messagesRef.current.scrollHeight
   }, [messages])
+
+  // ── Chat pantalla completa en móvil: mantener el compositor sobre el teclado.
+  // En iOS Safari un overlay `position:fixed` NO se encoge cuando aparece el
+  // teclado (el `dvh` no lo refleja), así que el campo quedaría tapado. Con
+  // visualViewport medimos la ventana REAL visible y fijamos la altura del chat
+  // (`--chat-vh`) y su desplazamiento superior. Solo actúa en móvil (≤600px) y
+  // mientras el paso es 'chat'; en escritorio se limpia y manda el CSS normal.
+  useEffect(() => {
+    if (step !== 'chat') return
+    const vv = window.visualViewport
+    const el = chatWrapRef.current
+    if (!vv || !el) return
+    const aplicar = () => {
+      if (window.innerWidth > 600) {
+        el.style.removeProperty('--chat-vh')
+        el.style.removeProperty('top')
+        return
+      }
+      el.style.setProperty('--chat-vh', `${Math.round(vv.height)}px`)
+      el.style.top = `${Math.round(vv.offsetTop)}px`
+      // Mantener el último mensaje a la vista al abrir/cerrar el teclado.
+      if (messagesRef.current) messagesRef.current.scrollTop = messagesRef.current.scrollHeight
+    }
+    aplicar()
+    vv.addEventListener('resize', aplicar)
+    vv.addEventListener('scroll', aplicar)
+    window.addEventListener('orientationchange', aplicar)
+    return () => {
+      vv.removeEventListener('resize', aplicar)
+      vv.removeEventListener('scroll', aplicar)
+      window.removeEventListener('orientationchange', aplicar)
+      if (el) { el.style.removeProperty('--chat-vh'); el.style.removeProperty('top') }
+    }
+  }, [step])
 
   // QR del gestor / deep-links: el hash llega como "#chat?codigo=PB-XXXX" y el
   // navegador NO encuentra un ancla con ese nombre → se quedaba arriba de la
@@ -2436,7 +2471,7 @@ export default function ChatSection() {
             )}
 
             {step === 'chat' && (
-              <div className={styles.chatWrap}>
+              <div className={styles.chatWrap} ref={chatWrapRef}>
 
                 <div className={styles.chatHeader}>
                   <div className={styles.chatHeadRow}>

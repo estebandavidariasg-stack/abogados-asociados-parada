@@ -1147,14 +1147,33 @@
 @media (max-width: 600px) {
   .section { padding: 60px 16px; }
   .card, .formCard { padding: 24px 18px; }
-  /* 'dvh' descuenta la barra del navegador móvil: el compositor queda siempre
-     visible y solo los mensajes hacen scroll interno (no la página). */
-  .chatWrap { height: 82vh; height: 82dvh; }
+  /* Chat a PANTALLA COMPLETA en el celular (estilo WhatsApp): overlay fijo que
+     cubre toda la ventana. `--chat-vh` lo fija el JS con visualViewport para que
+     el compositor quede SIEMPRE sobre el teclado en iOS; 100dvh es el respaldo.
+     El chat vive en divs planos (sin transform), así que `fixed` se ancla a la
+     ventana correctamente. */
+  .chatWrap {
+    position: fixed;
+    inset: 0;
+    top: 0;
+    height: var(--chat-vh, 100dvh);
+    min-height: 0;
+    width: 100%;
+    z-index: 1200;          /* sobre el navbar y el botón de WhatsApp */
+    border-radius: 0;
+    background: #ffffff;
+    box-shadow: none;
+  }
   .msgBubble { max-width: 90%; }
   .lawyerAvatar { width: 42px; height: 42px; }
 
-  /* Header compacto: menos padding, botón "Mis casos" chico, título 2 líneas */
-  .chatHeader { padding: 10px 12px; }
+  /* Header compacto pegado arriba, respetando el notch del iPhone */
+  .chatHeader {
+    padding: 10px 12px;
+    padding-top: calc(10px + env(safe-area-inset-top));
+    border-radius: 0;
+    flex-shrink: 0;
+  }
   .chatHeadRow { gap: 8px; }
   .chatBackBtn { padding: 6px 9px; font-size: 0.68rem; }
   .chatTitle { font-size: 0.8rem; letter-spacing: 0.01em; }
@@ -1163,12 +1182,33 @@
   /* Aviso y mensajes con menos padding lateral */
   .chatAvisoSummary, .chatAvisoTexto,
   .confianzaSummary, .confianzaBody { padding-left: 12px; padding-right: 12px; }
-  .chatMessages { padding: 12px; }
+  /* Los mensajes son la única zona que scrollea; contenida (no arrastra la
+     página por detrás) e inercial en iOS. */
+  .chatMessages {
+    padding: 12px;
+    flex: 1 1 auto;
+    min-height: 0;
+    border-left: none;
+    border-right: none;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
 
-  /* Compositor: campo con aire real, botón Enviar = flecha redonda */
-  .chatInputBar { padding: 8px; gap: 6px; }
+  /* Compositor: campo con aire real, botón Enviar = flecha redonda; pegado al
+     fondo respetando la franja inferior (home indicator) del iPhone. */
+  .chatInputBar {
+    padding: 8px;
+    padding-bottom: calc(8px + env(safe-area-inset-bottom));
+    gap: 6px;
+    flex-shrink: 0;
+    border: none;
+    border-top: 1px solid rgba(109,60,27,0.10);
+    border-radius: 0;
+  }
   .attachBtn { padding: 9px 10px; }
-  .chatInput { padding: 10px 12px; font-size: 0.92rem; }
+  /* 16px OBLIGATORIO: con menos, iOS Safari hace zoom al enfocar el campo (el
+     efecto de "se descuadra todo" al tocar para escribir). */
+  .chatInput { padding: 11px 12px; font-size: 16px; }
   .sendBtn {
     padding: 0;
     width: 42px;
