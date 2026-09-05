@@ -111,9 +111,6 @@ export function renderShell({ subjectLine, preheader, innerHtml }) {
                 Parada <span style="color:${C.goldText};">Bridge</span>
               </div>
               <div style="width:54px;height:3px;margin:14px auto 0;background-color:${C.gold};background:linear-gradient(90deg,rgba(201,168,76,0),#c9a84c,rgba(201,168,76,0));line-height:3px;font-size:0;">&nbsp;</div>
-              <div style="font-family:${FONT_SANS};font-size:13px;color:${C.body};margin-top:14px;letter-spacing:0.02em;">
-                ${subjectLine}
-              </div>
             </td>
           </tr>
 

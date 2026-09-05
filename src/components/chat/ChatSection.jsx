@@ -1532,6 +1532,28 @@ export default function ChatSection() {
     }
   }, [step])
 
+  // Al navegar a un paso "de tarjeta" (método, formulario, mis casos) aterrizar
+  // en la TARJETA, justo bajo el navbar — no en el título "Consulta Privada".
+  // Cada uno de esos pasos lleva id="consulta-form"; mismo offset (-80) y
+  // corrección en dos fases que el botón del hero (los reveals de framer-motion
+  // mueven el alto mientras el scroll viaja). No incluye 'cedula' para no
+  // autoscrollear en la carga inicial del home, ni 'chat' (overlay a pantalla
+  // completa en móvil).
+  const primerRenderRef = useRef(true)
+  useEffect(() => {
+    if (primerRenderRef.current) { primerRenderRef.current = false; return }
+    if (!['metodo', 'form', 'casos'].includes(step)) return
+    const posicionar = (behavior) => {
+      const target = document.getElementById('consulta-form')
+      if (!target) return
+      const top = target.getBoundingClientRect().top + window.scrollY - 80
+      window.scrollTo({ top: Math.max(0, top), behavior })
+    }
+    const t1 = setTimeout(() => posicionar('smooth'), 60)
+    const t2 = setTimeout(() => posicionar('auto'), 760)
+    return () => { clearTimeout(t1); clearTimeout(t2) }
+  }, [step])
+
   // Al entrar a post_chat, verificar si ya hay un PQR para esta sala —
   // así el formulario aparece UNA sola vez por consulta.
   useEffect(() => {
@@ -2446,6 +2468,20 @@ export default function ChatSection() {
     )
   }
 
+  // Nombre del profesional para el header del chat: si ya lo tomó alguien
+  // (activo) usamos ese; si el cliente lo eligió (deep-link) o lo sugirió la IA,
+  // lo mostramos ya desde "Esperando profesional" para que el header diga a
+  // quién le está escribiendo. Profesión = abogado/contador.
+  const profNombreHeader =
+    (roomStatus === 'active' && profesionalNombre)
+      ? profesionalNombre
+      : profesionalDeepLink
+        ? `${profesionalDeepLink.nombre || ''} ${profesionalDeepLink.apellido || ''}`.trim()
+        : profesionalIA
+          ? `${profesionalIA.nombre || ''} ${profesionalIA.apellido || ''}`.trim()
+          : ''
+  const profProfesionHeader = form.tipo_profesional === 'contador' ? 'Contador' : 'Abogado'
+
   return (
     <section className={styles.section} id="chat">
       <style>{AAP_CARD_STYLES}</style>
@@ -2488,12 +2524,12 @@ export default function ChatSection() {
                       </button>
                     )}
                     <div style={{ minWidth: 0, flex: 1 }}>
-                      {/* Título = profesional (a quién le hablas) o "Consulta"
-                          mientras espera. Una sola línea. */}
+                      {/* Título = "Consulta con <profesional>" (a quién le hablas),
+                          o solo "Consulta" si aún no hay uno elegido. Una línea. */}
                       <p className={styles.chatTitle}>
-                        {roomStatus === 'active' && profesionalNombre ? profesionalNombre : 'Consulta'}
+                        {profNombreHeader ? `Consulta con ${profNombreHeader}` : 'Consulta'}
                       </p>
-                      {/* Estado compacto: punto de color + estado + área (1 línea) */}
+                      {/* Estado compacto: punto + profesión + estado + área (1 línea) */}
                       <p className={styles.chatStatus}>
                         <span
                           aria-hidden="true"
@@ -2501,7 +2537,7 @@ export default function ChatSection() {
                           style={{ background: roomStatus === 'active' ? '#43c465' : roomStatus === 'waiting' ? '#e0b53c' : 'rgba(253,246,227,0.4)' }}
                         />
                         <span className={styles.chatStatusEstado}>
-                          {roomStatus === 'waiting' ? 'Esperando profesional'
+                          {profProfesionHeader} · {roomStatus === 'waiting' ? 'Esperando profesional'
                             : roomStatus === 'active' ? 'En línea'
                             : 'Finalizada'}
                         </span>
@@ -2802,7 +2838,7 @@ export default function ChatSection() {
       {step === 'casos' && (
         <div className={styles.floatingLayout}>
           <SideCards cards={CARDS_LEFT} side="left" />
-          <div className={styles.centerContent}>
+          <div className={styles.centerContent} id="consulta-form" style={{ scrollMarginTop: '90px' }}>
             <div className={`${styles.card} aap-card-casos`} style={{ boxSizing:'border-box' }}>
               <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:10, flexWrap:'wrap', marginBottom:2 }}>
                 <p className={styles.cedulaTitle} style={{ marginBottom:0 }}>Tus casos abiertos</p>
@@ -2993,7 +3029,7 @@ export default function ChatSection() {
       {step === 'metodo' && (
         <div className={styles.floatingLayout} ref={lawyersRef}>
           <SideCards cards={CARDS_LEFT} side="left" />
-          <div className={styles.centerContent}>
+          <div className={styles.centerContent} id="consulta-form" style={{ scrollMarginTop: '90px' }}>
             <div className={`${styles.card} aap-card-cedula`}>
               <button className={styles.btnBack} onClick={() => setStep(misCasos.length ? 'casos' : 'cedula')}>
                 ← Volver
@@ -3112,7 +3148,7 @@ export default function ChatSection() {
 
       {/* ── Form ── */}
       {step === 'form' && (
-        <div className={styles.form}>
+        <div className={styles.form} id="consulta-form" style={{ scrollMarginTop: '90px' }}>
           <div className={`${styles.formCard} aap-card-form`}>
             {/* Volver SIN perder lo escrito: el estado del formulario se conserva. */}
             <button className={styles.btnBack} onClick={() => setStep(misCasos.length ? 'casos' : 'metodo')}>← Volver</button>

@@ -396,11 +396,20 @@ export default function LawyerCard({
                 // profesional bloqueado y, al enviar, entra al chat con él ya elegido.
                 const tipo = lawyer.rol === 'contador' ? 'contador' : 'abogado'
                 window.location.hash = `#chat?abogado=${encodeURIComponent(lawyer.id)}&tipo=${tipo}`
-                // pequeño delay para que el modal se desmonte antes del scroll
+                // Aterriza en el CUADRO DE CÉDULA (#consulta-form), no en el
+                // título de la sección — igual que el botón "Cuéntanos tu caso"
+                // del hero: mismo offset (-80px) y corrección en dos fases para
+                // contrarrestar los reveals de framer-motion que mueven el alto.
                 setTimeout(() => {
-                  const el = document.getElementById('chat')
-                  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
-                }, 120)
+                  const target = document.getElementById('consulta-form') || document.getElementById('chat')
+                  if (!target) return
+                  const posicionar = (behavior) => {
+                    const top = target.getBoundingClientRect().top + window.scrollY - 80
+                    window.scrollTo({ top: Math.max(0, top), behavior })
+                  }
+                  posicionar('smooth')
+                  setTimeout(() => posicionar('auto'), 700)
+                }, 140)
               }}
             >
               INICIAR CONSULTA
