@@ -582,24 +582,73 @@
 }
 
 .chatHeader {
-  background: var(--navy);
+  /* Café con un degradado suave + hairline dorado inferior: menos bloque
+     macizo, más cabecera de tarjeta. */
+  background: linear-gradient(135deg, #5a3617 0%, #472f29 100%);
   border: 1px solid var(--navy);
-  border-bottom: none;
+  border-bottom: 2px solid rgba(201,168,76,0.4);
   border-radius: 12px 12px 0 0;
-  padding: 14px 20px;
+  padding: 13px 18px;
+}
+
+.chatHeadRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.chatBackBtn {
+  background: linear-gradient(135deg, #f2d580, #c9a84c 60%, #b8942f);
+  border: none;
+  color: #4a330f;
+  border-radius: 10px;
+  padding: 7px 12px;
+  cursor: pointer;
+  font-size: 0.74rem;
+  font-weight: 800;
+  white-space: nowrap;
+  flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.25);
 }
 
 .chatTitle {
   color: #ffffff;
   font-family: 'Cinzel', serif;
-  font-size: 0.9rem;
-  margin: 0 0 4px;
+  font-size: 0.95rem;
+  margin: 0 0 3px;
+  /* Una sola línea: el título es el nombre del profesional o "Consulta". */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .chatStatus {
-  color: rgba(252, 241, 232,0.6);
-  font-size: 0.75rem;
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 6px;
+  color: rgba(252, 241, 232, 0.7);
+  font-size: 0.74rem;
   margin: 0;
+  min-width: 0;
+}
+.chatStatusDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.chatStatusEstado {
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.chatStatusArea {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  flex: 1;
+  opacity: 0.85;
 }
 
 .chatMessages {
@@ -918,6 +967,9 @@
 
 .chatInput {
   flex: 1;
+  /* min-width:0 es clave: sin él, el ancho intrínseco del input desborda la
+     barra flex y el campo se salía del borde en móvil. */
+  min-width: 0;
   /* Blanco (antes crema): a juego con el área de mensajes. */
   background: #ffffff;
   border: 1px solid rgba(109,60,27,0.2);
@@ -929,6 +981,9 @@
   font-family: inherit;
   transition: border-color 0.2s, box-shadow 0.2s;
 }
+
+/* En móvil el botón Enviar es solo la flecha (ahorra ancho para el campo). */
+.sendBtnIcon { display: none; }
 
 .chatInput:focus {
   border-color: var(--navy-md);
@@ -953,16 +1008,181 @@
 .sendBtn:hover:not(:disabled) { background: var(--navy-md); }
 .sendBtn:disabled { opacity: 0.4; cursor: not-allowed; }
 
+/* ── Aviso "Valores orientativos" (colapsable) ── */
+.chatAviso {
+  background: rgba(109,60,27,0.05);
+  border-bottom: 1px solid rgba(109,60,27,0.08);
+  font-size: 0.72rem;
+  color: #634f3d;
+}
+.chatAvisoSummary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  cursor: pointer;
+  list-style: none;
+  font-size: 0.72rem;
+}
+.chatAvisoSummary::-webkit-details-marker { display: none; }
+.chatAvisoSummary:hover { background: rgba(109,60,27,0.04); }
+/* Flecha: cápsula redonda con muelle suave al abrir (ease-out expo). */
+.chatAvisoChevron {
+  margin-left: auto;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: rgba(201,168,76,0.16);
+  color: #8a6a28;
+  transition: transform 0.42s cubic-bezier(0.16, 1, 0.3, 1), background 0.25s;
+}
+.chatAvisoSummary:hover .chatAvisoChevron { background: rgba(201,168,76,0.3); }
+.chatAviso[open] .chatAvisoChevron { transform: rotate(180deg); }
+.chatAvisoTexto {
+  margin: 0;
+  padding: 0 16px 10px;
+  line-height: 1.5;
+  animation: chatReveal 0.34s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes chatReveal {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Confianza: documentos verificados del profesional (desplegable) ── */
+.confianzaWrap {
+  border-bottom: 1px solid rgba(109,60,27,0.08);
+  background: rgba(47,133,90,0.06);
+}
+.confianzaSummary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 16px;
+  cursor: pointer;
+  list-style: none;
+  font-size: 0.78rem;
+  color: #2f6a48;
+}
+.confianzaSummary::-webkit-details-marker { display: none; }
+.confianzaSummary:hover { background: rgba(47,133,90,0.05); }
+.confianzaSummary strong { color: #2f6a48; font-weight: 700; }
+.confianzaWrap .chatAvisoChevron {
+  background: rgba(47,133,90,0.14);
+  color: #2f855a;
+}
+.confianzaWrap[open] .chatAvisoChevron { transform: rotate(180deg); }
+.confianzaBody {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  padding: 0 16px 10px;
+  animation: chatReveal 0.34s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.confianzaChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid rgba(109,60,27,0.22);
+  background: #fff;
+  border-radius: 999px;
+  padding: 6px 13px;
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: #6d3c1b;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+}
+.confianzaChip:hover { border-color: rgba(201,168,76,0.6); background: #fffdf6; }
+.confianzaCedula {
+  font-size: 0.74rem;
+  color: rgba(109,60,27,0.8);
+  font-weight: 700;
+  margin-left: auto;
+}
+
+/* ── Adjunto en espera (previsualización antes de enviar) ── */
+.adjuntoPreview {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: #fdf8ec;
+  border: 1px solid rgba(201,168,76,0.4);
+  border-bottom: none;
+  animation: chatReveal 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.adjuntoThumb {
+  width: 40px; height: 40px; border-radius: 8px; object-fit: cover; flex-shrink: 0;
+  border: 1px solid rgba(109,60,27,0.2);
+}
+.adjuntoIcon {
+  width: 40px; height: 40px; border-radius: 8px; flex-shrink: 0;
+  display: grid; place-items: center;
+  background: rgba(201,168,76,0.16); color: #8a6a28;
+}
+.adjuntoInfo { min-width: 0; flex: 1; display: flex; flex-direction: column; }
+.adjuntoNombre {
+  font-size: 0.82rem; font-weight: 600; color: #472f29;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.adjuntoPeso { font-size: 0.68rem; color: rgba(109,60,27,0.6); }
+.adjuntoDescartar {
+  flex-shrink: 0; border: 1px solid rgba(109,60,27,0.3); background: #fff;
+  color: #6d3c1b; border-radius: 8px; padding: 7px 12px;
+  font-size: 0.74rem; font-weight: 600; cursor: pointer;
+}
+.adjuntoEnviar {
+  flex-shrink: 0; border: none;
+  background: linear-gradient(135deg,#f2d580,#c9a84c 60%,#b8942f);
+  color: #4a330f; border-radius: 8px; padding: 7px 14px;
+  font-size: 0.74rem; font-weight: 800; cursor: pointer;
+}
+.adjuntoEnviar:disabled, .adjuntoDescartar:disabled { opacity: 0.55; cursor: default; }
+
 /* ── Mobile ── */
 @media (max-width: 600px) {
   .section { padding: 60px 16px; }
   .card, .formCard { padding: 24px 18px; }
   /* 'dvh' descuenta la barra del navegador móvil: el compositor queda siempre
      visible y solo los mensajes hacen scroll interno (no la página). */
-  .chatWrap { height: 80vh; height: 80dvh; }
+  .chatWrap { height: 82vh; height: 82dvh; }
   .msgBubble { max-width: 90%; }
   .lawyerAvatar { width: 42px; height: 42px; }
-  .sendBtn { padding: 10px 14px; font-size: 0.8rem; }
+
+  /* Header compacto: menos padding, botón "Mis casos" chico, título 2 líneas */
+  .chatHeader { padding: 10px 12px; }
+  .chatHeadRow { gap: 8px; }
+  .chatBackBtn { padding: 6px 9px; font-size: 0.68rem; }
+  .chatTitle { font-size: 0.8rem; letter-spacing: 0.01em; }
+  .chatStatus { font-size: 0.7rem; }
+
+  /* Aviso y mensajes con menos padding lateral */
+  .chatAvisoSummary, .chatAvisoTexto,
+  .confianzaSummary, .confianzaBody { padding-left: 12px; padding-right: 12px; }
+  .chatMessages { padding: 12px; }
+
+  /* Compositor: campo con aire real, botón Enviar = flecha redonda */
+  .chatInputBar { padding: 8px; gap: 6px; }
+  .attachBtn { padding: 9px 10px; }
+  .chatInput { padding: 10px 12px; font-size: 0.92rem; }
+  .sendBtn {
+    padding: 0;
+    width: 42px;
+    height: 42px;
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+    border-radius: 10px;
+  }
+  .sendBtnText { display: none; }
+  .sendBtnIcon { display: block; }
+
+  /* Confianza: la cédula baja a su propia línea */
+  .confianzaCedula { margin-left: 0; flex-basis: 100%; }
 }
 
 /* ── Panel de calificación ── */

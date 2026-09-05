@@ -142,6 +142,7 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
   const [input,        setInput]        = useState('')
   const [sending,      setSending]      = useState(false)
   const [uploading,    setUploading]    = useState(false)
+  const [pendingFile,  setPendingFile]  = useState(null)  // adjunto en espera
   const [closing,      setClosing]      = useState(false)
   const [confirmClose, setConfirmClose] = useState(false)
   const [confirmVerificar, setConfirmVerificar] = useState(false)
@@ -626,10 +627,26 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
     }
   }
 
-  async function handleFile(e) {
+  function handleFile(e) {
     const file = e.target.files?.[0]
-    if (file) await subirArchivo(file)
     if (e.target) e.target.value = ''
+    if (file) prepararAdjunto(file)
+  }
+  function prepararAdjunto(file) {
+    if (!file) return
+    setPendingFile(prev => {
+      if (prev?.preview) URL.revokeObjectURL(prev.preview)
+      const esImg = /^image\//.test(file.type)
+      return { file, preview: esImg ? URL.createObjectURL(file) : null }
+    })
+  }
+  function descartarAdjunto() {
+    setPendingFile(prev => { if (prev?.preview) URL.revokeObjectURL(prev.preview); return null })
+  }
+  async function confirmarAdjunto() {
+    if (!pendingFile?.file) return
+    await subirArchivo(pendingFile.file)
+    descartarAdjunto()
   }
 
   // Sube un archivo al chat (input o arrastrar-soltar).
@@ -1376,7 +1393,7 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
               onDrop={(e) => {
                 e.preventDefault(); setDragging(false)
                 const f = e.dataTransfer?.files?.[0]
-                if (f && activeRoom.status !== 'closed') subirArchivo(f)
+                if (f && activeRoom.status !== 'closed') prepararAdjunto(f)
               }}
             >
               {dragging && (
@@ -1466,6 +1483,24 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
                 )
               })}
             </div>
+
+            {activeRoom.status !== 'closed' && pendingFile && (
+              <div className={styles.adjuntoPreview}>
+                {pendingFile.preview ? (
+                  <img src={pendingFile.preview} alt="" className={styles.adjuntoThumb} />
+                ) : (
+                  <span className={styles.adjuntoIcon}><IconPaperclip size={18} /></span>
+                )}
+                <div className={styles.adjuntoInfo}>
+                  <span className={styles.adjuntoNombre}>{pendingFile.file.name}</span>
+                  <span className={styles.adjuntoPeso}>Revisa antes de enviar</span>
+                </div>
+                <button type="button" className={styles.adjuntoDescartar} onClick={descartarAdjunto} disabled={uploading}>Descartar</button>
+                <button type="button" className={styles.adjuntoEnviar} onClick={confirmarAdjunto} disabled={uploading}>
+                  {uploading ? 'Enviando…' : 'Enviar'}
+                </button>
+              </div>
+            )}
 
             {activeRoom.status !== 'closed' && (
               <div className={styles.inputBar}>

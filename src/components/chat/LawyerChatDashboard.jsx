@@ -149,6 +149,8 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
   const [input,       setInput]       = useState('')
   const [sending,     setSending]     = useState(false)
   const [uploading,   setUploading]   = useState(false)
+  // Adjunto en espera: seleccionar → previsualizar → enviar (no auto-envío).
+  const [pendingFile, setPendingFile] = useState(null)
   const [closing,     setClosing]     = useState(false)
   const [confirmClose, setConfirmClose] = useState(false)
   const [confirmVerificar, setConfirmVerificar] = useState(false)
@@ -644,11 +646,27 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
     }
   }
 
-  /* ── Subir archivo ── */
-  async function handleFile(e) {
+  /* ── Subir archivo: seleccionar → previsualizar → enviar manual ── */
+  function handleFile(e) {
     const file = e.target.files?.[0]
-    if (file) await subirArchivo(file)
     if (e.target) e.target.value = ''
+    if (file) prepararAdjunto(file)
+  }
+  function prepararAdjunto(file) {
+    if (!file) return
+    setPendingFile(prev => {
+      if (prev?.preview) URL.revokeObjectURL(prev.preview)
+      const esImg = /^image\//.test(file.type)
+      return { file, preview: esImg ? URL.createObjectURL(file) : null }
+    })
+  }
+  function descartarAdjunto() {
+    setPendingFile(prev => { if (prev?.preview) URL.revokeObjectURL(prev.preview); return null })
+  }
+  async function confirmarAdjunto() {
+    if (!pendingFile?.file) return
+    await subirArchivo(pendingFile.file)
+    descartarAdjunto()
   }
 
   // Sube un archivo al chat (reutilizado por el input y por arrastrar-soltar).
@@ -1379,7 +1397,7 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
               onDrop={(e) => {
                 e.preventDefault(); setDragging(false)
                 const f = e.dataTransfer?.files?.[0]
-                if (f && activeRoom.status !== 'closed') subirArchivo(f)
+                if (f && activeRoom.status !== 'closed') prepararAdjunto(f)
               }}
             >
               {dragging && (
@@ -1474,6 +1492,26 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
 
             {/* Input — solo si la sala está abierta */}
             {activeRoom.status !== 'closed' && (
+              <>
+              {/* Adjunto en espera: previsualizar → confirmar / descartar */}
+              {pendingFile && (
+                <div className={styles.adjuntoPreview}>
+                  {pendingFile.preview ? (
+                    <img src={pendingFile.preview} alt="" className={styles.adjuntoThumb} />
+                  ) : (
+                    <span className={styles.adjuntoIcon}><IconPaperclip size={18} /></span>
+                  )}
+                  <div className={styles.adjuntoInfo}>
+                    <span className={styles.adjuntoNombre}>{pendingFile.file.name}</span>
+                    <span className={styles.adjuntoPeso}>Revisa antes de enviar</span>
+                  </div>
+                  <button type="button" className={styles.adjuntoDescartar} onClick={descartarAdjunto} disabled={uploading}>Descartar</button>
+                  <button type="button" className={styles.adjuntoEnviar} onClick={confirmarAdjunto} disabled={uploading}>
+                    {uploading ? 'Enviando…' : 'Enviar'}
+                  </button>
+                </div>
+              )}
+
               <div className={styles.inputBar}>
                 <div className={styles.attachWrap}>
                   <button
@@ -1534,6 +1572,7 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
                   Enviar
                 </button>
               </div>
+              </>
             )}
           </>
         )}

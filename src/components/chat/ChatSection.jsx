@@ -938,8 +938,8 @@ function RatingPanel({ roomId, onDone }) {
         {lawyers.map(l => {
           const nombre = `${l.nombre||''} ${l.apellido||''}`.trim()
           return (
-            <div key={l.id}>
-              <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:10 }}>
+            <div key={l.id} style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:10 }}>
+              <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:12 }}>
                 <img
                   src={l.foto_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(nombre)}&background=1a1a1a&color=c9a84c`}
                   alt={nombre}
@@ -949,7 +949,7 @@ function RatingPanel({ roomId, onDone }) {
                   decoding="async"
                   style={{ width:40, height:40, borderRadius:'50%', objectFit:'cover', flexShrink:0 }}
                 />
-                <p style={{ color:'#ccc', fontWeight:600, fontSize:'0.9rem', margin:0 }}>{nombre}</p>
+                <p style={{ color:'#6d3c1b', fontWeight:700, fontSize:'0.95rem', margin:0 }}>{nombre}</p>
               </div>
               <StarRating value={ratings[l.id]||0} onChange={v => setRatings(r => ({ ...r, [l.id]: v }))} />
             </div>
@@ -1165,25 +1165,43 @@ function VisorDocumento({ titulo, url, onClose }) {
     <div role="dialog" aria-modal="true" aria-label={titulo}
       onClick={e => { if (e.target === e.currentTarget) onClose() }}
       onContextMenu={e => e.preventDefault()}
-      style={{ position:'fixed', inset:0, zIndex:1200, background:'rgba(20,14,8,0.78)', display:'flex', flexDirection:'column', padding:16 }}>
-      <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:10, color:'#f5ecd8' }}>
-        <strong style={{ fontSize:'0.95rem' }}>{titulo}</strong>
-        <span style={{ fontSize:'0.7rem', opacity:0.75, border:'1px solid rgba(245,236,216,0.4)', borderRadius:999, padding:'2px 10px' }}>
-          Solo lectura
+      // Overlay OPACO (antes 0.78 dejaba ver el navbar/logo del sitio detrás).
+      style={{ position:'fixed', inset:0, zIndex:2000, background:'rgba(18,12,6,0.94)', display:'flex', flexDirection:'column' }}>
+
+      {/* Barra superior sólida: ícono ojo + título (1 línea) + botón X */}
+      <div style={{
+        display:'flex', alignItems:'center', gap:12,
+        padding:'12px 14px', background:'#472f29', color:'#fdf6e3',
+        borderBottom:'2px solid rgba(201,168,76,0.45)', flexShrink:0,
+      }}>
+        <span aria-hidden="true" style={{ display:'grid', placeItems:'center', width:34, height:34, borderRadius:10, background:'rgba(201,168,76,0.18)', color:'#f2d580', flexShrink:0 }}>
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" /><circle cx="12" cy="12" r="3" />
+          </svg>
         </span>
+        <div style={{ minWidth:0, flex:1 }}>
+          <p style={{ margin:0, fontWeight:700, fontSize:'0.9rem', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+            {titulo}
+          </p>
+          <p style={{ margin:0, fontSize:'0.68rem', color:'rgba(253,246,227,0.6)' }}>Solo lectura</p>
+        </div>
         <button type="button" onClick={onClose} aria-label="Cerrar visor"
-          style={{ marginLeft:'auto', background:'rgba(255,255,255,0.12)', border:'none', color:'#f5ecd8', borderRadius:10, padding:'8px 14px', cursor:'pointer', fontWeight:700 }}>
-          ✕ Cerrar
+          style={{ flexShrink:0, display:'grid', placeItems:'center', width:36, height:36, borderRadius:10, background:'rgba(255,255,255,0.12)', border:'none', color:'#fdf6e3', cursor:'pointer' }}>
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M18 6 6 18M6 6l12 12" />
+          </svg>
         </button>
       </div>
-      <div style={{ flex:1, minHeight:0, borderRadius:14, overflow:'hidden', background:'#2a211a', display:'flex', alignItems:'center', justifyContent:'center', userSelect:'none' }}>
+
+      {/* Documento */}
+      <div style={{ flex:1, minHeight:0, padding:12, display:'flex', alignItems:'center', justifyContent:'center', userSelect:'none' }}>
         {esPdf ? (
           <iframe title={titulo} src={`${url}#toolbar=0&navpanes=0&scrollbar=0`}
-            style={{ width:'100%', height:'100%', border:'none', background:'#fff' }} />
+            style={{ width:'100%', height:'100%', border:'none', borderRadius:12, background:'#fff' }} />
         ) : (
           <img src={url} alt={titulo} draggable={false}
             onContextMenu={e => e.preventDefault()}
-            style={{ maxWidth:'100%', maxHeight:'100%', objectFit:'contain', pointerEvents:'none' }} />
+            style={{ maxWidth:'100%', maxHeight:'100%', objectFit:'contain', borderRadius:12, pointerEvents:'none' }} />
         )}
       </div>
     </div>
@@ -1381,6 +1399,9 @@ export default function ChatSection() {
   const [input, setInput]           = useState('')
   const [sending, setSending]       = useState(false)
   const [uploading, setUploading]   = useState(false)
+  // Adjunto EN ESPERA de confirmación: seleccionar → previsualizar → enviar.
+  // Evita mandar un documento por equivocación. { file, preview }
+  const [pendingFile, setPendingFile] = useState(null)
 
   // ── Lightbox para ver imágenes en grande — ChatLightbox maneja Escape internamente
   const [lightbox, setLightbox] = useState(null)
@@ -2166,10 +2187,33 @@ export default function ChatSection() {
     }
   }
 
-  async function handleFile(e) {
+  // Seleccionar archivo → NO se envía; queda en espera para revisar y confirmar.
+  function handleFile(e) {
     const file = e.target.files?.[0]
-    if (file) await subirArchivo(file)
     if (fileRef.current) fileRef.current.value = ''
+    if (file) prepararAdjunto(file)
+  }
+
+  // Deja el archivo en espera con una previsualización (miniatura si es imagen).
+  function prepararAdjunto(file) {
+    if (!file) return
+    setPendingFile(prev => {
+      if (prev?.preview) URL.revokeObjectURL(prev.preview)
+      const esImg = /^image\//.test(file.type)
+      return { file, preview: esImg ? URL.createObjectURL(file) : null }
+    })
+  }
+
+  function descartarAdjunto() {
+    setPendingFile(prev => { if (prev?.preview) URL.revokeObjectURL(prev.preview); return null })
+  }
+
+  // Confirmar → recién ahora sube y envía el adjunto en espera.
+  async function confirmarAdjunto() {
+    if (!pendingFile?.file) return
+    const file = pendingFile.file
+    await subirArchivo(file)
+    descartarAdjunto()
   }
 
   // Sube un archivo al chat (reutilizado por el input y por arrastrar-soltar).
@@ -2386,7 +2430,7 @@ export default function ChatSection() {
         <div className={styles.floatingLayout}>
           <SideCards cards={CARDS_LEFT} side="left" />
 
-          <div className={styles.centerContent}>
+          <div className={styles.centerContent} id="consulta-form" style={{ scrollMarginTop: '90px' }}>
             {step === 'cedula' && (
               <StepCedula onNew={handleNew} onCasos={abrirMisCasos} />
             )}
@@ -2395,7 +2439,7 @@ export default function ChatSection() {
               <div className={styles.chatWrap}>
 
                 <div className={styles.chatHeader}>
-                  <div style={{ display:'flex', alignItems:'flex-start', gap:12 }}>
+                  <div className={styles.chatHeadRow}>
                     {/* Volver a la lista de casos (multi-chat) sin perder nada */}
                     {misCasos.length > 0 && (
                       <button
@@ -2403,77 +2447,89 @@ export default function ChatSection() {
                         onClick={volverAMisCasos}
                         aria-label="Volver a mis casos"
                         title="Volver a mis casos"
-                        style={{
-                          background:'linear-gradient(135deg,#f2d580,#c9a84c 60%,#b8942f)',
-                          border:'none', color:'#4a330f',
-                          borderRadius:10, padding:'7px 12px', cursor:'pointer',
-                          fontSize:'0.74rem', fontWeight:800, whiteSpace:'nowrap', flexShrink:0,
-                          boxShadow:'0 2px 8px rgba(0,0,0,0.25)',
-                        }}
+                        className={styles.chatBackBtn}
                       >
                         ← Mis casos
                       </button>
                     )}
-                    <div>
-                      <p className={styles.chatTitle}>Consulta — {roomArea || form.areas.join(', ')}</p>
-                      <p className={styles.chatStatus}>
-                        {roomStatus === 'waiting' ? 'Esperando que un abogado se una…'
-                          : roomStatus === 'active' ? (profesionalNombre ? `Chat activo · ${profesionalNombre}` : 'Chat activo')
-                          : 'Consulta finalizada'}
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      {/* Título = profesional (a quién le hablas) o "Consulta"
+                          mientras espera. Una sola línea. */}
+                      <p className={styles.chatTitle}>
+                        {roomStatus === 'active' && profesionalNombre ? profesionalNombre : 'Consulta'}
                       </p>
-                      {/* ── Código de referencia visible ── */}
-                      {roomCodigo && (
-                        <p style={{ fontSize:'0.68rem', color:'var(--gold)', letterSpacing:'0.12em',
-                          fontFamily:"'Courier New', monospace", marginTop:4, opacity:0.8 }}>
-                          Ref: {roomCodigo}
-                        </p>
-                      )}
+                      {/* Estado compacto: punto de color + estado + área (1 línea) */}
+                      <p className={styles.chatStatus}>
+                        <span
+                          aria-hidden="true"
+                          className={styles.chatStatusDot}
+                          style={{ background: roomStatus === 'active' ? '#43c465' : roomStatus === 'waiting' ? '#e0b53c' : 'rgba(253,246,227,0.4)' }}
+                        />
+                        <span className={styles.chatStatusEstado}>
+                          {roomStatus === 'waiting' ? 'Esperando profesional'
+                            : roomStatus === 'active' ? 'En línea'
+                            : 'Finalizada'}
+                        </span>
+                        {(roomArea || form.areas.join(', ')) && (
+                          <span className={styles.chatStatusArea}> · {roomArea || form.areas.join(', ')}</span>
+                        )}
+                      </p>
                     </div>
                   </div>
                 </div>
 
-                {/* Aviso legal de valores orientativos (debajo del encabezado azul) */}
-                <div style={{
-                  padding:'8px 16px', background:'rgba(109,60,27,0.05)',
-                  borderBottom:'1px solid rgba(109,60,27,0.08)',
-                  fontSize:'0.72rem', lineHeight:1.5, color:'#634f3d',
-                }}>
-                  <strong style={{ color:'#6d3c1b' }}>Valores orientativos:</strong>{' '}
-                  en Colombia los honorarios profesionales son de libre acuerdo entre las partes
-                  (no existe una tarifa oficial obligatoria). El profesional confirma el valor final
-                  antes de iniciar. Ver{' '}
-                  <a href="/terminos" target="_blank" rel="noopener noreferrer" style={{ color:'#6d3c1b', fontWeight:700 }}>términos</a>.
-                </div>
+                {/* Aviso legal de valores orientativos (debajo del encabezado azul).
+                    Colapsable en móvil para no saturar la vista del chat. */}
+                <details className={styles.chatAviso}>
+                  <summary className={styles.chatAvisoSummary}>
+                    <strong style={{ color:'#6d3c1b' }}>Valores orientativos</strong>
+                    <span className={styles.chatAvisoChevron} aria-hidden="true">
+                      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg>
+                    </span>
+                  </summary>
+                  <p className={styles.chatAvisoTexto}>
+                    En Colombia los honorarios profesionales son de libre acuerdo entre las partes
+                    (no existe una tarifa oficial obligatoria). El profesional confirma el valor final
+                    antes de iniciar. Ver{' '}
+                    <a href="/terminos" target="_blank" rel="noopener noreferrer" style={{ color:'#6d3c1b', fontWeight:700 }}>términos</a>.
+                  </p>
+                </details>
 
-                {/* ── Confianza: documentos del profesional (solo-ver) + cédula ── */}
+                {/* ── Confianza: documentos del profesional (solo-ver) + cédula.
+                    Desplegable para no saturar la cabecera del chat. ── */}
                 {roomStatus === 'active' && docsInfo?.ok &&
                   (docsInfo.docs?.tarjeta || docsInfo.docs?.certBancario || docsInfo.docs?.certDisciplinario || docsInfo.cedula) && (
-                  <div style={{
-                    padding: '8px 16px', borderBottom: '1px solid rgba(109,60,27,0.08)',
-                    display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center',
-                    background: 'rgba(201,168,76,0.06)',
-                  }}>
-                    {[
-                      docsInfo.docs?.tarjeta          && { key: 'tarjeta',          label: 'Tarjeta profesional' },
-                      docsInfo.docs?.certBancario     && { key: 'certBancario',     label: 'Cuenta bancaria certificada' },
-                      docsInfo.docs?.certDisciplinario && { key: 'certDisciplinario', label: 'Certificado disciplinario' },
-                    ].filter(Boolean).map(d => (
-                      <button key={d.key} type="button"
-                        onClick={() => abrirDoc(d.key, d.label)}
-                        style={{
-                          border: '1px solid rgba(109,60,27,0.25)', background: '#fff',
-                          borderRadius: 999, padding: '5px 12px', fontSize: '0.72rem',
-                          fontWeight: 600, color: '#6d3c1b', cursor: 'pointer',
-                        }}>
-                        {d.label}
-                      </button>
-                    ))}
-                    {docsInfo.cedula && (
-                      <span style={{ fontSize: '0.72rem', color: 'rgba(109,60,27,0.75)', fontWeight: 600, marginLeft: 'auto' }}>
-                        C.C. {formatCedula(docsInfo.cedula)}
+                  <details className={styles.confianzaWrap}>
+                    <summary className={styles.confianzaSummary}>
+                      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="#2f855a" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0 }}>
+                        <path d="M9 12l2 2 4-4" /><path d="M12 3l7 4v5c0 4.5-3 7-7 8-4-1-7-3.5-7-8V7z" />
+                      </svg>
+                      <strong>Profesional verificado</strong>
+                      <span className={styles.chatAvisoChevron} aria-hidden="true">
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg>
                       </span>
-                    )}
-                  </div>
+                    </summary>
+                    <div className={styles.confianzaBody}>
+                      {[
+                        docsInfo.docs?.tarjeta          && { key: 'tarjeta',          label: 'Tarjeta profesional' },
+                        docsInfo.docs?.certBancario     && { key: 'certBancario',     label: 'Cuenta bancaria certificada' },
+                        docsInfo.docs?.certDisciplinario && { key: 'certDisciplinario', label: 'Certificado disciplinario' },
+                      ].filter(Boolean).map(d => (
+                        <button key={d.key} type="button" className={styles.confianzaChip}
+                          onClick={() => abrirDoc(d.key, d.label)} title={`Ver ${d.label}`}>
+                          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0, color: '#8a6a28' }}>
+                            <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" /><circle cx="12" cy="12" r="3" />
+                          </svg>
+                          <span>{d.label}</span>
+                        </button>
+                      ))}
+                      {docsInfo.cedula && (
+                        <span className={styles.confianzaCedula}>
+                          C.C. {formatCedula(docsInfo.cedula)}
+                        </span>
+                      )}
+                    </div>
+                  </details>
                 )}
 
                 {/* Cobro de la asesoría (manual, directo al profesional) */}
@@ -2494,7 +2550,7 @@ export default function ChatSection() {
                   onDrop={(e) => {
                     e.preventDefault(); setDragging(false)
                     const f = e.dataTransfer?.files?.[0]
-                    if (f) subirArchivo(f)
+                    if (f) prepararAdjunto(f)   // a revisión, no se envía solo
                   }}
                 >
                   {dragging && (
@@ -2615,6 +2671,27 @@ export default function ChatSection() {
                   </Suspense>
                 )}
 
+                {/* Adjunto en espera: previsualizar → confirmar / descartar */}
+                {pendingFile && (
+                  <div className={styles.adjuntoPreview}>
+                    {pendingFile.preview ? (
+                      <img src={pendingFile.preview} alt="" className={styles.adjuntoThumb} />
+                    ) : (
+                      <span className={styles.adjuntoIcon}><IconPaperclip size={18} /></span>
+                    )}
+                    <div className={styles.adjuntoInfo}>
+                      <span className={styles.adjuntoNombre}>{pendingFile.file.name}</span>
+                      <span className={styles.adjuntoPeso}>{formatSize(pendingFile.file.size)} · revisa antes de enviar</span>
+                    </div>
+                    <button type="button" className={styles.adjuntoDescartar} onClick={descartarAdjunto} disabled={uploading}>
+                      Descartar
+                    </button>
+                    <button type="button" className={styles.adjuntoEnviar} onClick={confirmarAdjunto} disabled={uploading}>
+                      {uploading ? 'Enviando…' : 'Enviar'}
+                    </button>
+                  </div>
+                )}
+
                 <div className={styles.chatInputBar}>
                   <button className={styles.attachBtn} onClick={() => fileRef.current?.click()}
                     disabled={uploading} title="Adjuntar archivo"><IconPaperclip size={15} /></button>
@@ -2629,8 +2706,14 @@ export default function ChatSection() {
                   <input className={styles.chatInput} value={input}
                     onChange={e => setInput(e.target.value)}
                     onKeyDown={e => e.key==='Enter' && !e.shiftKey && (e.preventDefault(), sendMessage())}
-                    placeholder="Escribe un mensaje… (Enter para enviar)" />
-                  <button className={styles.sendBtn} onClick={sendMessage} disabled={!input.trim()}>Enviar</button>
+                    placeholder="Escribe un mensaje…" />
+                  <button className={styles.sendBtn} onClick={sendMessage} disabled={!input.trim()}
+                    aria-label="Enviar mensaje">
+                    <span className={styles.sendBtnText}>Enviar</span>
+                    <svg className={styles.sendBtnIcon} viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M22 2 11 13" /><path d="M22 2 15 22l-4-9-9-4 20-7z" />
+                    </svg>
+                  </button>
                 </div>
 
                 {sendError && (
