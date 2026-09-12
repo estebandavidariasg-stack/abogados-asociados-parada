@@ -6,7 +6,7 @@
     { "path": "/api/cron/gen-inactividad", "schedule": "0 13 * * *" }
   ],
   "rewrites": [
-    { "source": "/((?!api/|@|src/|node_modules/|.*\\.).*)", "destination": "/" }
+    { "source": "/((?!api/|_vercel/|@|src/|node_modules/|.*\\.).*)", "destination": "/" }
   ],
   "headers": [
     {
