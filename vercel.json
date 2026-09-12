@@ -5,6 +5,14 @@
   "crons": [
     { "path": "/api/cron/gen-inactividad", "schedule": "0 13 * * *" }
   ],
+  "redirects": [
+    {
+      "source": "/((?!api/).*)",
+      "has": [{ "type": "host", "value": ".*\\.vercel\\.app" }],
+      "destination": "https://paradabridge.com/$1",
+      "permanent": true
+    }
+  ],
   "rewrites": [
     { "source": "/((?!api/|_vercel/|@|src/|node_modules/|.*\\.).*)", "destination": "/" }
   ],
