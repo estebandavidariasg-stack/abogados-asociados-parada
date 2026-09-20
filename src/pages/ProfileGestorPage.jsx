@@ -463,7 +463,12 @@ function SeccionEstadisticas({ aprobado, codigo }) {
     return () => { cancel = true }
   }, [aprobado, codigo])
 
-  const decididos = stats ? stats.exitos + stats.fracasos : 0
+  // codigo_stats solo devuelve éxitos y fracasos, así que las RECHAZADAS
+  // (estado nuevo) se cuentan desde el propio historial. Sin esto aparecían
+  // como "Sin resultado" aunque en la línea de tiempo ya salen en rojo.
+  const rechazadas = historial.filter(h => h.resultado === 'rechazado').length
+  const noExitosas = stats ? stats.fracasos + rechazadas : 0
+  const decididos = stats ? stats.exitos + noExitosas : 0
   const tasaExito = decididos > 0 ? Math.round((stats.exitos / decididos) * 100) : 0
 
   const historialFiltrado = historial.filter(h => {
@@ -477,9 +482,9 @@ function SeccionEstadisticas({ aprobado, codigo }) {
   // Segmentos para la dona: en curso / éxitos / fracasos / otras (cerradas sin resultado, etc.)
   const donutData = stats ? [
     { key: 'exitos',   label: 'Éxitos',   value: stats.exitos,   color: '#1f7a4d' },
-    { key: 'fracasos', label: 'Fracasos', value: stats.fracasos, color: '#a23b3b' },
+    { key: 'fracasos', label: 'No exitosas', value: noExitosas, color: '#a23b3b' },
     { key: 'en_curso', label: 'En curso', value: stats.en_curso, color: '#c9a84c' },
-    { key: 'otras',    label: 'Sin resultado', value: Math.max(0, stats.total - stats.exitos - stats.fracasos - stats.en_curso), color: '#c8b29f' },
+    { key: 'otras',    label: 'Sin resultado', value: Math.max(0, stats.total - stats.exitos - noExitosas - stats.en_curso), color: '#c8b29f' },
   ].filter(d => d.value > 0) : []
 
   return (
@@ -551,7 +556,7 @@ function SeccionEstadisticas({ aprobado, codigo }) {
                 <span className={styles.legendDotExito} /> Éxitos · {stats.exitos}
               </span>
               <span className={styles.legendItem}>
-                <span className={styles.legendDotFracaso} /> Fracasos · {stats.fracasos}
+                <span className={styles.legendDotFracaso} /> No exitosas · {noExitosas}
               </span>
               <span className={styles.legendMuted}>
                 {decididos === 0
@@ -567,7 +572,7 @@ function SeccionEstadisticas({ aprobado, codigo }) {
             <StatTile label="En curso" value={stats.en_curso} tone="navy" />
             <StatTile label="Cerradas" value={stats.cerradas} tone="navy" />
             <StatTile label="Éxitos" value={stats.exitos} tone="ok" />
-            <StatTile label="Fracasos" value={stats.fracasos} tone="bad" />
+            <StatTile label="No exitosas" value={noExitosas} tone="bad" />
           </div>
 
           {/* Gráfica (dona) + leyenda del reparto de consultas */}

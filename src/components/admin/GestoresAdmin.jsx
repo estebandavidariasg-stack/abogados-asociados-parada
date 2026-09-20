@@ -258,52 +258,6 @@ export default function GestoresAdmin({ onChange }) {
   }
 
   // Inserta un cobro acumulado para el gestor (estado pendiente).
-  async function guardarCobro({ gestorId, codigo, casos, monto, nota }) {
-    const headers = await getAuthHeaders()
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/gestor_cobros`, {
-      method: 'POST',
-      headers: { ...headers, 'Content-Type': 'application/json', Prefer: 'return=representation' },
-      body: JSON.stringify({
-        gestor_id: gestorId,
-        codigo: codigo || null,
-        casos_exitosos: Number(casos) || 0,
-        monto: Number(monto) || 0,
-        nota: nota?.trim() || null,
-        estado: 'pendiente',
-        created_by: meId || null,
-      }),
-    })
-    if (!res.ok) { flash('No se pudo guardar el cobro.'); return false }
-
-    // Notifica en la campana del admin (mejor esfuerzo: no bloquea ni revierte
-    // el cobro si la política RLS aún no está aplicada o el insert falla).
-    try {
-      const gestor = gestores.find(g => g.id === gestorId)
-      const nombreGestor =
-        (gestor?.username ? `@${gestor.username}` : null) ||
-        [gestor?.nombre, gestor?.apellido].filter(Boolean).join(' ') ||
-        'gestor'
-      await fetch(`${SUPABASE_URL}/rest/v1/notificaciones`, {
-        method: 'POST',
-        headers: { ...headers, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
-        body: JSON.stringify({
-          tipo: 'cobro',
-          gestor_id: gestorId,
-          monto: Number(monto) || 0,
-          client_nombre: nombreGestor,
-          area: codigo || null,
-          mensaje: `Cobro registrado: ${Number(casos) || 0} caso(s) exitoso(s) del gestor ${nombreGestor}.`,
-        }),
-      })
-    } catch (e) {
-      console.warn('No se pudo crear la notificación de cobro (se ignora):', e)
-    }
-
-    flash('Cobro guardado.')
-    await cargar()
-    return true
-  }
-
   // ── Marcar pagado CON comprobante (obligatorio) ──
   // El pago al gestor es manual: al pulsar "Marcar pagado" se abre el selector
   // de archivo (PNG/JPG/PDF); el comprobante sube al bucket privado
@@ -588,7 +542,6 @@ export default function GestoresAdmin({ onChange }) {
                     onCrearCodigo={crearCodigoPara}
                     creando={creandoCodigo === g.id}
                     onMarcarResultado={marcarResultado}
-                    onGuardarCobro={guardarCobro}
                     onMarcarPagado={marcarPagado}
                   />
                 )
@@ -615,7 +568,6 @@ export default function GestoresAdmin({ onChange }) {
             cobros={cobrosDeGestor(g.id)}
             onClose={() => setExpanded(null)}
             onMarcarResultado={marcarResultado}
-            onGuardarCobro={guardarCobro}
             onMarcarPagado={marcarPagado}
             onAprobar={setAprobado}
           />
@@ -641,7 +593,7 @@ export default function GestoresAdmin({ onChange }) {
 function GestorCard({
   gestor: g, asignado, codigos, usage, rooms, cobros,
   onToggle, onAprobar, onAsignar, onCrearCodigo, creando,
-  onMarcarResultado, onGuardarCobro, onMarcarPagado,
+  onMarcarResultado, onMarcarPagado,
 }) {
   const codeStr = asignado?.codigo || null
 
@@ -749,7 +701,7 @@ function GestorCard({
 /* ── Modal de detalle del gestor (perfil + trazabilidad + cobros) ── */
 function GestorDetalleModal({
   gestor: g, codeStr, usage, rooms, cobros,
-  onClose, onMarcarResultado, onGuardarCobro, onMarcarPagado, onAprobar,
+  onClose, onMarcarResultado, onMarcarPagado, onAprobar,
 }) {
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') onClose() }
@@ -789,7 +741,7 @@ function GestorDetalleModal({
             <>
               <Trazabilidad codigo={codeStr} usage={usage} rooms={rooms} onMarcarResultado={onMarcarResultado} />
               <Cobros gestor={g} codigo={codeStr} rooms={rooms} cobros={cobros}
-                onGuardarCobro={onGuardarCobro} onMarcarPagado={onMarcarPagado} />
+                onMarcarPagado={onMarcarPagado} />
             </>
           ) : (
             <div className={styles.noteBox}>
@@ -871,7 +823,9 @@ function Trazabilidad({ codigo, usage, rooms, onMarcarResultado }) {
       if (EN_CURSO.has(r.status)) en_curso++
       if (r.status === 'closed') cerradas++
       if (r.resultado === 'exito') exitos++
-      if (r.resultado === 'fracaso') fracasos++
+      // 'fracaso' y 'rechazado' van al mismo lado: ninguno deja comisión.
+      // Sin esto, marcar "Rechazada" hacía desaparecer el caso de los números.
+      if (r.resultado === 'fracaso' || r.resultado === 'rechazado') fracasos++
     }
     return { total: usage, en_curso, cerradas, exitos, fracasos }
   }, [rooms, usage])
@@ -903,7 +857,7 @@ function Trazabilidad({ codigo, usage, rooms, onMarcarResultado }) {
       </div>
       <div className={styles.ratioLegend}>
         <span className={styles.legendItem}><span className={styles.dotExito} /> Éxitos · {stats.exitos}</span>
-        <span className={styles.legendItem}><span className={styles.dotFracaso} /> Fracasos · {stats.fracasos}</span>
+        <span className={styles.legendItem}><span className={styles.dotFracaso} /> No exitosas · {stats.fracasos}</span>
         <span className={styles.legendMuted}>
           {decididos === 0 ? 'Sin casos con resultado' : `Sobre ${decididos} caso${decididos === 1 ? '' : 's'} con resultado`}
         </span>
@@ -915,7 +869,7 @@ function Trazabilidad({ codigo, usage, rooms, onMarcarResultado }) {
         <Tile label="En curso" value={stats.en_curso} tone="navy" />
         <Tile label="Cerradas" value={stats.cerradas} tone="navy" />
         <Tile label="Éxitos" value={stats.exitos} tone="ok" />
-        <Tile label="Fracasos" value={stats.fracasos} tone="bad" />
+        <Tile label="No exitosas" value={stats.fracasos} tone="bad" />
       </div>
 
       {/* Marcar resultado de consultas cerradas */}
@@ -971,30 +925,14 @@ function Tile({ label, value, tone }) {
 }
 
 /* ── Cobros: form + historial ── */
-function Cobros({ gestor: g, codigo, rooms, cobros, onGuardarCobro, onMarcarPagado }) {
+// Las comisiones del gestor NACEN SOLAS al confirmarse el pago del profesional
+// (pagar_pago / confirmar_pago_wompi / confirmar_pago_profesional crean el
+// cupón en gestor_cobros). Por eso aquí solo se consultan y se marcan pagadas:
+// escribirlas a mano descuadraba el acumulado.
+function Cobros({ gestor: g, codigo, rooms, cobros, onMarcarPagado }) {
   const exitos = useMemo(() => rooms.filter(r => r.resultado === 'exito').length, [rooms])
-
-  const [casos, setCasos] = useState(String(exitos))
-  const [monto, setMonto] = useState('')
-  const [nota, setNota]   = useState('')
-  const [saving, setSaving] = useState(false)
-
-  // Prefill casos con los éxitos actuales cuando cambian.
-  useEffect(() => { setCasos(String(exitos)) }, [exitos])
-
   const totalAcum = cobros.reduce((s, c) => s + (Number(c.monto) || 0), 0)
   const totalPend = cobros.filter(c => c.estado !== 'pagado').reduce((s, c) => s + (Number(c.monto) || 0), 0)
-
-  async function submit(e) {
-    e.preventDefault()
-    if (!(Number(monto) > 0)) return
-    setSaving(true)
-    const ok = await onGuardarCobro({
-      gestorId: g.id, codigo, casos, monto, nota,
-    })
-    if (ok) { setMonto(''); setNota('') }
-    setSaving(false)
-  }
 
   return (
     <div className={styles.block}>
@@ -1014,45 +952,6 @@ function Cobros({ gestor: g, codigo, rooms, cobros, onGuardarCobro, onMarcarPaga
           <span className={styles.cobroStatLbl}>Éxitos (casos)</span>
         </div>
       </div>
-
-      {/* Form: guardar cobro */}
-      <form className={styles.cobroForm} onSubmit={submit}>
-        <div className={styles.cobroField}>
-          <label className={styles.cobroLabel}>Casos exitosos</label>
-          <input
-            className={styles.cobroInput}
-            type="number" min="0"
-            value={casos}
-            onChange={e => setCasos(e.target.value.replace(/\D/g, ''))}
-          />
-        </div>
-        <div className={styles.cobroField}>
-          <label className={styles.cobroLabel}>Monto (COP)</label>
-          <input
-            className={styles.cobroInput}
-            type="number" min="0" inputMode="numeric"
-            placeholder="0"
-            value={monto}
-            onChange={e => setMonto(e.target.value.replace(/\D/g, ''))}
-          />
-        </div>
-        <div className={`${styles.cobroField} ${styles.cobroNota}`}>
-          <label className={styles.cobroLabel}>Nota (opcional)</label>
-          <input
-            className={styles.cobroInput}
-            type="text"
-            placeholder="Ej: pago mes de julio"
-            value={nota}
-            onChange={e => setNota(e.target.value)}
-          />
-        </div>
-        <button className={styles.cobroSave} type="submit" disabled={saving || !(Number(monto) > 0)}>
-          {saving ? 'Guardando…' : 'Guardar cobro'}
-        </button>
-      </form>
-      {monto !== '' && Number(monto) > 0 && (
-        <p className={styles.cobroPreview}>Se registrará un cobro de <strong>{fmtCOP(monto)}</strong> por {Number(casos) || 0} caso(s) exitoso(s).</p>
-      )}
 
       {/* Historial */}
       {cobros.length > 0 && (
