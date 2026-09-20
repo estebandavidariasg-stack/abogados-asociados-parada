@@ -1,6 +1,6 @@
 import nodemailer from 'nodemailer'
 import crypto from 'node:crypto'
-import { renderEmailHtml, renderShell, infoBox, emailButton, codeBox, em, C, FONT_SERIF } from './_lib/emailTemplate.js'
+import { renderEmailHtml, renderShell, infoBox, emailButton, codeBox, em, C, FONT_SERIF, FONT_SANS } from './_lib/emailTemplate.js'
 import { renderTrazabilidadEmail, asuntoTrazabilidad } from './_lib/emailTrazabilidad.js'
 import { getCallerProfile, lawyerAssignedToRoom } from './_lib/adminAuth.js'
 
@@ -192,6 +192,57 @@ function emailRechazado({ nombreAbogado, rol, ctaUrl, cuentaEliminada }) {
       ctaLabel: 'Visitar el sitio',
       ctaUrl,
     }),
+  }
+}
+
+// El gestor acaba de recibir su código de referencia. Lleva el código bien
+// visible, el QR (si el cliente de correo carga imágenes; si no, el código de
+// arriba basta) y el enlace al panel para descargar la tarjeta imprimible.
+function emailGestorCodigo({ nombre, codigo }) {
+  const subjectLine = `Tu código de gestor: ${codigo}`
+  const destino = `${SITE_BASE}/#chat?codigo=${encodeURIComponent(codigo)}`
+  const qr = `https://api.qrserver.com/v1/create-qr-code/?size=320x320&data=${encodeURIComponent(destino)}&color=1A1A2E&bgcolor=FAFAFA&margin=2&qzone=1`
+  const saludo = nombre ? `Estimado/a ${em(esc(nombre))},` : 'Estimado/a gestor,'
+
+  const caja =
+    `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:24px 0 8px;">
+       <tr>
+         <td align="center" style="background-color:#fcf6f1;border:2px solid ${C.gold};border-radius:12px;padding:20px 14px;">
+           <div style="font-family:${FONT_SANS};font-size:11px;letter-spacing:0.12em;text-transform:uppercase;color:${C.muted};margin-bottom:8px;">Tu código</div>
+           <div style="font-family:${FONT_SERIF};font-size:24px;font-weight:700;color:${C.navy};letter-spacing:3px;line-height:1.2;white-space:nowrap;">${esc(codigo)}</div>
+         </td>
+       </tr>
+     </table>`
+
+  const qrBloque =
+    `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:6px 0 4px;">
+       <tr>
+         <td align="center">
+           <img src="${qr}" width="160" height="160" alt="Código QR de ${esc(codigo)}"
+                style="display:block;border:1px solid #e9dfd3;border-radius:10px;background-color:#fafafa;" />
+           <div style="font-family:${FONT_SANS};font-size:12px;color:${C.muted};margin-top:10px;">
+             Al escanearlo, la persona entra a la consulta con tu código ya puesto.
+           </div>
+         </td>
+       </tr>
+     </table>`
+
+  const inner =
+    `<p style="margin:0 0 16px;font-size:16px;line-height:1.6;color:${C.navy};">${saludo}</p>
+     <h1 style="margin:0 0 12px;font-family:${FONT_SANS};font-size:19px;font-weight:700;color:${C.navy};line-height:1.35;">Ya tienes tu código de gestor</h1>
+     <div style="margin:0 0 4px;font-size:15px;line-height:1.75;color:${C.body};text-align:justify;">
+       Este es tu código de referencia. Cada consulta que entre con él queda a tu nombre y genera tu comisión.
+     </div>
+     ${caja}
+     ${qrBloque}
+     <div style="margin:18px 0 0;font-size:15px;line-height:1.75;color:${C.body};text-align:justify;">
+       En tu panel puedes descargar la tarjeta lista para imprimir y seguir, una por una, las consultas que entren por tu código.
+     </div>
+     <div style="text-align:center;margin-top:26px;">${emailButton('Ir a mi panel', `${SITE_BASE}/perfil-gestor`)}</div>`
+
+  return {
+    subject: subjectLine,
+    html: renderShell({ subjectLine, preheader: `Tu código es ${codigo}`, innerHtml: inner }),
   }
 }
 
@@ -705,6 +756,55 @@ export default async function handler(req, res) {
     // resuelven server-side desde la fila de `pqr` con el service role. Así
     // este endpoint no puede usarse como relé para enviar correo a una
     // dirección arbitraria (mismo criterio que `new_consultation`).
+    // ── El admin le creó su código al gestor ──
+    // Solo superadmin. Del navegador llega el id del gestor y nada más: el
+    // código y el correo se resuelven server-side, así que este endpoint no
+    // sirve para mandar correos a direcciones arbitrarias.
+    if (type === 'gestor_codigo') {
+      const gestorId = String(data?.gestorId || '').trim()
+      if (!/^[0-9a-fA-F-]{36}$/.test(gestorId)) {
+        return res.status(400).json({ error: 'Gestor inválido.' })
+      }
+      const caller = await getCallerProfile(req)
+      if (caller?.rol !== 'superadmin') {
+        return res.status(401).json({ error: 'No autorizado.' })
+      }
+      if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+        return res.status(200).json({ ok: false, skipped: 'not_configured' })
+      }
+
+      const svcUno = async (pathQuery) => {
+        try {
+          const r = await fetch(`${SUPABASE_URL}/rest/v1/${pathQuery}`, { headers: svcHeaders() })
+          if (!r.ok) return null
+          const filas = await r.json()
+          return Array.isArray(filas) && filas[0] ? filas[0] : null
+        } catch { return null }
+      }
+
+      const gestor = await svcUno(
+        `profiles?id=eq.${encodeURIComponent(gestorId)}&rol=eq.gestor&select=email,nombre,apellido,username&limit=1`
+      )
+      if (!gestor?.email) return res.status(200).json({ ok: false, skipped: 'sin_email' })
+
+      const fila = await svcUno(
+        `codigos_referencia?gestor_id=eq.${encodeURIComponent(gestorId)}&select=codigo&order=created_at.desc&limit=1`
+      )
+      if (!fila?.codigo) return res.status(200).json({ ok: false, skipped: 'sin_codigo' })
+
+      const nombre = [gestor.nombre, gestor.apellido].filter(Boolean).join(' ').trim()
+        || (gestor.username ? `@${gestor.username}` : '')
+      const { subject, html } = emailGestorCodigo({ nombre, codigo: fila.codigo })
+
+      await transporter.sendMail({
+        from: `"Parada Bridge" <${process.env.GMAIL_USER}>`,
+        to: gestor.email,
+        subject,
+        html,
+      })
+      return res.status(200).json({ ok: true, sent: 'gestor_codigo' })
+    }
+
     if (type === 'pqr_radicado') {
       const radicado = String(data?.radicado || '').trim()
       if (!/^PQR-\d{8}-\d{3,6}$/.test(radicado)) {

@@ -199,7 +199,14 @@ export default function GestoresAdmin({ onChange }) {
           }),
         })
         if (res.ok) {
-          flash(`Código ${codigo} creado y asignado a @${g.username || 'gestor'}.`)
+          flash(`Código ${codigo} creado. Se le avisó por correo a @${g.username || 'gestor'}.`)
+          // Correo al gestor con su código y su QR (mejor esfuerzo: si el
+          // correo falla, el código ya quedó creado y asignado).
+          fetch('/api/notify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: headers.Authorization },
+            body: JSON.stringify({ type: 'gestor_codigo', data: { gestorId: g.id } }),
+          }).catch(() => {})
           await cargar()
           return
         }
