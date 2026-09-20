@@ -1,12 +1,21 @@
 
 import { useState, useEffect, useRef, lazy, Suspense } from 'react'
+import { createPortal } from 'react-dom'
 import { motion, useInView, useReducedMotion } from 'framer-motion'
 import { supabase, ensureChatToken } from '../../lib/supabase'
 import styles from './ChatSection.module.css'
 import AudioPlayer from './AudioPlayer'
 import TriagePanel from './TriagePanel'
-import { ChatImage, ChatLightbox, openChatFile } from '../../lib/chatFiles'
-import { COP, fetchCobroCliente, clienteMarcoPago, subirComprobanteCliente, descargarReciboPDF } from '../../lib/cobroAsesoria'
+import {
+  ChatImage, ChatLightbox, openChatFile, downloadChatFile, subirArchivoChat,
+  parseFichas, FichasContacto,
+  validarAdjuntoChat, prepararAdjuntoChat, nombreArchivoSeguro, describirErrorSubida,
+  crearGrabadorAudio, extAudio, mimeAudioLimpio, describirErrorMicrofono, AUDIO_CONSTRAINTS,
+} from '../../lib/chatFiles'
+import {
+  COP, fetchCobroCliente, clienteMarcoPago, subirComprobanteCliente, descargarReciboPDF,
+  AVISO_COBRO_CLIENTE,
+} from '../../lib/cobroAsesoria'
 // Lazy: arrastra ~30 kB de datos geográficos (32 departamentos + ~1.100
 // municipios) que solo se usan en el paso del formulario, nunca en el
 // primer render de la home.
@@ -27,7 +36,7 @@ function renderMensaje(text) {
 function parseFirmaOk(content) {
   try { const o = JSON.parse(content); return o?.t === 'firma_ok' ? o : null } catch { return null }
 }
-import { IconPaperclip, IconMic, IconFirma } from '../shared/Icons'
+import { IconPaperclip, IconMic, IconFirma, IconDownload } from '../shared/Icons'
 import { validarCelular, validarCorreo, normalizarCelular, contieneContacto, formatCedula } from '../../lib/validaciones'
 import { AREAS_DERECHO } from '../../lib/areasDerecho'
 import { AREAS_CONTADURIA } from '../../lib/areasContaduria'
@@ -40,6 +49,23 @@ function isImage(name) {
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
+
+// Texto legado del aviso de cobro: algunas salas lo tienen guardado como
+// mensaje de sistema. Se oculta del hilo porque ahora se pinta como banner.
+const AVISO_COBRO_LEGADO =
+  'Esta consulta tiene cobro obligatorio. El profesional definirá el valor antes de asesorarte, ' +
+  'lo verás aquí mismo en el chat y el pago se hace directamente a él.'
+
+// Ícono del aviso de cobro (moneda). Inline aquí y en los dashboards para no
+// acoplar módulos grandes solo por un banner.
+const IconCobro = () => (
+  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor"
+    strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <circle cx="12" cy="12" r="9" />
+    <path d="M14.5 9.2a2.6 2.6 0 0 0-2.5-1.6c-1.4 0-2.4.8-2.4 1.9 0 2.5 5 1.4 5 3.9 0 1.2-1.1 2-2.6 2a2.7 2.7 0 0 1-2.6-1.7" />
+    <path d="M12 6.2v1.4M12 16.4v1.4" />
+  </svg>
+)
 
 // ─────────────────────────────────────────────────────────────────────────
 // Card design system — scoped to ChatSection.
@@ -1208,13 +1234,14 @@ function VisorDocumento({ titulo, url, onClose }) {
   )
 }
 
-// Tarjeta de cobro de la asesoría (cliente). Aparece dentro del chat cuando el
-// profesional fijó un cobro o marcó la consulta gratuita. El pago es MANUAL y
-// directo al profesional — Parada Bridge no intermedia el dinero.
+// Tarjeta de cobro de la consulta (cliente). Aparece dentro del chat cuando el
+// profesional fija el valor. El pago es MANUAL y directo al profesional —
+// Parada Bridge no intermedia el dinero.
 function CobroClienteCard({ roomId, clientToken, profesionalNombre, onVerCertificado }) {
   const [cobro, setCobro]   = useState(null)
   const [busy, setBusy]     = useState(false)
-  const [copied, setCopied] = useState(false)
+  // El detalle del pago va en un modal: la tarjeta completa tapaba el chat.
+  const [detalleAbierto, setDetalleAbierto] = useState(false)
   // Comprobante de pago del cliente (obligatorio antes de "Ya realicé el pago").
   const [comprobanteFile, setComprobanteFile] = useState(null)
   const [comprobanteError, setComprobanteError] = useState('')
@@ -1252,10 +1279,6 @@ function CobroClienteCard({ roomId, clientToken, profesionalNombre, onVerCertifi
     setComprobanteError('')
     setComprobanteFile(f)
   }
-  const copiar = () => {
-    navigator.clipboard?.writeText(cobro.datos_pago || '')
-    setCopied(true); setTimeout(() => setCopied(false), 1600)
-  }
   const recibo = () => descargarReciboPDF({
     reciboNum: cobro.recibo_num,
     monto: cobro.monto,
@@ -1271,14 +1294,8 @@ function CobroClienteCard({ roomId, clientToken, profesionalNombre, onVerCertifi
     fontSize: '0.86rem', color: '#472F29', lineHeight: 1.5,
   }
 
-  if (cobro.estado === 'gratuita') {
-    return (
-      <div style={{ ...wrap, borderColor: 'rgba(46,158,95,0.4)', background: 'linear-gradient(180deg,#f3faf5,#eaf6ee)' }}>
-        <strong style={{ color: '#1f5e3c' }}>Asesoría sin costo 🙌</strong>
-        <div style={{ marginTop: 2, color: '#3d5a49' }}>El profesional marcó esta consulta como gratuita.</div>
-      </div>
-    )
-  }
+  // Consultas antiguas sin valor registrado: no se muestra tarjeta de cobro.
+  if (cobro.estado === 'gratuita') return null
 
   if (cobro.estado === 'pagado') {
     // Pago cerrado → el chat queda limpio: solo una línea discreta con el recibo.
@@ -1298,34 +1315,80 @@ function CobroClienteCard({ roomId, clientToken, profesionalNombre, onVerCertifi
     )
   }
 
-  // pendiente
+  // Pendiente: en el chat va solo una barra compacta; el detalle del pago se
+  // abre en un modal para no tapar la conversación.
   const informado = !!cobro.marcado_cliente_at
-  return (
-    <div style={wrap}>
+
+  const barra = (
+    <div style={{
+      margin: '10px 16px', padding: '10px 14px', borderRadius: 12,
+      display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
+      border: '1.5px solid rgba(201,168,76,0.6)',
+      background: 'linear-gradient(180deg,#fffdf4 0%,#faf2dd 100%)',
+      boxShadow: '0 3px 14px -6px rgba(154,122,44,0.45)',
+      color: '#5a3d12', fontSize: '0.84rem',
+    }}>
+      <span style={{ display: 'flex', alignItems: 'baseline', gap: 8, flex: '1 1 auto', minWidth: 0 }}>
+        <strong style={{ color: '#7a5a12', fontWeight: 800 }}>
+          {informado ? 'Pago informado' : 'Pago de la asesoría'}
+        </strong>
+        <span style={{ fontWeight: 800, fontSize: '1rem', color: '#472F29' }}>
+          {COP.format(Number(cobro.monto) || 0)}
+        </span>
+      </span>
+      <button type="button" onClick={() => setDetalleAbierto(true)}
+        style={{
+          flexShrink: 0, borderRadius: 9, padding: '8px 16px',
+          background: informado ? '#fff' : 'linear-gradient(135deg,#f2d580,#c9a84c 55%,#9a7a2c)',
+          border: informado ? '1px solid rgba(109,60,27,0.3)' : 'none',
+          color: '#5a3d12', fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer',
+          fontFamily: 'inherit',
+        }}>
+        {informado ? 'Ver detalle' : 'Pagar'}
+      </button>
+    </div>
+  )
+
+  if (!detalleAbierto) return barra
+
+  // Modal con el detalle del pago (portal a <body>: el chat tiene contenedores
+  // con overflow y transform que recortarían un position:fixed anidado).
+  const modal = (
+    <div
+      onClick={() => !busy && setDetalleAbierto(false)}
+      role="dialog" aria-modal="true" aria-label="Pago de la asesoría"
+      style={{
+        position: 'fixed', inset: 0, zIndex: 9000, padding: '5vh 16px',
+        background: 'rgba(48,27,8,0.55)', backdropFilter: 'blur(3px)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        overflowY: 'auto',
+      }}
+    >
+      <div onClick={e => e.stopPropagation()} style={{ ...wrap, margin: 0, width: '100%', maxWidth: 440, boxShadow: '0 24px 60px rgba(48,27,8,0.35)' }}>
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10 }}>
         <strong style={{ color: '#6d3c1b', fontSize: '1.02rem' }}>Pago de la asesoría</strong>
         <span style={{ fontWeight: 800, fontSize: '1.1rem', color: '#472F29' }}>{COP.format(Number(cobro.monto) || 0)}</span>
       </div>
 
-      {cobro.datos_pago && (
-        <div style={{ marginTop: 10, padding: '10px 12px', background: 'rgba(109,60,27,0.05)', borderRadius: 10 }}>
-          <div style={{ fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'rgba(109,60,27,0.6)', marginBottom: 4 }}>Datos de pago del profesional</div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'space-between' }}>
-            <span style={{ fontWeight: 600, whiteSpace: 'pre-wrap' }}>{cobro.datos_pago}</span>
-            <button type="button" onClick={copiar}
-              style={{ flexShrink: 0, background: '#fff', border: '1px solid rgba(109,60,27,0.25)', borderRadius: 8, padding: '5px 10px', fontSize: '0.75rem', fontWeight: 600, color: '#6d3c1b', cursor: 'pointer' }}>
-              {copied ? 'Copiado ✓' : 'Copiar'}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Cuenta certificada del profesional: el cliente consigna con confianza. */}
-      {onVerCertificado && (
-        <button type="button" onClick={onVerCertificado}
-          style={{ marginTop: 10, background: 'none', border: '1px solid rgba(109,60,27,0.3)', borderRadius: 10, padding: '8px 12px', fontSize: '0.78rem', fontWeight: 600, color: '#6d3c1b', cursor: 'pointer', width: '100%' }}>
-          Ver la cuenta bancaria certificada del profesional
-        </button>
+      {/* La cuenta para consignar es la del certificado bancario del
+          profesional (documento verificado). Ya no hay un campo de texto
+          libre con "datos de pago". */}
+      {onVerCertificado ? (
+        <>
+          <p style={{ margin: '12px 0 6px', fontSize: '0.78rem', color: 'rgba(109,60,27,0.75)' }}>
+            Consigna a la cuenta del certificado bancario del profesional:
+          </p>
+          {/* Cierra este modal antes de abrir el visor del documento: si no,
+              el visor queda detrás y el cliente no puede leer la cuenta. */}
+          <button type="button" onClick={() => { setDetalleAbierto(false); onVerCertificado() }}
+            style={{ background: '#fff', border: '1px solid rgba(109,60,27,0.3)', borderRadius: 10, padding: '10px 12px', fontSize: '0.8rem', fontWeight: 700, color: '#6d3c1b', cursor: 'pointer', width: '100%' }}>
+            Ver cuenta bancaria certificada
+          </button>
+        </>
+      ) : (
+        <p style={{ margin: '12px 0 0', padding: '10px 12px', borderRadius: 10, background: 'rgba(201,168,76,0.12)', fontSize: '0.78rem', color: '#7a5a12' }}>
+          El profesional aún no ha cargado su certificado bancario. Pídele la cuenta por el chat antes de pagar.
+        </p>
       )}
 
       <p style={{ margin: '10px 0 0', fontSize: '0.74rem', color: 'rgba(109,60,27,0.7)' }}>
@@ -1357,7 +1420,20 @@ function CobroClienteCard({ roomId, clientToken, profesionalNombre, onVerCertifi
           </button>
         </>
       )}
+
+        <button type="button" onClick={() => setDetalleAbierto(false)} disabled={busy}
+          style={{ marginTop: 10, width: '100%', background: 'none', border: '1px solid rgba(109,60,27,0.25)', borderRadius: 10, padding: '9px 12px', fontSize: '0.8rem', fontWeight: 600, color: '#6d3c1b', cursor: busy ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}>
+          Cerrar
+        </button>
+      </div>
     </div>
+  )
+
+  return (
+    <>
+      {barra}
+      {typeof document !== 'undefined' ? createPortal(modal, document.body) : modal}
+    </>
   )
 }
 
@@ -1399,6 +1475,9 @@ export default function ChatSection() {
   const [input, setInput]           = useState('')
   const [sending, setSending]       = useState(false)
   const [uploading, setUploading]   = useState(false)
+  const [uploadPct, setUploadPct]   = useState(0)      // % real de subida (XHR)
+  // id del mensaje cuyo archivo se está descargando (botón "Descargar").
+  const [descargando, setDescargando] = useState(null)
   // Adjunto EN ESPERA de confirmación: seleccionar → previsualizar → enviar.
   // Evita mandar un documento por equivocación. { file, preview }
   const [pendingFile, setPendingFile] = useState(null)
@@ -1448,6 +1527,8 @@ export default function ChatSection() {
   const [pqrSent,       setPqrSent]       = useState(false)
   const [pqrError,      setPqrError]      = useState('')
   const [pqrYaExiste,   setPqrYaExiste]   = useState(false)     // si ya envió uno para este room
+  const [pqrRadicado,   setPqrRadicado]   = useState('')        // PQR-AAAAMMDD-NNNN
+  const [pqrCorreo,     setPqrCorreo]     = useState('')        // correo al que se envió
 
   // ── Voz ──────────────────────────────────────────────────────────────────
   const [recording, setRecording]         = useState(false)
@@ -1455,6 +1536,10 @@ export default function ChatSection() {
   const mediaRecorderRef  = useRef(null)
   const audioChunksRef    = useRef([])
   const recordingTimerRef = useRef(null)
+  const descartarGrabacionRef = useRef(false)   // true = la grabación se canceló (no subir)
+  // true cuando la política de chat_messages rechazó el INSERT directo de un
+  // adjunto: los siguientes van directo al RPC (ahorra una ida y vuelta).
+  const insertDirectoRechazadoRef = useRef(false)
 
   // refs para evitar stale closures en callbacks del sondeo
   const formRef    = useRef(form)
@@ -1577,8 +1662,33 @@ export default function ChatSection() {
     if (!pqrMensaje.trim())  { setPqrError('Describe tu situación.'); return }
     if (pqrMensaje.trim().length < 15) { setPqrError('El mensaje es muy corto, por favor amplíalo un poco.'); return }
     setPqrSubmitting(true); setPqrError('')
-    const nombreCliente = `${form.nombre || ''} ${form.apellido || ''}`.trim()
+    // Al entrar desde "Mis casos" el formulario no se llenó en esta sesión:
+    // se usan los datos guardados del último formulario. Si tampoco están, el
+    // RPC los completa desde la sala (ver docs/sql/pqr-radicado-2026-09-17.sql).
+    const guardados = leerDatosCliente() || {}
+    const nombreCliente =
+      `${form.nombre || guardados.nombre || ''} ${form.apellido || guardados.apellido || ''}`.trim()
+    const correoCliente = form.correo || guardados.correo || ''
     try {
+      // Camino preferido: RPC que inserta y DEVUELVE el radicado (anon no
+      // puede leer `pqr`). Si el RPC aún no está aplicado, se cae al INSERT
+      // directo de siempre y el PQR queda registrado igual, sin número.
+      const { ok: rpcOk, data: radicadoRpc } = await rpcCliente('crear_pqr', {
+        p_room_id:           closedRoomId || null,
+        p_codigo_referencia: roomCodigo || null,
+        p_client_nombre:     nombreCliente || null,
+        p_client_email:      correoCliente || null,
+        p_tipo:              pqrTipo,
+        p_mensaje:           pqrMensaje.trim(),
+      })
+      const radicado = rpcOk && typeof radicadoRpc === 'string' ? radicadoRpc : ''
+      if (rpcOk) {
+        setPqrRadicado(radicado); setPqrCorreo(correoCliente)
+        notificarPqr({ radicado, nombreCliente, correoCliente })
+        setPqrSent(true)
+        return
+      }
+
       const res = await fetch(`${SUPABASE_URL}/rest/v1/pqr`, {
         method: 'POST',
         headers: {
@@ -1596,7 +1706,7 @@ export default function ChatSection() {
           room_id:           closedRoomId || null,
           codigo_referencia: roomCodigo || null,
           client_nombre:     nombreCliente || null,
-          client_email:      form.correo || null,
+          client_email:      correoCliente || null,
           tipo:              pqrTipo,
           mensaje:           pqrMensaje.trim(),
         }),
@@ -1605,26 +1715,41 @@ export default function ChatSection() {
         const detail = await res.text().catch(() => '')
         throw new Error(detail || `HTTP ${res.status}`)
       }
-      // Avisar al equipo administrativo por correo (best-effort, no bloquea).
-      fetch('/api/notify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          type: 'pqr_received',
-          data: {
-            tipo: pqrTipo,
-            clientNombre: nombreCliente || null,
-            clientEmail: form.correo || null,
-            codigoReferencia: roomCodigo || null,
-            mensaje: pqrMensaje.trim(),
-          },
-        }),
-      }).catch(() => {})
+      notificarPqr({ radicado: '', nombreCliente, correoCliente })
       setPqrSent(true)
     } catch (err) {
       setPqrError('No se pudo enviar tu PQR: ' + (err.message || 'error desconocido'))
     } finally {
       setPqrSubmitting(false)
+    }
+  }
+
+  // Correos de la PQR (best-effort, no bloquean la UI):
+  //   · al equipo administrativo, con el detalle de la solicitud;
+  //   · al cliente, con su número de radicado (el servidor resuelve el correo
+  //     y el contenido desde la fila del radicado, no desde el navegador).
+  function notificarPqr({ radicado, nombreCliente, correoCliente }) {
+    fetch('/api/notify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: 'pqr_received',
+        data: {
+          tipo: pqrTipo,
+          clientNombre: nombreCliente || null,
+          clientEmail: correoCliente || null,
+          codigoReferencia: roomCodigo || null,
+          radicado: radicado || null,
+          mensaje: pqrMensaje.trim(),
+        },
+      }),
+    }).catch(() => {})
+    if (radicado) {
+      fetch('/api/notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'pqr_radicado', data: { radicado } }),
+      }).catch(() => {})
     }
   }
 
@@ -1916,7 +2041,7 @@ export default function ChatSection() {
     setMessages([]); setForm({ nombre:'', apellido:'', ciudad:'', departamento:'', barrio:'', areas:[], correo:'', celular:'', descripcion:'', tipo_profesional:'abogado', genero:'' })
     setPicked([])
     setExcludedLawyerIds([]); setClosedRoomId(null)
-    setPqrTipo(''); setPqrMensaje(''); setPqrSent(false); setPqrError(''); setPqrYaExiste(false)
+    setPqrTipo(''); setPqrMensaje(''); setPqrSent(false); setPqrError(''); setPqrYaExiste(false); setPqrRadicado(''); setPqrCorreo('')
     setTriageResumen(''); setSolicitudAbierta(false); setAreasBloqueadas(false)
     setDesdeIA(false); setProfesionalIA(null); setCostoIA('')
     setProfesionalDeepLink(null)
@@ -2087,6 +2212,8 @@ export default function ChatSection() {
         content: primerMensaje,
       })
     }
+    // El aviso de cobro NO se guarda como mensaje: la RLS no deja al cliente
+    // escribir mensajes de sistema. Se pinta como banner en los tres chats.
     // En el flujo guiado por IA no pasamos por la lista (`lawyers` queda vacío),
     // así que sumamos el profesional recomendado por la IA para poder notificarlo.
     const todosAbogados = [...lawyers.cercanos, ...lawyers.porArea]
@@ -2254,11 +2381,23 @@ export default function ChatSection() {
   // Deja el archivo en espera con una previsualización (miniatura si es imagen).
   function prepararAdjunto(file) {
     if (!file) return
+    // Validar YA (tipo/tamaño) para no descubrir el error al pulsar Enviar.
+    const invalido = validarAdjuntoChat(file)
+    if (invalido) { setSendError(invalido); return }
+    setSendError('')
+    const esImg = /^image\//.test(file.type)
     setPendingFile(prev => {
       if (prev?.preview) URL.revokeObjectURL(prev.preview)
-      const esImg = /^image\//.test(file.type)
-      return { file, preview: esImg ? URL.createObjectURL(file) : null }
+      return { file, preview: esImg ? URL.createObjectURL(file) : null, preparando: esImg }
     })
+    // Trabajo adelantado mientras el usuario revisa: comprimir la imagen y
+    // renovar el JWT del chat. Al pulsar Enviar solo queda la subida.
+    ensureChatToken(localStorage.getItem('chat_cedula_hash')).catch(() => {})
+    if (esImg) {
+      prepararAdjuntoChat(file).then(listo => {
+        setPendingFile(prev => (prev && prev.file === file) ? { ...prev, file: listo, preparando: false } : prev)
+      })
+    }
   }
 
   function descartarAdjunto() {
@@ -2274,23 +2413,75 @@ export default function ChatSection() {
   }
 
   // Sube un archivo al chat (reutilizado por el input y por arrastrar-soltar).
-  async function subirArchivo(file) {
-    if (!file || !roomId) return
-    setUploading(true)
-    const path = `${roomId}/${crypto.randomUUID()}.${file.name.split('.').pop()}`
-    const { error } = await supabase.storage.from('chat-files').upload(path, file, { contentType: file.type })
-    if (!error) {
-      const { data: signed } = await supabase.storage.from('chat-files').createSignedUrl(path, 604800)
-      const { error: insErr } = await supabase.from('chat_messages').insert({
-        room_id: roomId, sender_type:'client', lawyer_id: null,
-        content: file.name, file_url: signed?.signedUrl, file_name: file.name, file_size: file.size,
+  // Registra el mensaje de un adjunto ya subido. Igual que el texto: INSERT
+  // directo con el JWT del cliente y, si la política lo rechaza, respaldo por
+  // RPC SECURITY DEFINER (enviar_adjunto_cliente, docs/sql/registro-2026-09-17.sql).
+  // Si ambos fallan, se borra el archivo del bucket (sin mensaje fantasma) y
+  // el error lleva el detalle real de la BD para poder diagnosticarlo.
+  async function registrarAdjuntoCliente(campos) {
+    // Si la política ya rechazó el INSERT directo en esta sesión, no gastar
+    // otra ida y vuelta en cada adjunto: ir directo al RPC.
+    let insErr = null
+    if (!insertDirectoRechazadoRef.current) {
+      ;({ error: insErr } = await supabase.from('chat_messages').insert({
+        room_id: roomId, sender_type: 'client', lawyer_id: null, ...campos,
+      }))
+      if (!insErr) return
+      insertDirectoRechazadoRef.current = true
+      console.error('[chat] insert directo del adjunto rechazado:', insErr)
+    }
+    const { ok, errText } = await rpcCliente('enviar_adjunto_cliente', {
+      p_client_token: localStorage.getItem('chat_cedula_hash'),
+      p_room_id:      roomId,
+      p_content:      campos.content,
+      p_file_url:     campos.file_url,
+      p_file_name:    campos.file_name,
+      p_file_size:    campos.file_size,
+      p_message_type: campos.message_type,
+    })
+    if (ok) return
+    console.error('[chat] RPC enviar_adjunto_cliente falló:', errText)
+    await supabase.storage.from('chat-files').remove(campos.file_url).catch(() => {})
+    let detalle = insErr?.message || ''
+    try { detalle = JSON.parse(errText || '{}')?.message || detalle } catch { /* texto plano */ }
+    throw Object.assign(new Error(detalle || 'insert'), { fase: 'insert', detalle })
+  }
+
+  //
+  // CAUSA del error anterior: la política del bucket chat-files (hardening
+  // 2026-09-04) solo acepta subidas bajo `chats/…` y con sesión o con el JWT
+  // del cliente. Este código subía a `<room>/<uuid>` (sin `chats/`) y el
+  // helper de Storage mandaba la anon key (ignoraba el JWT del cliente) →
+  // 403 en cada intento. Además subía la foto original (lenta) y guardaba una
+  // URL firmada de 7 días (moría). Ahora: ruta `chats/<room>/…`, JWT del
+  // cliente vigente, imagen comprimida, se guarda el PATH y, si el insert
+  // falla, se borra el archivo (sin mensajes fantasma).
+  async function subirArchivo(fileOriginal) {
+    if (!fileOriginal || !roomId) return
+    const invalido = validarAdjuntoChat(fileOriginal)
+    if (invalido) { setSendError(invalido); return }
+    setUploading(true); setUploadPct(0); setSendError('')
+    let path = null
+    try {
+      const file = await prepararAdjuntoChat(fileOriginal)   // ya viene comprimida desde prepararAdjunto
+      // El bucket exige el JWT del cliente: renovarlo si expiró (se reusa si sigue vigente).
+      await ensureChatToken(localStorage.getItem('chat_cedula_hash'))
+      path = `chats/${roomId}/${Date.now()}_${nombreArchivoSeguro(file.name)}`
+      const { error } = await subirArchivoChat({
+        path, file, contentType: file.type || 'application/octet-stream', onProgress: setUploadPct,
+      })
+      if (error) throw Object.assign(new Error(error.message || 'upload'), { status: error.status, fase: 'upload' })
+
+      await registrarAdjuntoCliente({
+        content: file.name, file_url: path, file_name: file.name, file_size: file.size,
         message_type: 'file',
       })
-      if (insErr) setSendError('No se pudo adjuntar el archivo. Intenta de nuevo.')
-    } else {
-      setSendError('No se pudo adjuntar el archivo. Revisa tu conexión e intenta de nuevo.')
+      await loadMessages(roomId)
+    } catch (err) {
+      setSendError(describirErrorSubida(err, err?.fase || 'upload'))
+    } finally {
+      setUploading(false)
     }
-    setUploading(false)
   }
 
   async function fixAudioDuration(blob) {
@@ -2328,55 +2519,69 @@ export default function ChatSection() {
     })
   }
 
+  // mimeType compatible por navegador (webm/opus en Chrome, mp4 en Safari) y
+  // fallback al formato por defecto si el elegido es rechazado; errores del
+  // micrófono visibles en el chat (antes: alert genérico).
   async function startRecording() {
+    setSendError('')
+    let stream = null
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus'
-        : MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm'
-        : MediaRecorder.isTypeSupported('audio/ogg;codecs=opus') ? 'audio/ogg;codecs=opus' : ''
-      const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream)
+      if (!navigator.mediaDevices?.getUserMedia) throw new Error('MediaRecorder no disponible')
+      stream = await navigator.mediaDevices.getUserMedia(AUDIO_CONSTRAINTS)
+      const recorder = crearGrabadorAudio(stream)
       mediaRecorderRef.current = recorder; audioChunksRef.current = []
+      descartarGrabacionRef.current = false
       recorder.ondataavailable = e => { if (e.data.size > 0) audioChunksRef.current.push(e.data) }
+      recorder.onerror = () => setSendError('La grabación se interrumpió. Intenta de nuevo.')
       recorder.onstop = async () => {
         stream.getTracks().forEach(t => t.stop())
         const actualType = recorder.mimeType || 'audio/webm'
         const blob = new Blob(audioChunksRef.current, { type: actualType })
+        // Cancelada con el botón del micrófono: se descarta sin subir.
+        if (descartarGrabacionRef.current) { descartarGrabacionRef.current = false; audioChunksRef.current = []; return }
         if (blob.size > 0) { const fixedBlob = await fixAudioDuration(blob); await uploadAudio(fixedBlob, actualType) }
+        else setSendError('La nota de voz quedó vacía. Mantén la grabación al menos un segundo.')
       }
       recorder.start(100); setRecording(true); setRecordingTime(0)
       recordingTimerRef.current = setInterval(() => setRecordingTime(t => t+1), 1000)
-    } catch (err) { alert('No se pudo acceder al micrófono: ' + err.message) }
+    } catch (err) {
+      stream?.getTracks().forEach(t => t.stop())
+      setSendError(describirErrorMicrofono(err))
+    }
   }
 
-  function stopRecording() {
-    mediaRecorderRef.current?.stop(); clearInterval(recordingTimerRef.current)
+  // enviar=true → el botón Enviar manda la nota; false → el micrófono la cancela.
+  function stopRecording(enviar = true) {
+    descartarGrabacionRef.current = !enviar
+    try { mediaRecorderRef.current?.stop() } catch { /* ya detenido */ }
+    clearInterval(recordingTimerRef.current)
     setRecording(false); setRecordingTime(0)
   }
 
+  // CAUSA del fallo anterior: subía con la anon key (el bucket exige el JWT
+  // del cliente desde el hardening) y los errores iban solo a la consola.
   async function uploadAudio(blob, mimeType = 'audio/webm') {
     if (!roomId) return
-    setUploading(true)
+    setUploading(true); setSendError('')
+    let path = null
     try {
-      const ext  = mimeType.includes('ogg') ? 'ogg' : mimeType.includes('mp4') ? 'mp4' : 'webm'
-      const path = `chats/${roomId}/audio_${Date.now()}.${ext}`
-      const cleanMime = mimeType.split(';')[0] || 'audio/webm'
-      const res  = await fetch(`${SUPABASE_URL}/storage/v1/object/chat-files/${path}`, {
-        method: 'POST',
-        headers: { 'Authorization':`Bearer ${SUPABASE_KEY}`, 'apikey':SUPABASE_KEY, 'Content-Type':cleanMime, 'x-upsert':'true' },
-        body: blob,
-      })
-      if (!res.ok) { const err = await res.text().catch(() => ''); console.error('Error subiendo audio:', res.status, err); return }
+      const ext       = extAudio(mimeType)
+      const cleanMime = mimeAudioLimpio(mimeType)
+      path = `chats/${roomId}/audio_${Date.now()}.${ext}`
+      await ensureChatToken(localStorage.getItem('chat_cedula_hash'))
+      const { error } = await supabase.storage.from('chat-files')
+        .upload(path, blob, { contentType: cleanMime, upsert: true })
+      if (error) throw Object.assign(new Error(error.message || 'upload'), { status: error.status, fase: 'upload' })
       // Guardamos el path (no el signed URL) para que el audio NO expire.
       // AudioPlayer firma on-demand al reproducir.
-      const { error: insErr } = await supabase.from('chat_messages').insert({
-        room_id: roomId, sender_type:'client', lawyer_id: null,
+      await registrarAdjuntoCliente({
         content:'Mensaje de voz', file_url: path,
         file_name:`voz_${Date.now()}.${ext}`, file_size: blob.size, message_type:'audio',
       })
-      if (insErr) { console.error('Error insertando mensaje de audio:', insErr); return }
       await loadMessages(roomId)
-    } catch (err) { console.error('Error en uploadAudio:', err) }
-    finally { setUploading(false) }
+    } catch (err) {
+      setSendError(describirErrorSubida(err, err?.fase || 'upload').replace('el archivo', 'la nota de voz'))
+    } finally { setUploading(false) }
   }
 
   const allLawyers = [...(lawyers.cercanos||[]), ...(lawyers.porArea||[])]
@@ -2638,8 +2843,24 @@ export default function ChatSection() {
                       <p className={styles.chatEmptyHint}>Un abogado se unirá en breve.</p>
                     </div>
                   )}
+                  {/* Aviso destacado: toda consulta tiene cobro. */}
+                  <div className={styles.avisoCobro} role="note">
+                    <IconCobro />
+                    <span>
+                      <strong>{AVISO_COBRO_CLIENTE.titulo}</strong> {AVISO_COBRO_CLIENTE.texto}
+                    </span>
+                  </div>
                   {messages.map(msg => {
+                    // El aviso ya se muestra arriba: se oculta si alguna sala
+                    // lo tiene guardado como mensaje de sistema.
+                    if (msg.message_type === 'system' && msg.content === AVISO_COBRO_LEGADO) return null
                     const mine = msg.sender_type === 'client'
+                    // Fichas de contacto: mensaje de sistema con las dos
+                    // tarjetas, insertado al confirmarse el pago.
+                    if (msg.message_type === 'system') {
+                      const fichas = parseFichas(msg.content)
+                      if (fichas) return <FichasContacto key={msg.id} data={fichas} />
+                    }
                     // Mensajes de sistema (cierres de sala, notas, etc.) se
                     // pintan como notificación centrada, no como burbuja.
                     if (msg.message_type === 'system') {
@@ -2709,15 +2930,36 @@ export default function ChatSection() {
                                 onOpen={setLightbox}
                               />
                             ) : (
-                              <button
-                                className={styles.fileBtn}
-                                onClick={() => openChatFile(msg.file_url)}
-                                title={msg.file_name}
-                              >
-                                <IconPaperclip size={16} />
-                                <span className={styles.fileName}>{msg.file_name}</span>
-                                <span className={styles.fileSize}>{formatSize(msg.file_size)}</span>
-                              </button>
+                              <div className={styles.fileRow}>
+                                <button
+                                  className={styles.fileBtn}
+                                  onClick={() => openChatFile(msg.file_url)}
+                                  title={`Abrir ${msg.file_name || 'archivo'}`}
+                                >
+                                  <IconPaperclip size={16} />
+                                  <span className={styles.fileName}>{msg.file_name}</span>
+                                  <span className={styles.fileSize}>{formatSize(msg.file_size)}</span>
+                                </button>
+                                {/* Descarga con el nombre original (URL firmada fresca).
+                                    El cliente no depende de puede_descargar_archivos. */}
+                                <button
+                                  type="button"
+                                  className={styles.downloadBtn}
+                                  disabled={descargando === msg.id}
+                                  aria-label={`Descargar ${msg.file_name || 'archivo'}`}
+                                  title="Descargar"
+                                  onClick={async () => {
+                                    setDescargando(msg.id)
+                                    try {
+                                      const ok = await downloadChatFile(msg.file_url, msg.file_name)
+                                      if (!ok) setSendError('No se pudo descargar el archivo. Intenta de nuevo.')
+                                    } finally { setDescargando(null) }
+                                  }}
+                                >
+                                  <IconDownload size={15} />
+                                  <span>{descargando === msg.id ? '…' : 'Descargar'}</span>
+                                </button>
+                              </div>
                             )
                           ) : (
                             <p className={styles.msgText}>{renderMensaje(msg.content)}</p>
@@ -2752,13 +2994,24 @@ export default function ChatSection() {
                     )}
                     <div className={styles.adjuntoInfo}>
                       <span className={styles.adjuntoNombre}>{pendingFile.file.name}</span>
-                      <span className={styles.adjuntoPeso}>{formatSize(pendingFile.file.size)} · revisa antes de enviar</span>
+                      <span className={styles.adjuntoPeso}>
+                        {uploading
+                          ? `Subiendo… ${uploadPct}%`
+                          : pendingFile.preparando
+                            ? 'Optimizando imagen…'
+                            : `${formatSize(pendingFile.file.size)} · revisa antes de enviar`}
+                      </span>
+                      {uploading && (
+                        <span className={styles.adjuntoBar} role="progressbar" aria-valuenow={uploadPct} aria-valuemin={0} aria-valuemax={100}>
+                          <span className={styles.adjuntoBarFill} style={{ width: `${uploadPct}%` }} />
+                        </span>
+                      )}
                     </div>
                     <button type="button" className={styles.adjuntoDescartar} onClick={descartarAdjunto} disabled={uploading}>
                       Descartar
                     </button>
                     <button type="button" className={styles.adjuntoEnviar} onClick={confirmarAdjunto} disabled={uploading}>
-                      {uploading ? 'Enviando…' : 'Enviar'}
+                      {uploading ? 'Subiendo…' : 'Enviar'}
                     </button>
                   </div>
                 )}
@@ -2769,17 +3022,22 @@ export default function ChatSection() {
                   <input ref={fileRef} type="file"
                     accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.gif,.webp,.txt"
                     onChange={handleFile} style={{ display:'none' }} />
+                  {/* Grabando: el micrófono pasa a "cancelar" y la nota se manda con Enviar */}
                   <button className={recording ? styles.recordingBtn : styles.attachBtn}
-                    onClick={recording ? stopRecording : startRecording} disabled={uploading}
-                    title={recording ? `Detener (${recordingTime}s)` : 'Grabar mensaje de voz'}>
-                    {recording ? <><span className={styles.recordDot}/>{recordingTime}s</> : <IconMic size={15} />}
+                    onClick={() => recording ? stopRecording(false) : startRecording()} disabled={uploading}
+                    aria-label={recording ? 'Cancelar grabación' : 'Grabar mensaje de voz'}
+                    title={recording ? 'Cancelar grabación' : 'Grabar mensaje de voz'}>
+                    {recording ? <><span className={styles.recordDot}/>{recordingTime}s ✕</> : <IconMic size={15} />}
                   </button>
                   <input className={styles.chatInput} value={input}
                     onChange={e => setInput(e.target.value)}
                     onKeyDown={e => e.key==='Enter' && !e.shiftKey && (e.preventDefault(), sendMessage())}
-                    placeholder="Escribe un mensaje…" />
-                  <button className={styles.sendBtn} onClick={sendMessage} disabled={!input.trim()}
-                    aria-label="Enviar mensaje">
+                    disabled={recording}
+                    placeholder={recording ? 'Grabando… pulsa Enviar para mandar la nota' : 'Escribe un mensaje…'} />
+                  <button className={styles.sendBtn}
+                    onClick={() => recording ? stopRecording(true) : sendMessage()}
+                    disabled={recording ? uploading : !input.trim()}
+                    aria-label={recording ? 'Enviar nota de voz' : 'Enviar mensaje'}>
                     <span className={styles.sendBtnText}>Enviar</span>
                     <svg className={styles.sendBtnIcon} viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                       <path d="M22 2 11 13" /><path d="M22 2 15 22l-4-9-9-4 20-7z" />
@@ -3500,27 +3758,38 @@ export default function ChatSection() {
       {/* ── Post-chat: banner + PQR + opción de continuar con otro profesional ── */}
       {step === 'post_chat' && (
         <div className={styles.lawyersWrap} ref={lawyersRef}>
-          <div className={`${styles.postChatActions} ${styles.postChatActionsTop}`}>
-            <button className={styles.btnBack} onClick={resetToStart}>
-              Salir
-            </button>
-          </div>
           <div className={styles.closedBanner}>
-            <strong>Tu consulta anterior fue cerrada.</strong>
-            Gracias por usar Parada Bridge. Si quieres, déjanos un comentario antes de continuar.
+            <strong>Tu consulta fue cerrada</strong>
+            Gracias por usar Parada Bridge.
           </div>
 
           {!pqrYaExiste && (
             <div className={`${styles.pqrCard} aap-card-pqr`}>
-              <p className={styles.pqrTitle}>¿Tienes algún comentario sobre tu experiencia?</p>
+              <p className={styles.pqrTitle}>¿Quieres contarnos algo sobre tu experiencia?</p>
               <p className={styles.pqrSubtitle}>
-                Tu mensaje llega directamente al equipo de Parada Bridge. Es opcional.
+                Opcional. Tu mensaje llega al equipo de Parada Bridge y recibes un número de
+                radicado para hacerle seguimiento.
               </p>
 
               {pqrSent ? (
-                <p className={styles.pqrSuccess}>
-                  ✓ Tu PQR fue enviada. Gracias por tu retroalimentación.
-                </p>
+                <div className={styles.pqrSuccess}>
+                  <p style={{ margin: 0 }}>✓ Recibimos tu solicitud. Gracias por escribirnos.</p>
+                  {pqrRadicado && (
+                    <>
+                      <p style={{ margin: '10px 0 2px', fontSize: '0.76rem', letterSpacing: '0.08em', textTransform: 'uppercase', opacity: 0.75 }}>
+                        Número de radicado
+                      </p>
+                      <p style={{ margin: 0, fontSize: '1.05rem', fontWeight: 700, letterSpacing: '0.04em' }}>
+                        {pqrRadicado}
+                      </p>
+                      <p style={{ margin: '8px 0 0', fontSize: '0.78rem', opacity: 0.8 }}>
+                        {pqrCorreo
+                          ? `Te lo enviamos a ${pqrCorreo}. Guárdalo para hacer seguimiento.`
+                          : 'Guárdalo para hacer seguimiento de tu solicitud.'}
+                      </p>
+                    </>
+                  )}
+                </div>
               ) : (
                 <>
                   <div className={styles.pqrTipoPills}>
@@ -3550,12 +3819,13 @@ export default function ChatSection() {
                   />
 
                   <div className={styles.pqrFooter}>
+                    <span className={styles.pqrContador}>{pqrMensaje.length}/2000</span>
                     <button
                       className={styles.pqrSubmitBtn}
                       onClick={handleSendPqr}
                       disabled={pqrSubmitting}
                     >
-                      {pqrSubmitting ? 'Enviando…' : 'Enviar PQR'}
+                      {pqrSubmitting ? 'Enviando…' : 'Enviar solicitud'}
                     </button>
                   </div>
 
@@ -3564,6 +3834,13 @@ export default function ChatSection() {
               )}
             </div>
           )}
+
+          {/* Salida al final del paso: es la acción de cierre, no de entrada. */}
+          <div className={styles.postChatSalir}>
+            <button type="button" className={styles.btnSalirPost} onClick={resetToStart}>
+              Salir e ir al inicio
+            </button>
+          </div>
         </div>
       )}
 

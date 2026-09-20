@@ -81,9 +81,9 @@ export default function MisPagos({ userId }) {
   // estado (procesando/aprobado/error), no el formulario PSE simulado.
   const [wompiFlow, setWompiFlow]   = useState(false)
 
-  const cargarPagos = useCallback(async () => {
+  const cargarPagos = useCallback(async ({ silencioso = false } = {}) => {
     if (!userId) return
-    setLoading(true)
+    if (!silencioso) setLoading(true)
     setError(null)
     try {
       const headers = await getAuthHeaders()
@@ -97,11 +97,24 @@ export default function MisPagos({ userId }) {
     } catch (err) {
       setError(err.message || 'Error cargando pagos')
     } finally {
-      setLoading(false)
+      if (!silencioso) setLoading(false)
     }
   }, [userId])
 
   useEffect(() => { cargarPagos() }, [cargarPagos])
+
+  // La lista se leía UNA sola vez al montar: cuando el pago lo confirmaba
+  // otro actor (el admin o el webhook de Wompi), la tarjeta seguía en
+  // "Pendiente" hasta recargar la página. Mientras quede algo pendiente se
+  // relee cada 8 s (pausado con la pestaña oculta) y al volver a la pestaña.
+  const hayPendientes = pagos.some(p => p.estado === 'pendiente')
+  useEffect(() => {
+    if (!hayPendientes) return
+    const t = setInterval(() => { if (!document.hidden) cargarPagos({ silencioso: true }) }, 8000)
+    const onVisible = () => { if (!document.hidden) cargarPagos({ silencioso: true }) }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => { clearInterval(t); document.removeEventListener('visibilitychange', onVisible) }
+  }, [hayPendientes, cargarPagos])
 
   // Lista filtrada por rango de fechas (created_at). El resumen se calcula
   // sobre la lista filtrada para que los totales sigan al filtro.

@@ -165,9 +165,19 @@ export default function RegisterModal({ onClose }) {
   const [paginaWeb, setPaginaWeb]         = useState('')
   const [docsSubmitting, setDocsSubmitting] = useState(false)
   const [docsError, setDocsError]         = useState('')
+  // Tarjeta profesional: se sube en el Paso C (con la cuenta). Aquí guardamos
+  // el path resultante para mostrarla como "adjunta" en 'docs' y, si esa
+  // subida falló, exigir un nuevo archivo (obligatoria).
+  const [tarjetaSubidaPath, setTarjetaSubidaPath] = useState(null)
+  const [tarjetaDocsFile, setTarjetaDocsFile]     = useState(null)
+  // Modelo contractual (OPCIONAL): un PDF → contratos/<uid>/modelo-contractual.pdf
+  // (misma ruta que DocumentosConfianza en el perfil).
+  const [modeloFile, setModeloFile]       = useState(null)
   const fotoInputRef     = useRef(null)
   const certBancInputRef = useRef(null)
   const certDiscInputRef = useRef(null)
+  const tarjetaDocsInputRef = useRef(null)
+  const modeloInputRef   = useRef(null)
 
   // Validaciones derivadas
   const pwRules    = PASSWORD_RULES.map(r => ({ ...r, ok: r.test(regPassword) }))
@@ -176,7 +186,8 @@ export default function RegisterModal({ onClose }) {
   const emailVal   = validarCorreo(regEmail)
   const telVal     = validarCelular(telefono)
   const cedulaVal  = validarCedula(cedula)
-  const showPwList = pwTouched && regPassword.length > 0
+  // Requisitos de contraseña SIEMPRE visibles (vacío → neutro; escribiendo → ✓/✗).
+  const pwEmpty    = regPassword.length === 0
 
   const isPro = rol === 'abogado' || rol === 'contador'
 
@@ -234,6 +245,8 @@ export default function RegisterModal({ onClose }) {
     setRol(r)
     setError(null); setEmailErrorInline('')
     setAreas([]); setExperiencia(''); setTarjetaFile(null)
+    setTarjetaSubidaPath(null); setTarjetaDocsFile(null); setModeloFile(null)
+    setCertBancFile(null); setCertDiscFile(null); setDocsError('')
     setVerificationStep('form'); setOtpError('')
     setCaptchaValue(null); recaptchaRef.current?.reset()
     setRespuestasExtra({})
@@ -393,9 +406,11 @@ export default function RegisterModal({ onClose }) {
           body: tarjetaFile,
         }
       )
-      // La tarjeta es opcional: si falla la subida, no abortamos la cuenta.
+      // Si falla la subida no abortamos la cuenta: el paso 'docs' la exige de
+      // nuevo (es obligatoria) y la sube al mismo path.
       if (upRes.ok) tarjetaPath = path
     }
+    setTarjetaSubidaPath(tarjetaPath)
 
     // 4. UPSERT en profiles con el rol y campos correctos.
     const headers = await getAuthHeaders()
@@ -472,22 +487,38 @@ export default function RegisterModal({ onClose }) {
       .catch(() => setDocsError('No se pudo procesar la foto. Intenta con otra imagen.'))
   }
 
-  function onDocChange(e, set) {
+  // pdfOnly: el modelo contractual solo acepta PDF (igual que en el perfil).
+  function onDocChange(e, set, { pdfOnly = false } = {}) {
     const file = e.target.files?.[0]
     e.target.value = ''
     if (!file) return
+    const esPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name || '')
+    if (pdfOnly && !esPdf) { setDocsError('El modelo contractual debe ser un PDF.'); return }
     const allowed = ['application/pdf', 'image/png', 'image/jpeg', 'image/webp']
-    if (!allowed.includes(file.type)) { setDocsError('Formato no permitido. Usa PDF, PNG, JPG o WEBP.'); return }
+    if (!pdfOnly && !allowed.includes(file.type)) { setDocsError('Formato no permitido. Usa PDF, PNG, JPG o WEBP.'); return }
     if (file.size / (1024 * 1024) > 10) { setDocsError('El archivo no puede superar 10 MB.'); return }
     setDocsError('')
     set(file)
   }
 
-  const canFinishDocs = !!fotoFile && !!certBancFile && !!certDiscFile && !docsSubmitting
+  // Reglas del paso: foto + tarjeta (path del Paso C o archivo nuevo) +
+  // al menos UN certificado. Modelo contractual, oficina y web: opcionales.
+  const tieneTarjeta      = !!tarjetaSubidaPath || !!tarjetaDocsFile
+  const tieneCertificado  = !!certBancFile && !!certDiscFile
+
+  function validarDocs() {
+    if (!fotoFile)         return 'Sube tu foto de perfil (obligatoria).'
+    if (!tieneTarjeta)     return 'Adjunta tu tarjeta profesional (obligatoria).'
+    if (!certBancFile)     return 'Adjunta la cuenta bancaria certificada (obligatoria).'
+    if (!certDiscFile)     return 'Adjunta el certificado disciplinario (obligatorio).'
+    return ''
+  }
 
   async function handleDocsSubmit(e) {
     e.preventDefault()
-    if (!canFinishDocs || !newUserId) return
+    if (docsSubmitting || !newUserId) return
+    const falta = validarDocs()
+    if (falta) { setDocsError(falta); return }
     setDocsSubmitting(true); setDocsError('')
     try {
       const headers = await getAuthHeaders()
@@ -501,28 +532,48 @@ export default function RegisterModal({ onClose }) {
       if (!fotoRes.ok) throw new Error('No se pudo subir la foto de perfil.')
       const fotoUrl = `${SUPABASE_URL}/storage/v1/object/public/profile-photos/${fotoPath}?t=${Date.now()}`
 
-      // 2. Certificados → tarjetas-profesionales/<uid>/… (bucket privado).
-      async function subirDoc(file, nombreBase) {
+      // 2. Documentos → tarjetas-profesionales/<uid>/… (bucket privado).
+      //    Mismas rutas de siempre: tarjeta.<ext>, certificados/certificado.<ext>,
+      //    certificado-disciplinario.<ext>.
+      async function subirDoc(file, nombreBase, etiqueta) {
         const ext  = file.name.split('.').pop().toLowerCase()
         const path = `${newUserId}/${nombreBase}.${ext}`
         const res  = await fetch(
           `${SUPABASE_URL}/storage/v1/object/tarjetas-profesionales/${path}`,
           { method: 'POST', headers: { ...headers, 'Content-Type': file.type, 'x-upsert': 'true' }, body: file }
         )
-        if (!res.ok) throw new Error(`No se pudo subir ${nombreBase.replace(/-/g, ' ')}.`)
+        if (!res.ok) throw new Error(`No se pudo subir ${etiqueta}.`)
         return path
       }
-      const certBancPath = await subirDoc(certBancFile, 'certificados/certificado')
-      const certDiscPath = await subirDoc(certDiscFile, 'certificado-disciplinario')
+      const cambios = { foto_url: fotoUrl }
+      if (tarjetaDocsFile) {
+        cambios.tarjeta_archivo_url = await subirDoc(tarjetaDocsFile, 'tarjeta', 'la tarjeta profesional')
+      }
+      if (certBancFile) {
+        cambios.certificado_bancario_url = await subirDoc(certBancFile, 'certificados/certificado', 'el certificado bancario')
+      }
+      if (certDiscFile) {
+        cambios.certificado_disciplinario_url = await subirDoc(certDiscFile, 'certificado-disciplinario', 'el certificado disciplinario')
+      }
+
+      // 2b. Modelo contractual (opcional) → contratos/<uid>/modelo-contractual.pdf
+      //     (misma ruta y columna que DocumentosConfianza en el perfil).
+      if (modeloFile) {
+        const modeloPath = `${newUserId}/modelo-contractual.pdf`
+        const mRes = await fetch(
+          `${SUPABASE_URL}/storage/v1/object/contratos/${modeloPath}`,
+          { method: 'POST', headers: { ...headers, 'Content-Type': 'application/pdf', 'x-upsert': 'true' }, body: modeloFile }
+        )
+        if (!mRes.ok) throw new Error('No se pudo subir el modelo contractual. Puedes quitarlo y subirlo luego desde tu perfil.')
+        cambios.modelo_contrato_path = modeloPath
+      }
 
       // 3. PATCH del perfil con todo lo del paso.
       const patchRes = await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${newUserId}`, {
         method: 'PATCH',
         headers: { ...(await getAuthHeaders()), Prefer: 'return=minimal' },
         body: JSON.stringify({
-          foto_url: fotoUrl,
-          certificado_bancario_url: certBancPath,
-          certificado_disciplinario_url: certDiscPath,
+          ...cambios,
           direccion_oficina: direccionOficina.trim() || null,
           pagina_web: paginaWeb.trim() || null,
         }),
@@ -608,13 +659,16 @@ export default function RegisterModal({ onClose }) {
         {rol && verificationStep === 'docs' && (
           <form className={styles.form} onSubmit={handleDocsSubmit}>
             <p className={styles.hint} style={{ marginTop: 0 }}>
-              Correo verificado ✓ — Sube lo que el administrador revisará para
+              Correo verificado ✓. Sube lo que el administrador revisará para
               aprobar tu perfil. Así no tendrás que esperar una segunda revisión.
             </p>
 
             {/* Foto de perfil */}
             <div className={styles.field}>
-              <label className={styles.label}>Foto de perfil <span className={styles.req}>*</span></label>
+              <label className={styles.label}>
+                Foto de perfil <span className={styles.req}>*</span>
+                <span className={`${extra.tag} ${extra.tagReq}`}>Obligatorio</span>
+              </label>
               <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
                 <div
                   aria-hidden="true"
@@ -649,43 +703,116 @@ export default function RegisterModal({ onClose }) {
                 style={{ display: 'none' }} onChange={onFotoChange} />
             </div>
 
-            {/* Certificado bancario */}
+            {/* Tarjeta profesional (obligatoria). Ya se subió con la cuenta en
+                el Paso C; si esa subida falló, aquí se exige de nuevo. */}
             <div className={styles.field}>
               <label className={styles.label}>
-                Cuenta bancaria certificada <span className={styles.req}>*</span> <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0, opacity: 0.6 }}>(PDF o imagen)</span>
+                Tarjeta profesional <span className={styles.req}>*</span>
+                <span className={`${extra.tag} ${extra.tagReq}`}>Obligatorio</span>
               </label>
-              <button type="button" className={extra.uploadBtn}
-                onClick={() => certBancInputRef.current?.click()}>
-                {certBancFile ? 'Cambiar archivo' : 'Subir certificado bancario'}
-              </button>
-              <input ref={certBancInputRef} type="file"
+              {tarjetaSubidaPath && !tarjetaDocsFile ? (
+                <div className={extra.docAdjunto}>
+                  <span className={extra.fileName}>✓ {tarjetaFile?.name || 'Tarjeta adjunta'} (ya recibida)</span>
+                  <button type="button" className={extra.linkMini}
+                    onClick={() => tarjetaDocsInputRef.current?.click()}>
+                    Cambiar archivo
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <button type="button" className={extra.uploadBtn}
+                    onClick={() => tarjetaDocsInputRef.current?.click()}>
+                    {tarjetaDocsFile ? 'Cambiar archivo' : 'Subir tarjeta profesional'}
+                  </button>
+                  {tarjetaDocsFile && <div className={extra.fileName}>✓ {tarjetaDocsFile.name}</div>}
+                  {!tarjetaSubidaPath && !tarjetaDocsFile && (
+                    <span className={extra.docHint}>
+                      No pudimos recibir la tarjeta del formulario. Súbela de nuevo (PDF o imagen).
+                    </span>
+                  )}
+                </>
+              )}
+              <input ref={tarjetaDocsInputRef} type="file"
                 accept="application/pdf,image/png,image/jpeg,image/webp"
-                style={{ display: 'none' }} onChange={(e) => onDocChange(e, setCertBancFile)} />
-              {certBancFile && <div className={extra.fileName}>✓ {certBancFile.name}</div>}
+                style={{ display: 'none' }} onChange={(e) => onDocChange(e, setTarjetaDocsFile)} />
             </div>
 
-            {/* Certificado disciplinario */}
+            {/* Certificados: obligatorio al menos uno de los dos */}
+            <fieldset className={extra.docGroup}>
+              <legend className={styles.label}>
+                Certificados <span className={styles.req}>*</span>
+                <span className={`${extra.tag} ${extra.tagReq}`}>Obligatorio · ambos</span>
+              </legend>
+              <p className={extra.docHint} style={{ marginTop: 0 }}>
+                Sube los dos. PDF o imagen, máx. 10 MB cada uno.
+              </p>
+
+              <div className={extra.docSlot}>
+                <span className={extra.docSlotName}>Cuenta bancaria certificada</span>
+                <button type="button" className={extra.uploadBtn}
+                  onClick={() => certBancInputRef.current?.click()}>
+                  {certBancFile ? 'Cambiar archivo' : 'Subir certificado bancario'}
+                </button>
+                <input ref={certBancInputRef} type="file"
+                  accept="application/pdf,image/png,image/jpeg,image/webp"
+                  style={{ display: 'none' }} onChange={(e) => onDocChange(e, setCertBancFile)} />
+                {certBancFile && (
+                  <div className={extra.fileRow}>
+                    <span className={extra.fileName}>✓ {certBancFile.name}</span>
+                    <button type="button" className={extra.linkMini} onClick={() => setCertBancFile(null)}>Quitar</button>
+                  </div>
+                )}
+              </div>
+
+              <div className={extra.docSlot}>
+                <span className={extra.docSlotName}>Certificado disciplinario</span>
+                <button type="button" className={extra.uploadBtn}
+                  onClick={() => certDiscInputRef.current?.click()}>
+                  {certDiscFile ? 'Cambiar archivo' : 'Subir certificado disciplinario'}
+                </button>
+                <input ref={certDiscInputRef} type="file"
+                  accept="application/pdf,image/png,image/jpeg,image/webp"
+                  style={{ display: 'none' }} onChange={(e) => onDocChange(e, setCertDiscFile)} />
+                {certDiscFile && (
+                  <div className={extra.fileRow}>
+                    <span className={extra.fileName}>✓ {certDiscFile.name}</span>
+                    <button type="button" className={extra.linkMini} onClick={() => setCertDiscFile(null)}>Quitar</button>
+                  </div>
+                )}
+                <span className={extra.docHint}>
+                  Los clientes podrán consultarlo dentro del chat para confiar en ti.
+                </span>
+              </div>
+            </fieldset>
+
+            {/* Modelo contractual (opcional) */}
             <div className={styles.field}>
               <label className={styles.label}>
-                Certificado disciplinario <span className={styles.req}>*</span> <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0, opacity: 0.6 }}>(PDF o imagen)</span>
+                Modelo contractual
+                <span className={`${extra.tag} ${extra.tagOpt}`}>Opcional</span>
               </label>
               <button type="button" className={extra.uploadBtn}
-                onClick={() => certDiscInputRef.current?.click()}>
-                {certDiscFile ? 'Cambiar archivo' : 'Subir certificado disciplinario'}
+                onClick={() => modeloInputRef.current?.click()}>
+                {modeloFile ? 'Cambiar archivo' : 'Subir modelo contractual (PDF)'}
               </button>
-              <input ref={certDiscInputRef} type="file"
-                accept="application/pdf,image/png,image/jpeg,image/webp"
-                style={{ display: 'none' }} onChange={(e) => onDocChange(e, setCertDiscFile)} />
-              {certDiscFile && <div className={extra.fileName}>✓ {certDiscFile.name}</div>}
-              <span style={{ fontSize: '0.68rem', opacity: 0.65, marginTop: 4, display: 'block' }}>
-                Los clientes podrán consultarlo dentro del chat para confiar en ti.
+              <input ref={modeloInputRef} type="file" accept="application/pdf,.pdf"
+                style={{ display: 'none' }} onChange={(e) => onDocChange(e, setModeloFile, { pdfOnly: true })} />
+              {modeloFile && (
+                <div className={extra.fileRow}>
+                  <span className={extra.fileName}>✓ {modeloFile.name}</span>
+                  <button type="button" className={extra.linkMini} onClick={() => setModeloFile(null)}>Quitar</button>
+                </div>
+              )}
+              <span className={extra.docHint}>
+                Tu contrato base para enviar a firma desde cualquier chat. Podrás subirlo o cambiarlo luego en tu perfil.
               </span>
             </div>
 
             {/* Dirección de oficina (opcional) */}
             <div className={styles.field}>
               <label className={styles.label}>
-                Dirección de oficina <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0, opacity: 0.6 }}>(opcional)</span>
+                Dirección de oficina
+                <span className={`${extra.tag} ${extra.tagOpt}`}>Opcional</span>
               </label>
               <input type="text" className={styles.input}
                 placeholder="Cra 7 # 12-34, oficina 501, Bogotá"
@@ -696,7 +823,8 @@ export default function RegisterModal({ onClose }) {
             {/* Página web (opcional) */}
             <div className={styles.field}>
               <label className={styles.label}>
-                Página web <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0, opacity: 0.6 }}>(opcional)</span>
+                Página web
+                <span className={`${extra.tag} ${extra.tagOpt}`}>Opcional</span>
               </label>
               <input type="url" className={styles.input}
                 placeholder="https://tusitio.com"
@@ -704,9 +832,10 @@ export default function RegisterModal({ onClose }) {
                 onChange={(e) => setPaginaWeb(e.target.value)} />
             </div>
 
-            {docsError && <p className={styles.msgError}>{docsError}</p>}
+            {docsError && <p className={styles.msgError} role="alert">{docsError}</p>}
 
-            <button type="submit" className={`btn-solid ${styles.submit}`} disabled={!canFinishDocs}>
+            {/* El botón queda activo para que la validación explique qué falta. */}
+            <button type="submit" className={`btn-solid ${styles.submit}`} disabled={docsSubmitting}>
               {docsSubmitting ? 'Enviando…' : 'Enviar para revisión →'}
             </button>
             <p className={styles.hint}>
@@ -768,7 +897,7 @@ export default function RegisterModal({ onClose }) {
             {/* Username */}
             <div className={styles.field}>
               <label className={styles.label}>Nombre de usuario <span className={styles.req}>*</span></label>
-              <input type="text" className={styles.input} placeholder="@usuario"
+              <input type="text" className={styles.input} placeholder="Ej: juanperez"
                 value={username}
                 onChange={(e) => setUsername(e.target.value.replace(/\s/g, '').toLowerCase())} required />
             </div>
@@ -867,31 +996,34 @@ export default function RegisterModal({ onClose }) {
                 </button>
               </div>
 
-              {showPwList && pwStrength && (
-                <div className={styles.strengthRow}>
-                  <div className={styles.strengthBars}>
-                    {[1,2,3].map(lvl => (
-                      <div key={lvl} className={styles.strengthBar}
-                        style={{ background: pwStrength.level >= lvl ? pwStrength.color : 'rgba(255,255,255,0.1)' }} />
-                    ))}
-                  </div>
-                  <span className={styles.strengthLabel} style={{ color: pwStrength.color }}>
-                    {pwStrength.label}
-                  </span>
+              {/* Barra de fortaleza (siempre visible; vacía si no hay texto) */}
+              <div className={styles.strengthRow} aria-live="polite">
+                <div className={styles.strengthBars}>
+                  {[1,2,3].map(lvl => (
+                    <div key={lvl} className={styles.strengthBar}
+                      style={{ background: pwStrength && pwStrength.level >= lvl ? pwStrength.color : 'rgba(109,60,27,0.12)' }} />
+                  ))}
                 </div>
-              )}
+                <span className={styles.strengthLabel} style={{ color: pwStrength ? pwStrength.color : '#6f5c48' }}>
+                  {pwStrength ? pwStrength.label : 'Fuerza'}
+                </span>
+              </div>
 
-              {showPwList && (
-                <ul className={styles.pwChecklist}>
-                  {pwRules.map(rule => (
+              {/* Checklist requisitos: siempre visible */}
+              <ul className={styles.pwChecklist} aria-label="Requisitos de la contraseña">
+                {pwRules.map(rule => {
+                  const estado = pwEmpty ? 'pending' : rule.ok ? 'ok' : 'fail'
+                  return (
                     <li key={rule.id}
-                      className={`${styles.pwItem} ${rule.ok ? styles.pwItemOk : styles.pwItemPending}`}>
-                      <span className={styles.pwIcon}>{rule.ok ? '✓' : '○'}</span>
+                      className={`${styles.pwItem} ${estado === 'ok' ? styles.pwItemOk : estado === 'fail' ? styles.pwItemFail : styles.pwItemPending}`}>
+                      <span className={styles.pwIcon} aria-hidden="true">
+                        {estado === 'ok' ? '✓' : estado === 'fail' ? '✗' : '○'}
+                      </span>
                       <span>{rule.label}</span>
                     </li>
-                  ))}
-                </ul>
-              )}
+                  )
+                })}
+              </ul>
             </div>
 
             {/* ── Campos profesionales: áreas + experiencia + tarjeta ── */}
@@ -1113,23 +1245,17 @@ export default function RegisterModal({ onClose }) {
               ¿Salir sin completar?
             </h4>
             <p style={{ margin: '0 0 20px', fontSize: '0.85rem', lineHeight: 1.6, color: '#5a4a3d' }}>
-              Tu registro quedará incompleto sin la foto y los certificados.
+              Tu registro quedará incompleto sin la foto, la tarjeta profesional y los dos certificados.
               Podrás completarlos luego desde tu perfil, pero el administrador
               no podrá revisarte hasta entonces.
             </p>
-            <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+            <div className={extra.confirmActions}>
               <button type="button" onClick={() => setConfirmSalir(false)}
-                className={`btn-solid ${styles.submit}`}
-                style={{ width: 'auto', padding: '0.55rem 1.3rem' }}>
+                className={`btn-solid ${styles.submit} ${extra.confirmBtn}`}>
                 Seguir completando
               </button>
               <button type="button" onClick={salirSinCompletar}
-                style={{
-                  border: '1px solid rgba(109,60,27,0.35)', background: '#fff',
-                  color: '#6d3c1b', borderRadius: 4, padding: '0.55rem 1.3rem',
-                  fontSize: '0.7rem', fontWeight: 600, letterSpacing: '0.14em',
-                  textTransform: 'uppercase', cursor: 'pointer',
-                }}>
+                className={`${styles.submit} ${extra.confirmBtn} ${extra.confirmBtnDanger}`}>
                 Salir de todas formas
               </button>
             </div>

@@ -663,6 +663,16 @@
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .adjuntoPeso { font-size: 0.68rem; color: rgba(109,60,27,0.6); }
+/* Barra de progreso de subida (porcentaje real vía XHR) */
+.adjuntoBar {
+  display: block; height: 4px; margin-top: 5px; border-radius: 4px;
+  background: rgba(109,60,27,0.12); overflow: hidden;
+}
+.adjuntoBarFill {
+  display: block; height: 100%; border-radius: 4px;
+  background: var(--gold, #c9a84c); transition: width 0.2s ease-out;
+}
+@media (prefers-reduced-motion: reduce) { .adjuntoBarFill { transition: none; } }
 .adjuntoDescartar {
   flex-shrink: 0; border: 1px solid rgba(109,60,27,0.3); background: #fff;
   color: #6d3c1b; border-radius: 8px; padding: 7px 12px;
@@ -1247,4 +1257,40 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .modalOverlay, .modalCard { animation: none; }
+}
+
+/* ── Aviso de cobro (banner destacado al abrir la consulta) ── */
+.avisoCobro {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  /* Acotado y centrado: a todo el ancho el texto quedaba en una sola línea
+     larguísima e ilegible en pantallas grandes. */
+  width: 100%;
+  max-width: 560px;
+  margin: 12px auto 14px;
+  padding: 13px 16px;
+  box-sizing: border-box;
+  border: 1.5px solid rgba(201,168,76,0.6);
+  border-radius: 12px;
+  background: linear-gradient(180deg, #fffdf4 0%, #faf2dd 100%);
+  box-shadow: 0 3px 14px -6px rgba(154,122,44,0.45);
+  color: #5a3d12;
+  font-size: 0.83rem;
+  line-height: 1.55;
+  text-wrap: pretty;
+}
+.avisoCobro svg { flex-shrink: 0; color: #9a7a2c; margin-top: 2px; }
+/* Título en su propia línea: el bloque queda compacto en dos líneas. */
+.avisoCobro strong {
+  display: block;
+  margin-bottom: 3px;
+  color: #7a5a12;
+  font-size: 0.88rem;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+}
+
+@media (max-width: 520px) {
+  .avisoCobro { margin: 10px 4px 12px; padding: 11px 13px; font-size: 0.8rem; }
 }

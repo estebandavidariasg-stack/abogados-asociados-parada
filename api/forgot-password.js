@@ -156,11 +156,27 @@ async function isRateLimitedByIp(ipHash) {
 
 async function recordAttempt(email, ipHash) {
   try {
-    await fetch(`${SUPABASE_URL}/rest/v1/forgot_password_attempts`, {
+    const post = (body) => fetch(`${SUPABASE_URL}/rest/v1/forgot_password_attempts`, {
       method: 'POST',
       headers: { ...adminHeaders(), Prefer: 'return=minimal' },
-      body:    JSON.stringify({ email, ip_hash: ipHash }),
+      body:    JSON.stringify(body),
     })
+    let res = await post({ email, ip_hash: ipHash })
+    // Si la columna ip_hash aún no existe en la BD (42703 — ver
+    // docs/sql/registro-2026-09-17.sql), registramos igual el intento por
+    // correo: antes el 400 pasaba en silencio y el rate-limit quedaba apagado.
+    if (!res.ok && res.status === 400) {
+      const detail = await res.text().catch(() => '')
+      if (detail.includes('ip_hash')) {
+        console.warn('[forgot-password] columna ip_hash ausente; registrando intento sin IP')
+        res = await post({ email })
+      } else {
+        console.error('[forgot-password] recordAttempt 400:', detail.slice(0, 200))
+      }
+    }
+    if (!res.ok && res.status !== 400) {
+      console.error('[forgot-password] recordAttempt failed:', res.status)
+    }
   } catch (err) {
     // No-fatal — si esto falla, simplemente perdemos un punto del conteo.
     console.error('[forgot-password] recordAttempt failed:', err)
@@ -374,9 +390,12 @@ export default async function handler(req, res) {
     })
 
     return res.status(200).json({ success: true })
-  } catch (_err) {
-    // Tampoco loggeamos el email — pero el cliente recibe error genérico
-    // sólo cuando Gmail mismo falla, no por usuario inexistente.
+  } catch (err) {
+    // No loggeamos el email — pero sí la causa (antes se tragaba en silencio
+    // y en los logs de Vercel no quedaba rastro de por qué no salía el correo).
+    // El cliente recibe error genérico sólo cuando falla Gmail o la inserción
+    // del código, no por usuario inexistente.
+    console.error('[forgot-password] envío fallido:', err?.message || err)
     return res.status(500).json({ error: 'No se pudo enviar el correo.' })
   }
 }

@@ -111,6 +111,108 @@
   word-break: break-all;
 }
 
+/* ── Paso 'docs': etiquetas obligatorio / opcional y grupo de certificados ── */
+.tag {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+.tagReq { background: rgba(201,168,76, 0.16); color: #7a5a12; border: 1px solid rgba(201,168,76, 0.45); }
+.tagOpt { background: rgba(109,60,27, 0.06); color: #6f5c48; border: 1px solid rgba(109,60,27, 0.16); }
+
+.docGroup {
+  margin: 0 0 1rem;
+  padding: 0.85rem 0.9rem 0.6rem;
+  border: 1px solid rgba(109,60,27, 0.14);
+  border-radius: 12px;
+  min-width: 0;
+}
+.docGroup > legend { padding: 0 6px; margin-bottom: 0; }
+
+.docSlot { margin-top: 0.7rem; }
+.docSlot:last-child { margin-bottom: 0.3rem; }
+.docSlotName {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--navy, #472f29);
+}
+
+.docHint {
+  display: block;
+  margin-top: 5px;
+  font-size: 0.68rem;
+  line-height: 1.5;
+  color: #6f5c48;
+}
+
+.fileRow, .docAdjunto {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.docAdjunto {
+  padding: 0.6rem 0.8rem;
+  background: rgba(26,140,78, 0.06);
+  border: 1px solid rgba(26,140,78, 0.28);
+  border-radius: 10px;
+}
+.docAdjunto .fileName { margin-top: 0; }
+
+.linkMini {
+  background: none;
+  border: none;
+  padding: 0;
+  margin-top: 6px;
+  font-family: inherit;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--navy-md, #6f5c48);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.linkMini:hover { color: var(--navy, #472f29); }
+
+/* ── Modal "¿Salir sin completar?": dos botones del mismo tamaño ── */
+.confirmActions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+/* Ambos heredan .submit (mismo alto, tipografía y radio); aquí solo se
+   igualan anchos y se quita el margen inferior del formulario. */
+.confirmBtn {
+  flex: 1 1 0;
+  width: auto;
+  margin: 0;
+  padding: 0.7rem 0.9rem;
+  font-size: 0.66rem;
+  letter-spacing: 0.14em;
+}
+/* .submit fija el fondo con !important, así que el rojo también lo necesita. */
+.confirmBtnDanger {
+  background: #b3402f !important;
+  color: #fff !important;
+}
+.confirmBtnDanger:hover:not(:disabled) {
+  background: #963224 !important;
+}
+@media (max-width: 400px) {
+  .confirmActions { flex-direction: column; }
+}
+
 @media (max-width: 480px) {
   .areasBox { grid-template-columns: 1fr; }
   .roleBtn { font-size: 0.66rem; padding: 0.75rem 0.3rem; }

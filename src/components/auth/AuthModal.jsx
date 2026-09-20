@@ -86,13 +86,19 @@ export default function AuthModal({ initialTab = 'login', onClose, onRegister })
           recaptchaToken: forgotCaptchaValue,
         }),
       })
+      // Sin funciones serverless (p. ej. `vite dev`) el rewrite SPA responde
+      // index.html con 200 y se mostraba "enviado" sin haber enviado nada.
+      const ct = res.headers.get('content-type') || ''
+      if (!ct.includes('application/json')) {
+        throw new Error('El servicio de recuperación no está disponible en este entorno.')
+      }
       if (!res.ok) {
         const data = await res.json().catch(() => ({}))
         throw new Error(data.error || `Error ${res.status}`)
       }
       setForgotMode('sent')
     } catch (err) {
-      setForgotError(err.message || 'No se pudo enviar el enlace.')
+      setForgotError(err.message || 'No se pudo enviar el código.')
       forgotRecaptchaRef.current?.reset()
       setForgotCaptchaValue(null)
     } finally {
@@ -130,7 +136,9 @@ export default function AuthModal({ initialTab = 'login', onClose, onRegister })
   const pwValid    = isPasswordValid(regPassword)
   const emailVal   = validarCorreo(regEmail)
   const telVal     = validarCelular(telefono)
-  const showPwList = pwTouched && regPassword.length > 0
+  // La lista de requisitos se muestra SIEMPRE (también con el campo vacío):
+  // vacío → todas en neutro; escribiendo → ✓ / ✗ por regla + barra de fuerza.
+  const pwEmpty    = regPassword.length === 0
 
   // ── Puede enviar el registro ──────────────────────────────────────────────
   const canRegister = pwValid && emailVal.valid === true && aceptaTerminos && captchaValue && !loading
@@ -172,7 +180,9 @@ export default function AuthModal({ initialTab = 'login', onClose, onRegister })
     if (!captchaValue) { setError('Por favor completa el captcha'); return }
     setLoading(true); setError(null)
     try {
-      const email = await resolveEmail(loginIdentifier.trim())
+      // Si alguien escribe "@usuario" por costumbre, se quita la arroba para
+      // que no se confunda con un correo (resolveEmail decide por el "@").
+      const email = await resolveEmail(loginIdentifier.trim().replace(/^@+/, ''))
       await signIn({ email, password: loginPassword })
       onClose()
     } catch (err) {
@@ -342,7 +352,7 @@ export default function AuthModal({ initialTab = 'login', onClose, onRegister })
             <div className={styles.field}>
               <label className={styles.label}>Correo o usuario</label>
               <input type="text" className={styles.input}
-                placeholder="correo@ejemplo.com o @usuario"
+                placeholder="correo@ejemplo.com o tu usuario"
                 value={loginIdentifier}
                 onChange={(e) => setLoginIdentifier(e.target.value)} required />
             </div>
@@ -469,15 +479,25 @@ export default function AuthModal({ initialTab = 'login', onClose, onRegister })
               </svg>
             </div>
             <p className={styles.sentText}>
-              Revisa tu correo. Te enviamos un enlace para restablecer tu contraseña.
+              Revisa tu correo. Te enviamos un <strong>código de 6 dígitos</strong> para
+              restablecer tu contraseña. Vence en 1 hora.
             </p>
-            <button
-              type="button"
+            <a
               className={`btn-solid ${styles.submit}`}
-              onClick={() => { setForgotMode(false); setForgotEmail('') }}
+              style={{ display: 'block', textAlign: 'center', textDecoration: 'none' }}
+              href={`/nueva-contrasena?email=${encodeURIComponent(forgotEmail.trim().toLowerCase())}`}
             >
-              Volver al inicio de sesión
-            </button>
+              Ingresar el código
+            </a>
+            <p className={styles.hint} style={{ marginTop: '0.9rem' }}>
+              <button
+                type="button"
+                className={styles.linkBtn}
+                onClick={() => { setForgotMode(false); setForgotEmail('') }}
+              >
+                ← Volver al inicio de sesión
+              </button>
+            </p>
           </div>
         )}
 
@@ -548,7 +568,7 @@ export default function AuthModal({ initialTab = 'login', onClose, onRegister })
             {/* Username */}
             <div className={styles.field}>
               <label className={styles.label}>Nombre de usuario <span className={styles.req}>*</span></label>
-              <input type="text" className={styles.input} placeholder="@usuario"
+              <input type="text" className={styles.input} placeholder="Ej: juanperez"
                 value={username}
                 onChange={(e) => setUsername(e.target.value.replace(/\s/g,'').toLowerCase())} required />
             </div>
@@ -631,33 +651,34 @@ export default function AuthModal({ initialTab = 'login', onClose, onRegister })
                 </button>
               </div>
 
-              {/* Barra de fortaleza */}
-              {showPwList && pwStrength && (
-                <div className={styles.strengthRow}>
-                  <div className={styles.strengthBars}>
-                    {[1,2,3].map(lvl => (
-                      <div key={lvl} className={styles.strengthBar}
-                        style={{ background: pwStrength.level >= lvl ? pwStrength.color : 'rgba(255,255,255,0.1)' }} />
-                    ))}
-                  </div>
-                  <span className={styles.strengthLabel} style={{ color: pwStrength.color }}>
-                    {pwStrength.label}
-                  </span>
+              {/* Barra de fortaleza (siempre visible; vacía si no hay texto) */}
+              <div className={styles.strengthRow} aria-live="polite">
+                <div className={styles.strengthBars}>
+                  {[1,2,3].map(lvl => (
+                    <div key={lvl} className={styles.strengthBar}
+                      style={{ background: pwStrength && pwStrength.level >= lvl ? pwStrength.color : 'rgba(109,60,27,0.12)' }} />
+                  ))}
                 </div>
-              )}
+                <span className={styles.strengthLabel} style={{ color: pwStrength ? pwStrength.color : '#6f5c48' }}>
+                  {pwStrength ? pwStrength.label : 'Fuerza'}
+                </span>
+              </div>
 
-              {/* Checklist requisitos */}
-              {showPwList && (
-                <ul className={styles.pwChecklist}>
-                  {pwRules.map(rule => (
+              {/* Checklist requisitos: siempre visible */}
+              <ul className={styles.pwChecklist} aria-label="Requisitos de la contraseña">
+                {pwRules.map(rule => {
+                  const estado = pwEmpty ? 'pending' : rule.ok ? 'ok' : 'fail'
+                  return (
                     <li key={rule.id}
-                      className={`${styles.pwItem} ${rule.ok ? styles.pwItemOk : styles.pwItemPending}`}>
-                      <span className={styles.pwIcon}>{rule.ok ? '✓' : '○'}</span>
+                      className={`${styles.pwItem} ${estado === 'ok' ? styles.pwItemOk : estado === 'fail' ? styles.pwItemFail : styles.pwItemPending}`}>
+                      <span className={styles.pwIcon} aria-hidden="true">
+                        {estado === 'ok' ? '✓' : estado === 'fail' ? '✗' : '○'}
+                      </span>
                       <span>{rule.label}</span>
                     </li>
-                  ))}
-                </ul>
-              )}
+                  )
+                })}
+              </ul>
             </div>
 
             {/* Términos y condiciones */}

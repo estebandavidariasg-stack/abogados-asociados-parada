@@ -19,7 +19,10 @@ function PdfIcon({ size = 36 }) {
 // rawPath     — raw tarjeta_archivo_url value; URL signed lazily on first click (admin cards)
 // storagePath — path used for type detection when displayUrl is already provided
 // compact     — smaller inline variant for card lists; no centering wrapper
-export default function TarjetaPreview({ displayUrl, rawPath, storagePath, compact = false }) {
+// label       — nombre del documento (aria-label, overlay y visor). Por defecto
+//               "Tarjeta profesional"; DocumentosConfianza lo reutiliza para
+//               certificados y modelo contractual.
+export default function TarjetaPreview({ displayUrl, rawPath, storagePath, compact = false, label = 'Tarjeta profesional' }) {
   const [open, setOpen] = useState(false)
   const [resolvedUrl, setResolvedUrl] = useState(displayUrl || null)
   const [resolving, setResolving] = useState(false)
@@ -64,10 +67,10 @@ export default function TarjetaPreview({ displayUrl, rawPath, storagePath, compa
       className={styles.compactBtn}
       onClick={handleOpen}
       disabled={resolving}
-      aria-label="Ver tarjeta profesional"
+      aria-label={`Ver ${label.toLowerCase()}`}
     >
       <PdfIcon size={14} />
-      <span>{resolving ? 'Cargando…' : 'Ver tarjeta profesional'}</span>
+      <span>{resolving ? 'Cargando…' : `Ver ${label.toLowerCase()}`}</span>
     </button>
   ) : (
     // Full: centered thumbnail card
@@ -77,10 +80,10 @@ export default function TarjetaPreview({ displayUrl, rawPath, storagePath, compa
         className={styles.thumb}
         onClick={handleOpen}
         disabled={resolving}
-        aria-label="Ver tarjeta profesional"
+        aria-label={`Ver ${label.toLowerCase()}`}
       >
         {isImage && resolvedUrl
-          ? <img src={resolvedUrl} alt="Tarjeta profesional" className={styles.thumbImg} draggable={false} />
+          ? <img src={resolvedUrl} alt={label} className={styles.thumbImg} draggable={false} />
           : (
             <div className={styles.thumbPdf}>
               <PdfIcon size={36} />
@@ -89,7 +92,7 @@ export default function TarjetaPreview({ displayUrl, rawPath, storagePath, compa
           )
         }
         <span className={styles.thumbOverlay} aria-hidden="true">
-          {resolving ? 'Cargando…' : 'Ver tarjeta'}
+          {resolving ? 'Cargando…' : label === 'Tarjeta profesional' ? 'Ver tarjeta' : 'Ver documento'}
         </span>
       </button>
     </div>
@@ -105,7 +108,7 @@ export default function TarjetaPreview({ displayUrl, rawPath, storagePath, compa
           onClick={e => { e.stopPropagation(); close(); }}
           role="dialog"
           aria-modal="true"
-          aria-label="Tarjeta profesional"
+          aria-label={label}
         >
           <button
             type="button"
@@ -118,7 +121,7 @@ export default function TarjetaPreview({ displayUrl, rawPath, storagePath, compa
               ? (
                 <img
                   src={resolvedUrl}
-                  alt="Tarjeta profesional"
+                  alt={label}
                   className={styles.viewerImg}
                   draggable={false}
                   onContextMenu={e => e.preventDefault()}
@@ -127,7 +130,7 @@ export default function TarjetaPreview({ displayUrl, rawPath, storagePath, compa
               : (
                 <iframe
                   src={viewUrl}
-                  title="Tarjeta profesional"
+                  title={label}
                   className={styles.viewerIframe}
                   sandbox="allow-same-origin allow-scripts"
                 />

@@ -82,6 +82,8 @@ export default function ResetPasswordPage() {
   const [error,  setError]  = useState('')
   const [loading, setLoading] = useState(false)
   const [done,   setDone]   = useState(false)
+  // true mientras iniciamos sesión con la clave nueva y saltamos al home.
+  const [entrando, setEntrando] = useState(false)
 
   useEffect(() => {
     // ¿Vino por enlace (hash con token de recovery válido)?
@@ -104,12 +106,36 @@ export default function ResetPasswordPage() {
     setMode('code')
   }, [])
 
-  // Aplica la nueva contraseña (la sesión de recovery ya está guardada).
+  // Tras cambiar la clave: iniciar sesión con la nueva contraseña y llevar al
+  // home YA autenticado. Recarga completa (no navigate) para que AuthProvider
+  // lea la sesión recién guardada en localStorage al montarse.
+  async function entrarYVolverAlHome(email, password) {
+    setEntrando(true)
+    try {
+      const { error: err } = await supabase.auth.signInWithPassword({ email, password })
+      if (err) throw err
+      window.location.replace('/')
+      return true
+    } catch {
+      // Fallback: la clave sí cambió; mostramos el éxito con botón manual.
+      setEntrando(false)
+      setDone(true)
+      return false
+    }
+  }
+
+  // Flujo por ENLACE: la sesión de recovery ya está guardada → PUT /auth/v1/user.
   async function aplicarPassword() {
     const { error: err } = await supabase.auth.updateUser({ password: pw1 })
     if (err) throw new Error(err.message || 'No se pudo actualizar la contraseña.')
-    await supabase.auth.signOut()
-    setDone(true)
+    let email = ''
+    try { email = JSON.parse(localStorage.getItem('sb_user') || '{}')?.email || '' } catch { /* no-op */ }
+    if (email) {
+      await entrarYVolverAlHome(email, pw1)
+    } else {
+      // Sin correo en el token: la sesión de recovery sigue viva → al home.
+      window.location.replace('/')
+    }
   }
 
   function validarPassword() {
@@ -143,9 +169,16 @@ export default function ResetPasswordPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: em, code: code.trim(), newPassword: pw1 }),
       })
+      // Sin funciones serverless (p. ej. `vite dev`), el rewrite SPA devuelve
+      // el index.html con 200: detectarlo evita un "código inválido" engañoso.
+      const ct = res.headers.get('content-type') || ''
+      if (!ct.includes('application/json')) {
+        throw new Error('El servicio de recuperación no está disponible en este entorno.')
+      }
       const data = await res.json().catch(() => ({}))
       if (!res.ok || !data?.success) throw new Error(data?.error || 'Código inválido o expirado.')
-      setDone(true)
+      // Clave cambiada en el servidor → entrar con ella y volver al home.
+      await entrarYVolverAlHome(em, pw1)
     } catch (err) {
       setError(err.message || 'No se pudo cambiar la contraseña.')
     } finally {
@@ -155,7 +188,8 @@ export default function ResetPasswordPage() {
 
   const strength      = getPasswordStrength(pw1)
   const rules         = PASSWORD_RULES.map(r => ({ ...r, ok: r.test(pw1) }))
-  const showChecklist = pw1.length > 0
+  // Requisitos SIEMPRE visibles: vacío → neutro; escribiendo → ✓ / ✗ por regla.
+  const pwEmpty       = pw1.length === 0
   const pwOk          = isPasswordValid(pw1) && pw1 === pw2
   const canSubmitCode = pwOk && /^\d{4,10}$/.test(code.trim()) && emailInput.trim().length > 3
 
@@ -177,33 +211,39 @@ export default function ResetPasswordPage() {
           <PwToggle shown={show1} onClick={() => setShow1(s => !s)} />
         </div>
 
-        {showChecklist && strength && (
-          <div className={styles.strengthRow}>
-            <div className={styles.strengthBars}>
-              {[1, 2, 3].map(lvl => (
-                <div key={lvl} className={styles.strengthBar}
-                  style={{ background: strength.level >= lvl ? strength.color : 'rgba(109,60,27,0.1)' }} />
-              ))}
-            </div>
-            <span className={styles.strengthLabel} style={{ color: strength.color }}>{strength.label}</span>
+        {/* Barra de fortaleza (siempre visible; vacía si no hay texto) */}
+        <div className={styles.strengthRow} aria-live="polite">
+          <div className={styles.strengthBars}>
+            {[1, 2, 3].map(lvl => (
+              <div key={lvl} className={styles.strengthBar}
+                style={{ background: strength && strength.level >= lvl ? strength.color : 'rgba(109,60,27,0.12)' }} />
+            ))}
           </div>
-        )}
-        {showChecklist && (
-          <ul className={styles.checklist}>
-            {rules.map(rule => (
-              <li key={rule.id} className={`${styles.checkItem} ${rule.ok ? styles.checkOk : styles.checkPending}`}>
+          <span className={styles.strengthLabel} style={{ color: strength ? strength.color : '#6f5c48' }}>
+            {strength ? strength.label : 'Fuerza'}
+          </span>
+        </div>
+        {/* Checklist de requisitos: siempre visible */}
+        <ul className={styles.checklist} aria-label="Requisitos de la contraseña">
+          {rules.map(rule => {
+            const estado = pwEmpty ? 'pending' : rule.ok ? 'ok' : 'fail'
+            return (
+              <li key={rule.id}
+                className={`${styles.checkItem} ${estado === 'ok' ? styles.checkOk : estado === 'fail' ? styles.checkFail : styles.checkPending}`}>
                 <span className={styles.checkIcon} aria-hidden="true">
-                  {rule.ok ? (
+                  {estado === 'ok' ? (
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
+                  ) : estado === 'fail' ? (
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
                   ) : (
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4"><circle cx="12" cy="12" r="8" /></svg>
                   )}
                 </span>
                 <span className={styles.checkLabel}>{rule.label}</span>
               </li>
-            ))}
-          </ul>
-        )}
+            )
+          })}
+        </ul>
       </div>
 
       <div className={styles.field}>
@@ -234,8 +274,12 @@ export default function ResetPasswordPage() {
           <p className={styles.muted}>Cargando…</p>
         )}
 
+        {entrando && (
+          <p className={styles.muted} aria-live="polite">Contraseña actualizada. Iniciando sesión…</p>
+        )}
+
         {/* Flujo por ENLACE — solo la contraseña */}
-        {mode === 'link' && !done && (
+        {mode === 'link' && !done && !entrando && (
           <form className={styles.form} onSubmit={submitLink}>
             {PasswordFields}
             {error && <p className={styles.error}>{error}</p>}
@@ -246,7 +290,7 @@ export default function ResetPasswordPage() {
         )}
 
         {/* Flujo por CÓDIGO — correo + código + contraseña */}
-        {mode === 'code' && !done && (
+        {mode === 'code' && !done && !entrando && (
           <form className={styles.form} onSubmit={submitCode}>
             <p className={styles.muted} style={{ marginBottom: 14 }}>
               Ingresa el <strong>código</strong> que te enviamos por correo y tu nueva contraseña.
@@ -286,15 +330,15 @@ export default function ResetPasswordPage() {
 
         {/* Éxito */}
         {done && (
-          <>
+          <div className={styles.successBox}>
             <div className={styles.successIcon}>
               <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <path d="M20 6 9 17l-5-5" />
               </svg>
             </div>
-            <p className={styles.successText}>¡Contraseña actualizada! Ya puedes iniciar sesión.</p>
-            <button type="button" className={styles.btnPrimary} onClick={() => navigate('/')}>Ir al inicio</button>
-          </>
+            <p className={styles.successText}>¡Contraseña actualizada! Inicia sesión con tu nueva contraseña.</p>
+            <button type="button" className={styles.btnPrimary} onClick={() => navigate('/')}>Ir al inicio de sesión</button>
+          </div>
         )}
       </div>
     </div>

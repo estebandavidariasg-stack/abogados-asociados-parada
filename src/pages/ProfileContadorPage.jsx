@@ -109,6 +109,8 @@ export default function ProfileContadorPage() {
   const [nombre, setNombre]           = useState('')
   const [apellido, setApellido]       = useState('')
   const [telefono, setTelefono]       = useState('')
+  const [cedula, setCedula]           = useState('')   // profiles.cedula (6-12 dígitos)
+  const [paginaWeb, setPaginaWeb]     = useState('')   // profiles.pagina_web
   const [universidad, setUniversidad] = useState('')
   // Modo "Otra" universidad: <select> muestra 'Otra' y revela un input libre.
   const [universidadOtra, setUniversidadOtra] = useState(false)
@@ -126,8 +128,6 @@ export default function ProfileContadorPage() {
   const [tarjetaArchivoUrl, setTarjetaArchivoUrl] = useState(null)
   const [tarjetaDisplayUrl, setTarjetaDisplayUrl] = useState(null)
   const [uploadingTarjeta, setUploadingTarjeta]   = useState(false)
-  // Datos de pago para el cobro de asesorías (Nequi, cuenta bancaria…).
-  const [datosPago, setDatosPago] = useState('')
   const [departamento, setDepartamento]     = useState('')
   const [barrio, setBarrio]                 = useState('')
   const [especialidades, setEspecialidades] = useState([])
@@ -147,6 +147,8 @@ export default function ProfileContadorPage() {
       setNombre(profile.nombre       || '')
       setApellido(profile.apellido   || '')
       setTelefono(profile.telefono   || '')
+      setCedula(profile.cedula       || '')
+      setPaginaWeb(profile.pagina_web || '')
       // Universidad: si el valor guardado no está en la lista → modo "Otra".
       const uniDB = profile.universidad || ''
       setUniversidad(uniDB)
@@ -166,7 +168,9 @@ export default function ProfileContadorPage() {
         ...espDB.filter(a => ESPECIALIDADES_CONTADURIA.includes(a)),
         ...(espLibre ? ['Otro'] : []),
       ])
-      setDireccion(profile.direccion  || '')
+      // direccion (perfil) y direccion_oficina (fila de confianza del chat)
+      // son el mismo dato: se leen con fallback y se guardan en ambas.
+      setDireccion(profile.direccion || profile.direccion_oficina || '')
       setDepartamento(profile.departamento || '')
       const ciudadDB = profile.ciudad || ''
       if (ciudadDB.includes(' - ')) {
@@ -181,7 +185,6 @@ export default function ProfileContadorPage() {
       setFotoUrl(profile.foto_url    || null)
       setVideoUrl(profile.video_url  || null)
       setTarjetaArchivoUrl(profile.tarjeta_archivo_url || null)
-      setDatosPago(profile.datos_pago || '')
       if (profile.foto_url) setFotoPreview(profile.foto_url)
 
       setInstagram(profile.instagram || '')
@@ -322,6 +325,10 @@ export default function ProfileContadorPage() {
     const especialidadesFinal = especialidades
       .filter(a => a !== 'Otro')
       .concat(especialidades.includes('Otro') && otroTexto ? [otroTexto] : [])
+    const cedulaLimpia = cedula.replace(/\D/g, '')
+    if (cedulaLimpia && !/^\d{6,12}$/.test(cedulaLimpia)) {
+      setError('La cédula debe tener entre 6 y 12 dígitos.'); return
+    }
     setSaving(true); setError(null); setMsg(null)
     try {
       const headers = await getAuthHeaders()
@@ -333,13 +340,15 @@ export default function ProfileContadorPage() {
           body: JSON.stringify({
             nombre, apellido, telefono, universidad,
             experiencia, direccion,
+            direccion_oficina: direccion.trim() || null,
+            cedula: cedulaLimpia || null,
+            pagina_web: paginaWeb.trim() || null,
             ciudad: barrio ? `${ciudad} - ${barrio}` : ciudad,
             departamento,
             // Reusamos la columna area_derecho para almacenar especialidades
             area_derecho: especialidadesFinal.join(', '),
             descripcion, foto_url: fotoUrl, video_url: videoUrl,
             tarjeta_archivo_url: tarjetaArchivoUrl || null,
-            datos_pago: datosPago.trim() || null,
             instagram, linkedin, facebook, twitter, whatsapp, tiktok,
           }),
         }
@@ -504,6 +513,20 @@ export default function ProfileContadorPage() {
             </div>
 
             <div className={styles.field}>
+              <label className={styles.label}>Cédula</label>
+              <input type="text" inputMode="numeric" maxLength={12} className={styles.input} placeholder="Número de cédula"
+                value={cedula} onChange={e => setCedula(e.target.value.replace(/\D/g, ''))} />
+            </div>
+            <div className={styles.field}>
+              <label className={styles.label}>
+                Página web
+                <span className={styles.optional}>(opcional)</span>
+              </label>
+              <input type="url" className={styles.input} placeholder="https://tusitio.com"
+                value={paginaWeb} onChange={e => setPaginaWeb(e.target.value)} />
+            </div>
+
+            <div className={styles.field}>
               <label className={styles.label}>Universidad</label>
               <select
                 className={styles.input}
@@ -599,17 +622,6 @@ export default function ProfileContadorPage() {
             <div className={styles.field}>
               <label className={styles.label}>Dirección de oficina</label>
               <input type="text" className={styles.input} placeholder="Calle 123 # 45-67, Of. 101" value={direccion} onChange={e => setDireccion(e.target.value)} />
-            </div>
-
-            {/* ── Datos de pago (para el cobro de asesorías) ── */}
-            <div className={`${styles.field} ${styles.fullWidth}`}>
-              <label className={styles.label}>Datos de pago (para cobrar asesorías)</label>
-              <input type="text" className={styles.input}
-                placeholder="Ej: Nequi 300 123 4567 · Bancolombia ahorros 123-456789-00"
-                value={datosPago} onChange={e => setDatosPago(e.target.value)} />
-              <p style={{ fontSize: '0.75rem', color: 'rgba(109,60,27,0.6)', marginTop: 6 }}>
-                El cliente verá estos datos cuando le cobres una asesoría. El pago es directo a ti.
-              </p>
             </div>
 
             {/* Descripción */}

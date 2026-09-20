@@ -1,6 +1,6 @@
 import nodemailer from 'nodemailer'
 import crypto from 'node:crypto'
-import { renderEmailHtml, renderShell, infoBox, emailButton, em, C, FONT_SERIF } from './_lib/emailTemplate.js'
+import { renderEmailHtml, renderShell, infoBox, emailButton, codeBox, em, C, FONT_SERIF } from './_lib/emailTemplate.js'
 import { renderTrazabilidadEmail, asuntoTrazabilidad } from './_lib/emailTrazabilidad.js'
 import { getCallerProfile, lawyerAssignedToRoom } from './_lib/adminAuth.js'
 
@@ -195,8 +195,36 @@ function emailRechazado({ nombreAbogado, rol, ctaUrl, cuentaEliminada }) {
   }
 }
 
+// Confirmación al CLIENTE con su número de radicado. Los datos salen de la
+// fila `pqr` (resuelta server-side por radicado), nunca del navegador.
+function emailPqrRadicado({ tipo, radicado, mensaje, fecha }) {
+  const tipoLabel = tipo === 'queja' ? 'Queja' : tipo === 'reclamo' ? 'Reclamo' : 'Petición'
+  const subjectLine = `Radicado ${radicado} · ${tipoLabel} recibida`
+  const campo = (label, value) =>
+    `<p style="margin:0 0 2px;font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:${C.muted};">${label}</p>
+     <p style="margin:0 0 12px;font-size:14px;color:${C.navy};font-weight:600;">${esc(value) || '—'}</p>`
+  const inner =
+    `<p style="margin:0 0 18px;font-size:15px;line-height:1.7;color:${C.body};text-align:center;">
+       Recibimos tu ${tipoLabel.toLowerCase()}. Este es tu número de radicado para hacer seguimiento:
+     </p>
+     ${codeBox(radicado)}
+     ${infoBox(
+       campo('Tipo de solicitud', tipoLabel) +
+       campo('Fecha de radicación', fecha) +
+       `<p style="margin:6px 0 2px;font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:${C.muted};">Resumen</p>
+        <p style="margin:0;font-size:14px;line-height:1.6;color:${C.body};white-space:pre-wrap;">${esc(mensaje)}</p>`
+     )}
+     <p style="margin:22px 0 0;font-size:13px;line-height:1.7;color:${C.muted};text-align:center;">
+       Nuestro equipo la revisará y te responderá por este mismo correo. Conserva el radicado para cualquier consulta.
+     </p>`
+  return {
+    subject: subjectLine,
+    html: renderShell({ subjectLine, preheader: `Tu radicado es ${radicado}.`, innerHtml: inner }),
+  }
+}
+
 // PQR del cliente al equipo administrativo. Ficha con los datos + el mensaje.
-function emailPqr({ tipo, clientNombre, clientEmail, codigoReferencia, mensaje, ctaUrl }) {
+function emailPqr({ tipo, clientNombre, clientEmail, codigoReferencia, radicado, mensaje, ctaUrl }) {
   const tipoLabel = tipo === 'queja' ? 'Queja' : tipo === 'reclamo' ? 'Reclamo' : 'Petición'
   const subjectLine = `Nueva PQR: ${tipoLabel}`
   const campo = (label, value) =>
@@ -207,6 +235,7 @@ function emailPqr({ tipo, clientNombre, clientEmail, codigoReferencia, mensaje, 
        Un cliente envió una <strong style="color:#6d3c1b;font-weight:700;">${tipoLabel.toLowerCase()}</strong> desde la plataforma.
      </p>
      ${infoBox(
+       (radicado ? campo('Radicado', radicado) : '') +
        campo('Cliente', clientNombre) +
        campo('Correo', clientEmail) +
        (codigoReferencia ? campo('Referencia', codigoReferencia) : '') +
@@ -649,7 +678,7 @@ export default async function handler(req, res) {
     // del admin (no a destinatarios arbitrarios), así que el peor abuso es
     // ruido en una sola bandeja.
     if (type === 'pqr_received') {
-      const { tipo, clientNombre, clientEmail, codigoReferencia, mensaje } = data || {}
+      const { tipo, clientNombre, clientEmail, codigoReferencia, radicado, mensaje } = data || {}
       if (!tipo || !mensaje) {
         return res.status(400).json({ error: 'Faltan datos de la PQR.' })
       }
@@ -658,6 +687,7 @@ export default async function handler(req, res) {
         clientNombre,
         clientEmail,
         codigoReferencia,
+        radicado: radicado ? String(radicado).slice(0, 40) : null,
         mensaje: String(mensaje).slice(0, 2000),
         ctaUrl: `${SITE_BASE}/admin`,
       })
@@ -668,6 +698,59 @@ export default async function handler(req, res) {
         html,
       })
       return res.status(200).json({ ok: true, sent: 'pqr_received' })
+    }
+
+    // ── Confirmación de radicado al CLIENTE que envió la PQR ──
+    // El cuerpo solo trae el `radicado`: el destinatario y el contenido se
+    // resuelven server-side desde la fila de `pqr` con el service role. Así
+    // este endpoint no puede usarse como relé para enviar correo a una
+    // dirección arbitraria (mismo criterio que `new_consultation`).
+    if (type === 'pqr_radicado') {
+      const radicado = String(data?.radicado || '').trim()
+      if (!/^PQR-\d{8}-\d{3,6}$/.test(radicado)) {
+        return res.status(400).json({ error: 'Radicado inválido.' })
+      }
+      if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+        return res.status(500).json({ error: 'Configuración del servidor incompleta.' })
+      }
+      let fila = null
+      try {
+        const r = await fetch(
+          `${SUPABASE_URL}/rest/v1/pqr?radicado=eq.${encodeURIComponent(radicado)}` +
+          `&select=tipo,mensaje,client_email,created_at&limit=1`,
+          {
+            headers: {
+              apikey: SUPABASE_SERVICE_ROLE_KEY,
+              Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+            },
+          }
+        )
+        const rows = await r.json().catch(() => [])
+        fila = Array.isArray(rows) ? rows[0] : null
+      } catch (e) {
+        console.error('[notify] pqr_radicado lookup falló:', e?.message || e)
+      }
+      // Sin fila o sin correo del cliente no hay a quién escribirle; no es un
+      // error del usuario (la PQR ya quedó registrada).
+      if (!fila?.client_email) {
+        return res.status(200).json({ ok: true, sent: false })
+      }
+      const fecha = new Date(fila.created_at || Date.now()).toLocaleString('es-CO', {
+        timeZone: 'America/Bogota', dateStyle: 'long', timeStyle: 'short',
+      })
+      const { subject, html } = emailPqrRadicado({
+        tipo: fila.tipo,
+        radicado,
+        mensaje: String(fila.mensaje || '').slice(0, 2000),
+        fecha,
+      })
+      await transporter.sendMail({
+        from: `"Parada Bridge" <${process.env.GMAIL_USER}>`,
+        to: fila.client_email,
+        subject,
+        html,
+      })
+      return res.status(200).json({ ok: true, sent: 'pqr_radicado' })
     }
 
     // ── Ficha de contacto cruzada (cliente ↔ abogado) ──

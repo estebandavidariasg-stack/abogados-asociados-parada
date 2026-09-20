@@ -104,8 +104,8 @@ export default function AdminStats({
         ]
       case 'resenas':
         return [
-          { n: resenasTotal, label: 'Reseñas recibidas', icon: 'star' },
-          { n: resenasAprob, label: 'Aprobadas (en el home)', tone: 'ok', icon: 'check' },
+          { n: resenasTotal, label: 'Opiniones recibidas', icon: 'star' },
+          { n: resenasAprob, label: 'Publicadas en el inicio', tone: 'ok', icon: 'check' },
           { n: Math.max(0, resenasTotal - resenasAprob), label: 'Por moderar', tone: (resenasTotal - resenasAprob) ? 'warn' : 'ok', icon: 'clock' },
           { n: approved.length, label: 'Profesionales', icon: 'users' },
         ]

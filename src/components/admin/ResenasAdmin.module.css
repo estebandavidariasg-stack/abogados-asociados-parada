@@ -16,9 +16,71 @@
 .tab:hover { color: #6d3c1b; }
 .tabOn { color: #6d3c1b; border-bottom-color: #c9a84c; }
 
-/* Barra de filtros: chips de profesión + búsqueda por profesional */
+/* ── Barra de filtros ─────────────────────────────────────────────────────
+   Dos niveles: arriba buscar + rango de fechas (lo que se escribe), abajo los
+   grupos de chips con su etiqueta (lo que se elige). Antes los chips iban
+   todos seguidos en una fila y no se distinguía un grupo de otro. */
 .filterBar {
-  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid rgba(109,60,27,0.12);
+  border-radius: 14px;
+  background: #fffdfa;
+}
+
+/* Fila 1: búsqueda ancha + fechas + limpiar */
+.filtroFila {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.filtroFila > .filtroProf { flex: 1 1 260px; }
+
+.fechas { display: flex; align-items: flex-end; gap: 8px; flex-wrap: wrap; }
+.campoFecha { display: flex; flex-direction: column; gap: 4px; }
+.campoFecha > span {
+  font-size: 0.6rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
+  color: #967f6b; padding-left: 2px;
+}
+.dateInput {
+  border: 1px solid rgba(109,60,27,0.18); background: #fff; border-radius: 10px;
+  font-family: inherit; font-size: 0.8rem; color: #4a3726; padding: 8px 10px; height: 38px;
+  color-scheme: light; font-variant-numeric: tabular-nums;
+}
+.dateInput:focus { outline: none; border-color: #c9a84c; box-shadow: 0 0 0 3px rgba(201,168,76,0.16); }
+
+.btnLimpiar {
+  height: 38px; padding: 0 14px; border-radius: 10px; cursor: pointer;
+  border: 1px solid rgba(178,59,59,0.35); background: #fff; color: #b23b3b;
+  font-family: inherit; font-size: 0.78rem; font-weight: 700; white-space: nowrap;
+  transition: background 0.18s, border-color 0.18s;
+}
+.btnLimpiar:hover { background: rgba(178,59,59,0.07); border-color: rgba(178,59,59,0.6); }
+
+/* Fila 2: grupos de chips, cada uno con su etiqueta */
+.grupos {
+  display: flex;
+  gap: 10px 26px;
+  flex-wrap: wrap;
+  padding-top: 12px;
+  border-top: 1px solid rgba(109,60,27,0.1);
+}
+.grupo { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-width: 0; }
+.grupoLabel {
+  font-size: 0.6rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
+  color: #967f6b; white-space: nowrap;
+}
+
+@media (max-width: 620px) {
+  .filtroFila > .filtroProf { flex: 1 1 100%; }
+  .fechas { width: 100%; }
+  .campoFecha { flex: 1 1 0; }
+  .dateInput { width: 100%; }
+  .btnLimpiar { width: 100%; }
+  .grupo { width: 100%; }
 }
 
 /* Chips de profesión (Todos / Abogados / Contadores) */
@@ -39,7 +101,7 @@
 /* Filtro por profesional (búsqueda instantánea) */
 .filtroProf {
   position: relative; display: flex; align-items: center;
-  max-width: 420px; flex: 1 1 260px; min-width: 220px;
+  flex: 1 1 260px; min-width: 220px;
 }
 .searchIcon {
   position: absolute; left: 12px; font-size: 1rem; color: #a5978a; pointer-events: none;
@@ -131,4 +193,55 @@
 
 @media (prefers-reduced-motion: reduce) {
   .btnAprobar:hover:not(:disabled) { transform: none; }
+}
+
+/* Etiqueta de origen de la opinión (chat / correo) en cada tarjeta. */
+.origenChip {
+  font-size: 0.62rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
+  color: #6d3c1b; background: rgba(109,60,27,0.08); border: 1px solid rgba(109,60,27,0.16);
+  padding: 2px 8px; border-radius: 999px; white-space: nowrap;
+}
+
+/* Ficha de PQRS */
+.pqrTipo {
+  font-size: 0.64rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
+  color: #6d3c1b; background: rgba(109,60,27,0.09); padding: 2px 9px; border-radius: 999px;
+}
+.radicado {
+  font-size: 0.78rem; font-weight: 700; letter-spacing: 0.03em; color: #8a5a10;
+}
+.pendiente {
+  font-size: 0.64rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
+  color: #8a5a10; background: rgba(230,160,40,0.16); padding: 2px 8px; border-radius: 999px;
+}
+.atendida {
+  font-size: 0.64rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
+  color: #1f7a34; background: rgba(76,175,80,0.16); padding: 2px 8px; border-radius: 999px;
+}
+
+/* ── Paginación (aparece solo cuando la lista supera una página) ── */
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding-top: 4px;
+}
+.pagerBtn {
+  height: 36px; padding: 0 16px; border-radius: 10px; cursor: pointer;
+  border: 1px solid rgba(109,60,27,0.2); background: #fff; color: #6d3c1b;
+  font-family: inherit; font-size: 0.8rem; font-weight: 700; white-space: nowrap;
+  transition: background 0.18s, border-color 0.18s;
+}
+.pagerBtn:hover:not(:disabled) { background: rgba(109,60,27,0.06); border-color: rgba(109,60,27,0.4); }
+.pagerBtn:disabled { opacity: 0.4; cursor: default; }
+.pagerInfo { font-size: 0.8rem; font-weight: 600; color: #8a735f; font-variant-numeric: tabular-nums; }
+
+/* En móvil los dos botones comparten la primera fila y el contador queda
+   centrado debajo; si no, "Siguiente" cae solo y se ve desalineado. */
+@media (max-width: 560px) {
+  .pager { gap: 10px 8px; }
+  .pagerBtn { flex: 1 1 0; padding: 0 10px; }
+  .pagerInfo { order: 2; flex: 1 1 100%; text-align: center; }
 }

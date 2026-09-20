@@ -165,33 +165,10 @@ function Fila({ items, carrusel, onAbrirProfesional }) {
   )
 }
 
-// ── Testimonios de ejemplo (fallback de ÚLTIMO recurso) ────────────────────
-// Sólo se muestran cuando NO existe ninguna reseña real aprobada todavía. En
-// cuanto haya reseñas reales, éstas se muestran solas (sin mezclar ejemplos)
-// para no exhibir atribuciones falsas junto a datos reales. Cada ejemplo
-// referencia a un profesional por índice de la lista pública para demostrar el
-// click-through (se resuelve en runtime contra /api/professionals, así siempre
-// apunta a alguien real y aprobado).
-const MOCK_TESTIMONIOS = [
-  { texto: 'Necesitaba orientación en un proceso de sucesión y no sabía por dónde empezar. En menos de un día ya estaba hablando con una abogada que me explicó todo con claridad. Excelente acompañamiento.', nombre: 'Laura Restrepo', rol: 'Cliente · Bogotá', rating: 5, imagen: null, profRefIndex: 0, profRefRol: 'abogado' },
-  { texto: 'Como dueño de una pyme, el tema tributario me abrumaba. El contador que me asignaron organizó mi declaración de renta y me ahorró varios dolores de cabeza. Muy recomendados.', nombre: 'Andrés Gómez', rol: 'Cliente · Medellín', rating: 5, imagen: null, profRefIndex: 0, profRefRol: 'contador' },
-  { texto: 'Tenía dudas sobre un contrato laboral y la asesoría fue rápida, seria y sin vueltas. Me sentí acompañada en todo el proceso y con respuestas concretas.', nombre: 'Valentina Ríos', rol: 'Cliente · Cali', rating: 4.5, imagen: null, profRefIndex: 1, profRefRol: 'abogado' },
-  { texto: 'Consulté por un tema de derecho de familia bastante delicado. El trato fue humano y profesional, y siempre supe cuáles eran mis opciones reales según la ley.', nombre: 'Carlos Mendoza', rol: 'Cliente · Barranquilla', rating: 5, imagen: null, profRefIndex: 2, profRefRol: 'abogado' },
-  { texto: 'La plataforma me conectó con un abogado de derecho penal que respondió mis dudas con paciencia. Todo transparente, incluido el costo antes de empezar.', nombre: 'Diana Vargas', rol: 'Cliente · Bucaramanga', rating: 4.5, imagen: null, profRefIndex: 3, profRefRol: 'abogado' },
-  { texto: 'Manejo varios locales y necesitaba poner al día la contabilidad. El profesional fue puntual, ordenado y me dejó todo claro para el cierre del año fiscal.', nombre: 'Jorge Patiño', rol: 'Cliente · Pereira', rating: 5, imagen: null, profRefIndex: 1, profRefRol: 'contador' },
-]
-
-// Opiniones adicionales de PRUEBA para el desplegable "Más opiniones" de cada
-// tarjeta. Solo acompañan a los testimonios de ejemplo (cuando no hay reseñas
-// reales); con reseñas reales, el desplegable muestra otras reseñas REALES del
-// mismo profesional (nunca se mezclan ejemplos con datos reales).
-const MOCK_EXTRAS = [
-  { nombre: 'Camila Torres', rating: 5, texto: 'Atención impecable de principio a fin. Volvería a consultar sin dudarlo.' },
-  { nombre: 'Felipe Naranjo', rating: 4.5, texto: 'Respuesta rápida y honesta sobre mis opciones. Muy profesional.' },
-  { nombre: 'Marcela Duarte', rating: 5, texto: 'Me guiaron paso a paso y el costo fue claro desde el inicio.' },
-  { nombre: 'Ricardo Salas', rating: 4.5, texto: 'Excelente disposición y conocimiento. Todo fue más simple de lo que creí.' },
-  { nombre: 'Paola Cifuentes', rating: 5, texto: 'Resolvieron mi duda tributaria en una sola sesión. Muy organizados.' },
-]
+// El inicio muestra SOLO opiniones reales aprobadas por el admin. Antes había
+// testimonios de ejemplo como respaldo, pero eran textos y nombres inventados
+// que el público leía como reales y el admin no podía retirar desde el panel.
+// Sin opiniones aprobadas, la sección entera no se renderiza.
 
 // Mínimo de tarjetas por fila para que una copia desborde el ancho visible y el
 // bucle del carrusel realmente se mueva (cada tarjeta mide 340px).
@@ -205,15 +182,9 @@ function rellenar(lista, min) {
   return out
 }
 
-// Ítems base (sin profesional resuelto todavía) para que el carrusel tenga
-// contenido desde el PRIMER render y arranque el auto-avance de inmediato; se
-// reemplazan por los datos reales/resueltos en cuanto carga `cargar()`.
-const SEED_ITEMS = rellenar(
-  MOCK_TESTIMONIOS.map(t => ({
-    texto: t.texto, nombre: t.nombre, rol: t.rol, rating: t.rating, imagen: t.imagen, profesional: null,
-  })),
-  MIN_TARJETAS,
-)
+// Sin semilla: el carrusel arranca vacío y se llena con las opiniones reales
+// cuando responde `cargar()`. La sección no se muestra hasta entonces.
+const SEED_ITEMS = []
 
 export default function TestimoniosSection() {
   // Arranca con contenido (SEED) para que el carrusel monte y se mueva ya.
@@ -329,24 +300,9 @@ export default function TestimoniosSection() {
         }
       } catch { /* sin reseñas reales → ejemplos */ }
 
-      // 3) Con reseñas reales: se muestran solas, repetidas hasta llenar la cinta
-      //    para que se mueva. Sin ninguna: ejemplos, cada uno con un profesional
-      //    real para demostrar el flujo ver-perfil → iniciar-consulta.
-      let finales
-      if (reales.length) {
-        finales = rellenar(reales, MIN_TARJETAS)
-      } else {
-        finales = MOCK_TESTIMONIOS.map((t, i) => {
-          const lista = porRol[t.profRefRol] || combinados
-          const prof = (lista.length ? lista[t.profRefIndex % lista.length] : null) || siguienteProf()
-          return {
-            texto: t.texto, nombre: t.nombre, rol: t.rol, rating: t.rating, imagen: t.imagen, profesional: prof,
-            // Opiniones de prueba plegadas (2 por tarjeta, rotando la lista).
-            extras: [MOCK_EXTRAS[i % MOCK_EXTRAS.length], MOCK_EXTRAS[(i + 2) % MOCK_EXTRAS.length]],
-          }
-        })
-        finales = rellenar(finales, MIN_TARJETAS)
-      }
+      // Solo opiniones reales, repetidas hasta llenar la cinta para que se
+      // mueva. Si no hay ninguna aprobada, la sección no se muestra.
+      const finales = reales.length ? rellenar(reales, MIN_TARJETAS) : []
 
       if (!cancelado) setItems(finales)
     }
@@ -357,6 +313,9 @@ export default function TestimoniosSection() {
 
   // Bloquear el scroll del body mientras el modal del profesional está abierto
   // lo maneja internamente LawyerCard (efecto sobre document.body.overflow).
+
+  // Sin opiniones aprobadas no hay nada que mostrar: la sección desaparece.
+  if (!items.length) return null
 
   const fila1 = items
   const fila2 = [...items].reverse()

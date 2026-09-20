@@ -29,9 +29,27 @@ export function parseMiles(v) {
   return Number(String(v ?? '').replace(/\D/g, '')) || 0
 }
 
+/* Aviso de apertura de la consulta: toda consulta tiene cobro. Se pinta como
+   banner destacado en los tres chats (cliente, abogado y contador). No se
+   guarda como mensaje: el cliente no puede escribir mensajes de sistema
+   (RLS) y así el profesional lo ve siempre, aunque entre días después. */
+export const AVISO_COBRO_CLIENTE = {
+  titulo: 'Esta consulta tiene cobro',
+  texto:
+    'El profesional definirá el valor antes de asesorarte. Lo verás aquí mismo en el chat ' +
+    'y el pago se hace directamente a él.',
+}
+
+export const AVISO_COBRO_PROFESIONAL = {
+  titulo: 'Define el cobro antes de asesorar',
+  texto:
+    'Esta consulta tiene cobro obligatorio. Usa el botón Cobro del encabezado para fijar el valor; ' +
+    'el cliente te paga directamente.',
+}
+
 // Etiquetas legibles de estado (para chips).
 export const ESTADO_COBRO_LABEL = {
-  gratuita:  'Gratuita',
+  gratuita:  'Sin valor',   // estado heredado: ya no se crean consultas sin cobro
   pendiente: 'Pendiente de pago',
   pagado:    'Pagado',
 }
@@ -50,9 +68,11 @@ export async function fetchCobroProfesional(roomId) {
   return Array.isArray(data) && data.length ? data[0] : null
 }
 
-// Fija/edita el cobro (monto <= 0 → gratuita). Persiste datos_pago en el perfil
-// si se envía uno nuevo. Devuelve la fila del cobro.
-export async function fijarCobro({ roomId, monto, nota, datosPago }) {
+// Fija/edita el cobro (el valor es obligatorio y mayor a 0). La cuenta para
+// consignar es el certificado bancario del profesional, así que ya no se envía
+// `p_datos_pago` (el RPC lo acepta opcional por compatibilidad).
+// Devuelve la fila del cobro.
+export async function fijarCobro({ roomId, monto, nota }) {
   const headers = await getAuthHeaders()
   const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/fijar_cobro_asesoria`, {
     method: 'POST',
@@ -61,7 +81,7 @@ export async function fijarCobro({ roomId, monto, nota, datosPago }) {
       p_room_id: roomId,
       p_monto: Number(monto) || 0,
       p_nota: nota || null,
-      p_datos_pago: datosPago || null,
+      p_datos_pago: null,
     }),
   })
   if (!res.ok) throw new Error(await res.text().catch(() => 'No se pudo fijar el cobro'))

@@ -238,12 +238,53 @@ export default function PagosCobrosAdmin() {
 
   useEffect(() => { cargar() }, [])
 
+  // El panel se cargaba UNA sola vez al montarse: si el pago se confirmaba
+  // después (webhook de Wompi, PSE del profesional), la tabla seguía diciendo
+  // "Pendiente" hasta pulsar "↻ Actualizar". Ahora, MIENTRAS haya algo
+  // pendiente, se vigila cada 8 s. El sondeo es BARATO a propósito: pide solo
+  // id+estado de las dos tablas y, si detecta un cambio, recarga el panel
+  // entero. Así no se repiten las seis consultas completas cada 8 s.
+  const hayPendientes = pagos.some(p => p.estado === 'pendiente')
+  const firmaEstados = useRef('')
+
+  useEffect(() => {
+    firmaEstados.current = pagos.map(p => `${p.id}:${p.estado}`).sort().join('|')
+  }, [pagos])
+
+  useEffect(() => {
+    if (!hayPendientes) return
+    let cancelado = false
+
+    async function vigilar() {
+      if (document.hidden || cancelado) return
+      try {
+        const headers = await getAuthHeaders()
+        const res = await fetch(
+          `${SUPABASE_URL}/rest/v1/pagos_profesional?select=id,estado`, { headers }
+        )
+        if (!res.ok) return
+        const filas = await res.json()
+        if (!Array.isArray(filas) || cancelado) return
+        const firma = filas.map(p => `${p.id}:${p.estado}`).sort().join('|')
+        if (firma !== firmaEstados.current) cargar({ silencioso: true })
+      } catch { /* siguiente vuelta */ }
+    }
+
+    const t = setInterval(vigilar, 8000)
+    document.addEventListener('visibilitychange', vigilar)
+    return () => {
+      cancelado = true
+      clearInterval(t)
+      document.removeEventListener('visibilitychange', vigilar)
+    }
+  }, [hayPendientes])
+
   // Cualquier cambio de filtro vuelve a la página 1.
   useEffect(() => { setPageP(1) }, [qP, profFilter, estadoP, desdeP, hastaP, perPageP])
   useEffect(() => { setPageC(1) }, [qC, estadoC, desdeC, hastaC, perPageC])
 
-  async function cargar() {
-    setLoading(true)
+  async function cargar({ silencioso = false } = {}) {
+    if (!silencioso) setLoading(true)
     try {
       const headers = await getAuthHeaders()
       const [pRes, coRes, prRes, gRes, aRes, cfgRes] = await Promise.all([
@@ -264,7 +305,7 @@ export default function PagosCobrosAdmin() {
       setConfig(c0)
       if (c0) { setPctEmpresa(String(c0.pct_empresa ?? '')); setPctGestor(String(c0.comision_gestor_pct ?? '')) }
     } catch { /* noop */ }
-    finally { setLoading(false) }
+    finally { if (!silencioso) setLoading(false) }
   }
 
   function flash(t) { setMsg(t); setTimeout(() => setMsg(''), 2800) }
@@ -347,6 +388,47 @@ export default function PagosCobrosAdmin() {
       setPayError(err.message || 'No se pudo completar el pago.')
     } finally {
       setPayBusy(false)
+    }
+  }
+
+  // ── Confirmar a mano el pago de un profesional ──
+  // El estado se pinta al instante en la tabla (sin esperar el refetch) y la
+  // RPC deja la luz verde + la ficha de contacto en el chat de esa consulta.
+  const [confModal, setConfModal] = useState(null)   // { pago } | null
+  const [confBusy, setConfBusy]   = useState(false)
+
+  async function confirmarPagoProfesional() {
+    const pago = confModal?.pago
+    if (!pago || confBusy) return
+    setConfBusy(true)
+    try {
+      const headers = await getAuthHeaders()
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/confirmar_pago_profesional`, {
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ p_pago_id: pago.id }),
+      })
+      if (!res.ok) {
+        const j = await res.json().catch(() => null)
+        const msg = String(j?.message || '')
+        // Mientras el SQL no esté aplicado, PostgREST responde que la función
+        // no existe: mejor decir qué falta que repetir el error crudo.
+        if (/could not find the function/i.test(msg)) {
+          throw new Error('Falta aplicar docs/sql/fichas-contacto-2026-09-17.sql en Supabase.')
+        }
+        if (/no autorizado/i.test(msg)) throw new Error('No autorizado para confirmar este pago.')
+        throw new Error(msg || 'No se pudo confirmar el pago.')
+      }
+      // Instantáneo: no esperamos al refetch para mostrar "Pagado".
+      const ahora = new Date().toISOString()
+      setPagos(ps => ps.map(x => (x.id === pago.id ? { ...x, estado: 'pagado', pagado_at: ahora } : x)))
+      setConfModal(null)
+      flash('Pago confirmado. Se enviaron las fichas de contacto al chat.')
+      cargar({ silencioso: true })
+    } catch (err) {
+      flash(err.message || 'No se pudo confirmar el pago.')
+    } finally {
+      setConfBusy(false)
     }
   }
 
@@ -621,7 +703,7 @@ export default function PagosCobrosAdmin() {
                 comisión que se genera para el gestor.
               </p>
             </div>
-            <button className={styles.refresh} onClick={cargar}>↻ Actualizar</button>
+            <button className={styles.refresh} onClick={() => cargar()}>↻ Actualizar</button>
           </header>
 
           {/* Resumen */}
@@ -728,6 +810,7 @@ export default function PagosCobrosAdmin() {
                       <th>Monto</th>
                       <th>Estado</th>
                       <th>Comisión gestor</th>
+                      <th>Acción</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -758,6 +841,13 @@ export default function PagosCobrosAdmin() {
                             </>
                           ) : <span className={styles.muted}>—</span>}
                         </td>
+                        <td>
+                          {p.estado === 'pendiente' ? (
+                            <button className={styles.payBtn} onClick={() => setConfModal({ pago: p })}>
+                              Confirmar pago
+                            </button>
+                          ) : <span className={styles.muted}>—</span>}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -780,7 +870,7 @@ export default function PagosCobrosAdmin() {
                 pago suben al inicio para que las atiendas primero.
               </p>
             </div>
-            <button className={styles.refresh} onClick={cargar}>↻ Actualizar</button>
+            <button className={styles.refresh} onClick={() => cargar()}>↻ Actualizar</button>
           </header>
 
           {/* Resumen */}
@@ -941,7 +1031,7 @@ export default function PagosCobrosAdmin() {
                 le paga a la empresa.
               </p>
             </div>
-            <button className={styles.refresh} onClick={cargar}>↻ Actualizar</button>
+            <button className={styles.refresh} onClick={() => cargar()}>↻ Actualizar</button>
           </header>
 
           {/* Config de comisión — controles a la izquierda, explicación al lado
@@ -1011,7 +1101,9 @@ export default function PagosCobrosAdmin() {
                   { k: 'todos', label: 'Todas', n: asesorias.length },
                   { k: 'pagado', label: 'Pagadas', n: asesorias.filter(a => a.estado === 'pagado').length },
                   { k: 'pendiente', label: 'Pendientes', n: asesorias.filter(a => a.estado === 'pendiente').length },
-                  { k: 'gratuita', label: 'Gratuitas', n: asesorias.filter(a => a.estado === 'gratuita').length },
+                  // 'gratuita' es un estado heredado (ya no se puede crear):
+                  // se muestra como "Sin valor" para no perder el histórico.
+                  { k: 'gratuita', label: 'Sin valor', n: asesorias.filter(a => a.estado === 'gratuita').length },
                 ]}
                 value={estadoA}
                 onChange={setEstadoA}
@@ -1052,9 +1144,9 @@ export default function PagosCobrosAdmin() {
                       </td>
                       <td className={styles.strong}>{a._nombre}</td>
                       <td className={styles.num}>{a._cedula || '—'}</td>
-                      <td className={styles.num}>{a.estado === 'gratuita' ? 'Gratuita' : fmtCOP(a.monto)}</td>
+                      <td className={styles.num}>{a.estado === 'gratuita' ? '—' : fmtCOP(a.monto)}</td>
                       <td>{a.estado === 'gratuita'
-                        ? <span className={styles.muted}>Gratuita</span>
+                        ? <span className={styles.muted}>Sin valor</span>
                         : <EstadoPill estado={a.estado === 'pagado' ? 'pagado' : 'pendiente'} />}</td>
                       <td className={styles.num}>{a._comision > 0 ? fmtCOP(a._comision) : <span className={styles.muted}>—</span>}</td>
                       <td className={styles.num}>{a.recibo_num || <span className={styles.muted}>—</span>}</td>
@@ -1065,6 +1157,49 @@ export default function PagosCobrosAdmin() {
             </div>
           )}
         </section>
+      )}
+
+      {/* ── Modal: confirmar el pago de un profesional ──
+          Confirmar es difícil de deshacer (habilita los datos de contacto y
+          genera la comisión del gestor), así que se pide confirmación. */}
+      {confModal && createPortal(
+        <div
+          className={styles.payOverlay}
+          role="dialog" aria-modal="true" aria-labelledby="confModalTitle"
+          onClick={() => !confBusy && setConfModal(null)}
+        >
+          <div className={styles.payModal} onClick={(e) => e.stopPropagation()}>
+            <h3 id="confModalTitle" className={styles.payTitle}>Confirmar pago del profesional</h3>
+            <p className={styles.paySub}>
+              {confModal.pago._nombre !== '—' ? <strong>{confModal.pago._nombre}</strong> : 'Profesional'} ·{' '}
+              <strong>{fmtCOP(confModal.pago.monto)}</strong>
+            </p>
+            <p className={styles.payHint}>
+              Al confirmar se habilitan los datos de contacto de esa consulta: las fichas
+              del profesional y del cliente quedan publicadas en el chat. Si hay gestor,
+              también nace su comisión.
+            </p>
+            <div className={styles.payActions}>
+              <button
+                type="button"
+                className={styles.payCancel}
+                onClick={() => setConfModal(null)}
+                disabled={confBusy}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className={styles.payConfirm}
+                onClick={confirmarPagoProfesional}
+                disabled={confBusy}
+              >
+                {confBusy ? 'Confirmando…' : 'Confirmar pago'}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
 
       {/* ── Modal: marcar comisión pagada + comprobante obligatorio ── */}

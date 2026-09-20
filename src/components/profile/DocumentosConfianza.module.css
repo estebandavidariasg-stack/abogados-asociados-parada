@@ -1,0 +1,117 @@
+/* ── Documentos de confianza ───────────────────────────────────────────────
+   Tres columnas bajo "Tarjeta profesional", con su mismo lenguaje visual
+   (etiqueta tracked + nota a la derecha, miniatura centrada, botón fantasma a
+   todo el ancho). Sin fondos ni bordes de tarjeta. */
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 0 1.6rem;
+}
+
+.doc {
+  display: flex;
+  flex-direction: column;
+  gap: 0.38rem;
+  min-width: 0;
+}
+/* Miniatura y botón anclados abajo para que las tres columnas alineen. */
+.doc > :nth-child(2) { margin-top: auto; }
+
+/* Copia de .label / .optional de ProfilePage.module.css (mismo look que la
+   etiqueta "Tarjeta profesional" justo arriba). */
+/* En columnas de ~220 px la nota va DEBAJO del nombre (a la derecha se
+   partía en tres líneas). */
+.label {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: #96765a;
+  margin-bottom: 0.45rem;
+}
+.optional {
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  font-size: 0.62rem;
+  color: #a8907d;
+}
+
+/* Placeholder sin archivo: mismo tamaño que el thumb de TarjetaPreview
+   (220×148, encogible) y mismo margen, para que la fila no salte al subir. */
+.empty {
+  align-self: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 220px;
+  max-width: 100%;
+  height: 148px;
+  margin: 10px 0 14px;
+  border: 1.5px dashed rgba(109,60,27, 0.3);
+  border-radius: 14px;
+  background: rgba(109,60,27, 0.03);
+  color: #96765a;
+  font-family: 'Poppins', sans-serif;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s, color 0.2s;
+}
+.empty:hover:not(:disabled) {
+  border-color: var(--gold, #c9a84c);
+  background: #fff;
+  color: #6d3c1b;
+}
+.empty:disabled { cursor: progress; opacity: 0.7; }
+
+.signing {
+  align-self: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 220px;
+  max-width: 100%;
+  height: 148px;
+  margin: 10px 0 14px;
+  border-radius: 14px;
+  background: rgba(109,60,27, 0.04);
+  color: #96765a;
+  font-size: 0.74rem;
+}
+
+.msgError, .msgOk {
+  grid-column: 1 / -1;
+  margin: 0.2rem 0 0;
+  padding: 0.6rem 0.85rem;
+  border-radius: 8px;
+  font-size: 0.78rem;
+}
+.msgError {
+  background: #fff5f5;
+  border: 1px solid rgba(220, 50, 50, 0.22);
+  color: #c0392b;
+}
+.msgOk {
+  background: rgba(26,140,78, 0.07);
+  border: 1px solid rgba(26,140,78, 0.3);
+  color: #1a6b3f;
+}
+
+@media (max-width: 640px) {
+  .grid { row-gap: 1.2rem; }
+  .doc > :nth-child(2) { margin-top: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .empty { transition: none; }
+}

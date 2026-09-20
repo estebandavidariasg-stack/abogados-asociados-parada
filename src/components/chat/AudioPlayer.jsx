@@ -55,6 +55,37 @@ export default function AudioPlayer({ src, mine, theme = 'dark' }) {
       try { audio.currentTime = 0 } catch {}
     }
 
+    // WebM de MediaRecorder llegan con duration=Infinity. Truco: seek a un
+    // valor imposible para que el navegador recalcule. Solo se intenta con el
+    // archivo COMPLETO en buffer (canplaythrough): a medio descargar, Chrome
+    // falla con "demuxer seek failed" en WebM sin Cues. Firefox a veces no
+    // dispara timeupdate → timeout de seguridad.
+    let pendingDurationFix = false
+    let decodeCancelled = false
+    // Duración exacta DECODIFICANDO la nota (fetch + Web Audio). Para WebM
+    // con Duration=0 / sin Cues, Chrome solo almacena ~2 s y el seek al final
+    // falla ("demuxer seek failed"); decodificar 50-500 KB de Opus tarda
+    // decenas de ms y no toca el <audio> (nada que recuperar).
+    const runDurationFix = async () => {
+      if (!pendingDurationFix || skipDurationFix) return
+      pendingDurationFix = false
+      skipDurationFix = true
+      try {
+        const res = await fetch(resolvedSrc)
+        if (!res.ok) return
+        const buf = await res.arrayBuffer()
+        if (decodeCancelled || buf.byteLength > 3 * 1024 * 1024) return
+        const Ctx = window.AudioContext || window.webkitAudioContext
+        if (!Ctx) return
+        const ctx = new Ctx()
+        try {
+          const decoded = await ctx.decodeAudioData(buf)
+          if (!decodeCancelled && decoded?.duration && isFinite(decoded.duration)) setDuration(decoded.duration)
+        } finally { ctx.close?.() }
+      } catch (e) {
+        console.warn('[AudioPlayer] no se pudo decodificar para calcular la duración', e?.message)
+      }
+    }
     const onLoaded = () => {
       setLoaded(true)
       if (audio.duration !== Infinity && !isNaN(audio.duration)) {
@@ -63,23 +94,20 @@ export default function AudioPlayer({ src, mine, theme = 'dark' }) {
       }
       // Si ya intentamos antes y fallo (webm legacy), no reintentar.
       if (skipDurationFix) return
-      // WebM blobs de MediaRecorder llegan con duration=Infinity. Truco:
-      // forzar seek a un valor imposible para que el navegador recalcule.
-      // Firefox a veces no dispara timeupdate → timeout de seguridad.
-      isAttemptingDurationFix = true
-      audio.addEventListener('timeupdate', onDurationFix)
-      durationFixTimer = setTimeout(() => {
-        isAttemptingDurationFix = false
-        audio.removeEventListener('timeupdate', onDurationFix)
-      }, 1500)
-      try { audio.currentTime = 1e101 } catch {}
+      pendingDurationFix = true
+      runDurationFix()
     }
+    const onCanPlayThrough = () => { runDurationFix() }
     const onTime = () => {
       setCurrent(audio.currentTime)
       setProgress(audio.duration ? (audio.currentTime / audio.duration) * 100 : 0)
       if (audio.duration !== Infinity && !isNaN(audio.duration)) setDuration(audio.duration)
     }
-    const onEnded  = () => { setPlaying(false); setProgress(0); setCurrent(0) }
+    const onEnded  = () => {
+      // Sin duración conocida (seek fallido): al terminar ya la sabemos.
+      if (audio.duration === Infinity || isNaN(audio.duration)) setDuration(audio.currentTime)
+      setPlaying(false); setProgress(0); setCurrent(0)
+    }
     const onError  = (ev) => {
       const code = ev?.currentTarget?.error?.code
       const msg  = ev?.currentTarget?.error?.message
@@ -113,6 +141,7 @@ export default function AudioPlayer({ src, mine, theme = 'dark' }) {
     const onCanPlay = () => setLoaded(true)
 
     audio.addEventListener('loadedmetadata', onLoaded)
+    audio.addEventListener('canplaythrough', onCanPlayThrough)
     audio.addEventListener('timeupdate', onTime)
     audio.addEventListener('ended', onEnded)
     audio.addEventListener('error', onError)
@@ -120,6 +149,8 @@ export default function AudioPlayer({ src, mine, theme = 'dark' }) {
 
     return () => {
       audio.removeEventListener('loadedmetadata', onLoaded)
+      audio.removeEventListener('canplaythrough', onCanPlayThrough)
+      decodeCancelled = true
       audio.removeEventListener('timeupdate', onTime)
       audio.removeEventListener('timeupdate', onDurationFix)
       audio.removeEventListener('ended', onEnded)
@@ -185,7 +216,11 @@ export default function AudioPlayer({ src, mine, theme = 'dark' }) {
       {/* preload="metadata": antes con "auto" abrir una sala con N notas de voz
           descargaba TODOS los audios completos aunque no se reprodujera ninguno.
           El botón de play se habilita con loadedmetadata, que sí se dispara. */}
-      <audio ref={audioRef} src={resolvedSrc || undefined} preload="metadata" crossOrigin="anonymous" />
+      {/* preload="auto": las notas de voz pesan < 1 MB y el truco de duración
+          (seek al final) solo funciona con el archivo completo en buffer. Con
+          "metadata" Chrome fallaba con "demuxer seek failed" en WebM sin Cues
+          (p. ej. los grabados por el cliente) y el player quedaba inutilizable. */}
+      <audio ref={audioRef} src={resolvedSrc || undefined} preload="auto" crossOrigin="anonymous" />
 
       <button className={styles.playBtn} onClick={togglePlay} disabled={!loaded}>
         {playing

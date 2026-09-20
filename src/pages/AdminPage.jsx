@@ -13,6 +13,7 @@ import ProfileDetailModal from '../components/admin/ProfileDetailModal'
 import TarjetaPreview from '../components/profile/TarjetaPreview'
 import NotificationBell from '../components/admin/NotificationBell'
 import ResenasAdmin from '../components/admin/ResenasAdmin'
+import PqrsAdmin from '../components/admin/PqrsAdmin'
 import ProyectosLeyAdmin from '../components/admin/ProyectosLeyAdmin'
 import CamposRegistro from '../components/admin/CamposRegistro'
 import AdminStats from '../components/admin/AdminStats'
@@ -27,6 +28,7 @@ const IconAlert  = (p) => (<svg viewBox="0 0 24 24" width="18" height="18" fill=
 const IconShield = (p) => (<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>)
 const IconDoc    = (p) => (<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 13h6M9 17h6"/></svg>)
 const IconStar   = (p) => (<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>)
+const IconPqr    = (p) => (<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M4 4h16v12H7l-3 3z"/><path d="M9 9h6M9 12h3"/></svg>)
 const IconHome   = (p) => (<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>)
 const IconLogout = (p) => (<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg>)
 const IconGestor = (p) => (<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/><path d="M12 11v0"/></svg>)
@@ -414,8 +416,11 @@ export default function AdminPage() {
     const [contratos, firmas, resenasTotal, resenasAprob, codigos, codigosActivos] = await Promise.all([
       contar('contratos?select=id'),
       contar('firmas_solicitudes?select=id&estado=eq.firmado'),
-      contar('resenas?select=id'),
-      contar('resenas?select=id&aprobado=eq.true'),
+      // Solo las que traen opinión escrita: las demás filas de `resenas` son
+      // invitaciones por correo aún sin responder, y contarlas hacía que el
+      // panel dijera "10 recibidas" con una sola opinión en la lista.
+      contar('resenas?select=id&texto=not.is.null'),
+      contar('resenas?select=id&texto=not.is.null&aprobado=eq.true'),
       contar('codigos_referencia?select=id'),
       contar('codigos_referencia?select=id&activo=eq.true'),
     ])
@@ -867,7 +872,8 @@ export default function AdminPage() {
     { key: 'alertas',      label: 'Inactividades',        count: alertasAccionables, alert: true, Icon: IconAlert },
     { key: 'chat_interno', label: 'Chat interno',         count: internosNoLeidos,   Icon: IconShield },
     { key: 'contratos',    label: 'Contratos',                                         Icon: IconDoc },
-    { key: 'resenas',      label: 'Reseñas',                                           Icon: IconStar },
+    { key: 'resenas',      label: 'Opiniones',                                         Icon: IconStar },
+    { key: 'pqrs',         label: 'PQRS',                                              Icon: IconPqr },
     { key: 'proyectos',    label: 'Proyectos de ley',                                  Icon: IconLey },
     // Solo el ADMIN MAESTRO puede configurar el formulario de registro.
     ...(profile?.es_admin_maestro
@@ -1550,6 +1556,13 @@ export default function AdminPage() {
           {activeTab === 'resenas' && (
             <div className={styles.section}>
               <ResenasAdmin />
+            </div>
+          )}
+
+          {/* ── PQRS (peticiones, quejas y reclamos de los clientes) ── */}
+          {activeTab === 'pqrs' && (
+            <div className={styles.section}>
+              <PqrsAdmin />
             </div>
           )}
 

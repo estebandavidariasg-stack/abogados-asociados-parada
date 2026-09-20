@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
-import { supabase } from './supabase'
+import { supabase, getAuthHeaders } from './supabase'
+import { compressImage } from '../utils/compressMedia'
+
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || ''
 
 /* ─────────────────────────────────────────────────────────────────────────
    Helpers de media de chat (bucket `chat-files`)
@@ -82,6 +85,211 @@ export async function openChatFile(src) {
     if (typeof window !== 'undefined') window.location.href = url
   }
   return true
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Adjuntos de chat: validación, compresión, errores legibles, descarga y
+   grabación de voz. Compartido por los tres chats (cliente, abogado,
+   contador) para que las reglas sean idénticas en los tres.
+───────────────────────────────────────────────────────────────────────── */
+
+export const CHAT_FILE_MAX_MB = 20
+const CHAT_FILE_EXT = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'jpg', 'jpeg', 'png', 'gif', 'webp', 'txt']
+
+/* Devuelve '' si el archivo es válido, o el mensaje de error para el usuario. */
+export function validarAdjuntoChat(file) {
+  if (!file) return 'Selecciona un archivo.'
+  const ext = String(file.name || '').split('.').pop().toLowerCase()
+  if (!CHAT_FILE_EXT.includes(ext)) {
+    return `Tipo de archivo no permitido (.${ext || '?'}). Usa PDF, Word, Excel, PowerPoint, imágenes o TXT.`
+  }
+  if (file.size === 0) return 'El archivo está vacío.'
+  if (file.size > CHAT_FILE_MAX_MB * 1024 * 1024) {
+    return `El archivo pesa ${(file.size / 1048576).toFixed(1)} MB y el máximo es ${CHAT_FILE_MAX_MB} MB.`
+  }
+  return ''
+}
+
+/* Nombre apto para la key de Storage: sin tildes, espacios ni símbolos raros
+   (Storage rechaza algunos caracteres y otros rompen la URL firmada). El
+   nombre original se conserva en chat_messages.file_name. */
+export function nombreArchivoSeguro(name) {
+  const base = String(name || 'archivo')
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[^A-Za-z0-9._-]+/g, '_')
+    .replace(/_+/g, '_')
+    .slice(-120)
+  return base || 'archivo'
+}
+
+/* Imágenes: reducir a 1600 px y JPEG antes de subir (una foto de celular de
+   4-8 MB baja a ~300 KB: la subida deja de ser lenta). Otros tipos pasan tal
+   cual. Si la compresión falla se sube el original. */
+const yaPreparados = new WeakSet()
+export async function prepararAdjuntoChat(file) {
+  if (!file || yaPreparados.has(file)) return file
+  if (!/^image\/(png|jpeg|webp)$/.test(file.type || '')) { yaPreparados.add(file); return file }
+  let out = file
+  try { out = await compressImage(file, 1600, 0.82, 'image/jpeg') } catch { out = file }
+  yaPreparados.add(out)
+  return out
+}
+
+/* Subida a Storage con PROGRESO real (XHR: fetch no expone el progreso de
+   envío). Mismos headers que el REST (sesión → JWT del cliente → anon key).
+   Resuelve { error } con la misma forma que supabase.storage.upload. */
+export function subirArchivoChat({ path, file, contentType, onProgress, bucket = 'chat-files' }) {
+  return new Promise(async (resolve) => {
+    let headers = {}
+    try { headers = await getAuthHeaders() } catch { /* sin headers → fallará con 401 y se informa */ }
+    const xhr = new XMLHttpRequest()
+    xhr.open('POST', `${SUPABASE_URL}/storage/v1/object/${bucket}/${path}`)
+    if (headers.apikey)        xhr.setRequestHeader('apikey', headers.apikey)
+    if (headers.Authorization) xhr.setRequestHeader('Authorization', headers.Authorization)
+    xhr.setRequestHeader('Content-Type', contentType || file?.type || 'application/octet-stream')
+    xhr.setRequestHeader('x-upsert', 'true')
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) onProgress?.(Math.min(99, Math.round((e.loaded / e.total) * 100)))
+    }
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) { onProgress?.(100); resolve({ error: null }); return }
+      let d = {}
+      try { d = JSON.parse(xhr.responseText || '{}') } catch { /* texto plano */ }
+      resolve({ error: { message: d.message || d.error || `HTTP ${xhr.status}`, status: xhr.status } })
+    }
+    xhr.onerror   = () => resolve({ error: new TypeError('Failed to fetch') })
+    xhr.ontimeout = () => resolve({ error: new TypeError('network timeout') })
+    xhr.send(file)
+  })
+}
+
+/* Traduce un error de subida/inserción a un mensaje concreto. `fase`:
+   'upload' (Storage) | 'insert' (chat_messages, ya con el archivo subido). */
+export function describirErrorSubida(err, fase = 'upload') {
+  const msg    = String(err?.message || err || '').toLowerCase()
+  const status = Number(err?.status || err?.statusCode || 0)
+  if (fase === 'insert') {
+    const detalle = err?.detalle ? ` (${String(err.detalle).slice(0, 140)})` : ''
+    return `El archivo se subió pero no se pudo registrar el mensaje; lo descartamos. Intenta de nuevo.${detalle}`
+  }
+  if (status === 413 || /exceeded|maximum size|too large|payload/.test(msg)) {
+    return `El archivo supera el máximo permitido (${CHAT_FILE_MAX_MB} MB).`
+  }
+  if (status === 415 || /mime|not supported|invalid.*type/.test(msg)) {
+    return 'Tipo de archivo no permitido.'
+  }
+  if (status === 401 || status === 403 || /row-level|security|not allowed|unauthorized|jwt|permission/.test(msg)) {
+    return 'No tienes permiso para subir archivos en esta sala. Recarga la página e intenta de nuevo.'
+  }
+  if (err instanceof TypeError || /failed to fetch|network|load failed|abort/.test(msg)) {
+    return 'Sin conexión con el servidor. Revisa tu red e intenta de nuevo.'
+  }
+  return 'No se pudo subir el archivo. Intenta de nuevo.'
+}
+
+/* Descarga un archivo del chat con su nombre original: firma una URL fresca,
+   lo trae como blob y dispara <a download>. (El atributo download se ignora
+   en URLs de otro origen, por eso pasa por blob.) Si algo falla, abre el
+   archivo en una pestaña como último recurso. Devuelve true si descargó. */
+export async function downloadChatFile(src, fileName) {
+  const url = await resolveSignedUrl(src, 600)
+  if (!url) return false
+  try {
+    const res = await fetch(url)
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    const blob   = await res.blob()
+    const objUrl = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = objUrl
+    a.download = fileName || 'archivo'
+    a.rel = 'noopener'
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    setTimeout(() => URL.revokeObjectURL(objUrl), 60_000)
+    return true
+  } catch {
+    return openChatFile(src)
+  }
+}
+
+/* ── Grabación de voz ── */
+const AUDIO_MIME_CANDIDATES = [
+  'audio/webm;codecs=opus',      // Chrome / Edge / Firefox / Opera
+  'audio/webm',
+  'audio/mp4;codecs=mp4a.40.2',  // Safari (macOS 14.1+ / iOS 17+)
+  'audio/mp4',
+  'audio/ogg;codecs=opus',       // Firefox antiguo
+  'audio/ogg',
+]
+
+/* Elige el mimeType que el navegador sabe grabar. '' = dejar que el
+   navegador use su formato por defecto (Safari sin isTypeSupported).
+   null = no hay MediaRecorder (no se puede grabar). */
+export function elegirMimeAudio() {
+  if (typeof MediaRecorder === 'undefined') return null
+  if (typeof MediaRecorder.isTypeSupported !== 'function') return ''
+  return AUDIO_MIME_CANDIDATES.find(m => {
+    try { return MediaRecorder.isTypeSupported(m) } catch { return false }
+  }) || ''
+}
+
+/* Crea el MediaRecorder con el mimeType elegido; si el navegador lo rechaza
+   igualmente (pasa en Safari), cae al constructor sin opciones. */
+export function crearGrabadorAudio(stream) {
+  const mime = elegirMimeAudio()
+  if (mime === null) throw new Error('MediaRecorder no disponible')
+  // 96 kbps: para voz con Opus/AAC es prácticamente transparente (el valor por
+  // defecto del navegador suele quedar por debajo) y 1 min ≈ 700 KB.
+  const opts = { audioBitsPerSecond: 96_000 }
+  if (mime) {
+    try { return new MediaRecorder(stream, { ...opts, mimeType: mime }) } catch { /* fallback abajo */ }
+  }
+  try { return new MediaRecorder(stream, opts) } catch { return new MediaRecorder(stream) }
+}
+
+/* Restricciones del micrófono: mono 48 kHz con cancelación de eco, supresión
+   de ruido y ganancia automática (lo que más mejora la voz en celulares).
+   Si el navegador no admite alguna, la ignora. */
+export const AUDIO_CONSTRAINTS = {
+  audio: {
+    channelCount: { ideal: 1 },
+    sampleRate: { ideal: 48000 },
+    echoCancellation: true,
+    noiseSuppression: true,
+    autoGainControl: true,
+  },
+}
+
+/* Extensión del archivo de voz según el mimeType REAL del grabador. */
+export function extAudio(mime) {
+  const m = String(mime || '').toLowerCase()
+  if (m.includes('ogg'))  return 'ogg'
+  if (m.includes('mp4') || m.includes('aac') || m.includes('m4a')) return 'm4a'
+  if (m.includes('mpeg') || m.includes('mp3')) return 'mp3'
+  return 'webm'
+}
+
+/* Content-Type "limpio" para Storage: sin ";codecs=…" (Firefox se niega a
+   reproducir si se guarda con el sufijo) y normalizando el alias de Apple. */
+export function mimeAudioLimpio(mime) {
+  const base = String(mime || '').split(';')[0].trim().toLowerCase()
+  if (!base) return 'audio/webm'
+  if (base === 'audio/x-m4a') return 'audio/mp4'
+  return base
+}
+
+export function describirErrorMicrofono(err) {
+  const name = err?.name || ''
+  if (name === 'NotAllowedError' || name === 'PermissionDeniedError' || name === 'SecurityError') {
+    return 'Permite el acceso al micrófono en el navegador para grabar la nota de voz.'
+  }
+  if (name === 'NotFoundError' || name === 'DevicesNotFoundError') return 'No se encontró un micrófono en este dispositivo.'
+  if (name === 'NotReadableError' || name === 'TrackStartError') return 'El micrófono está en uso por otra aplicación.'
+  if (/MediaRecorder no disponible/.test(err?.message || '')) {
+    return 'Tu navegador no permite grabar audio. Usa Chrome, Edge, Firefox o Safari actualizado.'
+  }
+  return 'No se pudo iniciar la grabación. Intenta de nuevo.'
 }
 
 /* Previsualización de imagen del chat. Firma una URL FRESCA al renderizar
@@ -197,4 +405,118 @@ export function ChatLightbox({ src, onClose }) {
   return typeof document !== 'undefined'
     ? createPortal(overlay, document.body)
     : overlay
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   FICHAS DE CONTACTO (mensaje de sistema tras confirmarse el pago)
+
+   La RPC `fichas_contacto_chat` (docs/sql/fichas-contacto-2026-09-17.sql)
+   inserta en la sala un mensaje con message_type 'system' cuyo contenido es
+   un JSON {"t":"fichas", profesional:{…}, cliente:{…}} — mismo patrón que
+   los mensajes de firma. Las cuatro superficies del chat (cliente, abogado,
+   contador y superadmin) lo pintan con esta misma tarjeta, así que el estilo
+   viaja aquí dentro en vez de duplicarse en cuatro módulos CSS.
+   ══════════════════════════════════════════════════════════════════════ */
+
+export function parseFichas(content) {
+  try {
+    const o = JSON.parse(content)
+    return o?.t === 'fichas' ? o : null
+  } catch { return null }
+}
+
+const FICHAS_CSS = `
+.aapFichas { width: 100%; max-width: 560px; margin: 10px auto; background: #fff; border: 1px solid rgba(109,60,27,0.16); border-radius: 14px; overflow: hidden; box-shadow: 0 6px 18px rgba(71,47,41,0.07); font-family: inherit; text-align: left; flex-shrink: 0; align-self: center; }
+.aapFichasHead { display: flex; align-items: flex-start; gap: 10px; padding: 13px 16px; background: linear-gradient(180deg, rgba(201,168,76,0.16), rgba(201,168,76,0.07)); border-bottom: 1px solid rgba(109,60,27,0.12); }
+.aapFichasHead svg { flex-shrink: 0; margin-top: 1px; color: #8a6a28; }
+.aapFichasTitle { display: block; font-family: 'Cinzel', 'Cormorant Garamond', serif; font-size: 0.86rem; letter-spacing: 0.03em; color: #472F29; margin: 0 0 2px; }
+.aapFichasSub { display: block; font-size: 0.72rem; line-height: 1.45; color: #8a735f; }
+.aapFichasGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); }
+.aapFicha { padding: 13px 16px; }
+.aapFicha + .aapFicha { border-left: 1px solid rgba(109,60,27,0.1); }
+.aapFichaRol { display: block; font-size: 0.6rem; font-weight: 700; letter-spacing: 0.11em; text-transform: uppercase; color: #a3856b; margin-bottom: 5px; }
+.aapFichaNombre { display: block; font-size: 0.9rem; font-weight: 700; color: #472F29; line-height: 1.3; margin-bottom: 2px; word-break: break-word; }
+.aapFichaArea { display: block; font-size: 0.72rem; color: #8a735f; line-height: 1.4; margin-bottom: 7px; word-break: break-word; }
+.aapFichaDato { display: flex; align-items: flex-start; gap: 7px; font-size: 0.78rem; line-height: 1.5; color: #4a3726; overflow-wrap: anywhere; }
+.aapFichaDato + .aapFichaDato { margin-top: 3px; }
+.aapFichaDato svg { flex-shrink: 0; color: #a3856b; margin-top: 4px; }
+.aapFichaDato a { color: #6d3c1b; text-decoration: none; border-bottom: 1px solid rgba(109,60,27,0.25); }
+.aapFichaDato a:hover { border-bottom-color: #6d3c1b; }
+.aapFichaVacio { font-size: 0.75rem; color: #b8a89a; font-style: italic; }
+@media (max-width: 560px) {
+  .aapFicha + .aapFicha { border-left: none; border-top: 1px solid rgba(109,60,27,0.1); }
+}
+`
+
+const IconMailMini = () => (
+  <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+    <rect x="1.75" y="3.25" width="12.5" height="9.5" rx="2" stroke="currentColor" strokeWidth="1.3" />
+    <path d="M2.5 4.5L8 8.75L13.5 4.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+  </svg>
+)
+const IconPhoneMini = () => (
+  <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+    <path d="M5.4 2.5H3.2c-.7 0-1.3.6-1.2 1.3.4 5 4.2 8.8 9.2 9.2.7.1 1.3-.5 1.3-1.2V9.6c0-.6-.4-1.1-1-1.2l-1.6-.3c-.4-.1-.9.1-1.1.5l-.5.8a8.4 8.4 0 0 1-3.3-3.3l.8-.5c.4-.2.6-.7.5-1.1l-.3-1.6c-.1-.6-.6-1-1.2-1Z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
+  </svg>
+)
+const IconUnlock = () => (
+  <svg width="17" height="17" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+    <rect x="3.5" y="8.75" width="13" height="8.25" rx="2" stroke="currentColor" strokeWidth="1.45" />
+    <path d="M6.75 8.75V6.25a3.25 3.25 0 0 1 6.25-1.2" stroke="currentColor" strokeWidth="1.45" strokeLinecap="round" />
+  </svg>
+)
+
+function FichaBloque({ rol, nombre, area, email, celular }) {
+  return (
+    <div className="aapFicha">
+      <span className="aapFichaRol">{rol}</span>
+      <span className="aapFichaNombre">{nombre || '—'}</span>
+      {area && <span className="aapFichaArea">{area}</span>}
+      {email ? (
+        <span className="aapFichaDato"><IconMailMini /><a href={`mailto:${email}`}>{email}</a></span>
+      ) : null}
+      {celular ? (
+        <span className="aapFichaDato"><IconPhoneMini /><a href={`tel:${celular.replace(/[^\d+]/g, '')}`}>{celular}</a></span>
+      ) : null}
+      {!email && !celular && <span className="aapFichaVacio">Sin datos de contacto registrados.</span>}
+    </div>
+  )
+}
+
+/* Tarjeta de las dos fichas. `data` es lo que devuelve parseFichas(). */
+export function FichasContacto({ data }) {
+  if (!data) return null
+  const pro = data.profesional || {}
+  const cli = data.cliente || {}
+  return (
+    <>
+      <style>{FICHAS_CSS}</style>
+      <div className="aapFichas" role="note">
+        <div className="aapFichasHead">
+          <IconUnlock />
+          <span>
+            <strong className="aapFichasTitle">Datos de contacto habilitados</strong>
+            <span className="aapFichasSub">
+              El pago quedó confirmado. Ya pueden comunicarse directamente por fuera del chat.
+            </span>
+          </span>
+        </div>
+        <div className="aapFichasGrid">
+          <FichaBloque
+            rol="Profesional"
+            nombre={pro.nombre}
+            area={pro.area}
+            email={pro.email}
+            celular={pro.celular}
+          />
+          <FichaBloque
+            rol="Cliente"
+            nombre={cli.nombre}
+            email={cli.email}
+            celular={cli.celular}
+          />
+        </div>
+      </div>
+    </>
+  )
 }

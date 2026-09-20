@@ -119,14 +119,42 @@
 /* ── Barra de filtro unificada (chips + búsqueda instantánea) ── */
 .unifiedBar {
   display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-  align-items: center;
+  flex-direction: column;
+  gap: 12px;
   background: #f8f9fc;
   border: 1px solid rgba(109,60,27,0.1);
   border-radius: 10px;
   padding: 12px 14px;
 }
+
+/* Nivel 1: lo que se escribe o se elige. La busqueda ocupa el espacio libre. */
+.filtroFila {
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+.filtroFila > .searchInput { flex: 1 1 260px; min-width: 200px; }
+
+/* Nivel 2: grupos de botones, cada uno con su etiqueta. */
+.filtroGrupos {
+  display: flex;
+  gap: 18px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  padding-top: 11px;
+  border-top: 1px solid rgba(109,60,27,0.09);
+}
+.filtroGrupo { display: flex; flex-direction: column; gap: 6px; }
+.filtroGrupoLabel {
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #967f6b;
+  padding-left: 2px;
+}
+.filtroGrupos > .refreshBtn { margin-left: auto; }
 
 .rolChips {
   display: flex;
@@ -366,6 +394,44 @@
 }
 
 .filterSelect:focus { border-color: rgba(109,60,27,0.35); }
+
+/* Rango de fechas de la barra unificada (mismo lenguaje que .filterSelect). */
+.fechasBox { display: flex; align-items: flex-end; gap: 8px; flex-wrap: wrap; }
+.fechaCampo { display: flex; flex-direction: column; gap: 4px; }
+.fechaCampo > span {
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #967f6b;
+  padding-left: 2px;
+}
+.fechaInput {
+  background: #f8f9fc;
+  border: 1px solid rgba(109,60,27,0.12);
+  border-radius: 8px;
+  padding: 9px 10px;
+  color: #4a301a;
+  font-family: inherit;
+  font-size: 0.85rem;
+  outline: none;
+  color-scheme: light;
+  font-variant-numeric: tabular-nums;
+}
+.fechaInput:focus { border-color: rgba(109,60,27,0.35); }
+.fechaLimpiar {
+  background: none;
+  border: 1px solid rgba(109,60,27,0.18);
+  border-radius: 8px;
+  padding: 9px 12px;
+  color: #6d3c1b;
+  font-family: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.18s, border-color 0.18s;
+}
+.fechaLimpiar:hover { background: rgba(109,60,27,0.06); border-color: rgba(109,60,27,0.4); }
 
 .refreshBtn {
   background: none;
@@ -826,6 +892,30 @@
 .fileBtn:hover { border-color: var(--gold); }
 .fileName { flex: 1; word-break: break-all; }
 .fileSize { color: #b59e8a; font-size: 0.7rem; flex-shrink: 0; }
+.fileBtn svg { flex-shrink: 0; color: var(--gold, #c9a84c); }
+
+/* En la burbuja del abogado (fondo #6d3c1b) el botón heredaba texto #6d3c1b
+   sobre el mismo color: el nombre del archivo quedaba invisible. */
+.bubbleMine .fileBtn {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+.bubbleMine .fileBtn:hover { border-color: var(--gold); background: rgba(255, 255, 255, 0.16); }
+.bubbleMine .fileSize { color: rgba(255, 255, 255, 0.75); }
+
+/* Nota de voz: etiqueta sobre el reproductor */
+.audioMsg { display: flex; flex-direction: column; gap: 4px; }
+.audioCaption {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #6d3c1b;
+}
+.audioCaption svg { color: var(--gold, #c9a84c); }
+.audioCaption .fileSize { font-weight: 500; }
 
 /* ── Imagen inline (preview tipo WhatsApp) ── */
 .imgBtn {
@@ -998,15 +1088,30 @@
   .filters > * { width: 100%; }
   .filterSelect { width: 100%; }
 
-  /* Barra unificada: chips en fila (envuelven), inputs a todo el ancho. */
-  .unifiedBar { flex-direction: column; align-items: stretch; }
+  /* Barra unificada: todo apilado a lo ancho; las fechas siguen en pareja. */
+  .filtroFila { align-items: stretch; }
+  .filtroGrupos { flex-direction: column; align-items: stretch; gap: 12px; }
+  .filtroGrupo { width: 100%; }
   .rolChips { width: 100%; }
-  .rolChip, .rolChipActive { flex: 1; text-align: center; }
-  .unifiedBar .searchInput,
-  .unifiedBar .filterSelect,
+  /* min-width 0 + padding corto: los tres chips de profesion caben en una
+     fila en vez de dejar "Contadores" solo debajo. */
+  .rolChip, .rolChipActive,
   .verifToggle, .verifToggleActive,
-  .verifDoneToggle, .verifDoneToggleActive,
-  .unifiedBar .refreshBtn { width: 100%; justify-content: center; }
+  .verifDoneToggle, .verifDoneToggleActive {
+    flex: 1 1 0;
+    min-width: 0;
+    padding-left: 8px;
+    padding-right: 8px;
+    justify-content: center;
+    text-align: center;
+  }
+  .unifiedBar .searchInput,
+  .unifiedBar .filterSelect { width: 100%; }
+  .filtroGrupos > .refreshBtn { margin-left: 0; width: 100%; justify-content: center; }
+  .fechasBox { width: 100%; }
+  .fechaCampo { flex: 1 1 0; min-width: 0; }
+  .fechaInput { width: 100%; }
+  .fechaLimpiar { width: 100%; }
 }
 
 @media (max-width: 480px) {
@@ -1261,14 +1366,21 @@
   font-size: 0.74rem;
   color: var(--navy, #6d3c1b);
 }
+/* La etiqueta SÍ se parte en líneas (con nowrap, "Monto gestor (…) · solo si
+   la consulta trae gestor" ensanchaba la tabla y sacaba los montos del modal).
+   Los montos van en una columna estrecha, fija a la derecha, sin partirse. */
 .cobroTd {
   padding: 4px 8px 4px 0;
   color: var(--muted, #6f5c48);
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.35;
 }
 .cobroTdNum {
-  padding: 4px 0;
+  padding: 4px 0 4px 12px;
+  width: 1%;
   text-align: right;
+  vertical-align: top;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   font-feature-settings: "tnum" 1;
@@ -1283,6 +1395,7 @@
   font-weight: 800;
 }
 .cobroSinGestor {
+  display: block;          /* segunda línea bajo la etiqueta, no en la misma */
   color: var(--muted, #ad9a8a);
   font-weight: 500;
   font-style: italic;
@@ -1352,7 +1465,10 @@
 .cobroModal .cobroTabla {
   margin: 4px 0 4px;
   font-size: 0.8rem;
+  table-layout: auto;
+  max-width: 100%;
 }
+.cobroModal { overflow: hidden; }   /* nada se sale del cuadro aunque cambie el copy */
 .cobroModal .confirmActions {
   margin-top: 18px;
 }
@@ -1471,390 +1587,4 @@
 @media (max-width: 480px) {
   .confirmModal { padding: 22px 18px; }
   .confirmActions { flex-direction: column-reverse; }
-}
-
-/* ════════════════════════════════════════════════════════════════
-   PQR — toggle, lista y panel detalle (PASO 3)
-════════════════════════════════════════════════════════════════ */
-
-/* Tabs Chats / PQR */
-.pqrTabs {
-  display: flex;
-  gap: 4px;
-  margin-bottom: 18px;
-  border-bottom: 1px solid rgba(109,60,27,0.12);
-  padding-bottom: 0;
-}
-
-.pqrTab,
-.pqrTabActive {
-  background: transparent;
-  border: none;
-  padding: 12px 22px;
-  cursor: pointer;
-  font-family: 'Cinzel', serif;
-  font-size: 0.86rem;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  color: var(--muted, #a3856b);
-  border-bottom: 3px solid transparent;
-  transition: color 0.18s ease, border-color 0.18s ease;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: -1px; /* para alinear con la línea base */
-}
-
-.pqrTab:hover { color: var(--navy, #6d3c1b); }
-
-.pqrTabActive {
-  color: var(--navy, #6d3c1b);
-  border-bottom-color: var(--gold, #c9a84c);
-}
-
-.pqrUnreadBadge {
-  background: var(--gold, #c9a84c);
-  color: #ffffff;
-  font-family: inherit;
-  font-size: 0.68rem;
-  font-weight: 700;
-  letter-spacing: 0;
-  padding: 2px 8px;
-  border-radius: 11px;
-  min-width: 22px;
-  text-align: center;
-  line-height: 1.4;
-}
-
-/* Sección PQR completa */
-.pqrSection {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.pqrFilters {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  align-items: center;
-}
-
-.pqrFilter,
-.pqrFilterActive {
-  background: #ffffff;
-  border: 1px solid rgba(109,60,27,0.18);
-  border-radius: 22px;
-  padding: 7px 16px;
-  font-family: inherit;
-  font-size: 0.78rem;
-  font-weight: 600;
-  cursor: pointer;
-  color: var(--navy, #6d3c1b);
-  transition: all 0.18s ease;
-}
-.pqrFilter:hover { border-color: rgba(201,168,76,0.55); }
-.pqrFilterActive {
-  background: rgba(201,168,76,0.15);
-  border: 2px solid var(--gold, #c9a84c);
-  color: #8a6a28;
-  padding: 6px 15px;
-}
-
-.pqrRefresh {
-  background: transparent;
-  border: 1px solid rgba(109,60,27,0.15);
-  border-radius: 6px;
-  padding: 6px 12px;
-  font-family: inherit;
-  font-size: 0.74rem;
-  cursor: pointer;
-  color: var(--muted, #a3856b);
-  margin-left: auto;
-  transition: all 0.18s ease;
-}
-.pqrRefresh:hover {
-  color: var(--navy, #6d3c1b);
-  border-color: rgba(201,168,76,0.45);
-}
-
-.pqrErrorTxt {
-  color: #c0392b;
-  font-size: 0.82rem;
-  background: rgba(192,57,43,0.06);
-  border: 1px solid rgba(192,57,43,0.2);
-  padding: 10px 14px;
-  border-radius: 8px;
-  margin: 0;
-}
-
-/* Layout: lista | detalle */
-.pqrLayout {
-  display: grid;
-  grid-template-columns: 1fr 1.4fr;
-  gap: 18px;
-  align-items: start;
-}
-
-.pqrList {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  max-height: 70vh;
-  overflow-y: auto;
-  padding-right: 4px;
-}
-
-.pqrEmpty {
-  color: var(--muted, #a3856b);
-  font-size: 0.85rem;
-  text-align: center;
-  padding: 30px 12px;
-  margin: 0;
-}
-
-/* Card individual de PQR */
-.pqrCardItem {
-  background: #ffffff;
-  border: 1px solid rgba(109,60,27,0.1);
-  border-left: 3px solid transparent;
-  border-radius: 10px;
-  padding: 12px 14px;
-  text-align: left;
-  cursor: pointer;
-  font-family: inherit;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  transition: border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
-}
-.pqrCardItem:hover {
-  border-color: rgba(201,168,76,0.45);
-  box-shadow: 0 2px 8px rgba(109,60,27,0.06);
-}
-
-.pqrCardItemActive {
-  border-color: var(--gold, #c9a84c);
-  border-left-color: var(--gold, #c9a84c);
-  background: rgba(201,168,76,0.04);
-}
-
-.pqrCardItemUnread {
-  border-left-color: var(--gold, #c9a84c);
-  background: rgba(201,168,76,0.04);
-}
-
-.pqrCardTop {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 4px;
-}
-
-.pqrTipoBadge {
-  display: inline-block;
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  padding: 3px 10px;
-  border-radius: 12px;
-  border: 1px solid;
-}
-
-.pqrDotUnread {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--gold, #c9a84c);
-  flex-shrink: 0;
-}
-
-.pqrCardName {
-  font-size: 0.86rem;
-  font-weight: 600;
-  color: var(--navy, #6d3c1b);
-  margin: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.pqrCardPreview {
-  font-size: 0.77rem;
-  color: var(--muted, #a3856b);
-  margin: 0;
-  line-height: 1.4;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-.pqrCardDate {
-  font-size: 0.7rem;
-  color: #d4c1b0;
-  margin: 4px 0 0;
-}
-
-.pqrLoadMore {
-  background: transparent;
-  border: 1px dashed rgba(109,60,27,0.25);
-  border-radius: 8px;
-  padding: 10px;
-  cursor: pointer;
-  color: var(--navy, #6d3c1b);
-  font-family: inherit;
-  font-size: 0.8rem;
-  font-weight: 600;
-  transition: all 0.18s ease;
-}
-.pqrLoadMore:hover {
-  background: rgba(201,168,76,0.08);
-  border-color: var(--gold, #c9a84c);
-  color: #8a6a28;
-}
-
-/* Panel detalle */
-.pqrDetail {
-  background: #ffffff;
-  border: 1px solid rgba(109,60,27,0.1);
-  border-radius: 12px;
-  padding: 20px 22px;
-  position: sticky;
-  top: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  box-shadow: 0 2px 12px rgba(109,60,27,0.06);
-}
-
-.pqrDetailHeader {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.pqrDetailClose {
-  background: transparent;
-  border: 1px solid rgba(109,60,27,0.15);
-  border-radius: 50%;
-  width: 28px;
-  height: 28px;
-  cursor: pointer;
-  color: var(--muted, #a3856b);
-  font-size: 0.85rem;
-  line-height: 1;
-  transition: all 0.18s ease;
-}
-.pqrDetailClose:hover {
-  color: #c0392b;
-  border-color: rgba(192,57,43,0.4);
-}
-
-.pqrDetailMeta {
-  display: grid;
-  grid-template-columns: 140px 1fr;
-  gap: 6px 14px;
-  margin: 0;
-  font-size: 0.78rem;
-}
-.pqrDetailMeta dt {
-  color: var(--muted, #a3856b);
-  font-weight: 500;
-}
-.pqrDetailMeta dd {
-  margin: 0;
-  color: var(--navy, #6d3c1b);
-  font-weight: 600;
-  word-break: break-word;
-}
-
-.pqrDetailMessage {
-  background: rgba(109,60,27,0.04);
-  border-left: 3px solid var(--gold, #c9a84c);
-  border-radius: 6px;
-  padding: 12px 14px;
-}
-.pqrDetailMessageLabel {
-  font-size: 0.7rem;
-  color: var(--muted, #a3856b);
-  margin: 0 0 6px;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  font-weight: 600;
-}
-.pqrDetailMessageText {
-  font-size: 0.88rem;
-  color: var(--navy, #6d3c1b);
-  margin: 0;
-  line-height: 1.55;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-.pqrDetailActions {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-}
-
-.pqrBtnPrimary {
-  background: var(--gold, #c9a84c);
-  color: #ffffff;
-  border: none;
-  border-radius: 7px;
-  padding: 9px 18px;
-  font-family: 'Cinzel', serif;
-  font-size: 0.78rem;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  cursor: pointer;
-  transition: background 0.18s ease;
-}
-.pqrBtnPrimary:hover { background: #b89540; }
-
-.pqrBtnDanger {
-  background: rgba(192,57,43,0.08);
-  border: 1px solid rgba(192,57,43,0.35);
-  border-radius: 7px;
-  padding: 9px 18px;
-  color: #c0392b;
-  font-family: inherit;
-  font-size: 0.78rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.18s ease;
-}
-.pqrBtnDanger:hover { background: rgba(192,57,43,0.18); }
-
-/* Responsive: en móvil el detalle se vuelve modal full-width sobre la lista */
-@media (max-width: 800px) {
-  .pqrLayout {
-    grid-template-columns: 1fr;
-  }
-  .pqrDetail {
-    position: fixed;
-    inset: 12px;
-    max-height: calc(100vh - 24px);
-    overflow-y: auto;
-    z-index: 50;
-    box-shadow: 0 8px 40px rgba(109,60,27,0.25);
-  }
-  .pqrDetail::before {
-    /* fondo opaco que aísla el modal del contenido detrás */
-    content: '';
-    position: fixed;
-    inset: 0;
-    background: rgba(109,60,27,0.35);
-    z-index: -1;
-  }
-  .pqrTabs { gap: 0; }
-  .pqrTab,
-  .pqrTabActive { padding: 10px 14px; font-size: 0.78rem; }
-  .pqrFilters { gap: 6px; }
-  .pqrRefresh { margin-left: 0; }
 }

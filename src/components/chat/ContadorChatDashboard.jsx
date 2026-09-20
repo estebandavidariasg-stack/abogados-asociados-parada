@@ -5,7 +5,11 @@ const UbicarFirma = lazy(() => import('../firma/UbicarFirma'))
 import { contieneContacto } from '../../lib/validaciones'
 import styles from './ContadorChatDashboard.module.css'
 import AudioPlayer from './AudioPlayer'
-import { ChatImage, openChatFile } from '../../lib/chatFiles'
+import {
+  ChatImage, openChatFile, subirArchivoChat, parseFichas, FichasContacto,
+  validarAdjuntoChat, prepararAdjuntoChat, nombreArchivoSeguro, describirErrorSubida,
+  crearGrabadorAudio, extAudio, mimeAudioLimpio, describirErrorMicrofono, AUDIO_CONSTRAINTS,
+} from '../../lib/chatFiles'
 import { IconPaperclip, IconMic, IconFirma } from '../shared/Icons'
 import { pedirIA } from '../../lib/aiClient'
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
@@ -14,6 +18,7 @@ import EnviarAFirmar from '../firma/EnviarAFirmar'
 import { firmantesPendientes } from '../../lib/firmaService'
 import {
   COP, fetchCobroProfesional, fijarCobro, confirmarPagoAsesoria, formatMiles, parseMiles,
+  AVISO_COBRO_PROFESIONAL,
 } from '../../lib/cobroAsesoria'
 
 // Parseo seguro de los payloads JSON de los mensajes de firma.
@@ -26,6 +31,9 @@ function parseFirmaOk(content) {
 function previewMsg(m) {
   if (m?.message_type === 'firma') return 'Documento para firmar'
   if (m?.message_type === 'firma_ok') return 'Documento firmado'
+  // Las fichas de contacto son un JSON: en el sidebar se muestra su nombre,
+  // no el contenido crudo.
+  if (m?.message_type === 'system' && parseFichas(m.content)) return 'Datos de contacto habilitados'
   return m?.content || ''
 }
 
@@ -142,6 +150,7 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
   const [input,        setInput]        = useState('')
   const [sending,      setSending]      = useState(false)
   const [uploading,    setUploading]    = useState(false)
+  const [uploadPct,    setUploadPct]    = useState(0)     // % real de subida (XHR)
   const [pendingFile,  setPendingFile]  = useState(null)  // adjunto en espera
   const [closing,      setClosing]      = useState(false)
   const [confirmClose, setConfirmClose] = useState(false)
@@ -150,8 +159,8 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
   // Salas a las que ya se les solicitó revisión en esta sesión (estado por
   // navegador: no hay columna en BD; basta para evitar reenvíos y mostrar el tag).
   const [verifiedRooms, setVerifiedRooms] = useState(() => new Set())
-  const [rating,       setRating]       = useState(0)
-  const [showRating,   setShowRating]   = useState(false)
+  // La calificación la hace SOLO el cliente (ChatSection). El profesional
+  // cierra la consulta en un paso, sin estrellas.
   const [loadingRooms, setLoadingRooms] = useState(true)
   const [canDownload,  setCanDownload]  = useState(canDownloadFiles)
   const [iaResultado, setIaResultado] = useState(null)
@@ -162,10 +171,8 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
   // ── Cobro de asesoría (cliente → profesional, manual) ──
   const [cobro, setCobro]           = useState(null)
   const [cobroOpen, setCobroOpen]   = useState(false)
-  const [cobroGratis, setCobroGratis] = useState(false)
   const [cobroMonto, setCobroMonto] = useState('')
   const [cobroNota, setCobroNota]   = useState('')
-  const [cobroDatos, setCobroDatos] = useState('')
   const [cobroBusy, setCobroBusy]   = useState(false)
   const [cobroErr, setCobroErr]     = useState('')
 
@@ -207,6 +214,7 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
   const mediaRecorderRef  = useRef(null)
   const audioChunksRef    = useRef([])
   const recordingTimerRef = useRef(null)
+  const descartarGrabacionRef = useRef(false)   // true = la grabación se canceló (no subir)
 
   // ── Toast visual (reemplaza alert() del navegador al click de archivo) ──
   const [toast, setToast] = useState(null)
@@ -561,8 +569,6 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
     setActiveRoom(room)
     setConfirmClose(false)
     setConfirmVerificar(false)
-    setShowRating(false)
-    setRating(0)
 
     if (room.my_status === 'invited' || room.status === 'waiting') {
       const headers = await getAuthHeaders()
@@ -634,11 +640,19 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
   }
   function prepararAdjunto(file) {
     if (!file) return
+    const invalido = validarAdjuntoChat(file)          // avisar YA, no al pulsar Enviar
+    if (invalido) { setToast(invalido); return }
+    const esImg = /^image\//.test(file.type)
     setPendingFile(prev => {
       if (prev?.preview) URL.revokeObjectURL(prev.preview)
-      const esImg = /^image\//.test(file.type)
-      return { file, preview: esImg ? URL.createObjectURL(file) : null }
+      return { file, preview: esImg ? URL.createObjectURL(file) : null, preparando: esImg }
     })
+    // Comprimir mientras el usuario revisa: al pulsar Enviar solo queda subir.
+    if (esImg) {
+      prepararAdjuntoChat(file).then(listo => {
+        setPendingFile(prev => (prev && prev.file === file) ? { ...prev, file: listo, preparando: false } : prev)
+      })
+    }
   }
   function descartarAdjunto() {
     setPendingFile(prev => { if (prev?.preview) URL.revokeObjectURL(prev.preview); return null })
@@ -650,49 +664,44 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
   }
 
   // Sube un archivo al chat (input o arrastrar-soltar).
-  async function subirArchivo(file) {
-    if (!file || !activeRoom) return
-    setUploading(true)
+  // Validación + compresión de imágenes antes de subir, se guarda el PATH
+  // (no una URL firmada de 7 días), el insert se verifica y, si falla, se
+  // borra el archivo subido (sin mensajes fantasma). Errores legibles en toast.
+  async function subirArchivo(fileOriginal) {
+    if (!fileOriginal || !activeRoom) return
+    const invalido = validarAdjuntoChat(fileOriginal)
+    if (invalido) { setToast(invalido); return }
+    setUploading(true); setUploadPct(0)
+    let path = null
     try {
+      const file = await prepararAdjuntoChat(fileOriginal)   // ya viene comprimida desde prepararAdjunto
+      path = `chats/${activeRoom.id}/${Date.now()}_${nombreArchivoSeguro(file.name)}`
+      const { error: upErr } = await subirArchivoChat({
+        path, file, contentType: file.type || 'application/octet-stream', onProgress: setUploadPct,
+      })
+      if (upErr) throw Object.assign(new Error(upErr.message || 'upload'), { status: upErr.status, fase: 'upload' })
+
       const headers = await getAuthHeaders()
-      const path = `chats/${activeRoom.id}/${Date.now()}_${file.name}`
-      const upRes = await fetch(
-        `${SUPABASE_URL}/storage/v1/object/chat-files/${path}`,
-        {
-          method: 'POST',
-          headers: { ...headers, 'Content-Type': file.type, 'x-upsert': 'true' },
-          body: file,
-        }
-      )
-      if (!upRes.ok) throw new Error('Error subiendo archivo')
-
-      const signRes = await fetch(
-        `${SUPABASE_URL}/storage/v1/object/sign/chat-files/${path}`,
-        {
-          method: 'POST',
-          headers: { ...headers, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ expiresIn: 604800 }),
-        }
-      )
-      const signData = await signRes.json()
-      const fileUrl  = `${SUPABASE_URL}/storage/v1${signData.signedURL}`
-
-      await fetch(`${SUPABASE_URL}/rest/v1/chat_messages`, {
+      const insRes = await fetch(`${SUPABASE_URL}/rest/v1/chat_messages`, {
         method: 'POST',
-        headers: { ...headers, 'Content-Type': 'application/json', Prefer: 'return=representation' },
+        headers: { ...headers, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
         body: JSON.stringify({
           room_id:      activeRoom.id,
           sender_type:  'lawyer',
           content:      file.name,
           message_type: 'file',
-          file_url:     fileUrl,
+          file_url:     path,
           file_name:    file.name,
           file_size:    file.size,
         }),
       })
+      if (!insRes.ok) {
+        await supabase.storage.from('chat-files').remove(path).catch(() => {})
+        throw Object.assign(new Error(`HTTP ${insRes.status}`), { fase: 'insert' })
+      }
       fetchMessages()
     } catch (err) {
-      alert('Error subiendo archivo: ' + err.message)
+      setToast(describirErrorSubida(err, err?.fase || 'upload'))
     } finally {
       setUploading(false)
     }
@@ -731,24 +740,31 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
     })
   }
 
+  // mimeType por navegador (webm/opus Chrome, mp4 Safari) con fallback al
+  // formato por defecto; errores del micrófono en toast (antes: alert).
   async function startRecording() {
     if (!activeRoom) return
+    let stream = null
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus'
-        : MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm'
-        : MediaRecorder.isTypeSupported('audio/ogg;codecs=opus') ? 'audio/ogg;codecs=opus' : ''
-      const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream)
+      if (!navigator.mediaDevices?.getUserMedia) throw new Error('MediaRecorder no disponible')
+      stream = await navigator.mediaDevices.getUserMedia(AUDIO_CONSTRAINTS)
+      const recorder = crearGrabadorAudio(stream)
       mediaRecorderRef.current = recorder
       audioChunksRef.current = []
+      descartarGrabacionRef.current = false
       recorder.ondataavailable = e => { if (e.data.size > 0) audioChunksRef.current.push(e.data) }
+      recorder.onerror = () => setToast('La grabación se interrumpió. Intenta de nuevo.')
       recorder.onstop = async () => {
         stream.getTracks().forEach(t => t.stop())
         const actualType = recorder.mimeType || 'audio/webm'
         const blob = new Blob(audioChunksRef.current, { type: actualType })
+        // Cancelada con el botón del micrófono: se descarta sin subir.
+        if (descartarGrabacionRef.current) { descartarGrabacionRef.current = false; audioChunksRef.current = []; return }
         if (blob.size > 0) {
           const fixedBlob = await fixAudioDuration(blob)
           await uploadAudio(fixedBlob, actualType)
+        } else {
+          setToast('La nota de voz quedó vacía. Graba al menos un segundo.')
         }
       }
       recorder.start(100)
@@ -756,12 +772,15 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
       setRecordingTime(0)
       recordingTimerRef.current = setInterval(() => setRecordingTime(t => t + 1), 1000)
     } catch (err) {
-      alert('No se pudo acceder al micrófono: ' + err.message)
+      stream?.getTracks().forEach(t => t.stop())
+      setToast(describirErrorMicrofono(err))
     }
   }
 
-  function stopRecording() {
-    mediaRecorderRef.current?.stop()
+  // enviar=true → el botón Enviar manda la nota; false → el micrófono la cancela.
+  function stopRecording(enviar = true) {
+    descartarGrabacionRef.current = !enviar
+    try { mediaRecorderRef.current?.stop() } catch { /* ya detenido */ }
     clearInterval(recordingTimerRef.current)
     setRecording(false)
     setRecordingTime(0)
@@ -770,28 +789,23 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
   async function uploadAudio(blob, mimeType = 'audio/webm') {
     if (!activeRoom) return
     setUploadingAudio(true)
+    let path = null
     try {
-      const ext  = mimeType.includes('ogg') ? 'ogg' : mimeType.includes('mp4') ? 'mp4' : 'webm'
-      const path = `chats/${activeRoom.id}/audio_${Date.now()}.${ext}`
-      const cleanMime = mimeType.split(';')[0] || 'audio/webm'
+      // Extensión según el mimeType REAL del grabador (webm / m4a / ogg) y
+      // Content-Type limpio (Firefox no reproduce si lleva ";codecs=opus").
+      const ext       = extAudio(mimeType)
+      const cleanMime = mimeAudioLimpio(mimeType)
+      path = `chats/${activeRoom.id}/audio_${Date.now()}.${ext}`
 
-      const upHeaders = await getAuthHeaders()
-      const upRes = await fetch(`${SUPABASE_URL}/storage/v1/object/chat-files/${path}`, {
-        method: 'POST',
-        headers: { ...upHeaders, 'Content-Type': cleanMime, 'x-upsert': 'true' },
-        body: blob,
-      })
-      if (!upRes.ok) {
-        const detail = await upRes.text().catch(() => '')
-        console.error('Error subiendo audio:', upRes.status, detail)
-        return
-      }
+      const { error: upErr } = await supabase.storage.from('chat-files')
+        .upload(path, blob, { contentType: cleanMime, upsert: true })
+      if (upErr) throw Object.assign(new Error(upErr.message || 'upload'), { status: upErr.status, fase: 'upload' })
 
       // Guardamos el PATH (no signed URL). AudioPlayer firma on-demand.
       const insHeaders = await getAuthHeaders()
       const insRes = await fetch(`${SUPABASE_URL}/rest/v1/chat_messages`, {
         method: 'POST',
-        headers: { ...insHeaders, 'Content-Type': 'application/json', Prefer: 'return=representation' },
+        headers: { ...insHeaders, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
         body: JSON.stringify({
           room_id:      activeRoom.id,
           sender_type:  'lawyer',
@@ -803,13 +817,12 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
         }),
       })
       if (!insRes.ok) {
-        const detail = await insRes.text().catch(() => '')
-        console.error('Error insertando mensaje de audio:', insRes.status, detail)
-        return
+        await supabase.storage.from('chat-files').remove(path).catch(() => {})
+        throw Object.assign(new Error(`HTTP ${insRes.status}`), { fase: 'insert' })
       }
       await fetchMessages()
     } catch (err) {
-      console.error('Error en uploadAudio:', err)
+      setToast(describirErrorSubida(err, err?.fase || 'upload').replace('el archivo', 'la nota de voz'))
     } finally {
       setUploadingAudio(false)
     }
@@ -862,40 +875,28 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
 
   async function abrirCobro() {
     setCobroErr('')
-    setCobroGratis(cobro?.estado === 'gratuita')
     setCobroMonto(cobro && Number(cobro.monto) > 0 ? formatMiles(String(cobro.monto)) : '')
     setCobroNota(cobro?.nota || '')
-    let datos = cobro?.datos_pago || ''
-    if (!datos) {
-      try {
-        const headers = await getAuthHeaders()
-        const r = await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${contadorId}&select=datos_pago`, { headers })
-        const d = await r.json(); datos = d?.[0]?.datos_pago || ''
-      } catch { /* noop */ }
-    }
-    setCobroDatos(datos)
     setCobroOpen(true)
   }
 
   async function guardarCobro() {
     if (cobroBusy) return
-    if (!cobroGratis) {
-      const m = parseMiles(cobroMonto)
-      if (!m || m <= 0) { setCobroErr('Ingresa un valor mayor a 0, o marca la asesoría como gratuita.'); return }
-    }
+    // Toda consulta tiene cobro: el valor es obligatorio y mayor a 0.
+    const m = parseMiles(cobroMonto)
+    if (!m || m <= 0) { setCobroErr('Ingresa el valor de la consulta (mayor a 0).'); return }
     setCobroBusy(true); setCobroErr('')
     try {
-      // Solo el precio: los datos bancarios salen del certificado bancario del
-      // perfil (el cliente lo consulta en el chat) y el concepto se eliminó.
+      // Solo el precio: la cuenta para consignar es el certificado bancario
+      // del perfil, que el cliente abre desde el chat.
       const row = await fijarCobro({
         roomId: activeRoom.id,
-        monto: cobroGratis ? 0 : parseMiles(cobroMonto),
+        monto: m,
         nota: null,
-        datosPago: cobroGratis ? null : (cobroDatos.trim() || null),
       })
       setCobro(row)
       setCobroOpen(false)
-      setToast(cobroGratis ? 'Asesoría marcada como gratuita.' : 'Cobro enviado al cliente.')
+      setToast('Cobro enviado al cliente.')
     } catch (err) {
       setCobroErr('No se pudo guardar el cobro. Intenta de nuevo.')
     } finally {
@@ -948,21 +949,6 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
       })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
 
-      // Calificación best-effort: su fallo no debe bloquear el cierre ya confirmado.
-      if (rating > 0) {
-        try {
-          await fetch(`${SUPABASE_URL}/rest/v1/chat_ratings`, {
-            method: 'POST',
-            headers: { ...headers, 'Content-Type': 'application/json', Prefer: 'return=representation' },
-            body: JSON.stringify({
-              room_id:   activeRoom.id,
-              lawyer_id: contadorId,
-              rating,
-            }),
-          })
-        } catch (_) { /* noop */ }
-      }
-
       // Programar el correo de reseña de la web (~5 min después, vía pg_cron) —
       // best-effort, requiere el correo del cliente (del formulario de consulta).
       if (activeRoom.client_email) {
@@ -982,7 +968,9 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
         } catch (_) { /* noop */ }
       }
 
-      setShowRating(false)
+      // Cerrar también el diálogo de confirmación: sin esto quedaba abierto
+      // encima del panel después de finalizar.
+      setConfirmClose(false)
       setActiveRoom(null)
       fetchRooms()
     } catch (_) {
@@ -1195,7 +1183,7 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
                 </p>
               </div>
 
-              {activeRoom.status !== 'closed' && !showRating && (
+              {activeRoom.status !== 'closed' && (
                 <div className={styles.headerActions}>
                   {!confirmClose && (
                     verifiedRooms.has(activeRoom.id)
@@ -1234,9 +1222,8 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
                       </>
                     ) : (
                       <button type="button" className={styles.btnVerificar} onClick={abrirCobro}
-                        title="Fijar el valor de la asesoría o marcarla gratuita">
+                        title="Fijar el valor de la consulta">
                         {cobro?.estado === 'pagado' ? '✓ Cobrado'
-                          : cobro?.estado === 'gratuita' ? 'Gratuita'
                           : Number(cobro?.monto) > 0 ? `Cobro · ${COP.format(Number(cobro.monto))}`
                           : 'Cobro'}
                       </button>
@@ -1248,8 +1235,8 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
                       </button>
                     : <div className={styles.confirmRow}>
                         <span className={styles.confirmText}>¿Confirmar cierre?</span>
-                        <button className={styles.btnConfirm} onClick={() => setShowRating(true)}>
-                          Sí, cerrar
+                        <button className={styles.btnConfirm} onClick={closeRoom} disabled={closing}>
+                          {closing ? 'Cerrando…' : 'Sí, cerrar'}
                         </button>
                         <button className={styles.btnCancel} onClick={() => setConfirmClose(false)}>
                           Cancelar
@@ -1259,37 +1246,6 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
                 </div>
               )}
             </div>
-
-            {/* Panel de calificación — banda full-width debajo del header. */}
-            {showRating && (
-              <div className={styles.ratingPanel}>
-                <p className={styles.ratingLabel}>Califica esta consulta</p>
-                <div className={styles.stars}>
-                  {[1,2,3,4,5].map(n => (
-                    <button
-                      key={n}
-                      className={`${styles.star} ${rating >= n ? styles.starOn : ''}`}
-                      onClick={() => setRating(n)}
-                    >★</button>
-                  ))}
-                </div>
-                <div className={styles.ratingActions}>
-                  <button
-                    className={styles.btnCancel}
-                    onClick={() => { setShowRating(false); setRating(0); setConfirmClose(false) }}
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    className={styles.btnConfirm}
-                    onClick={closeRoom}
-                    disabled={closing}
-                  >
-                    {closing ? 'Cerrando…' : 'Confirmar cierre'}
-                  </button>
-                </div>
-              </div>
-            )}
 
             {/* Luz verde — pago confirmado habilita datos de contacto y descargas */}
             {pagoConfirmado && (
@@ -1329,8 +1285,8 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
                   }}
                 >✓</span>
                 <span>
-                  <strong style={{ color: '#6d3c1b' }}>Luz verde ·</strong> Pago confirmado —
-                  datos de contacto y descarga de archivos habilitados.
+                  <strong style={{ color: '#6d3c1b' }}>Pago confirmado ·</strong> datos de
+                  contacto y descarga de archivos habilitados.
                 </span>
               </motion.div>
             )}
@@ -1404,12 +1360,32 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
                   </div>
                 </div>
               )}
+              {/* Recordatorio de cobro: visible mientras no se fije el valor. */}
+              {activeRoom.status !== 'closed' && !(Number(cobro?.monto) > 0) && (
+                <div className={styles.avisoCobro} role="note">
+                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor"
+                    strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <circle cx="12" cy="12" r="9" />
+                    <path d="M14.5 9.2a2.6 2.6 0 0 0-2.5-1.6c-1.4 0-2.4.8-2.4 1.9 0 2.5 5 1.4 5 3.9 0 1.2-1.1 2-2.6 2a2.7 2.7 0 0 1-2.6-1.7" />
+                    <path d="M12 6.2v1.4M12 16.4v1.4" />
+                  </svg>
+                  <span>
+                    <strong>{AVISO_COBRO_PROFESIONAL.titulo}</strong> {AVISO_COBRO_PROFESIONAL.texto}
+                  </span>
+                </div>
+              )}
               {messages.length === 0 && (
                 <p className={styles.messagesEmpty}>
                   No hay mensajes aún. Saluda al cliente para iniciar.
                 </p>
               )}
               {messages.map((m, i) => {
+                // Fichas de contacto (mensaje de sistema tras confirmarse el
+                // pago): tarjeta centrada, no burbuja.
+                if (m.message_type === 'system') {
+                  const fichas = parseFichas(m.content)
+                  if (fichas) return <FichasContacto key={m.id} data={fichas} />
+                }
                 const esMio = m.sender_type === 'lawyer'
                 const isAudio = m.message_type === 'audio' && m.file_url
                 const isFirstClientMsg = i === 0 && m.sender_type === 'client' && !isAudio
@@ -1493,11 +1469,20 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
                 )}
                 <div className={styles.adjuntoInfo}>
                   <span className={styles.adjuntoNombre}>{pendingFile.file.name}</span>
-                  <span className={styles.adjuntoPeso}>Revisa antes de enviar</span>
+                  <span className={styles.adjuntoPeso}>
+                    {uploading
+                      ? `Subiendo… ${uploadPct}%`
+                      : pendingFile.preparando ? 'Optimizando imagen…' : `${formatSize(pendingFile.file.size)} · revisa antes de enviar`}
+                  </span>
+                  {uploading && (
+                    <span className={styles.adjuntoBar} role="progressbar" aria-valuenow={uploadPct} aria-valuemin={0} aria-valuemax={100}>
+                      <span className={styles.adjuntoBarFill} style={{ width: `${uploadPct}%` }} />
+                    </span>
+                  )}
                 </div>
                 <button type="button" className={styles.adjuntoDescartar} onClick={descartarAdjunto} disabled={uploading}>Descartar</button>
                 <button type="button" className={styles.adjuntoEnviar} onClick={confirmarAdjunto} disabled={uploading}>
-                  {uploading ? 'Enviando…' : 'Enviar'}
+                  {uploading ? 'Subiendo…' : 'Enviar'}
                 </button>
               </div>
             )}
@@ -1537,28 +1522,32 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
                   style={{ display: 'none' }}
                   onChange={handleFile}
                 />
+                {/* Grabando: el micrófono pasa a "cancelar" y la nota se manda con Enviar */}
                 <button
                   className={recording ? styles.recordingBtn : styles.attachBtn}
-                  onClick={recording ? stopRecording : startRecording}
+                  onClick={() => recording ? stopRecording(false) : startRecording()}
                   disabled={uploadingAudio}
-                  title={recording ? `Detener (${recordingTime}s)` : 'Grabar mensaje de voz'}
+                  aria-label={recording ? 'Cancelar grabación' : 'Grabar mensaje de voz'}
+                  title={recording ? 'Cancelar grabación' : 'Grabar mensaje de voz'}
                 >
                   {recording
-                    ? <><span className={styles.recordDot}/>{recordingTime}s</>
+                    ? <><span className={styles.recordDot}/>{recordingTime}s ✕</>
                     : <IconMic size={15} />}
                 </button>
                 <input
                   className={styles.chatInput}
                   type="text"
-                  placeholder="Responde al cliente…"
+                  placeholder={recording ? 'Grabando… pulsa Enviar para mandar la nota' : 'Responde al cliente…'}
+                  disabled={recording}
                   value={input}
                   onChange={e => setInput(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && !e.shiftKey && enviar()}
                 />
                 <button
                   className={styles.sendBtn}
-                  onClick={enviar}
-                  disabled={sending || !input.trim()}
+                  onClick={() => recording ? stopRecording(true) : enviar()}
+                  disabled={recording ? uploadingAudio : (sending || !input.trim())}
+                  aria-label={recording ? 'Enviar nota de voz' : 'Enviar mensaje'}
                 >
                   Enviar
                 </button>
@@ -1640,38 +1629,30 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
         >
           <div className={styles.modalCard} onClick={e => e.stopPropagation()}
             style={{ textAlign: 'left', maxHeight: 'calc(100dvh - 40px)', overflowY: 'auto' }}>
-            <h3 id="modalCobroTitleContador" className={styles.modalTitle} style={{ textAlign: 'center' }}>Cobro de la asesoría</h3>
+            <h3 id="modalCobroTitleContador" className={styles.modalTitle} style={{ textAlign: 'center' }}>Cobro de la consulta</h3>
             <p className={styles.modalText} style={{ textAlign: 'center' }}>
-              Define si esta asesoría se cobra o es gratuita. El cliente te paga
+              Define el valor de esta consulta antes de asesorar. El cliente te paga
               directamente; Parada Bridge no intermedia el dinero.
             </p>
 
-            <label className={styles.cobroCheck}>
-              <input type="checkbox" checked={cobroGratis}
-                onChange={e => { setCobroGratis(e.target.checked); setCobroErr('') }} />
-              Marcar como asesoría gratuita
-            </label>
-
-            {!cobroGratis && (
-              <div className={styles.cobroField}>
-                <label className={styles.cobroLabel}>Valor a cobrar (COP)</label>
-                <input type="text" inputMode="numeric" value={cobroMonto}
-                  onChange={e => { setCobroMonto(formatMiles(e.target.value)); setCobroErr('') }}
-                  placeholder="Ej: 80.000"
-                  className={`${styles.cobroInput} ${styles.cobroAmount}`} />
-                <p className={styles.cobroHint}>
-                  El cliente verá tu cuenta bancaria certificada (la del registro)
-                  para consignarte y adjuntará su comprobante de pago.
-                </p>
-              </div>
-            )}
+            <div className={styles.cobroField}>
+              <label className={styles.cobroLabel}>Valor de la consulta (COP)</label>
+              <input type="text" inputMode="numeric" value={cobroMonto}
+                onChange={e => { setCobroMonto(formatMiles(e.target.value)); setCobroErr('') }}
+                placeholder="Ej: 80.000"
+                className={`${styles.cobroInput} ${styles.cobroAmount}`} />
+              <p className={styles.cobroHint}>
+                El cliente verá tu cuenta bancaria certificada (la del registro)
+                para consignarte y adjuntará su comprobante de pago.
+              </p>
+            </div>
 
             {cobroErr && <p className={styles.cobroErr}>{cobroErr}</p>}
 
             <div className={styles.modalActions}>
               <button className={styles.btnCancel} onClick={() => setCobroOpen(false)} disabled={cobroBusy}>Cancelar</button>
               <button className={styles.btnConfirmGold} onClick={guardarCobro} disabled={cobroBusy}>
-                {cobroBusy ? 'Guardando…' : cobroGratis ? 'Marcar gratuita' : 'Enviar cobro'}
+                {cobroBusy ? 'Guardando…' : 'Enviar cobro'}
               </button>
             </div>
           </div>

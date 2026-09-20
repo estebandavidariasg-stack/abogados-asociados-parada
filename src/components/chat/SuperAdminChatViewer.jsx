@@ -2,9 +2,9 @@ import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { supabase, getAuthHeaders } from '../../lib/supabase'
 import styles from './SuperAdminChatViewer.module.css'
-import { IconTrash, IconPaperclip, IconFirma } from '../shared/Icons'
+import { IconTrash, IconPaperclip, IconFirma, IconMic } from '../shared/Icons'
 import AudioPlayer from './AudioPlayer'
-import { openChatFile, ChatImage, ChatLightbox } from '../../lib/chatFiles'
+import { openChatFile, ChatImage, ChatLightbox, parseFichas, FichasContacto } from '../../lib/chatFiles'
 import { urlFirmada } from '../../lib/firmaService'
 
 // Mensajes de firma electrónica: su `content` es un JSON (t: 'firma' | 'firma_ok').
@@ -160,257 +160,6 @@ function StarDisplay({ rating }) {
   )
 }
 
-/* ─────────────────────────────────────────────────────────────────────────
-   Sub-componente PqrPanel — toda la lógica de PQR encapsulada aquí.
-   Recibe onUnreadChange para que el badge del toggle padre se sincronice
-   sin un fetch separado.
-───────────────────────────────────────────────────────────────────────── */
-const PQR_TIPOS = {
-  peticion: { label: 'Petición', color: '#d4823a', bg: 'rgba(212, 130, 58,0.10)' },
-  queja:    { label: 'Queja',    color: '#d68c2a', bg: 'rgba(214,140,42,0.10)' },
-  reclamo:  { label: 'Reclamo',  color: '#c0392b', bg: 'rgba(192,57,43,0.10)' },
-}
-const PQR_PAGE_SIZE = 20
-
-function PqrPanel({ onUnreadChange }) {
-  const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
-  const [items,    setItems]    = useState([])
-  const [filter,   setFilter]   = useState('todos')        // todos|peticion|queja|reclamo
-  const [page,     setPage]     = useState(1)              // página actual
-  const [hasMore,  setHasMore]  = useState(false)
-  const [selected, setSelected] = useState(null)           // PQR seleccionada (modal/panel)
-  const [loading,  setLoading]  = useState(true)
-  const [error,    setError]    = useState('')
-
-  async function fetchPage(targetPage = 1, append = false) {
-    setLoading(true); setError('')
-    try {
-      const headers = await getAuthHeaders()
-      const filterClause = filter === 'todos' ? '' : `&tipo=eq.${filter}`
-      // Pedimos 1 extra para saber si hay más
-      const limit  = PQR_PAGE_SIZE + 1
-      const offset = (targetPage - 1) * PQR_PAGE_SIZE
-      const res = await fetch(
-        `${SUPABASE_URL}/rest/v1/pqr?select=*&order=created_at.desc&limit=${limit}&offset=${offset}${filterClause}`,
-        { headers }
-      )
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const data = await res.json()
-      const more = data.length > PQR_PAGE_SIZE
-      const visible = more ? data.slice(0, PQR_PAGE_SIZE) : data
-      setItems(prev => append ? [...prev, ...visible] : visible)
-      setHasMore(more)
-      setPage(targetPage)
-    } catch (err) {
-      setError('No se pudo cargar la lista de PQR: ' + err.message)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  async function fetchUnreadCount() {
-    try {
-      const headers = await getAuthHeaders()
-      const res = await fetch(
-        `${SUPABASE_URL}/rest/v1/pqr?leido=eq.false&select=id`,
-        { headers: { ...headers, Prefer: 'count=exact' } }
-      )
-      const range = res.headers.get('content-range') // ej: "0-19/42"
-      const total = range ? parseInt(range.split('/')[1] || '0', 10) : 0
-      onUnreadChange?.(Number.isFinite(total) ? total : 0)
-    } catch { /* no-op */ }
-  }
-
-  // Recargar cuando cambia el filtro o al montar
-  useEffect(() => { fetchPage(1, false) /* eslint-disable-next-line */ }, [filter])
-  useEffect(() => { fetchUnreadCount() /* eslint-disable-next-line */ }, [])
-
-  async function markRead(id) {
-    const item = items.find(p => p.id === id)
-    if (!item || item.leido) return
-    try {
-      const headers = await getAuthHeaders()
-      const res = await fetch(`${SUPABASE_URL}/rest/v1/pqr?id=eq.${id}`, {
-        method: 'PATCH',
-        headers: { ...headers, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ leido: true }),
-      })
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      // Actualizar estado local sin refetch
-      setItems(prev => prev.map(p => p.id === id ? { ...p, leido: true } : p))
-      if (selected?.id === id) setSelected(s => ({ ...s, leido: true }))
-      fetchUnreadCount()
-    } catch (err) {
-      alert('No se pudo marcar como leído: ' + err.message)
-    }
-  }
-
-  async function deletePqr(id) {
-    if (!window.confirm('¿Eliminar esta PQR? Esta acción no se puede deshacer.')) return
-    try {
-      const headers = await getAuthHeaders()
-      const res = await fetch(`${SUPABASE_URL}/rest/v1/pqr?id=eq.${id}`, {
-        method: 'DELETE',
-        headers,
-      })
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      setItems(prev => prev.filter(p => p.id !== id))
-      if (selected?.id === id) setSelected(null)
-      fetchUnreadCount()
-    } catch (err) {
-      alert('No se pudo eliminar: ' + err.message)
-    }
-  }
-
-  function fmtFecha(ts) {
-    if (!ts) return ''
-    return new Date(ts).toLocaleString('es-CO', {
-      day: '2-digit', month: 'short', year: 'numeric',
-      hour: '2-digit', minute: '2-digit',
-    })
-  }
-
-  return (
-    <div className={styles.pqrSection}>
-      {/* Filtros por tipo */}
-      <div className={styles.pqrFilters}>
-        {[
-          { v: 'todos',    l: 'Todos' },
-          { v: 'peticion', l: 'Petición' },
-          { v: 'queja',    l: 'Queja' },
-          { v: 'reclamo',  l: 'Reclamo' },
-        ].map(opt => (
-          <button
-            key={opt.v}
-            className={filter === opt.v ? styles.pqrFilterActive : styles.pqrFilter}
-            onClick={() => setFilter(opt.v)}
-          >
-            {opt.l}
-          </button>
-        ))}
-        <button
-          className={styles.pqrRefresh}
-          onClick={() => { fetchPage(1, false); fetchUnreadCount() }}
-          title="Actualizar"
-        >
-          ↺ Actualizar
-        </button>
-      </div>
-
-      {error && <p className={styles.pqrErrorTxt}>{error}</p>}
-
-      <div className={styles.pqrLayout}>
-        {/* Lista */}
-        <div className={styles.pqrList}>
-          {loading && items.length === 0 && (
-            <p className={styles.pqrEmpty}>Cargando…</p>
-          )}
-          {!loading && items.length === 0 && (
-            <p className={styles.pqrEmpty}>No hay PQR en este filtro.</p>
-          )}
-          {items.map(p => {
-            const tipo = PQR_TIPOS[p.tipo] || { label: p.tipo, color: '#666', bg: '#eee' }
-            const isActive = selected?.id === p.id
-            return (
-              <button
-                key={p.id}
-                className={`${styles.pqrCardItem} ${isActive ? styles.pqrCardItemActive : ''} ${!p.leido ? styles.pqrCardItemUnread : ''}`}
-                onClick={() => setSelected(p)}
-              >
-                <div className={styles.pqrCardTop}>
-                  <span
-                    className={styles.pqrTipoBadge}
-                    style={{ color: tipo.color, background: tipo.bg, borderColor: tipo.color }}
-                  >
-                    {tipo.label}
-                  </span>
-                  {!p.leido && <span className={styles.pqrDotUnread} title="No leído" />}
-                </div>
-                <p className={styles.pqrCardName}>
-                  {p.client_nombre || 'Cliente anónimo'}
-                </p>
-                <p className={styles.pqrCardPreview}>
-                  {(p.mensaje || '').slice(0, 90)}{(p.mensaje || '').length > 90 ? '…' : ''}
-                </p>
-                <p className={styles.pqrCardDate}>{fmtFecha(p.created_at)}</p>
-              </button>
-            )
-          })}
-
-          {hasMore && !loading && (
-            <button
-              className={styles.pqrLoadMore}
-              onClick={() => fetchPage(page + 1, true)}
-            >
-              Cargar más
-            </button>
-          )}
-        </div>
-
-        {/* Detalle */}
-        {selected && (
-          <div className={styles.pqrDetail}>
-            <div className={styles.pqrDetailHeader}>
-              <span
-                className={styles.pqrTipoBadge}
-                style={{
-                  color: (PQR_TIPOS[selected.tipo] || {}).color || '#666',
-                  background: (PQR_TIPOS[selected.tipo] || {}).bg || '#eee',
-                  borderColor: (PQR_TIPOS[selected.tipo] || {}).color || '#666',
-                }}
-              >
-                {(PQR_TIPOS[selected.tipo] || {}).label || selected.tipo}
-              </span>
-              <button
-                className={styles.pqrDetailClose}
-                onClick={() => setSelected(null)}
-                aria-label="Cerrar detalle"
-              >
-                ✕
-              </button>
-            </div>
-
-            <dl className={styles.pqrDetailMeta}>
-              <dt>Nombre</dt>
-              <dd>{selected.client_nombre || '—'}</dd>
-              <dt>Email</dt>
-              <dd>{selected.client_email || '—'}</dd>
-              <dt>Código de referencia</dt>
-              <dd>{selected.codigo_referencia || '—'}</dd>
-              <dt>Fecha</dt>
-              <dd>{fmtFecha(selected.created_at)}</dd>
-              <dt>Estado</dt>
-              <dd>{selected.leido ? 'Leído' : 'No leído'}</dd>
-            </dl>
-
-            <div className={styles.pqrDetailMessage}>
-              <p className={styles.pqrDetailMessageLabel}>Mensaje</p>
-              <p className={styles.pqrDetailMessageText}>{selected.mensaje}</p>
-            </div>
-
-            <div className={styles.pqrDetailActions}>
-              {!selected.leido && (
-                <button
-                  className={styles.pqrBtnPrimary}
-                  onClick={() => markRead(selected.id)}
-                >
-                  Marcar como leído
-                </button>
-              )}
-              <button
-                className={styles.pqrBtnDanger}
-                onClick={() => deletePqr(selected.id)}
-              >
-                Eliminar
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
-
 const FIELDS = 'id, area_derecho, status, created_at, client_nombre, client_email, client_celular, client_cedula, codigo_referencia, tipo_profesional, pago_confirmado'
 
 export default function SuperAdminChatViewer({ initialRoomId = null }) {
@@ -426,6 +175,9 @@ export default function SuperAdminChatViewer({ initialRoomId = null }) {
   const [search, setSearch]             = useState('')
   const [rolFilter, setRolFilter]       = useState('todos')  // 'todos'|'abogado'|'contador'
   const [verifFilter, setVerifFilter]   = useState('todos')  // 'todos' | 'pendientes' | 'verificadas'
+  // Rango de fechas sobre created_at de la sala (YYYY-MM-DD, como los <input type="date">).
+  const [desde, setDesde]               = useState('')
+  const [hasta, setHasta]               = useState('')
   // Hash SHA-256 de lo que se está escribiendo en el buscador (cuando parece
   // una cédula) para poder matchear contra client_cedula (que está hasheado).
   const [searchHash, setSearchHash]     = useState('')
@@ -455,8 +207,6 @@ export default function SuperAdminChatViewer({ initialRoomId = null }) {
   // Defaults de plataforma_config (id=1) — se cargan una sola vez.
   const [cfgDefaults, setCfgDefaults] = useState(null)
   // Tabs Chats / PQR
-  const [view,            setView]            = useState('chats')   // 'chats' | 'pqr'
-  const [pqrUnreadCount,  setPqrUnreadCount]  = useState(0)
   const [lightbox,        setLightbox]        = useState(null)      // URL imagen ampliada
   const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
   const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
@@ -485,25 +235,6 @@ export default function SuperAdminChatViewer({ initialRoomId = null }) {
     })()
     return () => { cancel = true }
   }, [initialRoomId, rooms, filtered])
-
-  // Conteo inicial de PQR no leídos para mostrar el badge en el toggle
-  // antes de que el admin abra la pestaña.
-  useEffect(() => {
-    let cancelled = false
-    ;(async () => {
-      try {
-        const headers = await getAuthHeaders()
-        const res = await fetch(
-          `${SUPABASE_URL}/rest/v1/pqr?leido=eq.false&select=id`,
-          { headers: { ...headers, Prefer: 'count=exact' } }
-        )
-        const range = res.headers.get('content-range')
-        const total = range ? parseInt(range.split('/')[1] || '0', 10) : 0
-        if (!cancelled) setPqrUnreadCount(Number.isFinite(total) ? total : 0)
-      } catch { /* silencio: el badge solo es informativo */ }
-    })()
-    return () => { cancelled = true }
-  }, [SUPABASE_URL])
 
   // Defaults del cobro (plataforma_config id=1): default_total, pct_empresa,
   // comision_gestor_pct. Se leen una vez para prefijar el modal "Definir cobro".
@@ -552,6 +283,17 @@ export default function SuperAdminChatViewer({ initialRoomId = null }) {
     // verificadas (el profesional ya pagó).
     if (verifFilter === 'pendientes') list = list.filter(r => verifRooms.has(r.id) && !r.pago_confirmado)
     else if (verifFilter === 'verificadas') list = list.filter(r => r.pago_confirmado)
+    // Rango de fechas: se compara el DIA LOCAL de la sala ('sv' da YYYY-MM-DD),
+    // no el ISO en UTC, para que "hoy" signifique hoy en Colombia.
+    if (desde || hasta) {
+      list = list.filter(r => {
+        const dia = r.created_at ? new Date(r.created_at).toLocaleDateString('sv') : ''
+        if (!dia) return false
+        if (desde && dia < desde) return false
+        if (hasta && dia > hasta) return false
+        return true
+      })
+    }
     // Búsqueda unificada instantánea: nombre del cliente, nombre del
     // profesional asignado, código de referencia, área, y cédula (por hash
     // O por el número crudo que aparece en el primer mensaje / cache).
@@ -570,7 +312,11 @@ export default function SuperAdminChatViewer({ initialRoomId = null }) {
       )
     }
     setFiltered(list)
-  }, [rooms, filterStatus, filterArea, search, searchHash, rolFilter, verifFilter, verifRooms])
+  }, [rooms, filterStatus, filterArea, search, searchHash, rolFilter, verifFilter, verifRooms, desde, hasta])
+
+  // ¿Hay algún filtro activo? Decide si se ofrece "Limpiar filtros".
+  const hayFiltrosChat = !!(search || desde || hasta) ||
+    filterStatus !== 'all' || rolFilter !== 'todos' || verifFilter !== 'todos'
 
   useEffect(() => {
     if (!activeRoom) return
@@ -1055,33 +801,6 @@ export default function SuperAdminChatViewer({ initialRoomId = null }) {
   return (
     <div className={styles.viewer}>
 
-      {/* ── Tabs principales: Chats / PQR ── */}
-      <div className={styles.pqrTabs}>
-        <button
-          type="button"
-          className={view === 'chats' ? styles.pqrTabActive : styles.pqrTab}
-          onClick={() => setView('chats')}
-        >
-          Chats
-        </button>
-        <button
-          type="button"
-          className={view === 'pqr' ? styles.pqrTabActive : styles.pqrTab}
-          onClick={() => setView('pqr')}
-        >
-          PQR
-          {pqrUnreadCount > 0 && (
-            <span className={styles.pqrUnreadBadge}>{pqrUnreadCount}</span>
-          )}
-        </button>
-      </div>
-
-      {view === 'pqr' && (
-        <PqrPanel onUnreadChange={setPqrUnreadCount} />
-      )}
-
-      {view === 'chats' && (<>
-
       {/* ── Búsqueda avanzada ── */}
       <div className={styles.searchBox}>
         <p className={styles.searchTitle}>Búsqueda avanzada</p>
@@ -1121,72 +840,111 @@ export default function SuperAdminChatViewer({ initialRoomId = null }) {
         {searchError && <p className={styles.searchError}>{searchError}</p>}
       </div>
 
-      {/* ── Filtro unificado (chips de profesión + búsqueda instantánea) ── */}
+      {/* ── Filtro unificado, en dos niveles ──
+          Arriba lo que se escribe o se elige (búsqueda, estado, fechas);
+          abajo los grupos de botones, cada uno con su etiqueta. Todo en una
+          sola fila se veía como una hilera de cápsulas sueltas. */}
       {searchMode === 'all' && (
         <div className={styles.unifiedBar}>
-          <div className={styles.rolChips}>
-            {[
-              { v: 'todos',    l: 'Todos' },
-              { v: 'abogado',  l: 'Abogados' },
-              { v: 'contador', l: 'Contadores' },
-            ].map(opt => (
-              <button
-                key={opt.v}
-                type="button"
-                className={rolFilter === opt.v ? styles.rolChipActive : styles.rolChip}
-                onClick={() => setRolFilter(opt.v)}
-              >
-                {opt.l}
+          <div className={styles.filtroFila}>
+            <input
+              className={styles.searchInput}
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Buscar por nombre o cédula…"
+            />
+
+            <select className={styles.filterSelect} value={filterStatus}
+              onChange={e => setFilterStatus(e.target.value)}>
+              <option value="all">Todos los estados</option>
+              <option value="waiting">Esperando</option>
+              <option value="active">Activos</option>
+              <option value="closed">Cerrados</option>
+            </select>
+
+            {/* Rango de fechas de la consulta (por su fecha de creación). */}
+            <div className={styles.fechasBox}>
+              <label className={styles.fechaCampo}>
+                <span>Desde</span>
+                <input type="date" className={styles.fechaInput} value={desde}
+                  max={hasta || undefined} onChange={e => setDesde(e.target.value)} />
+              </label>
+              <label className={styles.fechaCampo}>
+                <span>Hasta</span>
+                <input type="date" className={styles.fechaInput} value={hasta}
+                  min={desde || undefined} onChange={e => setHasta(e.target.value)} />
+              </label>
+            </div>
+
+            {hayFiltrosChat && (
+              <button type="button" className={styles.fechaLimpiar}
+                onClick={() => {
+                  setSearch(''); setDesde(''); setHasta('')
+                  setFilterStatus('all'); setRolFilter('todos'); setVerifFilter('todos')
+                }}>
+                Limpiar filtros
               </button>
-            ))}
+            )}
           </div>
 
-          <input
-            className={styles.searchInput}
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="Buscar por nombre o cédula…"
-          />
+          <div className={styles.filtroGrupos}>
+            <div className={styles.filtroGrupo}>
+              <span className={styles.filtroGrupoLabel}>Profesión</span>
+              <div className={styles.rolChips}>
+                {[
+                  { v: 'todos',    l: 'Todos' },
+                  { v: 'abogado',  l: 'Abogados' },
+                  { v: 'contador', l: 'Contadores' },
+                ].map(opt => (
+                  <button
+                    key={opt.v}
+                    type="button"
+                    className={rolFilter === opt.v ? styles.rolChipActive : styles.rolChip}
+                    onClick={() => setRolFilter(opt.v)}
+                  >
+                    {opt.l}
+                  </button>
+                ))}
+              </div>
+            </div>
 
-          <select className={styles.filterSelect} value={filterStatus}
-            onChange={e => setFilterStatus(e.target.value)}>
-            <option value="all">Todos los estados</option>
-            <option value="waiting">Esperando</option>
-            <option value="active">Activos</option>
-            <option value="closed">Cerrados</option>
-          </select>
+            <div className={styles.filtroGrupo}>
+              <span className={styles.filtroGrupoLabel}>Verificación</span>
+              <div className={styles.rolChips}>
+                <button
+                  type="button"
+                  className={verifFilter === 'pendientes' ? styles.verifToggleActive : styles.verifToggle}
+                  onClick={() => setVerifFilter(v => v === 'pendientes' ? 'todos' : 'pendientes')}
+                  aria-pressed={verifFilter === 'pendientes'}
+                  title="Mostrar solo consultas con verificación pendiente"
+                >
+                  <IconVerif size={15} />
+                  Pendientes
+                  {(() => {
+                    const n = rooms.filter(r => verifRooms.has(r.id) && !r.pago_confirmado).length
+                    return n > 0 ? <span className={styles.verifCount}>{n}</span> : null
+                  })()}
+                </button>
 
-          <button
-            type="button"
-            className={verifFilter === 'pendientes' ? styles.verifToggleActive : styles.verifToggle}
-            onClick={() => setVerifFilter(v => v === 'pendientes' ? 'todos' : 'pendientes')}
-            aria-pressed={verifFilter === 'pendientes'}
-            title="Mostrar solo consultas con verificación pendiente"
-          >
-            <IconVerif size={15} />
-            Verificación pendiente
-            {(() => {
-              const n = rooms.filter(r => verifRooms.has(r.id) && !r.pago_confirmado).length
-              return n > 0 ? <span className={styles.verifCount}>{n}</span> : null
-            })()}
-          </button>
+                <button
+                  type="button"
+                  className={verifFilter === 'verificadas' ? styles.verifDoneToggleActive : styles.verifDoneToggle}
+                  onClick={() => setVerifFilter(v => v === 'verificadas' ? 'todos' : 'verificadas')}
+                  aria-pressed={verifFilter === 'verificadas'}
+                  title="Mostrar solo consultas verificadas (el profesional ya pagó)"
+                >
+                  <IconVerif size={15} />
+                  Verificadas
+                  {(() => {
+                    const n = rooms.filter(r => r.pago_confirmado).length
+                    return n > 0 ? <span className={styles.verifCount}>{n}</span> : null
+                  })()}
+                </button>
+              </div>
+            </div>
 
-          <button
-            type="button"
-            className={verifFilter === 'verificadas' ? styles.verifDoneToggleActive : styles.verifDoneToggle}
-            onClick={() => setVerifFilter(v => v === 'verificadas' ? 'todos' : 'verificadas')}
-            aria-pressed={verifFilter === 'verificadas'}
-            title="Mostrar solo consultas verificadas (el profesional ya pagó)"
-          >
-            <IconVerif size={15} />
-            Verificadas
-            {(() => {
-              const n = rooms.filter(r => r.pago_confirmado).length
-              return n > 0 ? <span className={styles.verifCount}>{n}</span> : null
-            })()}
-          </button>
-
-          <button className={styles.refreshBtn} onClick={loadRooms}>↺ Actualizar</button>
+            <button className={styles.refreshBtn} onClick={loadRooms}>↺ Actualizar</button>
+          </div>
         </div>
       )}
 
@@ -1364,7 +1122,7 @@ export default function SuperAdminChatViewer({ initialRoomId = null }) {
                     {pagoConfirmado && (
                       <span className={styles.luzVerde} title="El profesional confirmó el pago">
                         <IconVerif size={14} />
-                        ✓ Aprobada — contacto y descargas habilitados
+                        ✓ Pago confirmado · contacto y descargas habilitados
                       </span>
                     )}
 
@@ -1458,6 +1216,12 @@ export default function SuperAdminChatViewer({ initialRoomId = null }) {
             <div className={styles.messages} ref={messagesRef}>
               {messages.length === 0 && <p className={styles.messagesEmpty}>Sin mensajes.</p>}
               {messages.map(msg => {
+                // Fichas de contacto (mensaje de sistema tras confirmarse el
+                // pago): tarjeta centrada, no burbuja.
+                if (msg.message_type === 'system') {
+                  const fichas = parseFichas(msg.content)
+                  if (fichas) return <FichasContacto key={msg.id} data={fichas} />
+                }
                 const isLawyer = msg.sender_type === 'lawyer'
                 const isAudio  = msg.message_type === 'audio' && msg.file_url
                 const firma    = parseFirmaMsg(msg.content)
@@ -1472,9 +1236,16 @@ export default function SuperAdminChatViewer({ initialRoomId = null }) {
                         {isLawyer ? 'Abogado' : 'Cliente'}
                       </p>
                       {isAudio ? (
-                        // mine={true} = skin dorado del AudioPlayer (visible
-                        // sobre fondos claros y oscuros del viewer del admin)
-                        <AudioPlayer src={msg.file_url} mine={true} />
+                        // "Nota de voz" + el reproductor (que muestra la duración
+                        // al cargar los metadatos). mine={true} = skin dorado,
+                        // visible sobre fondos claros y oscuros del viewer.
+                        <div className={styles.audioMsg}>
+                          <span className={styles.audioCaption}>
+                            <IconMic size={12} /> Nota de voz
+                            {msg.file_size ? <span className={styles.fileSize}> · {formatSize(msg.file_size)}</span> : null}
+                          </span>
+                          <AudioPlayer src={msg.file_url} mine={true} />
+                        </div>
                       ) : firma ? (
                         // Mensaje de firma electrónica: preview de los documentos
                         // (a firmar / firmado / certificado) en vez del JSON crudo.
@@ -1519,10 +1290,10 @@ export default function SuperAdminChatViewer({ initialRoomId = null }) {
                         ) : (
                           <button className={styles.fileBtn}
                             onClick={() => openChatFile(msg.file_url)}
-                            title={msg.file_name}>
+                            title={msg.file_name || 'Abrir archivo'}>
                             <IconPaperclip size={16} />
-                            <span className={styles.fileName}>{msg.file_name}</span>
-                            <span className={styles.fileSize}>{formatSize(msg.file_size)}</span>
+                            <span className={styles.fileName}>{msg.file_name || msg.content || 'Archivo adjunto'}</span>
+                            {msg.file_size ? <span className={styles.fileSize}>{formatSize(msg.file_size)}</span> : null}
                           </button>
                         )
                       ) : (
@@ -1663,7 +1434,7 @@ export default function SuperAdminChatViewer({ initialRoomId = null }) {
                       <td className={styles.cobroTd}>
                         Monto gestor ({pctGes || 0}% de la parte empresa)
                         {!roomTraeGestor && (
-                          <span className={styles.cobroSinGestor}> · solo si la consulta trae gestor</span>
+                          <span className={styles.cobroSinGestor}>Solo si la consulta trae gestor</span>
                         )}
                       </td>
                       <td className={styles.cobroTdNum}>{formatCOP(montoGes)}</td>
@@ -1759,8 +1530,6 @@ export default function SuperAdminChatViewer({ initialRoomId = null }) {
         </div>,
         document.body
       )}
-
-      </>)}
 
       <ChatLightbox src={lightbox} onClose={() => setLightbox(null)} />
     </div>

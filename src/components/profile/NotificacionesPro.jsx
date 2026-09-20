@@ -8,8 +8,8 @@
        interno   : DMs del admin sin leer (mensajes_internos.leido)
        pagos     : pagos a la plataforma pendientes (pagos_profesional)
        notis     : filas de `notificaciones` del profesional (pago/inactividad…)
-     Sondeo cada 30s, pausado con la pestaña oculta (mismo patrón que la
-     campana del admin). "Leído" de la campana es LOCAL (localStorage
+     Sondeo cada 30s (8s mientras haya un pago pendiente), pausado con la
+     pestaña oculta (mismo patrón que la campana del admin). "Leído" de la campana es LOCAL (localStorage
      noti_seen_<uid>), igual que el visto de consultas: el profesional no
      escribe en `notificaciones` (esa tabla la gestiona el admin).
 
@@ -145,14 +145,19 @@ export function useProBadges(userId, { activo = true } = {}) {
     finally { inFlight.current = false }
   }, [userId])
 
+  // Con un pago pendiente el sondeo baja a 8 s: la confirmación (del admin o
+  // del webhook de Wompi) llega en segundos en vez de esperar hasta 30 s.
+  // Sin pendientes vuelve al ritmo normal para no castigar la base de datos.
+  const ritmo = badges.pagos > 0 ? 8_000 : 30_000
+
   useEffect(() => {
     if (!userId || !activo) return
     refresh()
-    const t = setInterval(() => { if (!document.hidden) refresh() }, 30_000)
+    const t = setInterval(() => { if (!document.hidden) refresh() }, ritmo)
     const onVisible = () => { if (!document.hidden) refresh() }
     document.addEventListener('visibilitychange', onVisible)
     return () => { clearInterval(t); document.removeEventListener('visibilitychange', onVisible) }
-  }, [userId, activo, refresh])
+  }, [userId, activo, refresh, ritmo])
 
   const notisNoLeidas = notis.filter(n => new Date(n.created_at).getTime() > notiSeenTs).length
 

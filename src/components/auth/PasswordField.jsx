@@ -15,7 +15,8 @@ export default function PasswordField({
 
   const strength  = getPasswordStrength(value)
   const rules     = PASSWORD_RULES.map(r => ({ ...r, ok: r.test(value) }))
-  const showList  = touched && value.length > 0
+  // Requisitos SIEMPRE visibles: vacío → neutro; escribiendo → ✓ / ✗ por regla.
+  const isEmpty   = value.length === 0
 
   return (
     <div className={styles.wrap}>
@@ -61,40 +62,40 @@ export default function PasswordField({
         </button>
       </div>
 
-      {/* Barra de fortaleza */}
-      {showList && strength && (
-        <div className={styles.strengthWrap}>
-          <div className={styles.strengthBars}>
-            {[1,2,3].map(lvl => (
-              <div
-                key={lvl}
-                className={styles.strengthBar}
-                style={{
-                  background: strength.level >= lvl ? strength.color : 'rgba(255,255,255,0.1)',
-                  transition: 'background 0.3s',
-                }}
-              />
-            ))}
-          </div>
-          <span className={styles.strengthLabel} style={{ color: strength.color }}>
-            {strength.label}
-          </span>
+      {/* Barra de fortaleza (siempre visible; vacía si no hay texto) */}
+      <div className={styles.strengthWrap} aria-live="polite">
+        <div className={styles.strengthBars}>
+          {[1,2,3].map(lvl => (
+            <div
+              key={lvl}
+              className={styles.strengthBar}
+              style={{
+                background: strength && strength.level >= lvl ? strength.color : 'rgba(109,60,27,0.12)',
+                transition: 'background 0.3s',
+              }}
+            />
+          ))}
         </div>
-      )}
+        <span className={styles.strengthLabel} style={{ color: strength ? strength.color : '#6f5c48' }}>
+          {strength ? strength.label : 'Fuerza'}
+        </span>
+      </div>
 
-      {/* Checklist de requisitos */}
-      {showList && (
-        <ul className={styles.checklist}>
-          {rules.map(rule => (
-            <li key={rule.id} className={`${styles.checkItem} ${rule.ok ? styles.checkOk : styles.checkPending}`}>
-              <span className={styles.checkIcon}>
-                {rule.ok ? '✓' : '○'}
+      {/* Checklist de requisitos: siempre visible */}
+      <ul className={styles.checklist} aria-label="Requisitos de la contraseña">
+        {rules.map(rule => {
+          const estado = isEmpty ? 'pending' : rule.ok ? 'ok' : 'fail'
+          return (
+            <li key={rule.id}
+              className={`${styles.checkItem} ${estado === 'ok' ? styles.checkOk : estado === 'fail' ? styles.checkFail : styles.checkPending}`}>
+              <span className={styles.checkIcon} aria-hidden="true">
+                {estado === 'ok' ? '✓' : estado === 'fail' ? '✗' : '○'}
               </span>
               <span className={styles.checkLabel}>{rule.label}</span>
             </li>
-          ))}
-        </ul>
-      )}
+          )
+        })}
+      </ul>
     </div>
   )
 }

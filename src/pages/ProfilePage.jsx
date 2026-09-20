@@ -106,6 +106,8 @@ export default function ProfilePage() {
   const [nombre, setNombre]           = useState('')
   const [apellido, setApellido]       = useState('')
   const [telefono, setTelefono]       = useState('')
+  const [cedula, setCedula]           = useState('')   // profiles.cedula (6-12 dígitos)
+  const [paginaWeb, setPaginaWeb]     = useState('')   // profiles.pagina_web
   const [universidad, setUniversidad] = useState('')
   // Cuando la universidad guardada no está en la lista, activamos el modo "Otra"
   // (el <select> muestra 'Otra' y se revela un input con el texto escrito).
@@ -128,8 +130,6 @@ export default function ProfilePage() {
   const [departamento, setDepartamento]     = useState('')
   const [barrio, setBarrio]                 = useState('')
   const [areasDerecho, setAreasDerecho] = useState([])
-  // Datos de pago para el cobro de asesorías (Nequi, cuenta bancaria…).
-  const [datosPago, setDatosPago] = useState('')
 
   // ── Redes sociales ────────────────────────────────────────────────────
   const [instagram, setInstagram] = useState('')
@@ -146,6 +146,8 @@ export default function ProfilePage() {
       setNombre(profile.nombre       || '')
       setApellido(profile.apellido   || '')
       setTelefono(profile.telefono   || '')
+      setCedula(profile.cedula       || '')
+      setPaginaWeb(profile.pagina_web || '')
       // Universidad: si el valor guardado no está en la lista, es una
       // universidad personalizada → activamos modo "Otra" y precargamos el input.
       const uniDB = profile.universidad || ''
@@ -164,7 +166,9 @@ export default function ProfilePage() {
       // Guardamos en el estado sólo las áreas oficiales; la personalizada se
       // reañade al guardar desde areaOtraTexto (evita duplicados/desalineación).
       setAreasDerecho(areasDB.filter(a => AREAS_DERECHO.includes(a)))
-      setDireccion(profile.direccion  || '')
+      // direccion (perfil) y direccion_oficina (fila de confianza del chat)
+      // son el mismo dato: se leen con fallback y se guardan en ambas.
+      setDireccion(profile.direccion || profile.direccion_oficina || '')
       setDepartamento(profile.departamento || '')
       // ciudad puede venir en formato "Municipio - Barrio" cuando existe nivel 3
       const ciudadDB = profile.ciudad || ''
@@ -180,7 +184,6 @@ export default function ProfilePage() {
       setFotoUrl(profile.foto_url    || null)
       setVideoUrl(profile.video_url  || null)
       setTarjetaArchivoUrl(profile.tarjeta_archivo_url || null)
-      setDatosPago(profile.datos_pago || '')
       if (profile.foto_url) setFotoPreview(profile.foto_url)
 
       // Redes sociales
@@ -350,6 +353,10 @@ export default function ProfilePage() {
     // Áreas de derecho: oficiales seleccionadas + la personalizada (si aplica).
     const areaOtraLimpia = areaOtraOn ? areaOtraTexto.trim() : ''
     const areasFinal = [...areasDerecho, ...(areaOtraLimpia ? [areaOtraLimpia] : [])]
+    const cedulaLimpia = cedula.replace(/\D/g, '')
+    if (cedulaLimpia && !/^\d{6,12}$/.test(cedulaLimpia)) {
+      setError('La cédula debe tener entre 6 y 12 dígitos.'); return
+    }
     setSaving(true); setError(null); setMsg(null)
     try {
       const headers = await getAuthHeaders()
@@ -365,12 +372,14 @@ export default function ProfilePage() {
           body: JSON.stringify({
             nombre, apellido, telefono, universidad,
             experiencia, direccion,
+            direccion_oficina: direccion.trim() || null,
+            cedula: cedulaLimpia || null,
+            pagina_web: paginaWeb.trim() || null,
             ciudad: barrio ? `${ciudad} - ${barrio}` : ciudad,
             departamento,
             area_derecho: areasFinal.join(', '),
             descripcion, foto_url: fotoUrl, video_url: videoUrl,
             tarjeta_archivo_url: tarjetaArchivoUrl || null,
-            datos_pago: datosPago.trim() || null,
             instagram, linkedin, facebook, twitter, whatsapp, tiktok,
           }),
         }
@@ -539,6 +548,20 @@ export default function ProfilePage() {
             </div>
 
             <div className={styles.field}>
+              <label className={styles.label}>Cédula</label>
+              <input type="text" inputMode="numeric" maxLength={12} className={styles.input} placeholder="Número de cédula"
+                value={cedula} onChange={e => setCedula(e.target.value.replace(/\D/g, ''))} />
+            </div>
+            <div className={styles.field}>
+              <label className={styles.label}>
+                Página web
+                <span className={styles.optional}>(opcional)</span>
+              </label>
+              <input type="url" className={styles.input} placeholder="https://tusitio.com"
+                value={paginaWeb} onChange={e => setPaginaWeb(e.target.value)} />
+            </div>
+
+            <div className={styles.field}>
               <label className={styles.label}>Universidad</label>
               <select
                 className={styles.input}
@@ -649,17 +672,6 @@ export default function ProfilePage() {
             <div className={styles.field}>
               <label className={styles.label}>Dirección de oficina</label>
               <input type="text" className={styles.input} placeholder="Calle 123 # 45-67, Of. 101" value={direccion} onChange={e => setDireccion(e.target.value)} />
-            </div>
-
-            {/* ── Datos de pago (para el cobro de asesorías) ── */}
-            <div className={`${styles.field} ${styles.fullWidth}`}>
-              <label className={styles.label}>Datos de pago (para cobrar asesorías)</label>
-              <input type="text" className={styles.input}
-                placeholder="Ej: Nequi 300 123 4567 · Bancolombia ahorros 123-456789-00"
-                value={datosPago} onChange={e => setDatosPago(e.target.value)} />
-              <p style={{ fontSize: '0.75rem', color: 'rgba(109,60,27,0.6)', marginTop: 6 }}>
-                El cliente verá estos datos cuando le cobres una asesoría. El pago es directo a ti.
-              </p>
             </div>
 
             {/* ── Descripción ── */}

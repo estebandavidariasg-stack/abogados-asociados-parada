@@ -600,16 +600,26 @@ export const supabase = {
           // contrato { data, error } — antes un throw dejaba UIs colgadas en
           // "Subiendo…" (ChatSection.handleFile, ModelosContractualesSection).
           try {
+            // Misma prioridad de token que el REST (anonAuthToken): sesión real
+            // → JWT del cliente del chat → anon key. Antes ignoraba el JWT del
+            // cliente y subía con la anon key; desde el hardening del bucket
+            // chat-files (2026-09-04) eso devuelve 403 y el cliente no podía
+            // adjuntar nada.
             const headers = {
               'apikey': SUPABASE_KEY,
-              'Authorization': `Bearer ${localStorage.getItem('sb_token') || SUPABASE_KEY}`,
+              'Authorization': `Bearer ${anonAuthToken()}`,
             }
             if (opts.contentType) headers['Content-Type'] = opts.contentType
+            if (opts.upsert) headers['x-upsert'] = 'true'
             const res = await fetch(`${SUPABASE_URL}/storage/v1/object/${bucket}/${path}`, {
               method: 'POST', headers, body: file,
             })
             const data = await res.json().catch(() => ({}))
-            if (!res.ok) return { data: null, error: data.message ? data : { message: `HTTP ${res.status}`, ...data } }
+            if (!res.ok) {
+              const error = data.message ? { ...data } : { message: `HTTP ${res.status}`, ...data }
+              error.status = res.status
+              return { data: null, error }
+            }
             return { data, error: null }
           } catch (err) { return { data: null, error: err } }
         },
@@ -644,7 +654,7 @@ export const supabase = {
             const list = Array.isArray(paths) ? paths : [paths]
             const headers = {
               apikey: SUPABASE_KEY,
-              Authorization: `Bearer ${localStorage.getItem('sb_token') || SUPABASE_KEY}`,
+              Authorization: `Bearer ${anonAuthToken()}`,
             }
             const results = await Promise.all(list.map(p =>
               fetch(`${SUPABASE_URL}/storage/v1/object/${bucket}/${p}`, { method: 'DELETE', headers, signal: timeoutSignal(20000) })

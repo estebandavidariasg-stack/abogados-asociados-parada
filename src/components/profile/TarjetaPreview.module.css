@@ -27,6 +27,7 @@
   align-items: center;
   gap: 10px;
   margin: 10px 0 14px;
+  width: 100%;
 }
 
 /* ── Thumbnail clickable ───────────────────────────────────── */
@@ -36,6 +37,7 @@
   align-items: center;
   justify-content: center;
   width: 220px;
+  max-width: 100%;   /* se encoge dentro de fichas estrechas (DocumentosConfianza) */
   height: 148px;
   border: 1.5px solid rgba(109,60,27, 0.13);
   border-radius: 14px;
