@@ -16,7 +16,7 @@ function esc(s) {
 // Barra de progreso de 4 pasos (tabla email-safe, tema claro de la marca).
 function barra(pasoActual) {
   const pasos = ['Inicio', 'En desarrollo', 'Cierre', 'Pago']
-  const idx = { inicio: 0, en_curso: 1, cierre: 2, pago: 3 }[pasoActual] ?? 0
+  const idx = { inicio: 0, en_curso: 1, cierre: 2, rechazado: 2, no_exitoso: 2, pago: 3 }[pasoActual] ?? 0
   const celdas = pasos.map((label, i) => {
     const activo = i <= idx
     const bg = activo ? C.gold : '#f6ece3'
@@ -41,7 +41,7 @@ function barra(pasoActual) {
  * @param {string} o.profesional    nombre del profesional
  * @param {string} o.profesionalRol 'abogado' | 'contador'
  * @param {string} o.area
- * @param {'inicio'|'en_curso'|'cierre'|'pago'} o.estado
+ * @param {'inicio'|'en_curso'|'cierre'|'rechazado'|'no_exitoso'|'pago'} o.estado
  * @param {'exitosa'|'no_concluida'|null} [o.resultado]
  * @param {string} [o.codigo]
  * @param {string} [o.comision]  ej "$2.500"
@@ -60,6 +60,14 @@ export function renderTrazabilidadEmail(o) {
   } else if (estado === 'en_curso') {
     titulo = 'La consulta está en desarrollo'
     cuerpo = `${ref} y ${trato} ${em(prof)} siguen trabajando en el caso${area ? ` de ${em(esc(area))}` : ''}. Todo marcha bien; falta el cierre.`
+  } else if (estado === 'rechazado') {
+    titulo = 'La consulta fue rechazada'
+    cuerpo = `La consulta de ${ref} no fue aceptada${area ? ` en el área de ${em(esc(area))}` : ''}, así que no continúa. ` +
+      `Esta vez no genera comisión. Puedes seguir compartiendo tu código: el siguiente referido cuenta igual.`
+  } else if (estado === 'no_exitoso') {
+    titulo = 'La consulta se cerró sin concretarse'
+    cuerpo = `La consulta de ${ref} con ${trato} ${em(prof)} se cerró sin concretarse. ` +
+      `Esta vez no genera comisión, pero gracias por traer el contacto.`
   } else if (estado === 'pago') {
     titulo = 'Tu comisión fue pagada'
     cuerpo = `El pago de tu comisión${comision ? ` de ${em(esc(comision))}` : ''} por la consulta de ${ref} ya fue realizado. ` +
@@ -73,7 +81,16 @@ export function renderTrazabilidadEmail(o) {
     cuerpo = `La consulta de ${ref} con ${trato} ${em(prof)} se cerró sin concretarse. Esta vez no genera comisión, pero gracias por traer el contacto.`
   }
 
-  const badge = estado === 'cierre'
+  const rojo = 'color:#b23b3b;background-color:#fbeded;border:1px solid #f0cccc;'
+  const verde = 'color:#1f7a4d;background-color:#e7f6ee;border:1px solid #bfe6cf;'
+  const pill = (txt, css) =>
+    `<div align="center" style="margin-top:8px;"><span style="display:inline-block;padding:7px 18px;border-radius:999px;font-family:${FONT_SANS};font-size:12px;font-weight:700;letter-spacing:0.04em;${css}">${txt}</span></div>`
+
+  const badge = estado === 'rechazado'
+    ? pill('RESULTADO · RECHAZADA', rojo)
+    : estado === 'no_exitoso'
+    ? pill('RESULTADO · NO EXITOSA', rojo)
+    : estado === 'cierre'
     ? `<div align="center" style="margin-top:8px;"><span style="display:inline-block;padding:7px 18px;border-radius:999px;font-family:${FONT_SANS};font-size:12px;font-weight:700;letter-spacing:0.04em;${
         resultado === 'exitosa'
           ? 'color:#1f7a4d;background-color:#e7f6ee;border:1px solid #bfe6cf;'
@@ -107,6 +124,8 @@ export function asuntoTrazabilidad(o) {
   if (o.estado === 'inicio')   return `${o.referido || 'Tu referido'} usó tu código QR`
   if (o.estado === 'en_curso') return `La consulta de ${o.referido || 'tu referido'} avanza`
   if (o.estado === 'pago')     return 'Tu comisión fue pagada · comprobante disponible'
+  if (o.estado === 'rechazado')  return `La consulta de ${o.referido || 'tu referido'} fue rechazada`
+  if (o.estado === 'no_exitoso') return `La consulta de ${o.referido || 'tu referido'} se cerró sin concretarse`
   return o.resultado === 'exitosa'
     ? 'Consulta cerrada con éxito · comisión disponible'
     : `La consulta de ${o.referido || 'tu referido'} se cerró`

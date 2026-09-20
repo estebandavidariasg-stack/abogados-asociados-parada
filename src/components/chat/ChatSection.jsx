@@ -1595,17 +1595,74 @@ export default function ChatSection() {
     }
   }, [step])
 
-  // QR del gestor / deep-links: el hash llega como "#chat?codigo=PB-XXXX" y el
-  // navegador NO encuentra un ancla con ese nombre → se quedaba arriba de la
-  // página. Al montar, si el hash apunta al chat, bajamos a la sección (el
-  // código ya se prellenó en StepCedula desde ese mismo hash).
+  // QR del gestor / de la plataforma / deep-links: el hash llega como
+  // "#chat?codigo=PB-XXXX" y el navegador NO encuentra un ancla con ese
+  // nombre, así que la página se quedaba arriba. El código ya viene
+  // prellenado desde ese mismo hash (lo lee StepCedula).
   useEffect(() => {
-    if (window.location.hash.startsWith('#chat')) {
-      // Pequeño delay: deja que el layout (hero, imágenes) se asiente primero.
-      const t = setTimeout(() => {
-        document.getElementById('chat')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-      }, 350)
-      return () => clearTimeout(t)
+    if (!window.location.hash.startsWith('#chat')) return
+
+    // Quien escanea el QR viene a escribir su cédula, así que hay que dejarlo
+    // EN la tarjeta de identificación. Dos cosas lo impedían:
+    //
+    //   · El tope lo ocupan DOS barras fijas (navbar y subnavbar) cuyo alto
+    //     cambia con el ancho y con el scroll, y scrollIntoView las ignora.
+    //   · La página sigue creciendo mientras el scroll viaja (imágenes del
+    //     hero, videos, reveals), así que cualquier destino calculado una vez
+    //     queda obsoleto: en un móvil con red lenta el salto se quedaba corto
+    //     y el usuario aterrizaba en una sección vacía.
+    //
+    // Por eso no se salta una vez: se CORRIGE hasta que la tarjeta queda en
+    // su sitio y el layout deja de moverse, con tope de tiempo y abortando si
+    // la persona toca la pantalla (nunca pelear contra su scroll).
+
+    let cancelado = false
+    let estables = 0
+
+    const barrasArriba = () => {
+      let base = 0
+      for (const el of document.querySelectorAll('nav, header')) {
+        const cs = getComputedStyle(el)
+        if (cs.position !== 'fixed' && cs.position !== 'sticky') continue
+        const r = el.getBoundingClientRect()
+        if (r.top <= 140 && r.height > 24) base = Math.max(base, r.bottom)
+      }
+      return base || 80
+    }
+
+    const abortar = () => { cancelado = true }
+    const eventos = ['wheel', 'touchstart', 'keydown', 'mousedown']
+    eventos.forEach(ev => window.addEventListener(ev, abortar, { passive: true, once: true }))
+
+    const corregir = () => {
+      if (cancelado) return true
+      const tarjeta = document.querySelector('.aap-card-cedula')
+      if (!tarjeta) return false           // aún no está montada: seguir esperando
+      const arriba = tarjeta.getBoundingClientRect().top
+      const objetivo = barrasArriba() + 16
+      if (Math.abs(arriba - objetivo) <= 4) {
+        estables += 1
+        return estables >= 3               // tres vueltas quieto = layout asentado
+      }
+      estables = 0
+      window.scrollTo({
+        top: Math.max(0, window.scrollY + arriba - objetivo),
+        // Suave la primera vez (se ve el recorrido); instantáneo después, para
+        // que las correcciones no se peleen con la animación en curso.
+        behavior: window.scrollY === 0 ? 'smooth' : 'auto',
+      })
+      return false
+    }
+
+    const inicio = Date.now()
+    const timer = setInterval(() => {
+      if (corregir() || Date.now() - inicio > 6000) clearInterval(timer)
+    }, 220)
+
+    return () => {
+      cancelado = true
+      clearInterval(timer)
+      eventos.forEach(ev => window.removeEventListener(ev, abortar))
     }
   }, [])
 

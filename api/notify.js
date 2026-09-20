@@ -932,7 +932,10 @@ export default async function handler(req, res) {
     // envía UNA sola vez y nunca hacia atrás.
     if (type === 'gestor_trazabilidad') {
       const { evento, roomId, cobroId } = data || {}
-      const ETAPAS = { inicio: 0, en_curso: 1, cierre: 2, pago: 3 }
+      const ETAPAS = { inicio: 0, en_curso: 1, cierre: 2, rechazado: 2, no_exitoso: 2, pago: 3 }
+      // 'cierre' (exitosa), 'rechazado' y 'no_exitoso' comparten nivel: son tres
+      // finales excluyentes de la misma etapa, y el dedupe por sala impide que
+      // el gestor reciba dos desenlaces contradictorios.
       if (!(evento in ETAPAS)) {
         return res.status(400).json({ error: 'Evento inválido.' })
       }
@@ -945,7 +948,7 @@ export default async function handler(req, res) {
       //  · en_curso: profesional autenticado Y asignado a esa sala.
       //  · inicio: flujo ANÓNIMO del cliente (igual que new_consultation); el
       //    dedupe por sala limita el abuso a 1 correo por sala real con código.
-      if (evento === 'cierre' || evento === 'pago') {
+      if (evento === 'cierre' || evento === 'pago' || evento === 'rechazado' || evento === 'no_exitoso') {
         const caller = await getCallerProfile(req)
         if (caller?.rol !== 'superadmin') {
           return res.status(401).json({ error: 'No autorizado.' })

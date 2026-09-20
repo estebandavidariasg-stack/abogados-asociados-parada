@@ -204,6 +204,22 @@
 }
 .proofBtn:hover { border-color: #c9a84c; background: #fcf8f0; }
 
+/* Certificado bancario del gestor: verde cuando está, rojo cuando falta. */
+.certBtn {
+  display: inline-flex; align-items: center; cursor: pointer; font-family: inherit;
+  font-size: 0.74rem; font-weight: 700; color: #1f7a4d;
+  background: #e7f6ee; border: 1px solid #bfe6cf;
+  padding: 6px 11px; border-radius: 9px; white-space: nowrap;
+  transition: border-color .15s ease, background .15s ease;
+}
+.certBtn:hover { border-color: #96d6b4; background: #d8f0e3; }
+.sinCert {
+  display: inline-block; font-size: 0.74rem; font-weight: 700; color: #a23b3b;
+  background: #fbeaea; border: 1px dashed rgba(162,59,59,0.35);
+  padding: 6px 11px; border-radius: 9px; white-space: nowrap;
+}
+@media (prefers-reduced-motion: reduce) { .certBtn { transition: none; } }
+
 /* ── Modal: pagar comisión + comprobante ── */
 .payOverlay {
   position: fixed; inset: 0; z-index: 1200;

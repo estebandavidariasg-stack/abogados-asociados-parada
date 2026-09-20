@@ -4,7 +4,7 @@ import { supabase } from '../../lib/supabase'
 import { getAuthHeaders } from '../../lib/supabase'
 import styles from './CodigosReferencia.module.css'
 import { IconPlus, IconX, IconCheck, IconDownload, IconQR, IconPencil } from '../shared/Icons'
-import { getQRUrl, downloadQRCard, chatUrlFor } from '../../lib/qrCard'
+import { getQRUrl, downloadQRCard, chatUrlFor, urlConsulta } from '../../lib/qrCard'
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
@@ -33,6 +33,9 @@ function downloadComisionista(codigo, nombre, apellido) {
 export default function CodigosReferencia() {
   const [codigos, setCodigos]   = useState([])
   const [loading, setLoading]   = useState(true)
+  const [usos, setUsos]         = useState({})     // { codigo: nº de consultas }
+  const [confirmDel, setConfirmDel] = useState(null)  // código a eliminar
+  const [borrando, setBorrando] = useState(false)
   const [saving, setSaving]     = useState(false)
   const [modalOpen, setModalOpen] = useState(false) // crear y editar usan el mismo modal
   const [editingId, setEditingId] = useState(null) // null = crear; id = editar
@@ -79,6 +82,47 @@ export default function CodigosReferencia() {
     if (plat) { setPlatDestino(plat.destino_url || APP_URL); setPlatCodigo(plat.codigo || 'PB-OFICIAL') }
     setCodigos(filas.filter(c => !c.es_plataforma))
     setLoading(false)
+    contarUsos(filas.map(c => c.codigo).filter(Boolean), headers)
+  }
+
+  // Cuántas consultas entraron por cada código. Decide si el código se puede
+  // borrar: las salas guardan el código como TEXTO y `generar_cobro` resuelve
+  // al gestor buscándolo aquí, así que borrar uno ya usado rompería la
+  // comisión de esas consultas. Los usados solo se desactivan.
+  async function contarUsos(codigos, headers) {
+    if (!codigos.length) { setUsos({}); return }
+    try {
+      const lista = codigos.map(c => `"${c}"`).join(',')
+      const res = await fetch(
+        `${SUPABASE_URL}/rest/v1/chat_rooms?codigo_referencia=in.(${encodeURIComponent(lista)})&select=codigo_referencia`,
+        { headers }
+      )
+      if (!res.ok) return
+      const filas = await res.json()
+      const mapa = {}
+      for (const f of (Array.isArray(filas) ? filas : [])) {
+        mapa[f.codigo_referencia] = (mapa[f.codigo_referencia] || 0) + 1
+      }
+      setUsos(mapa)
+    } catch { /* sin conteo, el borrado queda deshabilitado por prudencia */ }
+  }
+
+  async function eliminarCodigo(c) {
+    setBorrando(true)
+    try {
+      const headers = await getAuthHeaders()
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/codigos_referencia?id=eq.${c.id}`, {
+        method: 'DELETE', headers,
+      })
+      if (!res.ok) throw new Error('No se pudo eliminar el código.')
+      setConfirmDel(null)
+      setSuccess(`Código ${c.codigo} eliminado.`)
+      await fetchCodigos()
+    } catch (err) {
+      setError(err.message || 'No se pudo eliminar el código.')
+    } finally {
+      setBorrando(false)
+    }
   }
 
   // ── Guardar / crear el código oficial de la plataforma ──
@@ -121,7 +165,7 @@ export default function CodigosReferencia() {
 
   function downloadPlataforma() {
     return downloadQRCard({
-      target: platDestino || APP_URL,
+      target: urlConsulta(platDestino),
       codigo: platCodigo || 'PB-OFICIAL',
       nombre: 'Plataforma oficial', apellido: '',
       subtitulo: 'Sitio oficial', etiqueta: 'CÓDIGO OFICIAL DE LA PLATAFORMA',
@@ -191,14 +235,6 @@ export default function CodigosReferencia() {
   function closeModal() {
     setModalOpen(false)
     setEditingId(null); setEditingCodigo(''); setForm(FORM_VACIO); setError('')
-  }
-
-  async function toggleActivo(id, activo) {
-    const headers = await getAuthHeaders()
-    await fetch(`${SUPABASE_URL}/rest/v1/codigos_referencia?id=eq.${id}`, {
-      method: 'PATCH', headers, body: JSON.stringify({ activo: !activo }),
-    })
-    fetchCodigos()
   }
 
 
@@ -273,7 +309,7 @@ export default function CodigosReferencia() {
           <div className={styles.platBody}>
             <div className={styles.platQrBox}>
               <img
-                src={getQRUrl(platDestino || APP_URL, 260)}
+                src={getQRUrl(urlConsulta(platDestino), 260)}
                 alt="QR oficial de la plataforma"
                 className={styles.platQrImg}
                 width="130" height="130" loading="lazy" decoding="async"
@@ -283,11 +319,12 @@ export default function CodigosReferencia() {
             <div className={styles.platInfo}>
               <p className={styles.platTitle}>Parada Bridge · Sitio oficial</p>
               <p className={styles.platDesc}>
-                Este QR redirige directamente a nuestra página. Compártelo en material impreso o digital.
+                Al escanearlo, la persona aterriza en la sección de consulta, lista para escribir su cédula.
+                Compártelo en material impreso o digital.
               </p>
               <p className={styles.platCodigo}>{platCodigo || 'PB-OFICIAL'}</p>
-              <a className={styles.platUrl} href={platDestino || APP_URL} target="_blank" rel="noopener noreferrer">
-                {(platDestino || APP_URL).replace(/^https?:\/\//, '')}
+              <a className={styles.platUrl} href={urlConsulta(platDestino)} target="_blank" rel="noopener noreferrer">
+                {urlConsulta(platDestino).replace(/^https?:\/\//, '')}
               </a>
             </div>
 
@@ -326,7 +363,7 @@ export default function CodigosReferencia() {
       ) : (
         <div className={styles.list}>
           {codigos.map(c => (
-            <div key={c.id} className={`${styles.codigoCard} ${!c.activo ? styles.codigoInactivo : ''}`}>
+            <div key={c.id} className={styles.codigoCard}>
 
               {/* Info */}
               <div className={styles.codigoInfo}>
@@ -368,10 +405,11 @@ export default function CodigosReferencia() {
                   <IconPencil /> Editar
                 </button>
                 <button
-                  className={c.activo ? styles.btnDeactivate : styles.btnActivate}
-                  onClick={() => toggleActivo(c.id, c.activo)}
+                  className={styles.btnDelete}
+                  onClick={() => setConfirmDel(c)}
+                  title="Eliminar este código definitivamente"
                 >
-                  {c.activo ? 'Desactivar' : 'Activar'}
+                  Eliminar
                 </button>
               </div>
 
@@ -530,6 +568,52 @@ export default function CodigosReferencia() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* ── Confirmación de borrado ──
+          Solo llega aquí un código sin uso, así que el riesgo es perder el
+          código impreso, no el historial. Aun así se confirma: es definitivo. */}
+      {confirmDel && createPortal(
+        <div className={styles.modalOverlay} role="dialog" aria-modal="true"
+          aria-labelledby="delTitle" onClick={() => !borrando && setConfirmDel(null)}>
+          <div className={`${styles.modalCard} ${styles.confirmCard}`} onClick={(e) => e.stopPropagation()}>
+            <div className={styles.modalHead}>
+              <div>
+                <h3 id="delTitle" className={styles.modalTitle}>Eliminar código</h3>
+                <p className={styles.modalSub}><strong>{confirmDel.codigo}</strong></p>
+              </div>
+            </div>
+            {usos[confirmDel.codigo] > 0 ? (
+              <>
+                <p className={styles.confirmTexto}>
+                  Por este código entraron <strong>{usos[confirmDel.codigo]}</strong>{' '}
+                  {usos[confirmDel.codigo] === 1 ? 'consulta' : 'consultas'}. Esas consultas
+                  siguen en el historial, pero dejan de estar ligadas a su gestor: si alguna
+                  genera comisión más adelante, el sistema ya no sabrá a quién pagársela.
+                </p>
+                <p className={styles.confirmTexto}>
+                  La acción no se puede deshacer y las tarjetas impresas con este QR dejarán de servir.
+                </p>
+              </>
+            ) : (
+              <p className={styles.confirmTexto}>
+                Nadie ha entrado por este código todavía, así que no se pierde ningún historial.
+                La acción no se puede deshacer y las tarjetas impresas con este QR dejarán de servir.
+              </p>
+            )}
+            <div className={styles.modalActions}>
+              <button type="button" className={styles.btnCancel}
+                onClick={() => setConfirmDel(null)} disabled={borrando}>
+                Cancelar
+              </button>
+              <button type="button" className={styles.btnDelete}
+                onClick={() => eliminarCodigo(confirmDel)} disabled={borrando}>
+                {borrando ? 'Eliminando…' : 'Eliminar código'}
+              </button>
+            </div>
           </div>
         </div>,
         document.body

@@ -8,6 +8,28 @@ import styles from './GestoresAdmin.module.css'
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
 
+// Código de referencia: 'PB-' + 6 caracteres de un alfabeto sin I ni O (nadie
+// confunde I con 1, ni O con 0). 32 símbolos → `byte % 32` no sesga. Mismo
+// formato y mismo CSPRNG que usa el panel de Códigos.
+function nuevoCodigo() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+  const bytes = crypto.getRandomValues(new Uint8Array(6))
+  let code = 'PB-'
+  for (let i = 0; i < 6; i++) code += chars[bytes[i] % chars.length]
+  return code
+}
+
+// Certificado bancario del gestor: el valor guardado puede ser un path del
+// bucket privado `tarjetas-profesionales` o una URL antigua ya pública.
+async function abrirCertificado(valor) {
+  if (!valor) return
+  if (/^https?:\/\//.test(valor)) { window.open(valor, '_blank', 'noopener'); return }
+  const { data } = await supabase.storage
+    .from('tarjetas-profesionales')
+    .createSignedUrl(valor, 3600)
+  if (data?.signedUrl) window.open(data.signedUrl, '_blank', 'noopener')
+}
+
 /* ── Iconos locales (mismo estilo stroke Lucide del set compartido) ── */
 const IconUsers = ({ size = 15 }) => (
   <svg width={size} height={size} viewBox="0 0 16 16" fill="none" aria-hidden="true"
@@ -146,16 +168,86 @@ export default function GestoresAdmin({ onChange }) {
     await cargar()
   }
 
+  // Crea un código nuevo YA asignado a este gestor, con sus datos de perfil.
+  // El admin no tiene que ir a la pestaña Códigos, crearlo y volver a asignarlo:
+  // desde la tarjeta del gestor sale completo de una vez.
+  const [creandoCodigo, setCreandoCodigo] = useState(null)   // id del gestor en curso
+
+  async function crearCodigoPara(g) {
+    if (creandoCodigo) return
+    setCreandoCodigo(g.id)
+    try {
+      const headers = await getAuthHeaders()
+      // Reintento corto por si el código sorteado ya existe (choque del índice).
+      for (let intento = 0; intento < 5; intento++) {
+        const codigo = nuevoCodigo()
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/codigos_referencia`, {
+          method: 'POST',
+          headers: { ...headers, 'Content-Type': 'application/json', Prefer: 'return=representation' },
+          // `nombre` es NOT NULL en la tabla y el registro del gestor es
+          // simplificado (muchos solo traen usuario), así que nunca se manda
+          // null: cae al usuario y, en el peor caso, a "Gestor". El admin
+          // puede corregir el nombre después desde la pestaña Códigos.
+          body: JSON.stringify({
+            codigo,
+            gestor_id: g.id,
+            es_plataforma: false,
+            nombre:   (g.nombre || '').trim() || g.username || 'Gestor',
+            apellido: (g.apellido || '').trim(),
+            cedula:   g.cedula || '',
+            correo:   g.email  || '',
+          }),
+        })
+        if (res.ok) {
+          flash(`Código ${codigo} creado y asignado a @${g.username || 'gestor'}.`)
+          await cargar()
+          return
+        }
+        const err = await res.json().catch(() => null)
+        if (err?.code !== '23505') {
+          flash(err?.message || 'No se pudo crear el código.')
+          return
+        }
+      }
+      flash('No se pudo generar un código libre. Intenta de nuevo.')
+    } catch {
+      flash('No se pudo crear el código.')
+    } finally {
+      setCreandoCodigo(null)
+    }
+  }
+
   // Marca el resultado de una consulta cerrada (éxito/fracaso) — alimenta las stats.
+  // Aquí es donde el admin define el desenlace de la consulta, así que aquí
+  // sale el correo de trazabilidad al gestor. 'exito' ya tiene el suyo cuando
+  // se define el cobro (evento 'cierre'); los dos desenlaces negativos son los
+  // que faltaban y van en rojo.
+  const EVENTO_RESULTADO = { fracaso: 'no_exitoso', rechazado: 'rechazado' }
+  const ROTULO_RESULTADO = { exito: 'éxito', fracaso: 'no exitosa', rechazado: 'rechazada' }
+
   async function marcarResultado(roomId, resultado) {
     const headers = await getAuthHeaders()
     // Optimista: refleja el cambio local para que las stats se recalculen al instante.
     setRooms(rs => rs.map(r => r.id === roomId ? { ...r, resultado } : r))
-    await fetch(`${SUPABASE_URL}/rest/v1/chat_rooms?id=eq.${roomId}`, {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/chat_rooms?id=eq.${roomId}`, {
       method: 'PATCH', headers,
       body: JSON.stringify({ resultado, resultado_at: new Date().toISOString() }),
     })
-    flash(resultado === 'exito' ? 'Marcado como éxito.' : 'Marcado como fracaso.')
+    if (!res.ok) {
+      flash('No se pudo guardar el resultado. ¿Falta aplicar docs/sql/gestor-2026-09-17.sql?')
+      return
+    }
+    flash(`Consulta marcada como ${ROTULO_RESULTADO[resultado] || resultado}.`)
+
+    // Correo al gestor (mejor esfuerzo: el resultado ya quedó guardado).
+    const evento = EVENTO_RESULTADO[resultado]
+    if (evento) {
+      fetch('/api/notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: headers.Authorization },
+        body: JSON.stringify({ type: 'gestor_trazabilidad', data: { evento, roomId } }),
+      }).catch(() => {})
+    }
   }
 
   // Inserta un cobro acumulado para el gestor (estado pendiente).
@@ -486,6 +578,8 @@ export default function GestoresAdmin({ onChange }) {
                     onToggle={() => setExpanded(g.id)}
                     onAprobar={setAprobado}
                     onAsignar={asignarCodigo}
+                    onCrearCodigo={crearCodigoPara}
+                    creando={creandoCodigo === g.id}
                     onMarcarResultado={marcarResultado}
                     onGuardarCobro={guardarCobro}
                     onMarcarPagado={marcarPagado}
@@ -539,7 +633,8 @@ export default function GestoresAdmin({ onChange }) {
    ══════════════════════════════════════════════════════════════════ */
 function GestorCard({
   gestor: g, asignado, codigos, usage, rooms, cobros,
-  onToggle, onAprobar, onAsignar, onMarcarResultado, onGuardarCobro, onMarcarPagado,
+  onToggle, onAprobar, onAsignar, onCrearCodigo, creando,
+  onMarcarResultado, onGuardarCobro, onMarcarPagado,
 }) {
   const codeStr = asignado?.codigo || null
 
@@ -568,6 +663,18 @@ function GestorCard({
                   {usage} {usage === 1 ? 'persona usó el código' : 'personas usaron el código'}
                 </span>
               )}
+              {g.certificado_bancario_url ? (
+                <button
+                  type="button"
+                  className={styles.certTag}
+                  onClick={() => abrirCertificado(g.certificado_bancario_url)}
+                  title="Abrir el certificado bancario del gestor"
+                >
+                  Ver certificado bancario
+                </button>
+              ) : (
+                <span className={styles.noCertTag}>Sin certificado</span>
+              )}
             </div>
           </div>
         </div>
@@ -584,6 +691,21 @@ function GestorCard({
             </>
           ) : (
             <>
+              {!asignado && (
+                <button
+                  type="button"
+                  className={styles.btnCrearCodigo}
+                  onClick={() => onCrearCodigo(g)}
+                  disabled={creando}
+                  title={g.certificado_bancario_url
+                    ? 'Crear un código nuevo ya asignado a este gestor'
+                    : 'Se crea igual, pero sin certificado bancario no podrás pagarle la comisión'}
+                >
+                  <IconQR size={14} />
+                  {creando ? 'Creando…' : 'Crear código'}
+                </button>
+              )}
+
               <div className={styles.assignRow}>
                 <label className={styles.assignLabel}>Código</label>
                 <select
@@ -814,7 +936,14 @@ function Trazabilidad({ codigo, usage, rooms, onMarcarResultado }) {
                   className={`${styles.resBtn} ${styles.resFracaso} ${r.resultado === 'fracaso' ? styles.resActive : ''}`}
                   onClick={() => onMarcarResultado(r.id, 'fracaso')}
                 >
-                  <IconX /> Fracaso
+                  <IconX /> No exitosa
+                </button>
+                <button
+                  className={`${styles.resBtn} ${styles.resFracaso} ${r.resultado === 'rechazado' ? styles.resActive : ''}`}
+                  onClick={() => onMarcarResultado(r.id, 'rechazado')}
+                  title="La consulta no fue aceptada"
+                >
+                  <IconX /> Rechazada
                 </button>
               </div>
             </li>

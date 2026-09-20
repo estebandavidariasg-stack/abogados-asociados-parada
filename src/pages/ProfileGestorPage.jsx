@@ -4,6 +4,7 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts'
 import { useAuth } from '../context/AuthContext'
 import { supabase, getAuthHeaders } from '../lib/supabase'
 import { getQRUrl, downloadQRCard, chatUrlFor } from '../lib/qrCard'
+import LawyerInternalChat from '../components/chat/LawyerInternalChat'
 import styles from './ProfileGestorPage.module.css'
 // Reutilizamos el MISMO módulo de estilos del perfil profesional para que el
 // formulario "Mi perfil" tenga idéntica tipografía y formato.
@@ -15,6 +16,7 @@ const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
 const IconQr       = (p) => (<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3M21 14v.01M14 21h.01M21 21v-3h-3"/></svg>)
 const IconChart    = (p) => (<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M3 3v18h18"/><path d="M7 15l3-4 3 3 4-6"/></svg>)
 const IconWallet   = (p) => (<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M21 12V7a2 2 0 0 0-2-2H5a2 2 0 0 1 0-4h14"/><path d="M3 5v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-5"/><path d="M18 12a1 1 0 0 0 0 2h3v-2z"/></svg>)
+const IconShield   = (p) => (<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M12 3l7 3v5c0 4.4-3 8.4-7 10-4-1.6-7-5.6-7-10V6z"/><path d="M9 12l2 2 4-4"/></svg>)
 const IconUser     = (p) => (<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>)
 const IconHome     = (p) => (<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>)
 const IconLogout   = (p) => (<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg>)
@@ -25,6 +27,7 @@ const SECCIONES = [
   { id: 'codigo',   label: 'Mi código',    Icon: IconQr },
   { id: 'stats',    label: 'Estadísticas', Icon: IconChart },
   { id: 'cobros',   label: 'Cobros',       Icon: IconWallet },
+  { id: 'interno',  label: 'Chat interno', Icon: IconShield },
 ]
 
 const fmtCOP = (n) =>
@@ -124,6 +127,9 @@ export default function ProfileGestorPage() {
   const [cargandoCodigo, setCargandoCodigo] = useState(true)
 
   const aprobado = profile?.aprobado === true
+  // Sin certificado bancario no hay a donde pagarle la comision: es el
+  // requisito para tener codigo y para que el cobro sea cobrable.
+  const tieneCert = !!(profile?.certificado_bancario_url || '').trim()
 
   // Guard: solo gestores autenticados.
   useEffect(() => {
@@ -236,6 +242,8 @@ export default function ProfileGestorPage() {
               codigo={codigo}
               username={profile?.username}
               onDescargar={descargar}
+              tieneCert={tieneCert}
+              onIrAPerfil={() => setSeccion('perfil')}
             />
           )}
 
@@ -244,7 +252,24 @@ export default function ProfileGestorPage() {
           )}
 
           {seccion === 'cobros' && (
-            <SeccionCobros aprobado={aprobado} userId={user?.id} />
+            <SeccionCobros
+              aprobado={aprobado}
+              userId={user?.id}
+              tieneCert={tieneCert}
+              onIrAPerfil={() => setSeccion('perfil')}
+            />
+          )}
+
+          {seccion === 'interno' && (
+            <section className={styles.panel}>
+              <div className={styles.panelHead}>
+                <div>
+                  <p className={styles.eyebrow}>Canal privado</p>
+                  <h1 className={styles.panelTitle}>Chat <em>interno</em></h1>
+                </div>
+              </div>
+              <LawyerInternalChat miId={user?.id} />
+            </section>
           )}
 
           {seccion === 'perfil' && (
@@ -298,7 +323,7 @@ function EstadoPendiente() {
   )
 }
 
-function EstadoSinCodigo() {
+function EstadoSinCodigo({ tieneCert, onIrAPerfil }) {
   return (
     <div className={styles.estado}>
       <span className={styles.estadoIcon} data-tone="empty" aria-hidden="true">
@@ -308,11 +333,29 @@ function EstadoSinCodigo() {
           <rect x="3" y="14" width="7" height="7" rx="1" /><path d="M14 14h3v3M21 14v.01M14 21h.01M21 21v-3h-3" />
         </svg>
       </span>
-      <p className={styles.estadoTitle}>Pendiente de asignación</p>
-      <p className={styles.estadoDesc}>
-        Tu cuenta está aprobada. El administrador aún no te ha asignado un código de referencia.
-        Vuelve más tarde o contáctalo.
-      </p>
+      <p className={styles.estadoTitle}>Todavía no tienes código</p>
+      {/* Sin onIrAPerfil (p. ej. desde Estadísticas) solo se informa. */}
+      {!onIrAPerfil ? (
+        <p className={styles.estadoDesc}>
+          Cuando el administrador te asigne tu código, aquí verás cuántas personas lo usaron
+          y en qué va cada consulta.
+        </p>
+      ) : tieneCert ? (
+        <p className={styles.estadoDesc}>
+          Tu cuenta está aprobada y tu certificado bancario está cargado. El administrador
+          creará tu código en breve y aparecerá aquí con su QR.
+        </p>
+      ) : (
+        <>
+          <p className={styles.estadoDesc}>
+            Falta tu <strong>certificado bancario</strong>. Es la cuenta a la que te consignamos
+            las comisiones, y sin ella el administrador no puede emitirte el código.
+          </p>
+          <button type="button" className={styles.downloadBtn} onClick={onIrAPerfil}>
+            Subir certificado bancario
+          </button>
+        </>
+      )}
     </div>
   )
 }
@@ -320,7 +363,7 @@ function EstadoSinCodigo() {
 /* ══════════════════════════════════════════════════════════════════
    1. Mi código — QR + descarga
    ══════════════════════════════════════════════════════════════════ */
-function SeccionCodigo({ aprobado, cargando, codigo, username, onDescargar }) {
+function SeccionCodigo({ aprobado, cargando, codigo, username, onDescargar, tieneCert, onIrAPerfil }) {
   return (
     <section className={styles.panel}>
       <div className={styles.panelHead}>
@@ -336,7 +379,7 @@ function SeccionCodigo({ aprobado, cargando, codigo, username, onDescargar }) {
         ) : cargando ? (
           <p className={styles.estadoDesc} style={{ textAlign: 'center', margin: '0 auto' }}>Cargando tu código…</p>
         ) : !codigo ? (
-          <EstadoSinCodigo />
+          <EstadoSinCodigo tieneCert={tieneCert} onIrAPerfil={onIrAPerfil} />
         ) : (
           <div className={styles.qrWrap}>
             <div className={styles.qrBox}>
@@ -708,15 +751,21 @@ function ConsultaProgreso({ paso, resultado, tiempos = {} }) {
           )
         })}
       </div>
-      {paso === 'cerrada' && (
-        <span className={
-          resultado === 'exito' ? styles.histBadgeOk
-          : resultado === 'fracaso' ? styles.histBadgeBad
-          : styles.histBadgeNeutral
-        }>
-          {resultado === 'exito' ? 'Éxito' : resultado === 'fracaso' ? 'Fracaso' : 'Sin resultado'}
-        </span>
-      )}
+      {paso === 'cerrada' && (() => {
+        // Verde lo que deja comisión (exitosa o ya pagada), rojo los dos
+        // desenlaces que no la dejan (rechazada o no exitosa).
+        const ROTULO = {
+          exito: 'Exitosa', pagado: 'Pagada',
+          fracaso: 'No exitosa', rechazado: 'Rechazada',
+        }
+        const verde = resultado === 'exito' || resultado === 'pagado'
+        const rojo  = resultado === 'fracaso' || resultado === 'rechazado'
+        return (
+          <span className={verde ? styles.histBadgeOk : rojo ? styles.histBadgeBad : styles.histBadgeNeutral}>
+            {ROTULO[resultado] || 'Sin resultado'}
+          </span>
+        )
+      })()}
     </div>
   )
 }
@@ -778,7 +827,7 @@ function EstadoPill({ estado }) {
   return <span className={styles.pillDisponible}>Disponible</span>
 }
 
-function SeccionCobros({ aprobado, userId }) {
+function SeccionCobros({ aprobado, userId, tieneCert, onIrAPerfil }) {
   const [cobros, setCobros] = useState([])
   const [estado, setEstado] = useState('loading') // loading | ready | error
   const [pidiendoSemanal, setPidiendoSemanal] = useState(false)
@@ -945,6 +994,23 @@ function SeccionCobros({ aprobado, userId }) {
         </div>
       ) : (
         <>
+          {!tieneCert && (
+            <div className={styles.certAviso} role="note">
+              <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor"
+                strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M12 9v4" /><path d="M12 17h.01" />
+                <path d="M10.3 3.9L2.5 17.5A1.8 1.8 0 0 0 4 20.2h16a1.8 1.8 0 0 0 1.6-2.7L13.7 3.9a1.8 1.8 0 0 0-3.1 0z" />
+              </svg>
+              <span>
+                <strong>Falta tu certificado bancario.</strong> Tus comisiones se siguen acumulando,
+                pero no podemos pagarlas hasta tener la cuenta verificada.{' '}
+                <button type="button" className={styles.certAvisoLink} onClick={onIrAPerfil}>
+                  Subirlo ahora
+                </button>
+              </span>
+            </div>
+          )}
+
           {/* Tiles resumen — solicitados / pendientes / acumulado */}
           <div className={styles.statGrid}>
             <div className={styles.statTile} data-tone="navy">

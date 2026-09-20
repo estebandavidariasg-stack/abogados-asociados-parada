@@ -291,7 +291,7 @@ export default function PagosCobrosAdmin() {
         fetch(`${SUPABASE_URL}/rest/v1/pagos_profesional?select=id,profesional_id,monto,total_consulta,pct_empresa,pct_gestor,estado,comision_gestor,gestor_id,codigo,created_at,pagado_at&order=created_at.desc`, { headers }),
         fetch(`${SUPABASE_URL}/rest/v1/gestor_cobros?select=*&order=created_at.desc`, { headers }),
         fetch(`${SUPABASE_URL}/rest/v1/profiles?rol=in.(abogado,contador)&select=id,nombre,apellido,cedula,username,email,rol`, { headers }),
-        fetch(`${SUPABASE_URL}/rest/v1/profiles?rol=eq.gestor&select=id,nombre,apellido,cedula,username,email`, { headers }),
+        fetch(`${SUPABASE_URL}/rest/v1/profiles?rol=eq.gestor&select=id,nombre,apellido,cedula,username,email,certificado_bancario_url`, { headers }),
         fetch(`${SUPABASE_URL}/rest/v1/pagos_asesoria?select=id,room_id,profesional_id,monto,estado,nota,recibo_num,pago_profesional_id,marcado_cliente_at,confirmado_at,created_at&order=created_at.desc`, { headers }),
         fetch(`${SUPABASE_URL}/rest/v1/plataforma_config?id=eq.1&select=pct_empresa,comision_gestor_pct,default_total&limit=1`, { headers }),
       ])
@@ -430,6 +430,18 @@ export default function PagosCobrosAdmin() {
     } finally {
       setConfBusy(false)
     }
+  }
+
+  // Abre el certificado bancario del gestor (bucket privado → signed URL).
+  // Es la cuenta a la que se le consigna: el admin debe poder verla antes de
+  // marcar la comisión como pagada.
+  async function verCertificado(gestorId) {
+    const val = gestById.get(gestorId)?.certificado_bancario_url
+    if (!val) { flash('Ese gestor aún no subió su certificado bancario.'); return }
+    if (/^https?:\/\//.test(val)) { window.open(val, '_blank', 'noopener'); return }
+    const { data } = await supabase.storage.from('tarjetas-profesionales').createSignedUrl(val, 3600)
+    if (data?.signedUrl) window.open(data.signedUrl, '_blank', 'noopener')
+    else flash('No se pudo abrir el certificado.')
   }
 
   // Abre el comprobante de un cobro pagado (bucket privado → signed URL).
@@ -967,6 +979,7 @@ export default function PagosCobrosAdmin() {
                       <th>Código</th>
                       <th>Monto</th>
                       <th>Estado</th>
+                      <th>Cuenta</th>
                       <th>Acción</th>
                     </tr>
                   </thead>
@@ -991,6 +1004,15 @@ export default function PagosCobrosAdmin() {
                         <td className={styles.num}>{c.codigo || '—'}</td>
                         <td className={styles.num}>{fmtCOP(c.monto)}</td>
                         <td><EstadoPill estado={c._estadoUI} /></td>
+                        <td>
+                          {gestById.get(c.gestor_id)?.certificado_bancario_url ? (
+                            <button className={styles.certBtn} onClick={() => verCertificado(c.gestor_id)}>
+                              Ver certificado bancario
+                            </button>
+                          ) : (
+                            <span className={styles.sinCert}>Sin certificado</span>
+                          )}
+                        </td>
                         <td>
                           {c._estadoUI === 'solicitado' ? (
                             <button className={styles.payBtn} onClick={() => abrirPagoModal(c)}>

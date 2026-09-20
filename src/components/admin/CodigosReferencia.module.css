@@ -178,10 +178,6 @@
   box-shadow: 0 4px 16px rgba(109,60,27,0.12);
 }
 
-.codigoInactivo {
-  opacity: 0.45;
-}
-
 .codigoInfo {
   display: flex;
   align-items: flex-start;
@@ -232,7 +228,7 @@
   flex-wrap: wrap;
 }
 
-.btnQR, .btnEdit, .btnDownload, .btnDeactivate, .btnActivate {
+.btnQR, .btnEdit, .btnDownload, .btnDelete {
   padding: 7px 14px;
   border: none;
   border-radius: 14px;
@@ -265,19 +261,36 @@
 }
 .btnDownload:hover { background: rgba(109,60,27,0.1); }
 
-.btnDeactivate {
-  background: rgba(220,80,80,0.08);
-  border: 1px solid rgba(176,0,32,0.25);
-  color: #b00020;
-}
-.btnDeactivate:hover { background: rgba(220,80,80,0.16); }
 
-.btnActivate {
-  background: rgba(46,204,113,0.1);
-  border: 1px solid rgba(31,122,77,0.3);
-  color: #1f7a4d;
+/* Borrado definitivo: solo aparece en códigos sin uso. Sólido, no tinte,
+   para que se distinga de "Desactivar", que es reversible. */
+.btnDelete {
+  background: #b00020;
+  border: 1px solid #93001b;
+  color: #fff;
 }
-.btnActivate:hover { background: rgba(46,204,113,0.18); }
+.btnDelete:hover:not(:disabled) { background: #93001b; }
+.btnDelete:disabled { opacity: 0.55; cursor: not-allowed; }
+
+/* ── Modal de confirmación de borrado ──
+   Es una decisión de sí o no sobre un solo objeto, no un formulario: todo
+   va centrado en una columna estrecha para que la vista caiga en el código
+   y luego en los dos botones, sin recorrido lateral. */
+.confirmCard { max-width: 430px; text-align: center; }
+.confirmCard .modalHead { display: block; margin-bottom: 14px; }
+.confirmCard .modalTitle { letter-spacing: 0.03em; }
+.confirmCard .modalSub { margin-top: 6px; font-size: 0.8rem; }
+.confirmTexto {
+  font-size: 0.86rem;
+  line-height: 1.6;
+  color: #6f5c48;
+  margin: 0 auto 10px;
+  max-width: 44ch;
+  text-wrap: pretty;
+}
+.confirmTexto:last-of-type { margin-bottom: 0; }
+.confirmTexto strong { color: #6d3c1b; }
+.confirmCard .modalActions { justify-content: center; margin-top: 22px; }
 
 /* ── QR expandido ── */
 .qrExpanded {

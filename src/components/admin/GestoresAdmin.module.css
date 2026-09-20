@@ -253,6 +253,23 @@
   border-radius: 999px; padding: 3px 10px;
 }
 
+/* Certificado bancario: cuenta verificada del gestor. Verde cuando existe
+   (es un botón que lo abre), gris punteado cuando falta. */
+.certTag {
+  appearance: none; cursor: pointer; font-family: inherit;
+  font-size: 0.74rem; font-weight: 600; color: #1f7a4d;
+  background: #e7f6ee; border: 1px solid #bfe6cf;
+  border-radius: 999px; padding: 3px 10px;
+  transition: background 0.18s, border-color 0.18s;
+}
+.certTag:hover { background: #d8f0e3; border-color: #96d6b4; }
+.noCertTag {
+  font-size: 0.74rem; font-weight: 600; color: #a23b3b;
+  background: #fbeaea; border: 1px dashed rgba(162,59,59,0.35);
+  border-radius: 999px; padding: 3px 10px;
+}
+@media (prefers-reduced-motion: reduce) { .certTag { transition: none; } }
+
 /* Alinea el select (con su label encima) y el botón "Ver detalle" por su base,
    para que ambos controles queden a la misma altura. */
 .actions { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; }
@@ -277,6 +294,24 @@
 .btnApprove:hover { filter: brightness(1.05); }
 .btnReject { color: #b23b3b; background: rgba(220,80,80,0.08); border-color: rgba(220,80,80,0.28); }
 .btnReject:hover { background: rgba(220,80,80,0.14); }
+.btnCrearCodigo {
+  display: inline-flex; align-items: center; gap: 7px;
+  appearance: none; cursor: pointer; font-family: inherit;
+  font-size: 0.78rem; font-weight: 700; letter-spacing: 0.01em;
+  color: #6d3c1b;
+  background: linear-gradient(135deg, #f2d580, #c9a84c 60%, #b2913c);
+  border: 1px solid rgba(154,122,44,0.5);
+  border-radius: 9px; padding: 8px 14px; white-space: nowrap;
+  transition: filter 0.16s ease, box-shadow 0.16s ease;
+}
+.btnCrearCodigo:hover:not(:disabled) { filter: brightness(1.05); box-shadow: 0 4px 12px rgba(201,168,76,0.35); }
+.btnCrearCodigo:disabled {
+  cursor: not-allowed; color: #a59587;
+  background: rgba(109,60,27,0.05); border-color: rgba(109,60,27,0.14);
+  box-shadow: none;
+}
+@media (prefers-reduced-motion: reduce) { .btnCrearCodigo { transition: none; } }
+
 .btnExpand { color: #6d3c1b; background: rgba(109,60,27,0.06); border-color: rgba(109,60,27,0.16); }
 .btnExpand:hover { background: rgba(109,60,27,0.1); }
 .chevR { font-size: 1rem; line-height: 1; margin-left: -1px; transition: transform 0.16s ease; }

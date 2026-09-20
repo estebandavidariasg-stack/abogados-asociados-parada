@@ -18,6 +18,17 @@ export function chatUrlFor(codigo) {
   return `${APP_URL}/#chat?codigo=${encodeURIComponent(codigo)}`
 }
 
+/* El QR oficial de la plataforma apunta a una URL que el admin puede editar.
+   Si esa URL no lleva hash, el escaneo aterriza arriba del inicio en vez de la
+   consulta, que es lo que la gente busca al escanear. Esta función le añade
+   #chat cuando falta, sin tocar lo que el admin haya escrito a propósito
+   (si ya trae cualquier hash, se respeta). */
+export function urlConsulta(destino) {
+  const base = (destino || '').trim() || APP_URL
+  if (base.includes('#')) return base
+  return `${base.replace(/\/+$/, '')}/#chat`
+}
+
 // URL de la imagen del QR para previsualización inline.
 export function getQRUrl(target, size = 320) {
   return `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}` +
