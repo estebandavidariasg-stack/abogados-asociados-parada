@@ -569,6 +569,15 @@
    ══════════════════════════════════════════ */
 .tabContent { /* wrapper neutro */ }
 
+/* Aviso breve tras aprobar (se cierra solo a los 10 s). */
+.avisoOk {
+  display: flex; align-items: center; gap: 9px;
+  font-size: 0.86rem; font-weight: 600; color: #1f7a4d;
+  background: #e7f6ee; border: 1px solid #bfe6cf; border-radius: 12px;
+  padding: 11px 15px; margin-bottom: 12px;
+}
+.avisoOk svg { flex-shrink: 0; }
+
 .section {
   display: flex;
   flex-direction: column;
@@ -2019,6 +2028,45 @@
   color: #90735a;
   margin: 4px 0 14px;
 }
+
+/* ── Modal de aprobación: compromiso + adjunto opcional ── */
+.aprobarTexto {
+  margin: 0 0 16px;
+  padding: 13px 15px;
+  font-size: 0.86rem;
+  line-height: 1.6;
+  color: #4a3726;
+  background: #fbf6ee;
+  border: 1px solid rgba(201, 168, 76, 0.4);
+  border-radius: 12px;
+  text-wrap: pretty;
+}
+.aprobarAdjunto { display: flex; flex-direction: column; gap: 6px; margin-bottom: 4px; }
+.aprobarAdjuntar {
+  display: inline-flex; align-items: center; gap: 8px; align-self: flex-start;
+  font-family: inherit; font-size: 0.82rem; font-weight: 600; color: #6d3c1b;
+  background: #fff; border: 1px dashed rgba(109,60,27,0.35); border-radius: 10px;
+  padding: 9px 13px; cursor: pointer;
+  transition: background 0.18s, border-color 0.18s;
+}
+.aprobarAdjuntar:hover { background: rgba(109,60,27,0.05); border-color: #6d3c1b; }
+.aprobarArchivo {
+  display: inline-flex; align-items: center; gap: 8px; max-width: 100%;
+  font-size: 0.82rem; color: #4a3726;
+  background: #e7f6ee; border: 1px solid #bfe6cf; border-radius: 10px;
+  padding: 8px 10px 8px 12px;
+}
+.aprobarArchivo svg { flex-shrink: 0; color: #1f7a4d; }
+.aprobarArchivoNombre { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.aprobarArchivoPeso { flex-shrink: 0; color: #6f5c48; font-size: 0.74rem; }
+.aprobarQuitar {
+  flex-shrink: 0; width: 22px; height: 22px; margin-left: 2px;
+  display: grid; place-items: center; border: none; border-radius: 50%;
+  background: rgba(31,122,77,0.12); color: #1f7a4d; font-size: 1rem; line-height: 1;
+  cursor: pointer; font-family: inherit;
+}
+.aprobarQuitar:hover { background: rgba(31,122,77,0.22); }
+@media (prefers-reduced-motion: reduce) { .aprobarAdjuntar { transition: none; } }
 
 .reasignList {
   display: flex;

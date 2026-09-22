@@ -10,12 +10,15 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl
 
 /* Devuelve [{ dataUrl, width, height }] — una entrada por página.
    Trabaja sobre una COPIA: pdf.js desacopla (detach) el buffer que recibe, y si
-   fuera el original el llamador se quedaría sin bytes (p.ej. para estamparFirma). */
-export async function rasterizarPdf(pdfBytes, scale = 2) {
+   fuera el original el llamador se quedaría sin bytes (p.ej. para estamparFirma).
+   `maxPaginas` / `tipo` / `calidad`: la revisión de contacto del chat solo
+   necesita las primeras páginas en JPEG liviano. */
+export async function rasterizarPdf(pdfBytes, scale = 2, { maxPaginas = Infinity, tipo = 'image/png', calidad } = {}) {
   const bytes = pdfBytes instanceof Uint8Array ? pdfBytes.slice() : new Uint8Array(pdfBytes)
   const pdf = await pdfjsLib.getDocument({ data: bytes }).promise
   const paginas = []
-  for (let i = 1; i <= pdf.numPages; i++) {
+  const total = Math.min(pdf.numPages, maxPaginas)
+  for (let i = 1; i <= total; i++) {
     const page = await pdf.getPage(i)
     const viewport = page.getViewport({ scale })
     const canvas = document.createElement('canvas')
@@ -25,7 +28,7 @@ export async function rasterizarPdf(pdfBytes, scale = 2) {
     ctx.fillStyle = '#ffffff'
     ctx.fillRect(0, 0, canvas.width, canvas.height)
     await page.render({ canvasContext: ctx, viewport }).promise
-    paginas.push({ dataUrl: canvas.toDataURL('image/png'), width: canvas.width, height: canvas.height })
+    paginas.push({ dataUrl: canvas.toDataURL(tipo, calidad), width: canvas.width, height: canvas.height })
   }
   return paginas
 }

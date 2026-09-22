@@ -173,6 +173,13 @@ export default function SuperAdminChatViewer({ initialRoomId = null }) {
   const [filterStatus, setFilterStatus] = useState('all')
   const [filterArea, setFilterArea]     = useState('')
   const [search, setSearch]             = useState('')
+  const [searchInput, setSearchInput]   = useState('')   // lo tecleado; pasa a `search` tras 200 ms
+  useEffect(() => {
+    const t = setTimeout(() => setSearch(searchInput), 200)
+    return () => clearTimeout(t)
+  }, [searchInput])
+  // "Limpiar filtros" vacía `search` desde fuera: el campo debe seguirlo.
+  useEffect(() => { if (search === '') setSearchInput('') }, [search])
   const [rolFilter, setRolFilter]       = useState('todos')  // 'todos'|'abogado'|'contador'
   const [verifFilter, setVerifFilter]   = useState('todos')  // 'todos' | 'pendientes' | 'verificadas'
   // Rango de fechas sobre created_at de la sala (YYYY-MM-DD, como los <input type="date">).
@@ -294,21 +301,24 @@ export default function SuperAdminChatViewer({ initialRoomId = null }) {
         return true
       })
     }
-    // Búsqueda unificada instantánea: nombre del cliente, nombre del
-    // profesional asignado, código de referencia, área, y cédula (por hash
-    // O por el número crudo que aparece en el primer mensaje / cache).
+    // Búsqueda unificada en vivo: nombre del cliente, correo, profesional,
+    // código, área y cédula. La cédula se guarda hasheada (client_cedula), así
+    // que un prefijo no puede compararse contra el hash; pero el número en
+    // claro ya viaja en el PRIMER MENSAJE de cada sala ("Cédula: 12.345.678")
+    // y loadCedulasCrudas lo deja en _cedulaCruda. Con eso se filtra por
+    // prefijo desde el primer dígito, y con 6+ dígitos además se cruza el
+    // hash completo (cubre salas antiguas sin esa línea en el mensaje).
     if (search) {
       const s = search.toLowerCase()
       const rawCedula = search.replace(/\D/g, '')  // dígitos que teclea
       list = list.filter(r =>
         r.client_nombre?.toLowerCase().includes(s) ||
+        r.client_email?.toLowerCase().includes(s) ||
         r._professionalNombre?.toLowerCase().includes(s) ||
         r.codigo_referencia?.toLowerCase().includes(s) ||
         r.area_derecho?.toLowerCase().includes(s) ||
-        // cédula por hash (client_cedula está hasheado)
         (searchHash && r.client_cedula === searchHash) ||
-        // cédula por número crudo detectado en el primer mensaje
-        (rawCedula.length >= 6 && r._cedulaCruda && r._cedulaCruda.includes(rawCedula))
+        (rawCedula.length >= 1 && r._cedulaCruda && r._cedulaCruda.includes(rawCedula))
       )
     }
     setFiltered(list)
@@ -849,9 +859,9 @@ export default function SuperAdminChatViewer({ initialRoomId = null }) {
           <div className={styles.filtroFila}>
             <input
               className={styles.searchInput}
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder="Buscar por nombre o cédula…"
+              value={searchInput}
+              onChange={e => setSearchInput(e.target.value)}
+              placeholder="Buscar por nombre, correo o cédula…"
             />
 
             <select className={styles.filterSelect} value={filterStatus}

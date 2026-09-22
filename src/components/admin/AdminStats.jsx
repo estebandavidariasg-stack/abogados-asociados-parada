@@ -56,6 +56,7 @@ export default function AdminStats({
     contratos = 0, firmas = 0,
     resenasTotal = 0, resenasAprob = 0,
     codigos = 0, codigosActivos = 0,
+    roles = null,
   } = extra
 
   const cards = useMemo(() => {
@@ -116,6 +117,16 @@ export default function AdminStats({
           { n: Math.max(0, codigos - codigosActivos), label: 'Inactivos', icon: 'grid' },
           { n: approved.length, label: 'Profesionales', icon: 'users' },
         ]
+      case 'roles': {
+        // Conteos por rol de TODAS las cuentas (los manda RolesAdmin al cargar).
+        const r = roles || {}
+        return [
+          { n: r.superadmin ?? 0, label: 'Superadministradores', tone: 'ok', icon: 'shield' },
+          { n: r.abogado ?? 0, label: 'Abogados', icon: 'scale' },
+          { n: r.contador ?? 0, label: 'Contadores', icon: 'calc' },
+          { n: r.gestor ?? 0, label: 'Gestores', icon: 'users' },
+        ]
+      }
       case 'pending':
       default:
         return [
@@ -125,7 +136,7 @@ export default function AdminStats({
           { n: alertas.length, label: 'Alertas inactividad', tone: alertas.length ? 'alert' : 'ok', icon: 'alert' },
         ]
     }
-  }, [activeTab, pending, approved, alertas, chatsCerrados, rTotal, rWaiting, rActive, rClosed, aAb, aCont, conDescarga, sinProf, conProf, contratos, firmas, resenasTotal, resenasAprob, codigos, codigosActivos, pAb, pCont])
+  }, [activeTab, pending, approved, alertas, chatsCerrados, rTotal, rWaiting, rActive, rClosed, aAb, aCont, conDescarga, sinProf, conProf, contratos, firmas, resenasTotal, resenasAprob, codigos, codigosActivos, pAb, pCont, roles])
 
   // Serie histórica: registros (profiles) y consultas (chat_rooms) por mes.
   const chartData = useMemo(() => {

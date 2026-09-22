@@ -37,21 +37,28 @@ function fmtFechaHora(ts) {
 }
 
 /* ─────────────────────────────────────────────
-   Primero buscamos el id del superadmin para
-   poder construir la conversación correctamente
+   Ids de TODOS los superadmins. Hay más de una
+   cuenta superadmin, y antes se tomaba UNA al
+   azar (limit=1 sin orden): los mensajes del
+   profesional iban a una u otra según el día, y
+   el admin que entraba con la otra cuenta no los
+   veía. Ahora el hilo se arma contra cualquier
+   superadmin y se envía siempre al mismo (el de
+   id menor, estable entre sesiones).
 ───────────────────────────────────────────── */
-async function fetchAdminId() {
+async function fetchAdminIds() {
   const headers = await getAuthHeaders()
   const res = await fetch(
-    `${SUPABASE_URL}/rest/v1/profiles?rol=eq.superadmin&select=id&limit=1`,
+    `${SUPABASE_URL}/rest/v1/profiles?rol=eq.superadmin&select=id&order=id.asc`,
     { headers, signal: timeoutSignal(15000) }
   )
   const data = await res.json()
-  return Array.isArray(data) && data.length ? data[0].id : null
+  return Array.isArray(data) ? data.map(d => d.id).filter(Boolean) : []
 }
 
 export default function LawyerInternalChat({ miId }) {
-  const [adminId,   setAdminId]   = useState(null)
+  const [adminIds,  setAdminIds]  = useState([])     // todas las cuentas superadmin
+  const adminId = adminIds[0] || null                // destino de lo que envía el profesional
   const [messages,  setMessages]  = useState([])
   const [texto,     setTexto]     = useState('')
   const [sending,   setSending]   = useState(false)
@@ -98,10 +105,10 @@ export default function LawyerInternalChat({ miId }) {
     let cancelled = false
     let retryT = null
     const intentar = () => {
-      fetchAdminId()
-        .then(id => {
+      fetchAdminIds()
+        .then(ids => {
           if (cancelled) return
-          if (id) setAdminId(id)
+          if (ids.length) setAdminIds(ids)
           else retryT = setTimeout(intentar, 5000)
         })
         .catch(() => { if (!cancelled) retryT = setTimeout(intentar, 5000) })
@@ -114,15 +121,15 @@ export default function LawyerInternalChat({ miId }) {
   useEffect(() => {
     if (!adminId || !miId) return
     fetchMessages()
-    // Polling pausado con la pestaña oculta + refresco inmediato al volver.
-    pollRef.current = setInterval(() => { if (!document.hidden) fetchMessages() }, 3000)
+    // Polling cada 2 s, pausado con la pestaña oculta + refresco al volver.
+    pollRef.current = setInterval(() => { if (!document.hidden) fetchMessages() }, 2000)
     const onVisible = () => { if (!document.hidden) fetchMessages() }
     document.addEventListener('visibilitychange', onVisible)
     return () => {
       clearInterval(pollRef.current)
       document.removeEventListener('visibilitychange', onVisible)
     }
-  }, [adminId, miId])
+  }, [adminIds, miId])
 
   /* ── Scroll: solo auto-baja si el user YA estaba al fondo ──────────────
      Antes auto-bajaba en cada nuevo mensaje, lo que yankeaba al user cuando
@@ -165,9 +172,11 @@ export default function LawyerInternalChat({ miId }) {
       // Timeout obligatorio: el guard in-flight solo se libera cuando el fetch
       // se asienta — un fetch colgado (half-open) sin señal congelaría el poll
       // para siempre, incluso con la red ya recuperada.
+      // El hilo incluye lo cruzado con CUALQUIER superadmin (ver fetchAdminIds).
+      const lista = adminIds.join(',')
       const res = await fetch(
         `${SUPABASE_URL}/rest/v1/mensajes_internos` +
-        `?or=(and(from_id.eq.${miId},to_id.eq.${adminId}),and(from_id.eq.${adminId},to_id.eq.${miId}))` +
+        `?or=(and(from_id.eq.${miId},to_id.in.(${lista})),and(from_id.in.(${lista}),to_id.eq.${miId}))` +
         `&order=created_at.desc&limit=200&select=*`,
         { headers, signal: timeoutSignal(15000) }
       )
@@ -185,7 +194,7 @@ export default function LawyerInternalChat({ miId }) {
         const h2 = await getAuthHeaders()
         await fetch(
           `${SUPABASE_URL}/rest/v1/mensajes_internos` +
-          `?to_id=eq.${miId}&from_id=eq.${adminId}&leido=eq.false`,
+          `?to_id=eq.${miId}&from_id=in.(${adminIds.join(',')})&leido=eq.false`,
           {
             method: 'PATCH',
             headers: { ...h2, 'Content-Type': 'application/json' },
@@ -201,7 +210,7 @@ export default function LawyerInternalChat({ miId }) {
       inFlightRef.current = false
       setLoading(false)
     }
-  }, [adminId, miId])
+  }, [adminIds, miId])
 
   async function enviar() {
     if (!texto.trim() || !adminId || sending) return

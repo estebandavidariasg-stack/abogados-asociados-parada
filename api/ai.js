@@ -423,10 +423,128 @@ function validarHistorial(mensajes, { maxMsgs, maxTotalChars }) {
   return total <= maxTotalChars;
 }
 
+// ── Modo CENSURA: ¿un archivo del chat contiene datos de contacto? ──────────
+// Recibe imágenes (fotos, capturas o páginas de un PDF escaneado, ya
+// comprimidas en el cliente) y devuelve { contiene_contacto, motivo }. Los PDF
+// con texto NO pasan por aquí: el cliente extrae el texto y lo revisa gratis
+// con contieneContacto. Lo usan los tres roles del chat de consulta: el
+// profesional autenticado y el cliente anónimo (se valida que la sala exista y
+// esté abierta; el tope por sala/día acota el costo).
+const MAX_CENSURAS_SALA_DIA = Number(process.env.AI_MAX_CENSURAS_SALA_DIA || 30);
+const MAX_IMG_CENSURA = 4;
+
+const SYSTEM_CENSURA =
+  'Eres un filtro de moderación de una plataforma de consultas jurídicas y ' +
+  'contables. Recibes una o varias imágenes enviadas dentro de un chat entre un ' +
+  'cliente y un profesional (fotos, capturas de pantalla, páginas escaneadas). ' +
+  'Tu ÚNICA tarea es detectar si contienen DATOS DE CONTACTO de una persona o ' +
+  'empresa: números de teléfono o celular, correos electrónicos, direcciones ' +
+  'físicas (calle, carrera, avenida, casa, apartamento, oficina), usuarios de ' +
+  'redes sociales o WhatsApp, o instrucciones para contactar por fuera del chat. ' +
+  'NO cuentan como contacto: números de cédula, NIT, montos de dinero, fechas, ' +
+  'números de radicado o expediente, ni nombres de personas sin forma de ' +
+  'contactarlas. Responde SOLO con un objeto JSON: ' +
+  '{"contiene_contacto": true|false, "motivo": "..."} donde motivo describe en ' +
+  'pocas palabras QUÉ tipo de dato se encontró (sin transcribir el dato) o es ' +
+  'una cadena vacía si no hay contacto. Ante duda razonable, marca true.';
+
+async function censurasSalaHoy(roomId) {
+  const hoy = new Date().toISOString().slice(0, 10);
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/ai_uso_salas?room_id=eq.${encodeURIComponent(roomId)}&fecha=eq.${hoy}&select=censuras&limit=1`, { headers: serviceHeaders() });
+    if (!r.ok) return null; // columna/tabla ausente → sin tope (fail-open, como `usos`)
+    const rows = await r.json();
+    if (!Array.isArray(rows)) return null;
+    return rows[0]?.censuras ?? 0;
+  } catch { return null; }
+}
+
+async function registrarCensuraSala(roomId, profesionalId) {
+  const hoy = new Date().toISOString().slice(0, 10);
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/ai_uso_salas?room_id=eq.${encodeURIComponent(roomId)}&fecha=eq.${hoy}&select=censuras`, { headers: serviceHeaders() });
+    if (!r.ok) return;
+    const rows = await r.json();
+    if (Array.isArray(rows) && rows.length) {
+      await fetch(`${SUPABASE_URL}/rest/v1/ai_uso_salas?room_id=eq.${encodeURIComponent(roomId)}&fecha=eq.${hoy}`, {
+        method: 'PATCH', headers: serviceHeaders(), body: JSON.stringify({ censuras: (rows[0].censuras || 0) + 1 }),
+      });
+    } else {
+      await fetch(`${SUPABASE_URL}/rest/v1/ai_uso_salas`, {
+        method: 'POST', headers: serviceHeaders(), body: JSON.stringify({ room_id: roomId, fecha: hoy, usos: 0, censuras: 1, profesional_id: profesionalId || null }),
+      });
+    }
+  } catch { /* el conteo nunca bloquea el envío */ }
+}
+
+async function handleCensura(req, res) {
+  const { roomId, adjuntos } = req.body || {};
+  if (!roomId || typeof roomId !== 'string') { res.status(400).json({ error: 'Falta la sala' }); return; }
+
+  // Quién llama: profesional autenticado, o cliente anónimo de una sala abierta.
+  const perfil = await getCallerProfile(req);
+  if (perfil && !['abogado', 'contador', 'superadmin'].includes(perfil.rol)) {
+    res.status(403).json({ error: 'No autorizado' }); return;
+  }
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/chat_rooms?id=eq.${encodeURIComponent(roomId)}&select=id,status&limit=1`, { headers: serviceHeaders() });
+    const rows = r.ok ? await r.json() : [];
+    const sala = Array.isArray(rows) ? rows[0] : null;
+    if (!sala || !['waiting', 'active', 'open'].includes(sala.status)) {
+      res.status(403).json({ error: 'Sala no disponible' }); return;
+    }
+  } catch { res.status(502).json({ error: 'fallback' }); return; }
+
+  const usadas = await censurasSalaHoy(roomId);
+  if (usadas != null && usadas >= MAX_CENSURAS_SALA_DIA) {
+    res.status(429).json({ error: 'limite', mensaje: 'Se alcanzó el máximo de revisiones de archivos por consulta hoy.' }); return;
+  }
+
+  const { imagenes } = separarAdjuntos(adjuntos);
+  if (!imagenes.length) { res.status(400).json({ error: 'Sin imágenes para revisar' }); return; }
+  const valAdj = validarAdjuntos(imagenes.slice(0, MAX_IMG_CENSURA), []);
+  if (!valAdj.ok) { res.status(413).json({ error: 'adjunto', mensaje: valAdj.mensaje }); return; }
+
+  let raw = '';
+  try {
+    raw = await completar({
+      model: MODELOS.censura,
+      systemText: SYSTEM_CENSURA,
+      messages: [{
+        role: 'user',
+        content: [
+          { type: 'text', text: 'Revisa si estas imágenes contienen datos de contacto y responde solo el JSON.' },
+          ...bloquesImagenes(imagenes.slice(0, MAX_IMG_CENSURA)),
+        ],
+      }],
+      maxTokens: 200,
+      prefill: '{',
+    });
+  } catch (e) {
+    console.error('[api/ai] censura error:', e?.status, e?.message);
+    res.status(502).json({ error: 'fallback' }); return;
+  }
+
+  // Parseo tolerante: si el modelo no devolvió JSON, se informa como no
+  // revisado (el cliente decide; hoy sube sin revisar y deja aviso en consola).
+  let contiene = null, motivo = '';
+  try {
+    const obj = JSON.parse(raw.slice(raw.indexOf('{'), raw.lastIndexOf('}') + 1));
+    contiene = obj.contiene_contacto === true;
+    motivo = typeof obj.motivo === 'string' ? obj.motivo.slice(0, 200) : '';
+  } catch { /* contiene queda null */ }
+  if (contiene == null) { res.status(502).json({ error: 'fallback' }); return; }
+
+  await registrarCensuraSala(roomId, perfil?.id);
+  res.status(200).json({ contiene_contacto: contiene, motivo });
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') { res.status(405).json({ error: 'Method not allowed' }); return; }
 
   const { modo, sessionId, mensajes, tipo_profesional } = req.body || {};
+  // La censura no lleva historial: se despacha antes de exigir `mensajes`.
+  if (modo === 'censura') { return handleCensura(req, res); }
   if (!Array.isArray(mensajes) || mensajes.length === 0) { res.status(400).json({ error: 'Faltan mensajes' }); return; }
   if (modo === 'abogado') { return handleAbogado(req, res); }
   if (modo !== 'cliente') { res.status(400).json({ error: 'Modo no soportado' }); return; }

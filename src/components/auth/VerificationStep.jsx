@@ -250,7 +250,7 @@ export default function VerificationStep({
     <>
       <style>{VERIFY_STYLES}</style>
       <div className="aap-verify-wrap">
-        <h3 className="aap-verify-title">Verifica tu correo</h3>
+        <h3 className="aap-verify-title">Verifica Tu Correo</h3>
         <p className="aap-verify-subtitle">
           Ingresa el código de 6 dígitos que enviamos a{' '}
           <strong>{email}</strong>

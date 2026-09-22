@@ -11,7 +11,10 @@ import {
   parseFichas, FichasContacto,
   validarAdjuntoChat, prepararAdjuntoChat, nombreArchivoSeguro, describirErrorSubida,
   crearGrabadorAudio, extAudio, mimeAudioLimpio, describirErrorMicrofono, AUDIO_CONSTRAINTS,
+  revisarContactoArchivo, crearTranscriptor,
 } from '../../lib/chatFiles'
+// Código OTP al correo antes de crear la sala (mismo paso que el registro).
+const VerificationStep = lazy(() => import('../auth/VerificationStep'))
 import {
   COP, fetchCobroCliente, clienteMarcoPago, subirComprobanteCliente, descargarReciboPDF,
   AVISO_COBRO_CLIENTE,
@@ -1490,6 +1493,68 @@ export default function ChatSection() {
   // ── Contacto bloqueado (modal) ────────────────────────────────────────────
   const [contactoWarning, setContactoWarning] = useState(false)
 
+  // ── Verificación del correo (OTP) antes de crear la sala ─────────────────
+  // Tras el formulario se envía un código de 6 dígitos al correo y solo al
+  // verificarlo se sigue con la creación de la sala. "Verificado" se recuerda
+  // en sessionStorage (misma visita) para no pedirlo en cada consulta.
+  const [otpEmail, setOtpEmail] = useState('')
+  const [otpError, setOtpError] = useState('')
+  const [otpBusy,  setOtpBusy]  = useState(false)
+  const otpContinuarRef = useRef(null)   // qué hacer al verificar (crear sala / buscar profesionales)
+  const OTP_SESSION_KEY = 'chat_correo_verificado'
+  const correoVerificadoEnSesion = (correo) => {
+    try { return !!correo && sessionStorage.getItem(OTP_SESSION_KEY) === correo.trim().toLowerCase() } catch { return false }
+  }
+  const marcarCorreoVerificado = (correo) => {
+    try { sessionStorage.setItem(OTP_SESSION_KEY, correo.trim().toLowerCase()) } catch { /* modo privado */ }
+  }
+  async function enviarOtpConsulta(correo) {
+    const res = await fetch('/api/send-verification-code', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: correo.trim(), tipoRegistro: 'consulta' }),
+    })
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      throw new Error(data.error || 'No se pudo enviar el código. Intenta de nuevo.')
+    }
+  }
+  // Envía el código y muestra el paso de verificación; `continuar` corre al verificar.
+  async function pedirVerificacionCorreo(correo, continuar) {
+    otpContinuarRef.current = continuar
+    setOtpEmail(correo.trim()); setOtpError('')
+    try {
+      await enviarOtpConsulta(correo)
+      setFormError('')
+      setStep('verificar')
+    } catch (err) {
+      setFormError(err.message || 'No se pudo enviar el código.')
+    }
+  }
+  async function verificarOtpConsulta(code) {
+    if (otpBusy) return
+    setOtpBusy(true); setOtpError('')
+    try {
+      const res = await fetch('/api/verify-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: otpEmail, code }),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error || 'Código inválido o expirado')
+      }
+      marcarCorreoVerificado(otpEmail)
+      const continuar = otpContinuarRef.current
+      otpContinuarRef.current = null
+      setOtpBusy(false)
+      if (continuar) await continuar()
+    } catch (err) {
+      setOtpError(err.message || 'Código inválido o expirado')
+      setOtpBusy(false)
+    }
+  }
+
   // Aviso ligero de fallo de envío/adjunto (se autolimpia) — antes esos
   // errores eran silenciosos y el cliente perdía el mensaje sin enterarse.
   const [sendError, setSendError] = useState('')
@@ -2113,7 +2178,11 @@ export default function ChatSection() {
     if (!apellido.trim())                  { setFormError('Ingresa tu apellido.'); return }
     if (!departamento)                     { setFormError('Selecciona tu departamento.'); return }
     if (!ciudad)                           { setFormError('Selecciona tu ciudad.'); return }
-    if (!correo.trim() && !celular.trim()) { setFormError('Ingresa al menos un correo o celular.'); return }
+    // El correo es obligatorio: ahí llega el código que confirma la consulta.
+    if (!correo.trim() || validarCorreo(correo).valid !== true) {
+      setFormError('Ingresa un correo válido: te enviaremos un código para confirmar tu consulta.'); return
+    }
+    if (celular.trim() && !validarCelular(celular).valid) { setFormError('Revisa el número de celular.'); return }
     // En el flujo guiado por IA el área y la descripción ya vienen del asistente,
     // así que no se piden de nuevo (el form es reducido). Solo se validan en el
     // flujo manual.
@@ -2126,6 +2195,19 @@ export default function ChatSection() {
     // Guardar los datos APENAS pasan la validación (no solo al crear la sala):
     // así una nueva consulta con otro profesional nunca pide rellenar todo.
     guardarDatosCliente(form)
+
+    // Correo ya verificado en esta visita → sigue de una. Si no, código OTP y
+    // el resto del flujo (crear sala / buscar profesionales) corre al verificar.
+    if (correoVerificadoEnSesion(correo)) { await continuarTrasFormulario(); return }
+    await pedirVerificacionCorreo(correo, continuarTrasFormulario)
+    setSubmitting(false)
+  }
+
+  // Lo que pasa DESPUÉS del formulario (y del código OTP): según el flujo,
+  // publica la solicitud, entra directo al chat o va a la lista de profesionales.
+  async function continuarTrasFormulario() {
+    const { areas, departamento } = form
+    setSubmitting(true); setFormError('')
 
     // Flujo "solicitud abierta": no hay profesional del área → publicar directo
     // y pasar a la pantalla de espera (sin paso de selección ni segundo botón).
@@ -2336,6 +2418,18 @@ export default function ChatSection() {
       descripcion: (descripcion || '').trim() || 'El cliente inicia una nueva consulta.',
     }
     setForm(f => ({ ...f, ...fd }))
+    // Datos guardados de otra visita: el correo se verifica igual antes de
+    // crear la sala (una vez por visita). Sin correo guardado → formulario.
+    if (!correoVerificadoEnSesion(fd.correo)) {
+      setNuevaConsulta(null)
+      if (!fd.correo || validarCorreo(fd.correo).valid !== true) {
+        setProfesionalDeepLink(prof); setPicked([prof.id]); setAreasBloqueadas(areasProf.length > 0)
+        setStep('form'); setFormError('Confirma tu correo para continuar.')
+        return
+      }
+      await pedirVerificacionCorreo(fd.correo, () => startChat({ form: fd, picked: [prof.id], profDirecto: prof }))
+      return
+    }
     await startChat({ form: fd, picked: [prof.id], profDirecto: prof })
   }
 
@@ -2495,6 +2589,9 @@ export default function ChatSection() {
       p_file_name:    campos.file_name,
       p_file_size:    campos.file_size,
       p_message_type: campos.message_type,
+      // Solo cuando hay transcripción: la firma nueva de la RPC vive en
+      // docs/sql/consulta-otp-2026-09-17.sql; sin el parámetro sigue sirviendo la vieja.
+      ...(campos.transcripcion ? { p_transcripcion: campos.transcripcion } : {}),
     })
     if (ok) return
     console.error('[chat] RPC enviar_adjunto_cliente falló:', errText)
@@ -2521,6 +2618,9 @@ export default function ChatSection() {
     let path = null
     try {
       const file = await prepararAdjuntoChat(fileOriginal)   // ya viene comprimida desde prepararAdjunto
+      // ── Datos de contacto en el archivo (PDF/imagen): mismo bloqueo que el texto ──
+      const revision = await revisarContactoArchivo(file, { roomId })
+      if (revision.contiene) { setContactoWarning(true); return }
       // El bucket exige el JWT del cliente: renovarlo si expiró (se reusa si sigue vigente).
       await ensureChatToken(localStorage.getItem('chat_cedula_hash'))
       path = `chats/${roomId}/${Date.now()}_${nombreArchivoSeguro(file.name)}`
@@ -2590,16 +2690,19 @@ export default function ChatSection() {
       descartarGrabacionRef.current = false
       recorder.ondataavailable = e => { if (e.data.size > 0) audioChunksRef.current.push(e.data) }
       recorder.onerror = () => setSendError('La grabación se interrumpió. Intenta de nuevo.')
+      // Transcripción gratis en el navegador (Web Speech API), en paralelo a la grabación.
+      const transcriptor = crearTranscriptor()
       recorder.onstop = async () => {
         stream.getTracks().forEach(t => t.stop())
+        const texto = await transcriptor.stop()
         const actualType = recorder.mimeType || 'audio/webm'
         const blob = new Blob(audioChunksRef.current, { type: actualType })
         // Cancelada con el botón del micrófono: se descarta sin subir.
         if (descartarGrabacionRef.current) { descartarGrabacionRef.current = false; audioChunksRef.current = []; return }
-        if (blob.size > 0) { const fixedBlob = await fixAudioDuration(blob); await uploadAudio(fixedBlob, actualType) }
+        if (blob.size > 0) { const fixedBlob = await fixAudioDuration(blob); await uploadAudio(fixedBlob, actualType, texto) }
         else setSendError('La nota de voz quedó vacía. Mantén la grabación al menos un segundo.')
       }
-      recorder.start(100); setRecording(true); setRecordingTime(0)
+      recorder.start(100); transcriptor.start(); setRecording(true); setRecordingTime(0)
       recordingTimerRef.current = setInterval(() => setRecordingTime(t => t+1), 1000)
     } catch (err) {
       stream?.getTracks().forEach(t => t.stop())
@@ -2617,8 +2720,13 @@ export default function ChatSection() {
 
   // CAUSA del fallo anterior: subía con la anon key (el bucket exige el JWT
   // del cliente desde el hardening) y los errores iban solo a la consola.
-  async function uploadAudio(blob, mimeType = 'audio/webm') {
+  // `transcripcion`: texto de la nota de voz cuando exista (pendiente de decidir
+  // el motor de transcripción). Se revisa con contieneContacto igual que un
+  // mensaje de texto y se guarda en chat_messages.transcripcion.
+  async function uploadAudio(blob, mimeType = 'audio/webm', transcripcion = '') {
     if (!roomId) return
+    const texto = String(transcripcion || '').trim()
+    if (texto && contieneContacto(texto)) { setContactoWarning(true); return }
     setUploading(true); setSendError('')
     let path = null
     try {
@@ -2634,6 +2742,7 @@ export default function ChatSection() {
       await registrarAdjuntoCliente({
         content:'Mensaje de voz', file_url: path,
         file_name:`voz_${Date.now()}.${ext}`, file_size: blob.size, message_type:'audio',
+        ...(texto ? { transcripcion: texto } : {}),
       })
       await loadMessages(roomId)
     } catch (err) {
@@ -3601,7 +3710,7 @@ export default function ChatSection() {
             />
             </Suspense>
             <div className={styles.field}>
-              <label className={styles.label}>Correo electrónico</label>
+              <label className={styles.label}>Correo electrónico <span className={styles.required}>*</span></label>
               {(() => {
                 const v = validarCorreo(form.correo)
                 return (
@@ -3738,6 +3847,24 @@ export default function ChatSection() {
                       ? (form.tipo_profesional === 'contador' ? 'Buscando contadores…' : 'Buscando abogados…')
                       : (form.tipo_profesional === 'contador' ? 'Buscar contadores disponibles' : 'Buscar abogados disponibles'))}
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Código al correo antes de crear la sala ── */}
+      {step === 'verificar' && (
+        <div className={styles.form} id="consulta-form" style={{ scrollMarginTop: '90px' }}>
+          <div className={`${styles.formCard} aap-card-form ${styles.otpWrap}`}>
+            <Suspense fallback={<p className={styles.loadingText}>Cargando…</p>}>
+              <VerificationStep
+                email={otpEmail}
+                error={otpError}
+                submitting={otpBusy}
+                onSubmit={verificarOtpConsulta}
+                onResend={() => enviarOtpConsulta(otpEmail).catch(err => { setOtpError(err.message); throw err })}
+                onBack={() => { setOtpError(''); otpContinuarRef.current = null; setStep('form') }}
+              />
+            </Suspense>
           </div>
         </div>
       )}

@@ -100,6 +100,32 @@ export default function AdminInternalChat({ miId, initialSelectedId, onOpenRoom 
   const [sending, setSending]           = useState(false)
   const [loadingUsers, setLoadingUsers] = useState(true)
   const [noLeidos, setNoLeidos]         = useState({})
+  // Hay más de una cuenta superadmin. Los profesionales le escribían a una u
+  // otra (elegida al azar por `limit=1`), así que la cuenta con la que entraba
+  // el admin no veía la mitad de los hilos. El hilo y los no leídos se arman
+  // contra TODAS las cuentas superadmin; miId sigue siendo el remitente.
+  // (Leer/marcar los mensajes dirigidos a la otra cuenta exige las políticas
+  // de docs/sql/admin-roles-2026-09-17.sql; sin ellas se ve solo lo propio.)
+  const [adminIds, setAdminIds] = useState(() => (miId ? [miId] : []))
+  const adminIdsRef = useRef(adminIds)
+  useEffect(() => { adminIdsRef.current = adminIds }, [adminIds])
+  useEffect(() => {
+    if (!miId) return
+    let cancel = false
+    ;(async () => {
+      try {
+        const headers = await getAuthHeaders()
+        const r = await fetch(
+          `${SUPABASE_URL}/rest/v1/profiles?rol=eq.superadmin&select=id&order=id.asc`,
+          { headers, signal: timeoutSignal(15000) }
+        )
+        const d = await r.json()
+        const ids = Array.isArray(d) ? d.map(x => x.id).filter(Boolean) : []
+        if (!cancel && ids.length) setAdminIds(ids.includes(miId) ? ids : [miId, ...ids])
+      } catch { /* se queda con [miId] */ }
+    })()
+    return () => { cancel = true }
+  }, [miId])
 
   // ── Filtro sidebar (instantáneo, sin botón) ──────────────────────────────
   const [rolFilter, setRolFilter] = useState('todos')   // todos | abogado | contador | gestor
@@ -164,7 +190,7 @@ export default function AdminInternalChat({ miId, initialSelectedId, onOpenRoom 
     selectedIdRef.current = selected?.id || null
     if (selected) {
       fetchMessages()
-      pollRef.current = setInterval(() => { if (!document.hidden) fetchMessages() }, 3000)
+      pollRef.current = setInterval(() => { if (!document.hidden) fetchMessages() }, 2000)
     }
     const onVisible = () => { if (!document.hidden && selected) fetchMessages() }
     document.addEventListener('visibilitychange', onVisible)
@@ -172,7 +198,18 @@ export default function AdminInternalChat({ miId, initialSelectedId, onOpenRoom 
       clearInterval(pollRef.current)
       document.removeEventListener('visibilitychange', onVisible)
     }
-  }, [selected])
+  }, [selected, adminIds])
+
+  // Los contadores del sidebar se leían UNA vez al montar: un mensaje nuevo
+  // de un profesional no aparecía en ningún lado hasta recargar, salvo que su
+  // conversación ya estuviera abierta. Ahora se sondean cada 2 s (consulta
+  // ligera: solo from_id de los no leídos), pausado con la pestaña oculta.
+  useEffect(() => {
+    if (!miId) return
+    fetchNoLeidos()
+    const t = setInterval(() => { if (!document.hidden) fetchNoLeidos() }, 2000)
+    return () => clearInterval(t)
+  }, [miId, adminIds])
 
   // Al desmontar con una grabación activa: libera el micrófono y el timer
   // (sin esto el indicador de mic del navegador quedaba encendido).
@@ -228,24 +265,34 @@ export default function AdminInternalChat({ miId, initialSelectedId, onOpenRoom 
       // En error transitorio conserva la lista visible (no vaciarla).
       if (Array.isArray(data)) setAbogados(data)
 
-      // Contar no leídos por abogado
-      if (Array.isArray(data) && data.length && miId) {
-        const h2 = await getAuthHeaders()
-        const nRes = await fetch(
-          `${SUPABASE_URL}/rest/v1/mensajes_internos?to_id=eq.${miId}&leido=eq.false&select=from_id`,
-          { headers: h2 }
-        )
-        const nData = await nRes.json()
-        if (Array.isArray(nData)) {
-          const counts = {}
-          nData.forEach(m => { counts[m.from_id] = (counts[m.from_id] || 0) + 1 })
-          setNoLeidos(counts)
-        }
-      }
+      if (Array.isArray(data) && data.length && miId) await fetchNoLeidos()
     } catch (_) {
       // Red caída: conserva el estado visible.
     } finally {
       setLoadingUsers(false)
+    }
+  }
+
+  const noLeidosInFlight = useRef(false)
+  async function fetchNoLeidos() {
+    if (!miId || noLeidosInFlight.current) return
+    noLeidosInFlight.current = true
+    try {
+      const headers = await getAuthHeaders()
+      const nRes = await fetch(
+        `${SUPABASE_URL}/rest/v1/mensajes_internos?to_id=in.(${adminIdsRef.current.join(',')})&leido=eq.false&select=from_id`,
+        { headers, signal: timeoutSignal(15000) }
+      )
+      const nData = await nRes.json()
+      if (Array.isArray(nData)) {
+        const counts = {}
+        nData.forEach(m => { counts[m.from_id] = (counts[m.from_id] || 0) + 1 })
+        setNoLeidos(counts)
+      }
+    } catch (_) {
+      // siguiente tick
+    } finally {
+      noLeidosInFlight.current = false
     }
   }
 
@@ -264,8 +311,9 @@ export default function AdminInternalChat({ miId, initialSelectedId, onOpenRoom 
       // Timeout obligatorio: el guard in-flight solo se libera cuando el fetch
       // se asienta — un fetch colgado (half-open) sin señal congelaría el poll
       // para siempre, incluso con la red ya recuperada.
+      const ids = adminIdsRef.current.join(',')
       const res = await fetch(
-        `${SUPABASE_URL}/rest/v1/mensajes_internos?or=(and(from_id.eq.${miId},to_id.eq.${convId}),and(from_id.eq.${convId},to_id.eq.${miId}))&order=created_at.desc&limit=200&select=*`,
+        `${SUPABASE_URL}/rest/v1/mensajes_internos?or=(and(from_id.in.(${ids}),to_id.eq.${convId}),and(from_id.eq.${convId},to_id.in.(${ids})))&order=created_at.desc&limit=200&select=*`,
         { headers, signal: timeoutSignal(15000) }
       )
       const data = await res.json()
@@ -277,11 +325,11 @@ export default function AdminInternalChat({ miId, initialSelectedId, onOpenRoom 
       setMessages(asc)
 
       // Marcar como leídos los mensajes hacia mí
-      const sinLeer = asc.filter(m => m.to_id === miId && !m.leido)
+      const sinLeer = asc.filter(m => adminIdsRef.current.includes(m.to_id) && !m.leido)
       if (sinLeer.length > 0) {
         const h2 = await getAuthHeaders()
         await fetch(
-          `${SUPABASE_URL}/rest/v1/mensajes_internos?to_id=eq.${miId}&from_id=eq.${convId}&leido=eq.false`,
+          `${SUPABASE_URL}/rest/v1/mensajes_internos?to_id=in.(${ids})&from_id=eq.${convId}&leido=eq.false`,
           { method: 'PATCH', headers: h2, body: JSON.stringify({ leido: true }), signal: timeoutSignal(15000) }
         )
         setNoLeidos(prev => ({ ...prev, [convId]: 0 }))
@@ -327,6 +375,7 @@ export default function AdminInternalChat({ miId, initialSelectedId, onOpenRoom 
       setTexto('')
       notificarPorCorreo(selected.id)
       await fetchMessages()
+      fetchNoLeidos()
     } catch (err) {
       // El texto queda en el campo para reintentar, con el motivo visible.
       setSendError(err.message || 'No se pudo enviar. Revisa tu conexión.')
@@ -788,7 +837,7 @@ export default function AdminInternalChat({ miId, initialSelectedId, onOpenRoom 
                 <p className={styles.sinMsgs}>No hay mensajes. Inicia la conversación.</p>
               )}
               {messages.map(m => {
-                const mine = m.from_id === miId
+                const mine = adminIds.includes(m.from_id)
                 const rev = parseRevision(m)
                 if (rev) {
                   return (

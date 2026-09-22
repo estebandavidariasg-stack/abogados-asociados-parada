@@ -162,7 +162,7 @@ function IdentidadGate({ onListo, initial }) {
         initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
       >
-        <h2 className={styles.gateTitle}>Verifica tu correo</h2>
+        <h2 className={styles.gateTitle}>Verifica Tu Correo</h2>
         <p className={styles.gateSub}>
           Enviamos un código de 6 dígitos a <strong>{identPend.correo}</strong> para confirmar que eres una persona real.
           {otpSimulado() && <> <strong>Modo de prueba:</strong> usa el código <strong>{DEMO_CODIGO}</strong>.</>}
@@ -631,7 +631,7 @@ export default function ProyectosLeyPage() {
           transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
         >
           <span className={styles.heroEyebrow}>Participación ciudadana</span>
-          <h1 className={styles.heroTitle}>Debate de <em>proyectos de ley</em></h1>
+          <h1 className={styles.heroTitle}>Debate de <em>Proyectos de Ley</em></h1>
           <p className={styles.heroLead}>
             Lee los proyectos en trámite, deja tu postura sobre el articulado y observa,
             en tiempo real, lo que opina el país. Tu voz cuenta: un voto por persona, con tu cédula bajo reserva.

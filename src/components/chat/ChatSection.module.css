@@ -2176,3 +2176,11 @@
 @media (max-width: 520px) {
   .avisoCobro { margin: 10px 4px 12px; padding: 11px 13px; font-size: 0.8rem; }
 }
+
+/* ── Paso de verificación del correo (OTP) antes de crear la sala ──────────
+   VerificationStep trae sus estilos pensados para el modal oscuro; sobre la
+   tarjeta crema del formulario el título dorado no contrasta: se ajusta aquí. */
+.otpWrap :global(.aap-verify-title) { color: #472f29; }
+.otpWrap :global(.aap-verify-subtitle strong) { color: #8a6a28; }
+.otpWrap :global(.aap-verify-back) { color: #6b5a4c; }
+.otpWrap :global(.aap-verify-resend) { color: #8a6a28; }

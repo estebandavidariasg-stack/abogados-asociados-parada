@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { supabase, getAuthHeaders } from './supabase'
 import { compressImage } from '../utils/compressMedia'
+import { contieneContacto } from './validaciones'
+import { pedirIA } from './aiClient'
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || ''
 
@@ -519,4 +521,133 @@ export function FichasContacto({ data }) {
       </div>
     </>
   )
+}
+
+/* ── Revisión de datos de contacto en archivos (los tres roles del chat) ─────
+   Antes de subir un PDF/imagen se revisa si trae teléfono, correo o dirección.
+   Orden de menor a mayor costo:
+     1. PDF / Word / TXT con texto → se extrae el texto en el navegador
+        (extractDocText) y pasa por contieneContacto. Gratis, sin IA.
+     2. Imagen, o PDF escaneado (sin texto) → primeras páginas/imagen
+        comprimida a /api/ai modo 'censura' (Haiku). Centavos por archivo.
+     3. Más de REVISION_MAX_BYTES, Excel/PowerPoint/.doc, o la IA no responde →
+        NO se revisa: sube igual y queda un aviso en consola (`revisado:false`).
+   Devuelve { contiene, motivo, revisado, aviso }. Nunca lanza. */
+export const REVISION_MAX_BYTES = 4 * 1024 * 1024
+const REVISION_MAX_PAGINAS = 3
+
+/* Dirección física a la colombiana ("Calle 26 # 13-19", "Cra 7 No. 32-16",
+   "Av. Boyacá 45A-10"). Solo se usa en la revisión de ARCHIVOS: en los
+   mensajes de texto contieneContacto sigue igual (una dirección mencionada en
+   la descripción de un caso inmobiliario no debe bloquear la conversación). */
+const RE_DIRECCION = /\b(?:calle|cll|cl|carrera|cra|kr|kra|avenida|av|transversal|tv|trv|diagonal|dg|diag|manzana|mz)\.?\s*\d{1,3}\s*[a-z]?(?:\s*(?:bis|sur|norte|este|oeste))?\s*(?:#|n[°ºo]\.?|no\.?|num\.?|numero)\s*\d{1,3}\s*[a-z]?\s*-\s*\d{1,3}/i
+const contieneDireccion = (t) => RE_DIRECCION.test(String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, ''))
+
+function fileABase64(file) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader()
+    r.onload = () => resolve(String(r.result || '').split(',')[1] || '')
+    r.onerror = () => reject(r.error)
+    r.readAsDataURL(file)
+  })
+}
+
+export async function revisarContactoArchivo(file, { roomId, authHeader } = {}) {
+  const sinRevisar = (aviso) => {
+    console.warn(`[chat] archivo "${file?.name}" enviado sin revisión de contacto (${aviso}).`)
+    return { contiene: false, motivo: '', revisado: false, aviso }
+  }
+  if (!file || !roomId) return { contiene: false, motivo: '', revisado: false, aviso: 'sin_sala' }
+  if (file.size > REVISION_MAX_BYTES) return sinRevisar('supera 4 MB')
+
+  const nombre = String(file.name || '').toLowerCase()
+  const tipo   = file.type || ''
+  const esImg  = /^image\/(jpeg|png|webp|gif)$/.test(tipo)
+  const esPdf  = tipo === 'application/pdf' || nombre.endsWith('.pdf')
+  const esTxt  = nombre.endsWith('.docx') || nombre.endsWith('.txt')
+
+  let imagenes = []
+  if (esPdf || esTxt) {
+    // 1) Texto en el navegador → regex local (gratis).
+    try {
+      const { extractDocText } = await import('../utils/extractDocText')
+      const { text } = await extractDocText(file, { maxChars: 400_000 })
+      if (text && text.length >= 20) {
+        const contiene = contieneContacto(text) || contieneDireccion(text)
+        return { contiene, motivo: contiene ? 'texto del documento' : '', revisado: true, aviso: '' }
+      }
+    } catch (err) {
+      if (!esPdf) return sinRevisar(err?.message || 'sin texto')
+    }
+    if (!esPdf) return sinRevisar('sin texto legible')
+    // 2) PDF escaneado → primeras páginas como JPEG liviano para la IA.
+    try {
+      const { rasterizarPdf } = await import('./pdfARaster')
+      const paginas = await rasterizarPdf(await file.arrayBuffer(), 1.2, {
+        maxPaginas: REVISION_MAX_PAGINAS, tipo: 'image/jpeg', calidad: 0.7,
+      })
+      imagenes = paginas.map(p => ({ kind: 'image', media_type: 'image/jpeg', data: p.dataUrl.split(',')[1] }))
+    } catch (err) {
+      return sinRevisar(err?.message || 'no se pudo leer el PDF')
+    }
+  } else if (esImg) {
+    // Imagen ya comprimida (1600 px JPEG) → una sola imagen a la IA.
+    try {
+      const listo = await prepararAdjuntoChat(file)
+      imagenes = [{ kind: 'image', media_type: listo.type || 'image/jpeg', data: await fileABase64(listo) }]
+    } catch (err) {
+      return sinRevisar(err?.message || 'no se pudo leer la imagen')
+    }
+  } else {
+    return sinRevisar('tipo no revisable')
+  }
+
+  const { ok, status, data } = await pedirIA({ modo: 'censura', roomId, adjuntos: imagenes }, { authHeader })
+  if (!ok) return sinRevisar(data?.mensaje || data?.error || `HTTP ${status}`)
+  return { contiene: data?.contiene_contacto === true, motivo: data?.motivo || '', revisado: true, aviso: '' }
+}
+
+/* ── Transcripción de notas de voz con la Web Speech API (gratis) ──────────
+   Corre EN PARALELO al MediaRecorder mientras se graba: el navegador
+   reconoce el habla (es-CO) y al parar devuelve el texto, que uploadAudio
+   revisa con contieneContacto y guarda en chat_messages.transcripcion.
+   Soportado en Chrome, Edge y Safari; en Firefox `soportado` es false y la
+   nota se envía sin transcripción (como hasta ahora). Chrome corta el
+   reconocimiento a ~60 s: se reanuda solo mientras la grabación siga. */
+export function crearTranscriptor(lang = 'es-CO') {
+  const SR = typeof window !== 'undefined' && (window.SpeechRecognition || window.webkitSpeechRecognition)
+  if (!SR) return { soportado: false, start() {}, stop: () => Promise.resolve('') }
+  let rec = null, activo = false, finales = [], interino = ''
+  const texto = () => [...finales, interino].join(' ').replace(/\s+/g, ' ').trim()
+  const armar = () => {
+    rec = new SR()
+    rec.lang = lang; rec.continuous = true; rec.interimResults = true; rec.maxAlternatives = 1
+    rec.onresult = (e) => {
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const r = e.results[i]
+        if (r.isFinal) { finales.push(String(r[0]?.transcript || '').trim()); interino = '' }
+        else interino = String(r[0]?.transcript || '')
+      }
+    }
+    rec.onerror = (e) => { if (e?.error === 'not-allowed' || e?.error === 'service-not-allowed') activo = false }
+    rec.onend = () => { if (activo) { try { rec.start() } catch { /* ya activo */ } } }
+  }
+  return {
+    soportado: true,
+    start() {
+      activo = true; finales = []; interino = ''
+      try { armar(); rec.start() } catch { activo = false }
+    },
+    stop() {
+      activo = false
+      return new Promise((resolve) => {
+        if (!rec) return resolve('')
+        let listo = false
+        const fin = () => { if (listo) return; listo = true; resolve(texto()) }
+        rec.onend = fin
+        try { rec.stop() } catch { fin() }
+        setTimeout(fin, 1500)   // por si el navegador no dispara onend
+      })
+    },
+  }
 }

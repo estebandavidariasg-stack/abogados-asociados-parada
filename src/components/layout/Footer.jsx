@@ -24,13 +24,15 @@ const IconMapPin = () => (
 )
 
 // ── Documentos legales (PDFs en public/legal) — se ven en la misma página ──
+// Tres contratos y tres políticas en una sola fila. Los originales viven en
+// docs/ con su nombre largo; aquí van con nombre corto para que la URL sea limpia.
 const DOCS_LEGALES = [
-  { titulo: 'Términos y condiciones',                    href: '/terminos' },
-  { titulo: 'Política de privacidad',                    href: '/privacidad' },
-  { titulo: 'Política de cookies',                       pdf: '/legal/politica-cookies.pdf' },
-  { titulo: 'Política de devoluciones',                  pdf: '/legal/politica-devoluciones.pdf' },
-  { titulo: 'Licencia de usuario final (EULA)',          pdf: '/legal/eula.pdf' },
-  { titulo: 'Autorización y tratamiento de datos',       pdf: '/legal/tratamiento-datos.pdf' },
+  { titulo: 'Términos de uso',                              pdf: '/legal/terminos-de-uso.pdf' },
+  { titulo: 'Licencia de usuario final (EULA)',             pdf: '/legal/eula.pdf' },
+  { titulo: 'Autorización de tratamiento de datos',         pdf: '/legal/autorizacion-datos.pdf' },
+  { titulo: 'Política de tratamiento de datos personales',  pdf: '/legal/politica-tratamiento-datos.pdf' },
+  { titulo: 'Política de cookies',                          pdf: '/legal/politica-cookies.pdf' },
+  { titulo: 'Política de devoluciones',                     pdf: '/legal/politica-devoluciones.pdf' },
 ]
 
 export default function Footer() {
@@ -108,34 +110,11 @@ export default function Footer() {
       </div>
 
       {/* ── Documentos legales ── */}
-      <nav aria-label="Documentos legales" style={{
-        display: 'flex', flexWrap: 'wrap', justifyContent: 'center',
-        gap: '6px 22px', padding: '10px 20px 0', position: 'relative', zIndex: 1,
-      }}>
-        {/* Café tinta sobre el fondo claro del footer (antes iba en crema y
-            se volvía invisible: solo se veían los subrayados). */}
-        {DOCS_LEGALES.map(d => d.pdf ? (
-          <button
-            key={d.titulo}
-            type="button"
-            onClick={() => setDocAbierto(d)}
-            style={{
-              background: 'none', border: 'none', cursor: 'pointer', padding: 0,
-              fontSize: '0.76rem', color: '#68584a',
-              textDecoration: 'underline', textUnderlineOffset: 3,
-              textDecorationColor: 'rgba(201,168,76,0.55)',
-            }}
-          >
+      <nav aria-label="Documentos legales" className={styles.legalNav}>
+        {DOCS_LEGALES.map(d => (
+          <button key={d.titulo} type="button" className={styles.legalLink} onClick={() => setDocAbierto(d)}>
             {d.titulo}
           </button>
-        ) : (
-          <a key={d.titulo} href={d.href} style={{
-            fontSize: '0.76rem', color: '#68584a',
-            textDecoration: 'underline', textUnderlineOffset: 3,
-            textDecorationColor: 'rgba(201,168,76,0.55)',
-          }}>
-            {d.titulo}
-          </a>
         ))}
       </nav>
 

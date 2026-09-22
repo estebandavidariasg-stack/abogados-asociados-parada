@@ -105,10 +105,11 @@ export default async function handler(req, res) {
       } catch { /* si falla, las tarjetas caen a su propia query */ }
     }
 
-    // Cache en el CDN de Vercel: 5 min fresco + 10 min sirviendo stale
-    // mientras revalida en background. La lista cambia solo cuando el admin
-    // aprueba/revoca un profesional → 5 min de desfase es irrelevante.
-    res.setHeader('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600')
+    // Cache en el CDN de Vercel: 1 min fresco + 1 min sirviendo stale mientras
+    // revalida. Antes era 5 + 10: un profesional recién aprobado podía tardar
+    // hasta 15 min en salir en el home. Ahora el tope es 2 min. (El propio
+    // superadmin no pasa por aquí: LawyersSection le lee directo de Supabase.)
+    res.setHeader('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=60')
     return res.status(200).json(lista)
   } catch (err) {
     res.setHeader('Cache-Control', 'no-store')

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
@@ -17,7 +17,8 @@ import PqrsAdmin from '../components/admin/PqrsAdmin'
 import ProyectosLeyAdmin from '../components/admin/ProyectosLeyAdmin'
 import CamposRegistro from '../components/admin/CamposRegistro'
 import AdminStats from '../components/admin/AdminStats'
-import { IconCheck, IconX } from '../components/shared/Icons'
+import RolesAdmin from '../components/admin/RolesAdmin'
+import { IconCheck, IconX, IconPaperclip } from '../components/shared/Icons'
 
 // ── Iconos SVG (estilo Lucide, currentColor) — sin emojis como iconos ──
 const IconInbox  = (p) => (<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>)
@@ -37,6 +38,14 @@ const IconLey    = (p) => (<svg viewBox="0 0 24 24" width="18" height="18" fill=
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
+
+// Mensaje que recibe todo profesional al ser aprobado, por el chat interno y
+// por correo (el correo lo arma api/notify.js con este mismo texto).
+const TEXTO_COMPROMISO =
+  'Fuiste aprobado en Parada Bridge. Tu compromiso: debes cobrar la consulta, ' +
+  'no puedes enviar datos de contacto al cliente dentro del chat, y si vas a enviar ' +
+  'un archivo o poder, adjúntalo por el chat de la plataforma.'
+const ADJUNTO_MAX_BYTES = 10 * 1024 * 1024
 
 async function getAuthHeaders() {
   const { data } = await supabase.auth.getSession()
@@ -123,15 +132,36 @@ export default function AdminPage() {
     setActiveTab('chat_interno')
   }
 
+  // Hay más de una cuenta superadmin y los profesionales escriben a cualquiera
+  // de ellas: los no leídos se cuentan contra TODAS (misma regla que el chat
+  // interno). Requiere la política de lectura de docs/sql/admin-roles-2026-09-17.sql;
+  // sin ella la consulta devuelve solo lo propio, como antes.
+  const [adminIds, setAdminIds] = useState([])
+  useEffect(() => {
+    if (loading || !user?.id || profile?.rol !== 'superadmin') return
+    let alive = true
+    ;(async () => {
+      try {
+        const headers = await getAuthHeaders()
+        const r = await fetch(`${SUPABASE_URL}/rest/v1/profiles?rol=eq.superadmin&select=id&order=id.asc`, { headers })
+        const d = await r.json()
+        const ids = Array.isArray(d) ? d.map(x => x.id).filter(Boolean) : []
+        if (alive) setAdminIds(ids.includes(user.id) ? ids : [user.id, ...ids])
+      } catch { if (alive) setAdminIds([user.id]) }
+    })()
+    return () => { alive = false }
+  }, [user?.id, profile?.rol, loading])
+
   // Mensajes internos sin leer → badge del riel (poll 30s, pausado en oculto).
   useEffect(() => {
     if (loading || !user?.id || profile?.rol !== 'superadmin') return
     let alive = true
+    const destinos = (adminIds.length ? adminIds : [user.id]).join(',')
     async function tick() {
       try {
         const headers = await getAuthHeaders()
         const res = await fetch(
-          `${SUPABASE_URL}/rest/v1/mensajes_internos?to_id=eq.${user.id}&leido=eq.false&select=id`,
+          `${SUPABASE_URL}/rest/v1/mensajes_internos?to_id=in.(${destinos})&leido=eq.false&select=id`,
           { headers: { ...headers, Prefer: 'count=exact', Range: '0-0' } }
         )
         const total = parseInt((res.headers.get('content-range') || '').split('/')[1], 10)
@@ -141,7 +171,7 @@ export default function AdminPage() {
     tick()
     const id = setInterval(() => { if (!document.hidden) tick() }, 30_000)
     return () => { alive = false; clearInterval(id) }
-  }, [user?.id, profile?.rol, loading, activeTab])
+  }, [user?.id, profile?.rol, loading, activeTab, adminIds])
 
   async function fetchAll() {
     setLoadingData(true)
@@ -190,10 +220,74 @@ export default function AdminPage() {
   // lista — el admin siempre ve que algo está ocurriendo.
   // Map id → 'aprobando' | 'rechazando'.
   const [procesandoIds, setProcesandoIds] = useState(() => new Map())
+  // Aviso tras aprobar: el home público se sirve desde la caché del CDN
+  // (60 s frescos + 60 s stale), así que el profesional puede tardar hasta
+  // 2 min en salir ahí. El propio admin lo ve ya, porque LawyersSection le
+  // lee directo de Supabase.
+  const [avisoAprobado, setAvisoAprobado] = useState('')
+  useEffect(() => {
+    if (!avisoAprobado) return
+    const t = setTimeout(() => setAvisoAprobado(''), 10000)
+    return () => clearTimeout(t)
+  }, [avisoAprobado])
   const marcarProcesando = (id, modo) => setProcesandoIds(prev => new Map(prev).set(id, modo))
   const quitarProcesando = (id) => setProcesandoIds(prev => { const m = new Map(prev); m.delete(id); return m })
 
-  async function approveProfile(id) {
+  // ── Modal de aprobación: compromiso + adjunto opcional ──
+  const [aprobarModal, setAprobarModal] = useState(null)   // perfil a aprobar | null
+  const [aprobarFile, setAprobarFile]   = useState(null)   // File opcional (PDF/imagen)
+  const [aprobarError, setAprobarError] = useState('')
+  const aprobarFileRef = useRef(null)
+
+  function abrirAprobar(p) {
+    setAprobarFile(null); setAprobarError(''); setAprobarModal(p)
+  }
+
+  function elegirAdjuntoAprobar(e) {
+    const f = e.target.files?.[0]
+    e.target.value = ''
+    if (!f) return
+    const ok = ['application/pdf', 'image/png', 'image/jpeg', 'image/webp'].includes(f.type)
+    if (!ok) { setAprobarError('Solo PDF, PNG, JPG o WEBP.'); return }
+    if (f.size > ADJUNTO_MAX_BYTES) { setAprobarError('El archivo no puede superar 10 MB.'); return }
+    setAprobarError(''); setAprobarFile(f)
+  }
+
+  // Deja el compromiso en el chat interno (mismo hilo y mismo mecanismo de
+  // adjuntos que AdminInternalChat: bucket chat-files, carpeta internal/).
+  // Best-effort: si algo falla aquí, la aprobación ya quedó hecha.
+  async function enviarCompromisoInterno(id, headers, file) {
+    const base = { 'Content-Type': 'application/json', Prefer: 'return=minimal' }
+    await fetch(`${SUPABASE_URL}/rest/v1/mensajes_internos`, {
+      method: 'POST', headers: { ...headers, ...base },
+      body: JSON.stringify({ from_id: user.id, to_id: id, mensaje: TEXTO_COMPROMISO }),
+    })
+    if (!file) return
+    const safe = file.name.replace(/[^\w.\-]+/g, '_').slice(0, 80)
+    const path = `internal/${user.id}_${id}/file_${Date.now()}_${safe}`
+    const up = await fetch(`${SUPABASE_URL}/storage/v1/object/chat-files/${path}`, {
+      method: 'POST',
+      headers: { ...headers, 'Content-Type': file.type || 'application/octet-stream', 'x-upsert': 'true' },
+      body: file,
+    })
+    if (!up.ok) throw new Error('No se pudo subir el adjunto.')
+    const sign = await fetch(`${SUPABASE_URL}/storage/v1/object/sign/chat-files/${path}`, {
+      method: 'POST', headers: { ...headers, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ expiresIn: 60 * 60 * 24 * 7 }),
+    })
+    const sd = await sign.json().catch(() => null)
+    const signedUrl = sd?.signedURL ? `${SUPABASE_URL}/storage/v1${sd.signedURL}` : null
+    if (!signedUrl) throw new Error('No se pudo firmar el adjunto.')
+    await fetch(`${SUPABASE_URL}/rest/v1/mensajes_internos`, {
+      method: 'POST', headers: { ...headers, ...base },
+      body: JSON.stringify({
+        from_id: user.id, to_id: id, mensaje: null, message_type: 'file',
+        file_url: signedUrl, file_name: file.name, file_size: file.size,
+      }),
+    })
+  }
+
+  async function approveProfile(id, file = null) {
     if (procesandoIds.has(id)) return
     marcarProcesando(id, 'aprobando')
     try {
@@ -202,17 +296,23 @@ export default function AdminPage() {
         method: 'PATCH', headers,
         body: JSON.stringify({ aprobado: true }),
       })
-      // Avisar al profesional por correo (best-effort: no bloquea la aprobación).
-      // El endpoint valida superadmin con este mismo token.
+      // Compromiso al chat interno (+ adjunto opcional). Best-effort.
+      let avisoAdjunto = ''
+      try { await enviarCompromisoInterno(id, headers, file) }
+      catch (err) { avisoAdjunto = ` ${err.message || 'El adjunto no se pudo enviar.'}` }
+      // Mismo texto por correo (type 'aprobacion'; el endpoint valida superadmin
+      // y resuelve el correo server-side). Best-effort: no bloquea la aprobación.
       try {
         await fetch('/api/notify', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: headers.Authorization },
-          body: JSON.stringify({ type: 'account_approved', data: { lawyerId: id } }),
+          body: JSON.stringify({ type: 'aprobacion', data: { lawyerId: id } }),
         })
       } catch { /* el correo es secundario; la aprobación ya quedó */ }
       // Salida optimista de Solicitudes (fetchAll confirma después).
       setPending(prev => prev.filter(p => p.id !== id))
+      setAvisoAprobado('Aprobado. Se envió el compromiso por chat interno y correo. Visible en el home en máximo 2 minutos.' + avisoAdjunto)
+      setAprobarModal(null); setAprobarFile(null)
       await fetchAll()
       fetchGestores()
     } finally {
@@ -865,6 +965,7 @@ export default function AdminPage() {
   const TABS = [
     { key: 'pending',      label: 'Solicitudes',         count: pending.length,       Icon: IconInbox },
     { key: 'approved',     label: 'Aprobados',            count: approved.length,      Icon: IconUsers },
+    { key: 'roles',        label: 'Gestión de Roles',                                  Icon: IconShield },
     { key: 'gestores',     label: 'Gestores',             count: gestores.filter(g => !g.aprobado).length, Icon: IconGestor },
     { key: 'pagos',        label: 'Pagos y cobros',                                    Icon: IconWallet },
     { key: 'chats',        label: 'Historial chats',                                   Icon: IconChat },
@@ -952,7 +1053,7 @@ export default function AdminPage() {
                     a la derecha. Ambas van portaleadas/fijas: sus dropdowns se
                     anclan a su propio botón, así que no se solapan. */}
                 <NotificationBell modo="dinero" />
-                <NotificationBell modo="alertas" onOpenRoom={handleOpenRoom}
+                <NotificationBell modo="alertas" adminIds={adminIds} onOpenRoom={handleOpenRoom}
                   onOpenInterno={handleOpenInterno} miId={user?.id} />
               </div>
             </div>
@@ -985,6 +1086,11 @@ export default function AdminPage() {
           {/* ── Solicitudes pendientes ── */}
           {activeTab === 'pending' && (
             <div className={styles.section}>
+              {avisoAprobado && (
+                <div className={styles.avisoOk} role="status">
+                  <IconCheck /> {avisoAprobado}
+                </div>
+              )}
               {PersonFilterBar({})}
               {pendingFiltered.length === 0 ? (
                 <div className={styles.emptyState}>
@@ -1055,7 +1161,7 @@ export default function AdminPage() {
                     <button
                       className={styles.btnApprove}
                       disabled={!!procesando}
-                      onClick={e => { e.stopPropagation(); approveProfile(p.id) }}
+                      onClick={e => { e.stopPropagation(); abrirAprobar(p) }}
                     >
                       {procesando === 'aprobando' ? 'Aprobando…' : <><IconCheck /> Aprobar</>}
                     </button>
@@ -1559,6 +1665,19 @@ export default function AdminPage() {
             </div>
           )}
 
+          {/* ── Gestión de roles (abogado / contador / gestor) ── */}
+          {activeTab === 'roles' && (
+            <div className={styles.section}>
+              <RolesAdmin
+                miId={user?.id}
+                // Refresco silencioso: fetchAll enciende loadingData y desmonta la
+                // pestaña, lo que borraba el aviso de "rol cambiado / cuenta creada".
+                onChanged={() => { fetchPending(); fetchApproved(); fetchGestores() }}
+                onConteo={c => setExtraCounts(e => ({ ...e, roles: c }))}
+              />
+            </div>
+          )}
+
           {/* ── PQRS (peticiones, quejas y reclamos de los clientes) ── */}
           {activeTab === 'pqrs' && (
             <div className={styles.section}>
@@ -1604,6 +1723,61 @@ export default function AdminPage() {
           </div>
         </main>
       </div>
+
+      {/* ── Modal de aprobación: compromiso + adjunto opcional ── */}
+      {aprobarModal && (
+          <div
+            className={styles.logoutOverlay}
+            role="dialog" aria-modal="true" aria-labelledby="aprobarTitle"
+            onClick={() => { if (!procesandoIds.has(aprobarModal.id)) setAprobarModal(null) }}
+          >
+            <div className={`${styles.logoutModal} ${styles.reasignModal}`} onClick={e => e.stopPropagation()}>
+              <h2 id="aprobarTitle" className={styles.logoutTitle}>
+                Aprobar a {(aprobarModal.nombre || aprobarModal.apellido)
+                  ? `${aprobarModal.nombre || ''} ${aprobarModal.apellido || ''}`.trim()
+                  : `@${aprobarModal.username || 'profesional'}`}
+              </h2>
+              <p className={styles.logoutText}>
+                Al aprobar, este mensaje le llega por el chat interno y por correo:
+              </p>
+              <blockquote className={styles.aprobarTexto}>{TEXTO_COMPROMISO}</blockquote>
+
+              <div className={styles.aprobarAdjunto}>
+                <input
+                  ref={aprobarFileRef} type="file"
+                  accept=".pdf,.png,.jpg,.jpeg,.webp,application/pdf,image/png,image/jpeg,image/webp"
+                  style={{ display: 'none' }} onChange={elegirAdjuntoAprobar}
+                />
+                {aprobarFile ? (
+                  <span className={styles.aprobarArchivo} title={aprobarFile.name}>
+                    <IconPaperclip size={14} />
+                    <span className={styles.aprobarArchivoNombre}>{aprobarFile.name}</span>
+                    <span className={styles.aprobarArchivoPeso}>{(aprobarFile.size / (1024 * 1024)).toFixed(1)} MB</span>
+                    <button type="button" className={styles.aprobarQuitar} onClick={() => setAprobarFile(null)} aria-label="Quitar adjunto">×</button>
+                  </span>
+                ) : (
+                  <button type="button" className={styles.aprobarAdjuntar} onClick={() => aprobarFileRef.current?.click()}>
+                    <IconPaperclip size={14} /> Adjuntar archivo (opcional)
+                  </button>
+                )}
+                <span className={styles.reasignInfo}>PDF o imagen, hasta 10 MB. Viaja junto al mensaje del chat interno.</span>
+              </div>
+              {aprobarError && <p className={styles.reasignError}>{aprobarError}</p>}
+
+              <div className={styles.logoutActions}>
+                <button type="button" className={styles.logoutCancel}
+                  onClick={() => setAprobarModal(null)} disabled={procesandoIds.has(aprobarModal.id)}>
+                  Cancelar
+                </button>
+                <button type="button" className={`${styles.cfOk} ${styles.cfOkGold}`}
+                  onClick={() => approveProfile(aprobarModal.id, aprobarFile)}
+                  disabled={procesandoIds.has(aprobarModal.id)}>
+                  {procesandoIds.has(aprobarModal.id) ? 'Aprobando…' : 'Aprobar y enviar'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
       {/* ── Modal de detalle de perfil (Solicitudes / Aprobados) ── */}
       {previewProfile && (

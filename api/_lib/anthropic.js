@@ -4,6 +4,7 @@ import Anthropic from '@anthropic-ai/sdk';
 export const MODELOS = {
   cliente: 'claude-haiku-4-5-20251001',
   abogado: 'claude-sonnet-4-6', // usado por el Plan 2
+  censura: 'claude-haiku-4-5-20251001', // revisión de imágenes/PDF escaneados del chat (barato)
 };
 
 // El cliente se construye de forma lazy (en cada llamada) para leer

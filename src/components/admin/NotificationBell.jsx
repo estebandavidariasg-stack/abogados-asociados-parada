@@ -160,7 +160,10 @@ const TIPOS = {
    en la campana de alertas. Se filtra en cliente tras el fetch. */
 const TIPOS_DINERO = ['pago', 'cobro']
 
-export default function NotificationBell({ onOpenRoom, onOpenInterno, miId, modo = 'alertas' }) {
+export default function NotificationBell({ onOpenRoom, onOpenInterno, miId, modo = 'alertas', adminIds }) {
+  // Los mensajes internos pueden ir dirigidos a cualquiera de las cuentas
+  // superadmin (ver AdminPage): se leen y se marcan contra todas ellas.
+  const destinos = (Array.isArray(adminIds) && adminIds.length ? adminIds : [miId]).filter(Boolean).join(',')
   const esDinero = modo === 'dinero'
   const [open, setOpen]         = useState(false)
   const [items, setItems]       = useState([])
@@ -206,7 +209,7 @@ export default function NotificationBell({ onOpenRoom, onOpenInterno, miId, modo
       if (!esDinero && miId) {
         try {
           const mRes = await fetch(
-            `${SUPABASE_URL}/rest/v1/mensajes_internos?to_id=eq.${miId}&leido=eq.false&select=from_id,created_at&order=created_at.desc&limit=200`,
+            `${SUPABASE_URL}/rest/v1/mensajes_internos?to_id=in.(${destinos})&leido=eq.false&select=from_id,created_at&order=created_at.desc&limit=200`,
             { headers }
           )
           const msgs = await mRes.json()
@@ -296,7 +299,7 @@ export default function NotificationBell({ onOpenRoom, onOpenInterno, miId, modo
       if (item.tipo === 'mensaje_interno') {
         // Sintética: marca leídos los mensajes de ese remitente.
         await fetch(
-          `${SUPABASE_URL}/rest/v1/mensajes_internos?to_id=eq.${miId}&from_id=eq.${item._fromId}&leido=eq.false`,
+          `${SUPABASE_URL}/rest/v1/mensajes_internos?to_id=in.(${destinos})&from_id=eq.${item._fromId}&leido=eq.false`,
           { method: 'PATCH', headers: { ...headers, Prefer: 'return=minimal' }, body: JSON.stringify({ leido: true }) }
         )
       } else {
@@ -325,7 +328,7 @@ export default function NotificationBell({ onOpenRoom, onOpenInterno, miId, modo
       }
       if (internos.length && miId) {
         await fetch(
-          `${SUPABASE_URL}/rest/v1/mensajes_internos?to_id=eq.${miId}&leido=eq.false`,
+          `${SUPABASE_URL}/rest/v1/mensajes_internos?to_id=in.(${destinos})&leido=eq.false`,
           { method: 'PATCH', headers: { ...headers, Prefer: 'return=minimal' }, body: JSON.stringify({ leido: true }) }
         )
       }

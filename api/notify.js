@@ -155,6 +155,74 @@ function emailAprobado({ nombreAbogado, rol, ctaUrl }) {
   }
 }
 
+// Aprobación con el COMPROMISO del profesional. Mismo texto que el mensaje
+// que el panel deja en el chat interno; vive aquí para que el correo no
+// dependa de lo que mande el navegador.
+const TEXTO_COMPROMISO =
+  'Fuiste aprobado en Parada Bridge. Tu compromiso: debes cobrar la consulta, ' +
+  'no puedes enviar datos de contacto al cliente dentro del chat, y si vas a enviar ' +
+  'un archivo o poder, adjúntalo por el chat de la plataforma.'
+
+function emailAprobacion({ nombre, rol, ctaUrl }) {
+  const rolLabel = rol === 'contador' ? 'contador' : 'abogado'
+  const subjectLine = 'Fuiste aprobado en Parada Bridge'
+  const b = (t) => `<strong style="color:#6d3c1b;font-weight:700;">${t}</strong>`
+  return {
+    subject: subjectLine,
+    html: renderEmailHtml({
+      subjectLine,
+      preheader: 'Tu cuenta ya está activa. Lee tu compromiso antes de atender la primera consulta.',
+      greetingHtml: `Estimado/a ${b(esc(nombre))},`,
+      bodyHtml:
+        `Tu cuenta como ${b(rolLabel)} ya está aprobada y apareces en la plataforma.<br><br>` +
+        `${b('Tu compromiso:')} debes ${b('cobrar la consulta')}, ` +
+        `${b('no puedes enviar datos de contacto')} al cliente dentro del chat, ` +
+        `y si vas a enviar un archivo o poder, ${b('adjúntalo por el chat de la plataforma')}.<br><br>` +
+        `Este mismo mensaje te queda en tu chat interno con la administración.`,
+      ctaLabel: 'Ingresar a mi cuenta',
+      ctaUrl,
+    }),
+  }
+}
+
+// Cuenta de administración creada desde el panel: correo con la contraseña
+// temporal. Solo se manda al correo recién creado (nunca vuelve al navegador).
+function emailCuentaAdmin({ nombre, email, password, ctaUrl }) {
+  const subjectLine = 'Tu cuenta de administración en Parada Bridge'
+  const b = (t) => `<strong style="color:#6d3c1b;font-weight:700;">${t}</strong>`
+  return {
+    subject: subjectLine,
+    html: renderEmailHtml({
+      subjectLine,
+      preheader: 'Ya puedes entrar al panel de administración con tu contraseña temporal.',
+      greetingHtml: `Hola ${b(esc(nombre))},`,
+      bodyHtml:
+        `Te crearon una cuenta de ${b('superadministrador')} en Parada Bridge.<br><br>` +
+        `Entra con tu correo ${b(esc(email))} y esta contraseña temporal:` +
+        codeBox(esc(password)) +
+        `Al ingresar, cámbiala por una propia desde ${b('¿Olvidaste tu contraseña?')} en la pantalla de acceso. ` +
+        `Si no esperabas esta cuenta, escribe a gerencia@paradabridge.com.`,
+      ctaLabel: 'Entrar al panel',
+      ctaUrl,
+    }),
+  }
+}
+
+// Contraseña temporal: 12 caracteres de un alfabeto sin ambigüedades (sin
+// 0/O, 1/l/I), con al menos una mayúscula, una minúscula y un dígito para
+// pasar las reglas del formulario de acceso. CSPRNG (randomInt).
+function passwordTemporal() {
+  const MAY = 'ABCDEFGHJKLMNPQRSTUVWXYZ', MIN = 'abcdefghjkmnpqrstuvwxyz', DIG = '23456789'
+  const ALL = MAY + MIN + DIG
+  const pick = (s) => s[crypto.randomInt(0, s.length)]
+  const chars = [pick(MAY), pick(MIN), pick(DIG)]
+  while (chars.length < 12) chars.push(pick(ALL))
+  for (let i = chars.length - 1; i > 0; i--) {
+    const j = crypto.randomInt(0, i + 1); [chars[i], chars[j]] = [chars[j], chars[i]]
+  }
+  return chars.join('')
+}
+
 // El administrador escribió por el chat interno → aviso al profesional.
 function emailMensajeInterno({ nombreProfesional, ctaUrl }) {
   const subjectLine = 'El administrador te escribió en Parada Bridge'
@@ -602,6 +670,100 @@ export default async function handler(req, res) {
         html,
       })
       return res.status(200).json({ ok: true, sent: 'account_approved' })
+    }
+
+    // ── Aprobación + compromiso (lo dispara el panel al aprobar) ──
+    // Solo superadmin; el correo del profesional se resuelve server-side.
+    if (type === 'aprobacion') {
+      const caller = await getCallerProfile(req)
+      if (caller?.rol !== 'superadmin') {
+        return res.status(401).json({ error: 'No autorizado.' })
+      }
+      const { lawyerId } = data || {}
+      if (!lawyerId) {
+        return res.status(400).json({ error: 'Falta lawyerId.' })
+      }
+      const pro = await resolveProfessionalEmail(lawyerId)
+      if (!pro?.email) {
+        return res.status(400).json({ error: 'No se pudo resolver el correo del profesional.' })
+      }
+      const { subject, html } = emailAprobacion({
+        nombre: `${pro.nombre || ''} ${pro.apellido || ''}`.trim() || 'profesional',
+        rol: pro.rol,
+        ctaUrl: `${SITE_BASE}/?loginModal=true`,
+      })
+      await transporter.sendMail({
+        from: `"Parada Bridge" <${process.env.GMAIL_USER}>`,
+        to: pro.email,
+        subject,
+        html,
+      })
+      return res.status(200).json({ ok: true, sent: 'aprobacion' })
+    }
+
+    // ── El superadmin crea una cuenta de administración desde el panel ──
+    // 1) usuario en Auth (Admin API, correo confirmado, contraseña temporal),
+    // 2) perfil con rol + aprobado vía RPC admin_alta_cuenta (service-role;
+    //    docs/sql/admin-roles-2026-09-17.sql), 3) correo con la contraseña.
+    // Si el perfil falla, se borra el usuario recién creado (sin huérfanos).
+    if (type === 'crear_admin') {
+      const caller = await getCallerProfile(req)
+      if (caller?.rol !== 'superadmin') {
+        return res.status(401).json({ error: 'No autorizado.' })
+      }
+      const nombre   = String(data?.nombre   || '').trim().slice(0, 60)
+      const apellido = String(data?.apellido || '').trim().slice(0, 60)
+      const email    = String(data?.email    || '').trim().toLowerCase()
+      const rol      = data?.rol === 'superadmin' ? 'superadmin' : ''
+      if (!nombre || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !rol) {
+        return res.status(400).json({ error: 'Faltan datos: nombre, correo válido y rol.' })
+      }
+      // username: parte local del correo + sufijo aleatorio (la columna es única).
+      const base = email.split('@')[0].toLowerCase().replace(/[^a-z0-9]+/g, '').slice(0, 20) || 'admin'
+      const username = `${base}-${crypto.randomBytes(2).toString('hex')}`
+      const password = passwordTemporal()
+
+      const au = await fetch(`${SUPABASE_URL}/auth/v1/admin/users`, {
+        method: 'POST',
+        headers: svcHeaders(),
+        body: JSON.stringify({
+          email, password, email_confirm: true,
+          user_metadata: { nombre, apellido, username, rol },
+        }),
+      })
+      const user = await au.json().catch(() => ({}))
+      if (!au.ok || !user?.id) {
+        const msg = String(user?.msg || user?.message || user?.error_description || '')
+        if (au.status === 422 || /already|registered|exists/i.test(msg)) {
+          return res.status(409).json({ error: 'Ese correo ya tiene una cuenta. Cámbiale el rol desde la tabla.' })
+        }
+        console.error('[notify] crear_admin auth:', au.status, msg)
+        return res.status(500).json({ error: 'No se pudo crear el usuario.' })
+      }
+
+      const rp = await fetch(`${SUPABASE_URL}/rest/v1/rpc/admin_alta_cuenta`, {
+        method: 'POST',
+        headers: svcHeaders(),
+        body: JSON.stringify({ p_id: user.id, p_email: email, p_username: username, p_nombre: nombre, p_apellido: apellido, p_rol: rol }),
+      })
+      if (!rp.ok) {
+        const j = await rp.json().catch(() => ({}))
+        console.error('[notify] crear_admin perfil:', rp.status, j?.message)
+        await fetch(`${SUPABASE_URL}/auth/v1/admin/users/${user.id}`, { method: 'DELETE', headers: svcHeaders() }).catch(() => {})
+        const falta = /could not find the function/i.test(String(j?.message || ''))
+        return res.status(500).json({ error: falta ? 'Falta aplicar docs/sql/admin-roles-2026-09-17.sql en Supabase.' : 'No se pudo crear el perfil.' })
+      }
+
+      const { subject, html } = emailCuentaAdmin({
+        nombre, email, password, ctaUrl: `${SITE_BASE}/?loginModal=true`,
+      })
+      try {
+        await transporter.sendMail({ from: `"Parada Bridge" <${process.env.GMAIL_USER}>`, to: email, subject, html })
+      } catch (e) {
+        console.error('[notify] crear_admin correo:', e?.message)
+        return res.status(200).json({ ok: true, id: user.id, sent: false })
+      }
+      return res.status(200).json({ ok: true, id: user.id, sent: true })
     }
 
     // ── "El administrador te escribió" (chat interno) ──

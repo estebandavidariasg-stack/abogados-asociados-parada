@@ -7,7 +7,7 @@ import styles from './ContadorChatDashboard.module.css'
 import AudioPlayer from './AudioPlayer'
 import {
   ChatImage, openChatFile, subirArchivoChat, parseFichas, FichasContacto,
-  validarAdjuntoChat, prepararAdjuntoChat, nombreArchivoSeguro, describirErrorSubida,
+  validarAdjuntoChat, prepararAdjuntoChat, nombreArchivoSeguro, describirErrorSubida, revisarContactoArchivo, crearTranscriptor,
   crearGrabadorAudio, extAudio, mimeAudioLimpio, describirErrorMicrofono, AUDIO_CONSTRAINTS,
 } from '../../lib/chatFiles'
 import { IconPaperclip, IconMic, IconFirma } from '../shared/Icons'
@@ -675,13 +675,16 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
     let path = null
     try {
       const file = await prepararAdjuntoChat(fileOriginal)   // ya viene comprimida desde prepararAdjunto
+      // ── Datos de contacto en el archivo (PDF/imagen): mismo bloqueo que el texto ──
+      const headers = await getAuthHeaders()
+      const revision = await revisarContactoArchivo(file, { roomId: activeRoom.id, authHeader: headers.Authorization })
+      if (revision.contiene) { setContactoBlocked(true); return }
       path = `chats/${activeRoom.id}/${Date.now()}_${nombreArchivoSeguro(file.name)}`
       const { error: upErr } = await subirArchivoChat({
         path, file, contentType: file.type || 'application/octet-stream', onProgress: setUploadPct,
       })
       if (upErr) throw Object.assign(new Error(upErr.message || 'upload'), { status: upErr.status, fase: 'upload' })
 
-      const headers = await getAuthHeaders()
       const insRes = await fetch(`${SUPABASE_URL}/rest/v1/chat_messages`, {
         method: 'POST',
         headers: { ...headers, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
@@ -754,20 +757,24 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
       descartarGrabacionRef.current = false
       recorder.ondataavailable = e => { if (e.data.size > 0) audioChunksRef.current.push(e.data) }
       recorder.onerror = () => setToast('La grabación se interrumpió. Intenta de nuevo.')
+      // Transcripción gratis en el navegador (Web Speech API), en paralelo a la grabación.
+      const transcriptor = crearTranscriptor()
       recorder.onstop = async () => {
         stream.getTracks().forEach(t => t.stop())
+        const texto = await transcriptor.stop()
         const actualType = recorder.mimeType || 'audio/webm'
         const blob = new Blob(audioChunksRef.current, { type: actualType })
         // Cancelada con el botón del micrófono: se descarta sin subir.
         if (descartarGrabacionRef.current) { descartarGrabacionRef.current = false; audioChunksRef.current = []; return }
         if (blob.size > 0) {
           const fixedBlob = await fixAudioDuration(blob)
-          await uploadAudio(fixedBlob, actualType)
+          await uploadAudio(fixedBlob, actualType, texto)
         } else {
           setToast('La nota de voz quedó vacía. Graba al menos un segundo.')
         }
       }
       recorder.start(100)
+      transcriptor.start()
       setRecording(true)
       setRecordingTime(0)
       recordingTimerRef.current = setInterval(() => setRecordingTime(t => t + 1), 1000)
@@ -786,8 +793,13 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
     setRecordingTime(0)
   }
 
-  async function uploadAudio(blob, mimeType = 'audio/webm') {
+  // `transcripcion`: texto de la nota de voz cuando exista (motor pendiente de
+  // decidir). Pasa por contieneContacto como un mensaje de texto y se guarda
+  // en chat_messages.transcripcion (docs/sql/consulta-otp-2026-09-17.sql).
+  async function uploadAudio(blob, mimeType = 'audio/webm', transcripcion = '') {
     if (!activeRoom) return
+    const texto = String(transcripcion || '').trim()
+    if (texto && contieneContacto(texto)) { setContactoBlocked(true); return }
     setUploadingAudio(true)
     let path = null
     try {
@@ -814,6 +826,7 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
           file_url:     path,
           file_name:    `voz_${Date.now()}.${ext}`,
           file_size:    blob.size,
+          ...(texto ? { transcripcion: texto } : {}),
         }),
       })
       if (!insRes.ok) {

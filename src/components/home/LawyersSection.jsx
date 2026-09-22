@@ -4,6 +4,7 @@ import { headerStagger, eyebrowReveal, fadeUp, VIEWPORT } from '../../lib/motion
 import LawyerCard from './LawyerCard'
 import styles from './LawyersSection.module.css'
 import { useAuth } from '../../context/AuthContext'
+import { getAuthHeaders } from '../../lib/supabase'
 import { useCarrusel } from '../../lib/useCarrusel'
 
 /* Flechas de navegación centradas bajo la cinta de profesionales. Nudgean la
@@ -23,6 +24,16 @@ function CintaFlechas({ onPrev, onNext }) {
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || ''
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || ''
+
+// Mismas columnas públicas que devuelve /api/professionals (espejo de su
+// PUBLIC_COLS). Solo se usan en la lectura directa del superadmin.
+const PUBLIC_COLS = [
+  'id', 'nombre', 'apellido', 'area_derecho',
+  'ciudad', 'departamento',
+  'foto_url', 'video_url', 'descripcion',
+  'universidad', 'experiencia', 'rol',
+  'instagram', 'linkedin', 'facebook', 'twitter', 'whatsapp', 'tiktok',
+].join(',')
 
 export default function LawyersSection() {
   const sectionRef = useRef(null)
@@ -64,10 +75,16 @@ export default function LawyersSection() {
     async function fetchLawyers() {
       setLoading(true)
       try {
-        // Endpoint cacheado en el CDN de Vercel (ver api/professionals.js):
-        // evita pegar a Supabase en cada carga del home. Devuelve SOLO las
-        // columnas públicas (la whitelist vive ahora server-side).
-        const res = await fetch(`/api/professionals?rol=${profesion}`)
+        // Público: endpoint cacheado en el CDN de Vercel (api/professionals.js),
+        // evita pegar a Supabase en cada carga del home. Superadmin: directo a
+        // Supabase (mismo truco que VideoCarousel con fetchVideos(true)), para
+        // que vea al profesional que acaba de aprobar sin esperar la caché.
+        const res = isSuperAdmin
+          ? await fetch(
+              `${SUPABASE_URL}/rest/v1/profiles?aprobado=eq.true&rol=eq.${profesion}&select=${PUBLIC_COLS}`,
+              { headers: await getAuthHeaders() }
+            )
+          : await fetch(`/api/professionals?rol=${profesion}`)
         if (!res.ok) {
           const detail = await res.text().catch(() => '')
           console.error('[LawyersSection] fetch failed:', res.status, detail)
@@ -87,7 +104,7 @@ export default function LawyersSection() {
     }
     fetchLawyers()
     return () => { cancelled = true }
-  }, [profesion, shouldFetch])
+  }, [profesion, shouldFetch, isSuperAdmin])
 
   // Al cambiar de profesión, resetear filtros secundarios
   function changeProfesion(p) {

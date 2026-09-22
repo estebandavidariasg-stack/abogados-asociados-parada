@@ -43,12 +43,15 @@ const RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000
 const RATE_LIMIT_MAX        = 3
 const CODE_TTL_MS           = 10 * 60 * 1000
 
-const TIPOS_VALIDOS = new Set(['abogado', 'contador', 'gestor', 'firma', 'voto'])
+const TIPOS_VALIDOS = new Set(['abogado', 'contador', 'gestor', 'firma', 'voto', 'consulta'])
 
 // Tipos que NO crean cuenta (solo verifican identidad de un correo): se saltan
 // el reCAPTCHA y el chequeo "ya registrado". 'firma' = firma electrónica;
-// 'voto' = verificación del votante en el debate de proyectos de ley.
-const TIPOS_SIN_CUENTA = new Set(['firma', 'voto'])
+// 'voto' = verificación del votante en el debate de proyectos de ley;
+// 'consulta' = el cliente confirma su correo antes de abrir una consulta
+// (puede ser un correo que ya exista como usuario, p. ej. un profesional
+// que consulta como cliente). El rate limit 3/10 min sigue aplicando.
+const TIPOS_SIN_CUENTA = new Set(['firma', 'voto', 'consulta'])
 
 /* ── Verificación de reCAPTCHA contra Google ──────────────────────────────
    Antes el token sólo se recolectaba en el cliente y nunca se validaba.
@@ -171,6 +174,21 @@ function renderVerificationEmailHtml({ code, tipoRegistro }) {
     return renderShell({
       subjectLine: 'Código para votar',
       preheader: `Tu código para participar: ${code}`,
+      innerHtml: inner,
+    })
+  }
+  // Consulta: el cliente confirma su correo antes de que se abra la sala.
+  if (tipoRegistro === 'consulta') {
+    const inner =
+      `<p style="margin:0;font-size:16px;line-height:1.6;color:${C.navy};text-align:center;">
+         Para ${em('abrir tu consulta')}, ingresa este código de verificación:
+       </p>
+       ${codeBox(code)}
+       <p style="margin:0;text-align:center;font-size:13px;color:${C.body};">Este código expira en 10 minutos.</p>
+       <p style="margin:10px 0 0;text-align:center;font-size:12px;color:${C.muted};">Si no solicitaste una consulta, ignora este correo.</p>`
+    return renderShell({
+      subjectLine: 'Código para tu consulta',
+      preheader: `Tu código para abrir la consulta: ${code}`,
       innerHtml: inner,
     })
   }
