@@ -1265,7 +1265,7 @@ function CobroClienteCard({ roomId, clientToken, profesionalNombre, onVerCertifi
     if (!comprobanteFile) { setComprobanteError('Adjunta el comprobante de tu pago para continuar.'); return }
     setBusy(true); setComprobanteError('')
     try {
-      const path = await subirComprobanteCliente(roomId, comprobanteFile)
+      const path = await subirComprobanteCliente(roomId, comprobanteFile, clientToken)
       if (!path) { setComprobanteError('No se pudo subir el comprobante. Intenta de nuevo.'); setBusy(false); return }
       await clienteMarcoPago(roomId, clientToken, path)
       const c = await fetchCobroCliente(roomId, clientToken)

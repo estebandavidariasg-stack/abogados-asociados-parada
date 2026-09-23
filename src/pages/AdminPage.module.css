@@ -2031,15 +2031,29 @@
 
 /* ── Modal de aprobación: compromiso + adjunto opcional ── */
 .aprobarTexto {
-  margin: 0 0 16px;
-  padding: 13px 15px;
-  font-size: 0.86rem;
-  line-height: 1.6;
-  color: #4a3726;
-  background: #fbf6ee;
-  border: 1px solid rgba(201, 168, 76, 0.4);
-  border-radius: 12px;
+  position: relative;
+  margin: 0 0 18px;
+  padding: 30px 18px 17px;
+  font-size: 0.95rem;
+  line-height: 1.68;
+  font-weight: 500;
+  color: #3d2b1d;
+  background: linear-gradient(180deg, #fffaef 0%, #fdf3e0 100%);
+  border: 1px solid rgba(201, 168, 76, 0.75);
+  border-radius: 14px;
+  box-shadow: 0 6px 18px rgba(109, 60, 27, 0.10), inset 0 1px 0 rgba(255, 255, 255, 0.7);
   text-wrap: pretty;
+}
+/* Rotulo del recuadro: dice si es el compromiso o la bienvenida del gestor. */
+.aprobarTextoRotulo {
+  position: absolute;
+  top: 10px;
+  left: 18px;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: #8a6a28;
 }
 .aprobarAdjunto { display: flex; flex-direction: column; gap: 6px; margin-bottom: 4px; }
 .aprobarAdjuntar {

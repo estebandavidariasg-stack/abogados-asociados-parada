@@ -45,6 +45,14 @@ const TEXTO_COMPROMISO =
   'Fuiste aprobado en Parada Bridge. Tu compromiso: debes cobrar la consulta, ' +
   'no puedes enviar datos de contacto al cliente dentro del chat, y si vas a enviar ' +
   'un archivo o poder, adjúntalo por el chat de la plataforma.'
+// El gestor no atiende consultas: su mensaje es solo de bienvenida.
+const TEXTO_BIENVENIDA_GESTOR =
+  '¡Bienvenido a Parada Bridge! Tu cuenta de gestor ya está activa. Cuando la ' +
+  'administración te asigne tu código de referencia, lo verás en tu perfil junto a ' +
+  'su código QR para compartirlo, y desde ahí podrás seguir tus casos y tus comisiones.'
+// Texto y rótulo según el rol aprobado.
+const textoAprobacion = (rol) => (rol === 'gestor' ? TEXTO_BIENVENIDA_GESTOR : TEXTO_COMPROMISO)
+const rotuloAprobacion = (rol) => (rol === 'gestor' ? 'Mensaje de bienvenida' : 'Compromiso del profesional')
 const ADJUNTO_MAX_BYTES = 10 * 1024 * 1024
 
 async function getAuthHeaders() {
@@ -256,11 +264,11 @@ export default function AdminPage() {
   // Deja el compromiso en el chat interno (mismo hilo y mismo mecanismo de
   // adjuntos que AdminInternalChat: bucket chat-files, carpeta internal/).
   // Best-effort: si algo falla aquí, la aprobación ya quedó hecha.
-  async function enviarCompromisoInterno(id, headers, file) {
+  async function enviarCompromisoInterno(id, headers, file, rol) {
     const base = { 'Content-Type': 'application/json', Prefer: 'return=minimal' }
     await fetch(`${SUPABASE_URL}/rest/v1/mensajes_internos`, {
       method: 'POST', headers: { ...headers, ...base },
-      body: JSON.stringify({ from_id: user.id, to_id: id, mensaje: TEXTO_COMPROMISO }),
+      body: JSON.stringify({ from_id: user.id, to_id: id, mensaje: textoAprobacion(rol) }),
     })
     if (!file) return
     const safe = file.name.replace(/[^\w.\-]+/g, '_').slice(0, 80)
@@ -287,7 +295,7 @@ export default function AdminPage() {
     })
   }
 
-  async function approveProfile(id, file = null) {
+  async function approveProfile(id, file = null, rol = null) {
     if (procesandoIds.has(id)) return
     marcarProcesando(id, 'aprobando')
     try {
@@ -298,7 +306,7 @@ export default function AdminPage() {
       })
       // Compromiso al chat interno (+ adjunto opcional). Best-effort.
       let avisoAdjunto = ''
-      try { await enviarCompromisoInterno(id, headers, file) }
+      try { await enviarCompromisoInterno(id, headers, file, rol) }
       catch (err) { avisoAdjunto = ` ${err.message || 'El adjunto no se pudo enviar.'}` }
       // Mismo texto por correo (type 'aprobacion'; el endpoint valida superadmin
       // y resuelve el correo server-side). Best-effort: no bloquea la aprobación.
@@ -1740,7 +1748,10 @@ export default function AdminPage() {
               <p className={styles.logoutText}>
                 Al aprobar, este mensaje le llega por el chat interno y por correo:
               </p>
-              <blockquote className={styles.aprobarTexto}>{TEXTO_COMPROMISO}</blockquote>
+              <blockquote className={styles.aprobarTexto}>
+                <span className={styles.aprobarTextoRotulo}>{rotuloAprobacion(aprobarModal.rol)}</span>
+                {textoAprobacion(aprobarModal.rol)}
+              </blockquote>
 
               <div className={styles.aprobarAdjunto}>
                 <input
@@ -1770,7 +1781,7 @@ export default function AdminPage() {
                   Cancelar
                 </button>
                 <button type="button" className={`${styles.cfOk} ${styles.cfOkGold}`}
-                  onClick={() => approveProfile(aprobarModal.id, aprobarFile)}
+                  onClick={() => approveProfile(aprobarModal.id, aprobarFile, aprobarModal.rol)}
                   disabled={procesandoIds.has(aprobarModal.id)}>
                   {procesandoIds.has(aprobarModal.id) ? 'Aprobando…' : 'Aprobar y enviar'}
                 </button>

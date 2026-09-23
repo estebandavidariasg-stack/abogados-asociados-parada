@@ -302,7 +302,7 @@ export default function RegisterModal({ onClose }) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        email: regEmail.trim(),
+        email: regEmail.trim().toLowerCase(),
         tipoRegistro: rol,          // 'abogado' | 'contador' | 'gestor'
         recaptchaToken: captchaValue,
       }),
@@ -333,7 +333,7 @@ export default function RegisterModal({ onClose }) {
       const verifyRes = await fetch('/api/verify-code', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: regEmail.trim(), code }),
+        body: JSON.stringify({ email: regEmail.trim().toLowerCase(), code }),
       })
       if (!verifyRes.ok) {
         const data = await verifyRes.json().catch(() => ({}))
@@ -365,6 +365,12 @@ export default function RegisterModal({ onClose }) {
   // ── Paso C: signUp → signIn temporal → (subir tarjeta) → UPSERT perfil
   //    con el rol correcto → signOut. Un solo camino para los 3 roles.
   async function actuallyCreateAccount() {
+    // Supabase Auth guarda el correo SIEMPRE en minúsculas y el trigger
+    // handle_new_user lo copia así a profiles.email. Si aquí mandáramos el
+    // correo tal como se escribió (con una mayúscula), el UPSERT del paso 4
+    // se vería como un CAMBIO de email y el trigger lo rechaza con
+    // "No puedes cambiar tu email desde este endpoint". Por eso se normaliza.
+    const emailNorm = regEmail.trim().toLowerCase()
     // 1. signUp — crea auth.users. El trigger crea la fila en profiles con
     //    rol='abogado' por defecto; la corregimos en el UPSERT (paso 4).
     const metaData =
@@ -372,7 +378,7 @@ export default function RegisterModal({ onClose }) {
         ? { username }
         : { nombre, apellido, username, telefono }
     const { error: signUpError } = await supabase.auth.signUp({
-      email: regEmail,
+      email: emailNorm,
       password: regPassword,
       options: { data: metaData },
     })
@@ -381,7 +387,7 @@ export default function RegisterModal({ onClose }) {
     // 2. Sign-in temporal para obtener token (necesario para el UPSERT y para
     //    subir la tarjeta al bucket privado con RLS auth.uid() = folder).
     const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
-      email: regEmail,
+      email: emailNorm,
       password: regPassword,
     })
     if (signInError || !signInData?.user?.id) {
@@ -425,7 +431,7 @@ export default function RegisterModal({ onClose }) {
     const payload = {
       id: userId,
       username,
-      email: regEmail,
+      email: emailNorm,
       rol,
       aprobado: false,
       ...(Object.keys(datosAdicionales).length ? { datos_adicionales: datosAdicionales } : {}),

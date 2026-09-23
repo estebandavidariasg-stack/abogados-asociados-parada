@@ -660,6 +660,17 @@ export default function AdminInternalChat({ miId, initialSelectedId, onOpenRoom 
 
   const nombreRol = rol => rol === 'contador' ? 'Contador' : rol === 'gestor' ? 'Gestor' : 'Abogado'
 
+  // Los gestores se registran sin nombre ni apellido (solo usuario), así que
+  // sin este respaldo su fila salía en blanco en la lista y en la cabecera.
+  const nombreDe = a => {
+    const n = [a?.nombre, a?.apellido].filter(Boolean).join(' ').trim()
+    return n || (a?.username ? `@${a.username}` : 'Sin nombre')
+  }
+  const inicialesDe = a => {
+    const n = `${a?.nombre?.[0] || ''}${a?.apellido?.[0] || ''}`.trim()
+    return n || (a?.username?.[0] || '?').toUpperCase()
+  }
+
   return (
     <div ref={wrapRef} className={`${styles.wrap} ${selected ? styles.wrapOpen : ''}`}>
 
@@ -775,11 +786,11 @@ export default function AdminInternalChat({ miId, initialSelectedId, onOpenRoom 
             >
               <div className={styles.avatar}>
                 {a.foto_url
-                  ? <img src={a.foto_url} alt={a.nombre} width="40" height="40" loading="lazy" decoding="async" />
-                  : `${a.nombre?.[0] || ''}${a.apellido?.[0] || ''}`}
+                  ? <img src={a.foto_url} alt={nombreDe(a)} width="40" height="40" loading="lazy" decoding="async" />
+                  : inicialesDe(a)}
               </div>
               <div className={styles.itemInfo}>
-                <p className={styles.itemNombre}>{a.nombre} {a.apellido}</p>
+                <p className={styles.itemNombre}>{nombreDe(a)}</p>
                 <p className={styles.itemCiudad}>
                   <span className={`${styles.rolPill} ${a.rol === 'contador' ? styles.rolPillContador : a.rol === 'gestor' ? styles.rolPillGestor : styles.rolPillAbogado}`}>
                     {nombreRol(a.rol)}
@@ -814,12 +825,12 @@ export default function AdminInternalChat({ miId, initialSelectedId, onOpenRoom 
               </button>
               <div className={styles.chatHeadAvatar}>
                 {selected.foto_url
-                  ? <img src={selected.foto_url} alt={selected.nombre} width="44" height="44" loading="lazy" decoding="async" />
-                  : `${selected.nombre?.[0] || ''}${selected.apellido?.[0] || ''}`}
+                  ? <img src={selected.foto_url} alt={nombreDe(selected)} width="44" height="44" loading="lazy" decoding="async" />
+                  : inicialesDe(selected)}
               </div>
               <div>
                 <p className={styles.chatHeadNombre}>
-                  {selected.nombre} {selected.apellido}
+                  {nombreDe(selected)}
                   <span className={`${styles.rolPill} ${selected.rol === 'contador' ? styles.rolPillContador : selected.rol === 'gestor' ? styles.rolPillGestor : styles.rolPillAbogado}`}>
                     {nombreRol(selected.rol)}
                   </span>

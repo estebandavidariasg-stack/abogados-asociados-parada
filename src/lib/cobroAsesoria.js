@@ -9,7 +9,7 @@
 //  · El recibo PDF se genera con pdf-lib mediante import dinámico, para no
 //    arrastrar la librería al bundle público.
 // ─────────────────────────────────────────────────────────────────────────
-import { getAuthHeaders } from './supabase'
+import { getAuthHeaders, ensureChatToken } from './supabase'
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
@@ -149,19 +149,32 @@ export async function clienteMarcoPago(roomId, clientToken, comprobantePath = nu
 
 // Sube el comprobante de pago del cliente al bucket chat-files (misma ruta y
 // permisos que los adjuntos del chat). Devuelve el path o null.
-export async function subirComprobanteCliente(roomId, file) {
+// CAUSA del "No se pudo subir el comprobante": esta función subía con la ANON
+// KEY, y desde el hardening del bucket chat-files (2026-09-04) la política solo
+// acepta subidas a `chats/…` con sesión o con el JWT del cliente — la anon key
+// recibe 403 "violates row-level security policy". Igual que los adjuntos del
+// chat: se renueva el JWT del cliente y se usa getAuthHeaders()
+// (sesión → JWT del cliente → anon key).
+export async function subirComprobanteCliente(roomId, file, clientToken) {
   try {
+    const hash = clientToken || localStorage.getItem('chat_cedula_hash')
+    await ensureChatToken(hash)
+    const headers = await getAuthHeaders()
     const safe = (file.name || 'comprobante').replace(/[^\w.\-]+/g, '_').slice(0, 60)
     const path = `chats/${roomId}/comprobante_${Date.now()}_${safe}`
     const res = await fetch(`${SUPABASE_URL}/storage/v1/object/chat-files/${path}`, {
       method: 'POST',
       headers: {
-        apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`,
+        ...headers,
         'Content-Type': file.type || 'application/octet-stream', 'x-upsert': 'true',
       },
       body: file,
     })
-    return res.ok ? path : null
+    if (!res.ok) {
+      console.error('[cobro] subida del comprobante rechazada:', res.status, await res.text().catch(() => ''))
+      return null
+    }
+    return path
   } catch { return null }
 }
 

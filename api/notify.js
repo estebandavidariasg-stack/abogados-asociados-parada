@@ -38,7 +38,7 @@ async function resolveProfessionalEmail(lawyerId) {
     const url =
       `${SUPABASE_URL}/rest/v1/profiles` +
       `?id=eq.${encodeURIComponent(lawyerId)}` +
-      `&select=email,nombre,apellido,rol&limit=1`
+      `&select=email,nombre,apellido,rol,username&limit=1`
     const res = await fetch(url, {
       headers: {
         apikey:        SUPABASE_SERVICE_ROLE_KEY,
@@ -167,6 +167,26 @@ function emailAprobacion({ nombre, rol, ctaUrl }) {
   const rolLabel = rol === 'contador' ? 'contador' : 'abogado'
   const subjectLine = 'Fuiste aprobado en Parada Bridge'
   const b = (t) => `<strong style="color:#6d3c1b;font-weight:700;">${t}</strong>`
+  // El gestor no atiende consultas: recibe solo la bienvenida (mismo texto que
+  // le queda en el chat interno desde el panel de administración).
+  if (rol === 'gestor') {
+    const asunto = 'Bienvenido a Parada Bridge'
+    return {
+      subject: asunto,
+      html: renderEmailHtml({
+        subjectLine: asunto,
+        preheader: 'Tu cuenta de gestor ya está activa.',
+        greetingHtml: `Hola ${b(esc(nombre))},`,
+        bodyHtml:
+          `${b('¡Bienvenido a Parada Bridge!')} Tu cuenta de ${b('gestor')} ya está activa.<br><br>` +
+          `Cuando la administración te asigne tu ${b('código de referencia')}, lo verás en tu perfil ` +
+          `junto a su ${b('código QR')} para compartirlo, y desde ahí podrás seguir tus casos y tus comisiones.<br><br>` +
+          `Este mismo mensaje te queda en tu chat interno con la administración.`,
+        ctaLabel: 'Entrar a mi perfil',
+        ctaUrl,
+      }),
+    }
+  }
   return {
     subject: subjectLine,
     html: renderEmailHtml({
@@ -688,7 +708,9 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: 'No se pudo resolver el correo del profesional.' })
       }
       const { subject, html } = emailAprobacion({
-        nombre: `${pro.nombre || ''} ${pro.apellido || ''}`.trim() || 'profesional',
+        // Los gestores suelen no tener nombre: se saluda por su usuario.
+        nombre: `${pro.nombre || ''} ${pro.apellido || ''}`.trim()
+          || (pro.username ? `@${pro.username}` : (pro.rol === 'gestor' ? 'gestor' : 'profesional')),
         rol: pro.rol,
         ctaUrl: `${SITE_BASE}/?loginModal=true`,
       })
