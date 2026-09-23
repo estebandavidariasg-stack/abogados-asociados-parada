@@ -27,6 +27,7 @@ const IconChat   = (p) => (<svg viewBox="0 0 24 24" width="18" height="18" fill=
 const IconRecover= (p) => (<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>)
 const IconAlert  = (p) => (<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg>)
 const IconShield = (p) => (<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>)
+const IconChatInterno = (p) => (<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M8 10.5h7M8 14h4"/><path d="M21 12.5a7.5 7.5 0 0 1-10.9 6.7L4 21l1.8-4.1A7.5 7.5 0 1 1 21 12.5z"/></svg>)
 const IconDoc    = (p) => (<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 13h6M9 17h6"/></svg>)
 const IconStar   = (p) => (<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>)
 const IconPqr    = (p) => (<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M4 4h16v12H7l-3 3z"/><path d="M9 9h6M9 12h3"/></svg>)
@@ -364,14 +365,40 @@ export default function AdminPage() {
     }
   }
 
+  // Quitar de la página = ELIMINAR la cuenta (perfil + usuario de auth), no
+  // solo desaprobarla: así desaparece del sitio, del panel y de Solicitudes, y
+  // el correo queda libre. El borrado lo hace el servidor con service-role
+  // (api/notify, type 'account_rejected'), que además INHABILITA el código/QR
+  // del gestor sin borrar su registro. Si el servidor no pudiera borrar, se
+  // cae al comportamiento anterior (marcar como no aprobado) y se avisa.
   async function removeApproved(id) {
-    const headers = await getAuthHeaders()
-    await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${id}`, {
-      method: 'PATCH', headers,
-      body: JSON.stringify({ aprobado: false }),
-    })
-    fetchAll()
-    fetchGestores()
+    if (procesandoIds.has(id)) return
+    marcarProcesando(id, 'eliminando')
+    try {
+      const headers = await getAuthHeaders()
+      let eliminada = false
+      try {
+        const res = await fetch('/api/notify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: headers.Authorization },
+          body: JSON.stringify({ type: 'account_rejected', data: { lawyerId: id, eliminarCuenta: true } }),
+        })
+        const j = await res.json().catch(() => ({}))
+        eliminada = j?.deleted === true
+      } catch { /* sin /api (dev local): cae al marcado clásico */ }
+      if (!eliminada) {
+        await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${id}`, {
+          method: 'PATCH', headers,
+          body: JSON.stringify({ aprobado: false }),
+        })
+        setAvisoAprobado('La cuenta se quitó de la página, pero no se pudo borrar de la base de datos. Revísala en Supabase.')
+      }
+      setApproved(prev => prev.filter(p => p.id !== id))
+      await fetchAll()
+      fetchGestores()
+    } finally {
+      quitarProcesando(id)
+    }
   }
 
   async function toggleDescargaArchivos(id, current) {
@@ -979,7 +1006,7 @@ export default function AdminPage() {
     { key: 'chats',        label: 'Historial chats',                                   Icon: IconChat },
     { key: 'recuperar',    label: 'Recuperar chats',      count: chatsCerrados.length, Icon: IconRecover },
     { key: 'alertas',      label: 'Inactividades',        count: alertasAccionables, alert: true, Icon: IconAlert },
-    { key: 'chat_interno', label: 'Chat interno',         count: internosNoLeidos,   Icon: IconShield },
+    { key: 'chat_interno', label: 'Chat interno',         count: internosNoLeidos,   Icon: IconChatInterno },
     { key: 'contratos',    label: 'Contratos',                                         Icon: IconDoc },
     { key: 'resenas',      label: 'Opiniones',                                         Icon: IconStar },
     { key: 'pqrs',         label: 'PQRS',                                              Icon: IconPqr },
@@ -1271,15 +1298,17 @@ export default function AdminPage() {
                         e.stopPropagation()
                         const quien = (p.nombre || p.apellido) ? `${p.nombre || ''} ${p.apellido || ''}`.trim() : `@${p.username || 'este usuario'}`
                         setConfirmAction({
-                          title: 'Quitar de la página',
-                          message: `${quien} dejará de aparecer en el sitio público y no podrá usar su panel. Podrás volver a aprobarlo más adelante. ¿Quitar?`,
-                          confirmLabel: 'Quitar',
+                          title: 'Eliminar de la plataforma',
+                          message: p.rol === 'gestor'
+                            ? `Se eliminará la cuenta de ${quien} de la base de datos. Su código QR queda INHABILITADO pero se conserva, para no perder el rastro de las consultas que ya llegaron con él. Esta acción no se puede deshacer.`
+                            : `Se eliminará la cuenta de ${quien} de la base de datos y de Solicitudes. Dejará de aparecer en el sitio y su correo quedará libre para registrarse de nuevo. Esta acción no se puede deshacer.`,
+                          confirmLabel: 'Eliminar cuenta',
                           toneClass: 'cfOkDanger',
                           onConfirm: () => removeApproved(p.id),
                         })
                       }}
                     >
-                      <IconX /> Quitar de la página
+                      <IconX /> Eliminar cuenta
                     </button>
                   </div>
                 </div>

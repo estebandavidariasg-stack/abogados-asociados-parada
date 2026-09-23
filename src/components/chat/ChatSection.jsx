@@ -11,7 +11,7 @@ import {
   parseFichas, FichasContacto,
   validarAdjuntoChat, prepararAdjuntoChat, nombreArchivoSeguro, describirErrorSubida,
   crearGrabadorAudio, extAudio, mimeAudioLimpio, describirErrorMicrofono, AUDIO_CONSTRAINTS,
-  revisarContactoArchivo, crearTranscriptor,
+  revisarContactoArchivo, crearTranscriptor, PdfVisor,
 } from '../../lib/chatFiles'
 // Código OTP al correo antes de crear la sala (mismo paso que el registro).
 const VerificationStep = lazy(() => import('../auth/VerificationStep'))
@@ -1225,8 +1225,11 @@ function VisorDocumento({ titulo, url, onClose }) {
       {/* Documento */}
       <div style={{ flex:1, minHeight:0, padding:12, display:'flex', alignItems:'center', justifyContent:'center', userSelect:'none' }}>
         {esPdf ? (
-          <iframe title={titulo} src={`${url}#toolbar=0&navpanes=0&scrollbar=0`}
-            style={{ width:'100%', height:'100%', border:'none', borderRadius:12, background:'#fff' }} />
+          // Rasterizado a imágenes: el <iframe> deja el PDF en blanco (o lo
+          // manda a descargar) en los navegadores móviles.
+          <div style={{ width:'100%', height:'100%' }}>
+            <PdfVisor url={url} titulo={titulo} />
+          </div>
         ) : (
           <img src={url} alt={titulo} draggable={false}
             onContextMenu={e => e.preventDefault()}
@@ -1419,7 +1422,7 @@ function CobroClienteCard({ roomId, clientToken, profesionalNombre, onVerCertifi
           </div>
           <button type="button" onClick={marcar} disabled={busy || !comprobanteFile}
             style={{ marginTop: 10, width: '100%', background: comprobanteFile ? 'linear-gradient(135deg,#f2d580,#c9a84c 55%,#9a7a2c)' : 'rgba(201,168,76,0.35)', color: '#5a3d12', border: 'none', borderRadius: 10, padding: '11px 16px', fontWeight: 700, fontSize: '0.88rem', cursor: busy || !comprobanteFile ? 'not-allowed' : 'pointer' }}>
-            {busy ? 'Registrando…' : 'Ya realicé el pago'}
+            {busy ? 'Registrando…' : 'Confirmar'}
           </button>
         </>
       )}
@@ -1479,6 +1482,7 @@ export default function ChatSection() {
   const [sending, setSending]       = useState(false)
   const [uploading, setUploading]   = useState(false)
   const [uploadPct, setUploadPct]   = useState(0)      // % real de subida (XHR)
+  const [revisando, setRevisando]   = useState(false)  // revisión de contacto previa a la subida
   // id del mensaje cuyo archivo se está descargando (botón "Descargar").
   const [descargando, setDescargando] = useState(null)
   // Adjunto EN ESPERA de confirmación: seleccionar → previsualizar → enviar.
@@ -2589,9 +2593,12 @@ export default function ChatSection() {
       p_file_name:    campos.file_name,
       p_file_size:    campos.file_size,
       p_message_type: campos.message_type,
-      // Solo cuando hay transcripción: la firma nueva de la RPC vive en
-      // docs/sql/consulta-otp-2026-09-17.sql; sin el parámetro sigue sirviendo la vieja.
-      ...(campos.transcripcion ? { p_transcripcion: campos.transcripcion } : {}),
+      // SIEMPRE se manda p_transcripcion (null si no hay). En la BD quedaron DOS
+      // versiones de la RPC (la de 7 argumentos y la nueva de 8), así que una
+      // llamada con 7 era ambigua: PostgREST respondía 300 "Could not choose the
+      // best candidate function" y el adjunto se descartaba. Con los 8 solo
+      // encaja la nueva. El SQL pendiente borra además la versión vieja.
+      p_transcripcion: campos.transcripcion || null,
     })
     if (ok) return
     console.error('[chat] RPC enviar_adjunto_cliente falló:', errText)
@@ -2619,7 +2626,10 @@ export default function ChatSection() {
     try {
       const file = await prepararAdjuntoChat(fileOriginal)   // ya viene comprimida desde prepararAdjunto
       // ── Datos de contacto en el archivo (PDF/imagen): mismo bloqueo que el texto ──
+      // Tarda un par de segundos, así que se avisa en vez de dejar la barra en 0 %.
+      setRevisando(true)
       const revision = await revisarContactoArchivo(file, { roomId })
+      setRevisando(false)
       if (revision.contiene) { setContactoWarning(true); return }
       // El bucket exige el JWT del cliente: renovarlo si expiró (se reusa si sigue vigente).
       await ensureChatToken(localStorage.getItem('chat_cedula_hash'))
@@ -3161,13 +3171,15 @@ export default function ChatSection() {
                     <div className={styles.adjuntoInfo}>
                       <span className={styles.adjuntoNombre}>{pendingFile.file.name}</span>
                       <span className={styles.adjuntoPeso}>
-                        {uploading
-                          ? `Subiendo… ${uploadPct}%`
-                          : pendingFile.preparando
-                            ? 'Optimizando imagen…'
-                            : `${formatSize(pendingFile.file.size)} · revisa antes de enviar`}
+                        {revisando
+                          ? 'Revisando el archivo…'
+                          : uploading
+                            ? `Subiendo… ${uploadPct}%`
+                            : pendingFile.preparando
+                              ? 'Optimizando imagen…'
+                              : `${formatSize(pendingFile.file.size)} · revisa antes de enviar`}
                       </span>
-                      {uploading && (
+                      {uploading && !revisando && (
                         <span className={styles.adjuntoBar} role="progressbar" aria-valuenow={uploadPct} aria-valuemin={0} aria-valuemax={100}>
                           <span className={styles.adjuntoBarFill} style={{ width: `${uploadPct}%` }} />
                         </span>
@@ -3186,7 +3198,9 @@ export default function ChatSection() {
                   <button className={styles.attachBtn} onClick={() => fileRef.current?.click()}
                     disabled={uploading} title="Adjuntar archivo"><IconPaperclip size={15} /></button>
                   <input ref={fileRef} type="file"
-                    accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.gif,.webp,.txt"
+                    /* Con solo extensiones, el selector de Android oculta los
+                       Word; se añaden los MIME para que aparezcan. */
+                    accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.gif,.webp,.txt,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,image/*,text/plain"
                     onChange={handleFile} style={{ display:'none' }} />
                   {/* Grabando: el micrófono pasa a "cancelar" y la nota se manda con Enviar */}
                   <button className={recording ? styles.recordingBtn : styles.attachBtn}

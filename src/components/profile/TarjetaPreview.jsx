@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { createPortal } from 'react-dom'
 import { supabase } from '../../lib/supabase'
+import { PdfVisor } from '../../lib/chatFiles'
 import styles from './TarjetaPreview.module.css'
 
 function PdfIcon({ size = 36 }) {
@@ -128,12 +129,10 @@ export default function TarjetaPreview({ displayUrl, rawPath, storagePath, compa
                 />
               )
               : (
-                <iframe
-                  src={viewUrl}
-                  title={label}
-                  className={styles.viewerIframe}
-                  sandbox="allow-same-origin allow-scripts"
-                />
+                // El <iframe> no muestra PDFs en móvil: se rasterizan a imagen.
+                <div className={styles.viewerIframe}>
+                  <PdfVisor url={resolvedUrl} titulo={label} />
+                </div>
               )
             }
           </div>

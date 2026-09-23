@@ -153,6 +153,52 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
   const prefersReducedMotion = useReducedMotion()
   const [rooms,       setRooms]       = useState([])
   const [activeRoom,  setActiveRoom]  = useState(null)
+  const dashRef = useRef(null)   // panel del chat (pantalla completa en móvil)
+
+  // ── Chat a pantalla completa en móvil ────────────────────────────────────
+  // Mientras hay una consulta abierta, el panel cubre la ventana. En iOS un
+  // overlay `fixed` NO se encoge al aparecer el teclado, así que se mide la
+  // ventana REAL con visualViewport y se fija la altura (--chat-vh) y el
+  // desplazamiento superior; si no, el compositor queda debajo del teclado.
+  // Además se bloquea el scroll del fondo para que no se arrastre la página.
+  useEffect(() => {
+    const el = dashRef.current
+    if (!activeRoom || !el) return
+    const movil = () => window.innerWidth <= 700
+    const vv = window.visualViewport
+    const aplicar = () => {
+      if (!movil()) {
+        el.style.removeProperty('--chat-vh'); el.style.removeProperty('top')
+        document.body.style.overflow = ''
+        document.body.classList.remove('aap-chat-fullscreen')
+        return
+      }
+      // La marca en <body> deja que la página aparte lo que quedaría encima
+      // (riel de secciones, encabezado y campana). Ver ProfilePage.module.css.
+      document.body.classList.add('aap-chat-fullscreen')
+      document.body.style.overflow = 'hidden'
+      if (vv) {
+        el.style.setProperty('--chat-vh', `${Math.round(vv.height)}px`)
+        el.style.top = `${Math.round(vv.offsetTop)}px`
+      }
+      if (mensajesRef.current) mensajesRef.current.scrollTop = mensajesRef.current.scrollHeight
+    }
+    aplicar()
+    vv?.addEventListener('resize', aplicar)
+    vv?.addEventListener('scroll', aplicar)
+    window.addEventListener('orientationchange', aplicar)
+    window.addEventListener('resize', aplicar)
+    return () => {
+      vv?.removeEventListener('resize', aplicar)
+      vv?.removeEventListener('scroll', aplicar)
+      window.removeEventListener('orientationchange', aplicar)
+      window.removeEventListener('resize', aplicar)
+      el.style.removeProperty('--chat-vh')
+      el.style.removeProperty('top')
+      document.body.style.overflow = ''
+      document.body.classList.remove('aap-chat-fullscreen')
+    }
+  }, [activeRoom])
   const [messages,    setMessages]    = useState([])
   const [input,       setInput]       = useState('')
   const [sending,     setSending]     = useState(false)
@@ -1044,7 +1090,7 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
   })
 
   return (
-    <div className={`${styles.dashboard} ${activeRoom ? styles.dashboardChatOpen : ''}`}>
+    <div ref={dashRef} className={`${styles.dashboard} ${activeRoom ? styles.dashboardChatOpen : ''}`}>
 
       {/* ── Sidebar de salas ── */}
       <div className={styles.sidebar}>
@@ -1591,7 +1637,14 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
                   disabled={recording ? uploadingAudio : (sending || !input.trim())}
                   aria-label={recording ? 'Enviar nota de voz' : 'Enviar mensaje'}
                 >
-                  Enviar
+                  {/* En móvil el botón es redondo y solo muestra el avión; en
+                      escritorio se lee la palabra. Se usa un SVG real (no una
+                      máscara CSS) para que el icono quede centrado de verdad. */}
+                  <span className={styles.sendTexto}>Enviar</span>
+                  <svg className={styles.sendIcono} viewBox="0 0 24 24" width="17" height="17"
+                    fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M4 12h15" /><path d="m13 6 6 6-6 6" />
+                  </svg>
                 </button>
               </div>
               </>

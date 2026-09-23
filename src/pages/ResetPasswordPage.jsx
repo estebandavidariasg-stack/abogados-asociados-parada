@@ -106,36 +106,24 @@ export default function ResetPasswordPage() {
     setMode('code')
   }, [])
 
-  // Tras cambiar la clave: iniciar sesión con la nueva contraseña y llevar al
-  // home YA autenticado. Recarga completa (no navigate) para que AuthProvider
-  // lea la sesión recién guardada en localStorage al montarse.
-  async function entrarYVolverAlHome(email, password) {
-    setEntrando(true)
+  // Tras cambiar la clave NO se deja la sesión abierta: se cierra cualquier
+  // sesión (la de recovery del enlace incluida) y se muestra la pantalla de
+  // éxito para que la persona entre a mano con su contraseña nueva. Así, si el
+  // enlace se abrió en un equipo prestado, nadie queda dentro de la cuenta.
+  async function cerrarSesionTrasCambio() {
+    try { await supabase.auth.signOut() } catch { /* la clave ya cambió */ }
     try {
-      const { error: err } = await supabase.auth.signInWithPassword({ email, password })
-      if (err) throw err
-      window.location.replace('/')
-      return true
-    } catch {
-      // Fallback: la clave sí cambió; mostramos el éxito con botón manual.
-      setEntrando(false)
-      setDone(true)
-      return false
-    }
+      ;['sb_token', 'sb_refresh_token', 'sb_token_exp', 'sb_user'].forEach(k => localStorage.removeItem(k))
+    } catch { /* modo privado */ }
+    setEntrando(false)
+    setDone(true)
   }
 
   // Flujo por ENLACE: la sesión de recovery ya está guardada → PUT /auth/v1/user.
   async function aplicarPassword() {
     const { error: err } = await supabase.auth.updateUser({ password: pw1 })
     if (err) throw new Error(err.message || 'No se pudo actualizar la contraseña.')
-    let email = ''
-    try { email = JSON.parse(localStorage.getItem('sb_user') || '{}')?.email || '' } catch { /* no-op */ }
-    if (email) {
-      await entrarYVolverAlHome(email, pw1)
-    } else {
-      // Sin correo en el token: la sesión de recovery sigue viva → al home.
-      window.location.replace('/')
-    }
+    await cerrarSesionTrasCambio()
   }
 
   function validarPassword() {
@@ -177,8 +165,8 @@ export default function ResetPasswordPage() {
       }
       const data = await res.json().catch(() => ({}))
       if (!res.ok || !data?.success) throw new Error(data?.error || 'Código inválido o expirado.')
-      // Clave cambiada en el servidor → entrar con ella y volver al home.
-      await entrarYVolverAlHome(em, pw1)
+      // Clave cambiada en el servidor → NO se abre sesión; se pide entrar a mano.
+      await cerrarSesionTrasCambio()
     } catch (err) {
       setError(err.message || 'No se pudo cambiar la contraseña.')
     } finally {

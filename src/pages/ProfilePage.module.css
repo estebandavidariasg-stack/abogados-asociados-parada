@@ -946,3 +946,16 @@ select.input option {
 @media (prefers-reduced-motion: reduce) {
   .navItem { transition: none; }
 }
+/* ── Chat del profesional a PANTALLA COMPLETA en móvil ──────────────────────
+   Mientras hay una consulta abierta, el dashboard se fija a la ventana. Aquí
+   se aparta todo lo que quedaría por encima: el riel de secciones (sticky,
+   z-index 5) y el encabezado de la sección. Además se sube el contexto de
+   apilamiento del panel: `.panel` tiene z-index 1, así que el z-index 1200 del
+   chat quedaba ENCERRADO dentro y el riel lo tapaba.
+   La marca `aap-chat-fullscreen` la pone y la quita el dashboard. */
+@media (max-width: 700px) {
+  :global(body.aap-chat-fullscreen) .sidebar,
+  :global(body.aap-chat-fullscreen) .panelHead { display: none; }
+  :global(body.aap-chat-fullscreen) .panel { z-index: 1300; }
+  :global(body.aap-chat-fullscreen) .page { padding: 0; }
+}

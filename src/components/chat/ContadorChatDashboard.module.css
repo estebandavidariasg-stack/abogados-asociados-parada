@@ -1294,3 +1294,104 @@
 @media (max-width: 520px) {
   .avisoCobro { margin: 10px 4px 12px; padding: 11px 13px; font-size: 0.8rem; }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   CHAT A PANTALLA COMPLETA EN MÓVIL (mismo patrón que el chat del cliente)
+
+   Antes el chat se abría empotrado dentro del perfil: por encima quedaban el
+   riel de secciones, el título "Consultas de Clientes" y la campana, así que
+   la conversación disponía de media pantalla y el compositor caía fuera de
+   vista. Al seleccionar una consulta el panel pasa a cubrir la ventana.
+
+   `--chat-vh` lo fija el JS con visualViewport: en iOS un overlay `fixed` NO
+   se encoge al abrir el teclado, y sin esto el campo de texto quedaría tapado.
+   ══════════════════════════════════════════════════════════════════════════ */
+@media (max-width: 700px) {
+  .dashboardChatOpen {
+    position: fixed;
+    inset: 0;
+    top: 0;
+    width: 100%;
+    height: var(--chat-vh, 100dvh);
+    min-height: 0;
+    margin: 0;
+    z-index: 1200;            /* sobre el navbar y el botón flotante de WhatsApp */
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    background: #fff;
+  }
+
+  /* Cabecera compacta: caso arriba, acciones en su propia fila. Se usa GRID en
+     vez de flex-wrap porque con dos hijos de `flex-basis: 100%` el navegador
+     los mantenía en la misma línea y las acciones se salían de la pantalla. */
+  .dashboardChatOpen .chatHeader {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: center;
+    padding: 8px 12px;
+    padding-top: calc(8px + env(safe-area-inset-top));
+    gap: 6px;
+    border-radius: 0;
+  }
+  .dashboardChatOpen .chatMeta { min-width: 0; }
+  .dashboardChatOpen .chatTitle { font-size: 0.86rem; }
+  .dashboardChatOpen .chatSubtitle {
+    font-size: 0.7rem;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  /* Acciones: envuelven en dos líneas antes que quedar cortadas. Se prefiere
+     esto a una fila deslizable: en el celular un botón a medias se lee como
+     error, no como "hay más a la derecha". */
+  .dashboardChatOpen .headerActions {
+    min-width: 0;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    gap: 6px;
+  }
+  .dashboardChatOpen .headerActions > * { max-width: 100%; }
+
+  /* Los mensajes son lo único que scrollea. */
+  .dashboardChatOpen .messages {
+    flex: 1 1 auto;
+    min-height: 0;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Compositor pegado abajo, sobre la franja del home indicator. */
+  .dashboardChatOpen .inputBar {
+    padding: 8px;
+    padding-bottom: calc(8px + env(safe-area-inset-bottom));
+    border-radius: 0;
+  }
+}
+
+/* ── Compositor: el botón Enviar ya no se sale de la pantalla ──────────────
+   CAUSA: `.chatInput` tenía `flex: 1` pero, por defecto, un ítem flex no baja
+   de su ancho de contenido (min-width: auto), así que empujaba el botón fuera
+   del contenedor. `min-width: 0` lo deja encoger. */
+.chatInput { min-width: 0; }
+
+@media (max-width: 700px) {
+  .inputBar { gap: 6px; padding: 10px; }
+  /* 16px es obligatorio: con menos, iOS Safari hace zoom al enfocar el campo. */
+  .chatInput { font-size: 16px; padding: 10px 12px; }
+  /* Enviar pasa a botón redondo: ocupa 40 px en vez de ~90. */
+  .sendBtn {
+    width: 40px; height: 40px; padding: 0;
+    border-radius: 50%;
+    display: grid; place-items: center;
+  }
+  /* Con `.sendBtn` delante para ganarle a la regla de escritorio de más abajo
+     (misma especificidad + posterior en el archivo = ganaba ella). */
+  .sendBtn .sendTexto { display: none; }
+  .sendBtn .sendIcono { display: block; }
+  .attachBtn, .recordingBtn { padding: 9px 10px; }
+}
+
+/* En escritorio manda la palabra; el icono solo existe en el botón redondo. */
+.sendIcono { display: none; }
+
+/* Placeholder legible: #d4c1b0 sobre #f5f7fb daba ~1.8:1, ilegible al sol. */
+.chatInput::placeholder { color: #8a7259; }

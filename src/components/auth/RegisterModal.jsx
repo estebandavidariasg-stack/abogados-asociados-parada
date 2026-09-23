@@ -108,6 +108,7 @@ export default function RegisterModal({ onClose }) {
   const [regPassword, setRegPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [pwTouched, setPwTouched]     = useState(false)
+  const [pwFocus, setPwFocus]         = useState(false)   // requisitos visibles mientras se escribe
   const [emailTouched, setEmailTouched] = useState(false)
   const [telTouched, setTelTouched]   = useState(false)
   const [aceptaTerminos, setAceptaTerminos] = useState(false)
@@ -986,7 +987,8 @@ export default function RegisterModal({ onClose }) {
                   placeholder="Mínimo 8 caracteres"
                   value={regPassword}
                   onChange={(e) => setRegPassword(e.target.value)}
-                  onFocus={() => setPwTouched(true)}
+                  onFocus={() => { setPwTouched(true); setPwFocus(true) }}
+                  onBlur={() => setPwFocus(false)}
                   required
                   autoComplete="new-password"
                   style={{
@@ -1015,21 +1017,27 @@ export default function RegisterModal({ onClose }) {
                 </span>
               </div>
 
-              {/* Checklist requisitos: siempre visible */}
-              <ul className={styles.pwChecklist} aria-label="Requisitos de la contraseña">
-                {pwRules.map(rule => {
-                  const estado = pwEmpty ? 'pending' : rule.ok ? 'ok' : 'fail'
-                  return (
-                    <li key={rule.id}
-                      className={`${styles.pwItem} ${estado === 'ok' ? styles.pwItemOk : estado === 'fail' ? styles.pwItemFail : styles.pwItemPending}`}>
-                      <span className={styles.pwIcon} aria-hidden="true">
-                        {estado === 'ok' ? '✓' : estado === 'fail' ? '✗' : '○'}
-                      </span>
-                      <span>{rule.label}</span>
-                    </li>
-                  )
-                })}
-              </ul>
+              {/* Requisitos: aparecen al enfocar el campo y se desvanecen al
+                  salir. Si la contraseña quedó incompleta siguen a la vista,
+                  para que no se pierda el motivo del error. */}
+              <div className={`${styles.pwChecklistWrap} ${(pwFocus || (!pwEmpty && !pwValid)) ? styles.pwChecklistWrapOpen : ''}`}>
+                <div>
+                  <ul className={styles.pwChecklist} aria-label="Requisitos de la contraseña">
+                    {pwRules.map(rule => {
+                      const estado = pwEmpty ? 'pending' : rule.ok ? 'ok' : 'fail'
+                      return (
+                        <li key={rule.id}
+                          className={`${styles.pwItem} ${estado === 'ok' ? styles.pwItemOk : estado === 'fail' ? styles.pwItemFail : styles.pwItemPending}`}>
+                          <span className={styles.pwIcon} aria-hidden="true">
+                            {estado === 'ok' ? '✓' : estado === 'fail' ? '✗' : '○'}
+                          </span>
+                          <span>{rule.label}</span>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                </div>
+              </div>
             </div>
 
             {/* ── Campos profesionales: áreas + experiencia + tarjeta ── */}

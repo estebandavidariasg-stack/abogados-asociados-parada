@@ -591,10 +591,13 @@ export async function revisarContactoArchivo(file, { roomId, authHeader } = {}) 
       return sinRevisar(err?.message || 'no se pudo leer el PDF')
     }
   } else if (esImg) {
-    // Imagen ya comprimida (1600 px JPEG) → una sola imagen a la IA.
+    // Copia PEQUEÑA solo para la revisión (1000 px, calidad 0.6): leer un
+    // teléfono o un correo no necesita resolución completa, y así el envío a la
+    // IA no retrasa la subida en el celular. La imagen que se sube es la otra.
     try {
-      const listo = await prepararAdjuntoChat(file)
-      imagenes = [{ kind: 'image', media_type: listo.type || 'image/jpeg', data: await fileABase64(listo) }]
+      let chica = file
+      try { chica = await compressImage(file, 1000, 0.6, 'image/jpeg') } catch { /* va la original */ }
+      imagenes = [{ kind: 'image', media_type: chica.type || 'image/jpeg', data: await fileABase64(chica) }]
     } catch (err) {
       return sinRevisar(err?.message || 'no se pudo leer la imagen')
     }
@@ -650,4 +653,78 @@ export function crearTranscriptor(lang = 'es-CO') {
       })
     },
   }
+}
+
+/* ── Visor de PDF por imágenes ──────────────────────────────────────────────
+   Android Chrome (y varios navegadores móviles) NO renderizan un PDF dentro de
+   un <iframe>: lo mandan a descargar o dejan el marco en blanco. Por eso las
+   previsualizaciones "no se veían" en el celular. Aquí el PDF se descarga, se
+   rasteriza con pdf.js (que el proyecto ya usa para la firma) y se muestran las
+   páginas como imágenes: se ve igual en escritorio y en móvil, y sigue siendo
+   solo lectura (no hay descarga ni menú contextual).
+   Si algo falla, se ofrece el enlace directo como último recurso. */
+const PDF_MAX_PAGINAS = 12
+
+export function PdfVisor({ url, titulo = 'Documento', fondo = '#fff' }) {
+  const [paginas, setPaginas] = useState(null)   // null = cargando
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    let vivo = true
+    setPaginas(null); setError('')
+    ;(async () => {
+      try {
+        const res = await fetch(url)
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        const bytes = new Uint8Array(await res.arrayBuffer())
+        const { rasterizarPdf } = await import('./pdfARaster')
+        // 1.5x es nítido en pantallas densas sin disparar la memoria del móvil.
+        const pags = await rasterizarPdf(bytes, 1.5, {
+          maxPaginas: PDF_MAX_PAGINAS, tipo: 'image/jpeg', calidad: 0.82,
+        })
+        if (vivo) setPaginas(pags)
+      } catch (err) {
+        console.error('[PdfVisor] no se pudo rasterizar:', err)
+        if (vivo) { setError('No se pudo mostrar el documento aquí.'); setPaginas([]) }
+      }
+    })()
+    return () => { vivo = false }
+  }, [url])
+
+  const caja = {
+    width: '100%', height: '100%', overflowY: 'auto', overflowX: 'hidden',
+    borderRadius: 12, background: fondo, WebkitOverflowScrolling: 'touch',
+  }
+
+  if (paginas === null) {
+    return (
+      <div style={{ ...caja, display: 'grid', placeItems: 'center', color: '#8a6a28', fontSize: '0.85rem' }}>
+        Cargando documento…
+      </div>
+    )
+  }
+  if (error) {
+    return (
+      <div style={{ ...caja, display: 'grid', placeItems: 'center', gap: 10, padding: 20, textAlign: 'center' }}>
+        <p style={{ margin: 0, color: '#6d3c1b', fontSize: '0.88rem' }}>{error}</p>
+        <a href={url} target="_blank" rel="noopener noreferrer"
+          style={{ fontSize: '0.82rem', fontWeight: 700, color: '#8a6a28' }}>
+          Abrirlo en otra pestaña
+        </a>
+      </div>
+    )
+  }
+  return (
+    <div style={caja} onContextMenu={e => e.preventDefault()}>
+      {paginas.map((p, i) => (
+        <img key={i} src={p.dataUrl} alt={`${titulo}, página ${i + 1}`} draggable={false}
+          style={{ display: 'block', width: '100%', height: 'auto', userSelect: 'none' }} />
+      ))}
+      {paginas.length >= PDF_MAX_PAGINAS && (
+        <p style={{ margin: 0, padding: '10px 14px', fontSize: '0.75rem', color: '#8a6a28', textAlign: 'center' }}>
+          Se muestran las primeras {PDF_MAX_PAGINAS} páginas.
+        </p>
+      )}
+    </div>
+  )
 }

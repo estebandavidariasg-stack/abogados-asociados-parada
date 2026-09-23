@@ -116,7 +116,9 @@
 .overlay {
   position: fixed;
   inset: 0;
-  z-index: 900;
+  /* Por encima del modal de detalle del admin (z-index 9999 en
+     LawyerCard.module.css): con 900 el visor se abría DETRÁS del modal. */
+  z-index: 10000;
   background: rgba(48, 27, 8, 0.84);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);

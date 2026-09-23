@@ -1,6 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { getAuthHeaders, timeoutSignal } from '../../lib/supabase'
-import { openChatFile, ChatImage, ChatLightbox } from '../../lib/chatFiles'
+import {
+  downloadChatFile, ChatImage, ChatLightbox,
+  crearGrabadorAudio, AUDIO_CONSTRAINTS, describirErrorMicrofono,
+} from '../../lib/chatFiles'
 import styles from './LawyerInternalChat.module.css'
 import AudioPlayer from './AudioPlayer'
 import { IconMic, IconPaperclip } from '../shared/Icons'
@@ -61,6 +64,8 @@ export default function LawyerInternalChat({ miId }) {
   const adminId = adminIds[0] || null                // destino de lo que envía el profesional
   const [messages,  setMessages]  = useState([])
   const [texto,     setTexto]     = useState('')
+  // Aviso breve de micrófono/envío (antes el fallo solo salía por consola).
+  const [sendError, setSendError] = useState('')
   const [sending,   setSending]   = useState(false)
   const [loading,   setLoading]   = useState(true)
   const [noLeidos,  setNoLeidos]  = useState(0)
@@ -75,6 +80,7 @@ export default function LawyerInternalChat({ miId }) {
   const mediaRecorderRef  = useRef(null)
   const audioChunksRef    = useRef([])
   const recordingTimerRef = useRef(null)
+  const descartarGrabacionRef = useRef(false)   // el micrófono cancela; enviar manda
 
   // Al desmontar con una grabación activa: libera el micrófono y el timer
   // (sin esto el indicador de mic del navegador quedaba encendido).
@@ -272,18 +278,18 @@ export default function LawyerInternalChat({ miId }) {
   async function startRecording() {
     if (!adminId) return
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus'
-        : MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm'
-        : MediaRecorder.isTypeSupported('audio/ogg;codecs=opus') ? 'audio/ogg;codecs=opus' : ''
-      const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream)
+      const stream = await navigator.mediaDevices.getUserMedia(AUDIO_CONSTRAINTS)
+      const recorder = crearGrabadorAudio(stream)
       mediaRecorderRef.current = recorder
       audioChunksRef.current = []
+      descartarGrabacionRef.current = false
       recorder.ondataavailable = e => { if (e.data.size > 0) audioChunksRef.current.push(e.data) }
       recorder.onstop = async () => {
         stream.getTracks().forEach(t => t.stop())
         const actualType = recorder.mimeType || 'audio/webm'
         const blob = new Blob(audioChunksRef.current, { type: actualType })
+        // El micrófono cancela la nota; el botón de enviar es el que la manda.
+        if (descartarGrabacionRef.current) { descartarGrabacionRef.current = false; audioChunksRef.current = []; return }
         if (blob.size > 0) {
           const fixedBlob = await fixAudioDuration(blob)
           await uploadAudio(fixedBlob, actualType)
@@ -294,12 +300,14 @@ export default function LawyerInternalChat({ miId }) {
       setRecordingTime(0)
       recordingTimerRef.current = setInterval(() => setRecordingTime(t => t + 1), 1000)
     } catch (err) {
-      alert('No se pudo acceder al micrófono: ' + err.message)
+      setSendError(describirErrorMicrofono(err))
     }
   }
 
-  function stopRecording() {
-    mediaRecorderRef.current?.stop()
+  // enviar=true → manda la nota; false → el micrófono la descarta.
+  function stopRecording(enviar = true) {
+    descartarGrabacionRef.current = !enviar
+    try { mediaRecorderRef.current?.stop() } catch { /* ya detenido */ }
     clearInterval(recordingTimerRef.current)
     setRecording(false)
     setRecordingTime(0)
@@ -518,7 +526,7 @@ export default function LawyerInternalChat({ miId }) {
                 ) : (
                   <button
                     className={styles.fileBtn}
-                    onClick={() => openChatFile(m.file_url)}
+                    onClick={() => downloadChatFile(m.file_url, m.file_name)}
                     title={m.file_name}
                   >
                     <IconPaperclip size={16} />
@@ -597,12 +605,20 @@ export default function LawyerInternalChat({ miId }) {
           style={{ display: 'none' }}
         />
 
+        {sendError && (
+          <div role="alert" onClick={() => setSendError('')}
+            style={{ position: 'absolute', bottom: '100%', left: 8, right: 8, margin: '0 0 6px',
+              padding: '7px 11px', borderRadius: 8, background: '#fee2e2', color: '#991b1b',
+              fontSize: 12, cursor: 'pointer' }}>
+            {sendError}
+          </div>
+        )}
         {/* Grabar voz */}
         <button
           className={recording ? styles.recordingBtn : styles.attachBtn}
-          onClick={recording ? stopRecording : startRecording}
+          onClick={recording ? () => stopRecording(false) : startRecording}
           disabled={uploadingAudio || uploadingFile}
-          title={recording ? `Detener (${recordingTime}s)` : 'Grabar mensaje de voz'}
+          title={recording ? `Cancelar grabación (${recordingTime}s)` : 'Grabar mensaje de voz'}
         >
           {recording
             ? <><span className={styles.recordDot}/>{recordingTime}s</>
@@ -618,8 +634,9 @@ export default function LawyerInternalChat({ miId }) {
         />
         <button
           className={styles.btnEnviar}
-          onClick={enviar}
-          disabled={sending || !texto.trim()}
+          onClick={recording ? () => stopRecording(true) : enviar}
+          disabled={recording ? false : (sending || !texto.trim())}
+          title={recording ? 'Enviar nota de voz' : 'Enviar mensaje'}
         >
           ➤
         </button>

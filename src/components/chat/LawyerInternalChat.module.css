@@ -220,6 +220,7 @@
 
 /* ── Input ── */
 .inputArea {
+  position: relative;   /* ancla del aviso de error sobre la barra de escritura */
   display: flex;
   gap: 8px;
   padding: 12px 14px;

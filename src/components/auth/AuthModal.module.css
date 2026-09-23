@@ -445,3 +445,23 @@
 @media (max-width: 480px) {
   .pwChecklist { grid-template-columns: 1fr; }
 }
+/* ── Requisitos de la contraseña: aparecen al enfocar el campo y se desvanecen
+   despacio al salir. La animación de alto usa grid-template-rows 0fr→1fr, que
+   sí es animable (a diferencia de height:auto) y no salta. ── */
+.pwChecklistWrap {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  /* Al OCULTAR: se va lento (0.55 s) para poder terminar de leerlo. */
+  transition: grid-template-rows 0.42s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.55s ease;
+}
+/* Al MOSTRAR: entra rápido, para que no estorbe al escribir. */
+.pwChecklistWrapOpen {
+  grid-template-rows: 1fr;
+  opacity: 1;
+  transition: grid-template-rows 0.24s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.18s ease;
+}
+.pwChecklistWrap > * { overflow: hidden; min-height: 0; }
+@media (prefers-reduced-motion: reduce) {
+  .pwChecklistWrap, .pwChecklistWrapOpen { transition: none; }
+}

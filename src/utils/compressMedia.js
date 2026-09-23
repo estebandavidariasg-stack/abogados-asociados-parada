@@ -63,7 +63,9 @@ export async function compressImage(file, maxWidthPx = 1200, quality = 0.82, mim
   // Si ya es pequeño, lo dejamos tal cual.
   if (file.size < SKIP_THRESHOLD_BYTES) return file
 
-  const bitmap = await loadBitmap(file)
+  // Se pide el bitmap ya escalado al ancho objetivo (ver loadBitmap). Si el
+  // navegador ignora resizeWidth, el canvas de abajo lo reescala igual.
+  const bitmap = await loadBitmap(file, maxWidthPx)
 
   const srcWidth  = bitmap.width
   const srcHeight = bitmap.height
@@ -120,10 +122,17 @@ export async function compressImage(file, maxWidthPx = 1200, quality = 0.82, mim
  * Carga un File como ImageBitmap (preferido) o HTMLImageElement (fallback).
  * createImageBitmap es ~3-5x más rápido y respeta orientación EXIF.
  */
-async function loadBitmap(file) {
+async function loadBitmap(file, maxWidthPx) {
   if (typeof createImageBitmap === 'function') {
     try {
-      return await createImageBitmap(file, { imageOrientation: 'from-image' })
+      // `resizeWidth` deja que el navegador decodifique Y escale de una sola
+      // pasada: en un celular, una foto de 12 MP baja de segundos a décimas y
+      // usa mucha menos memoria que decodificar a tamaño completo y luego
+      // redibujar en el canvas.
+      return await createImageBitmap(file, {
+        imageOrientation: 'from-image',
+        ...(maxWidthPx ? { resizeWidth: maxWidthPx, resizeQuality: 'high' } : {}),
+      })
     } catch {
       // Algunos navegadores no soportan imageOrientation — reintentamos sin opciones
       try { return await createImageBitmap(file) } catch { /* fallback abajo */ }

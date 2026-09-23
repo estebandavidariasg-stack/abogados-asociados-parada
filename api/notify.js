@@ -862,7 +862,10 @@ export default async function handler(req, res) {
       }
 
       // Correo de rechazo (best-effort: si no hay email, el borrado igual procede).
-      const borrar = eliminarCuenta === true && perfil.aprobado !== true
+      // El superadmin puede eliminar TAMBIÉN cuentas ya aprobadas (quitar a
+      // alguien de la plataforma): antes solo se borraban las pendientes y la
+      // cuenta aprobada quedaba en la base con aprobado=false.
+      const borrar = eliminarCuenta === true
       if (perfil.email) {
         try {
           const { subject, html } = emailRechazado({
@@ -888,10 +891,29 @@ export default async function handler(req, res) {
       let deleted = false
       if (borrar) {
         try {
-          await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${encodeURIComponent(lawyerId)}`, {
+          // GESTOR: su código/QR NO se borra, se INHABILITA. La fila conserva
+          // el código y los datos con los que se emitió, así las consultas que
+          // ya llegaron por ese QR siguen siendo rastreables. Se desliga del
+          // perfil (gestor_id = null) para que el borrado de abajo no arrastre
+          // la fila ni choque con la llave foránea.
+          if (perfil.rol === 'gestor') {
+            const rc = await fetch(
+              `${SUPABASE_URL}/rest/v1/codigos_referencia?gestor_id=eq.${encodeURIComponent(lawyerId)}`,
+              {
+                method: 'PATCH',
+                headers: svcHeaders({ Prefer: 'return=minimal' }),
+                body: JSON.stringify({ activo: false, gestor_id: null }),
+              }
+            )
+            if (!rc.ok) console.error('[notify] inhabilitar códigos del gestor falló:', rc.status)
+          }
+          const delPerfil = await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${encodeURIComponent(lawyerId)}`, {
             method: 'DELETE',
             headers: svcHeaders({ Prefer: 'return=minimal' }),
           })
+          if (!delPerfil.ok) {
+            console.error('[notify] borrar perfil falló:', delPerfil.status, await delPerfil.text().catch(() => ''))
+          }
           const delAuth = await fetch(
             `${SUPABASE_URL}/auth/v1/admin/users/${encodeURIComponent(lawyerId)}`,
             { method: 'DELETE', headers: svcHeaders() }

@@ -146,6 +146,47 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
   const prefersReducedMotion = useReducedMotion()
   const [rooms,        setRooms]        = useState([])
   const [activeRoom,   setActiveRoom]   = useState(null)
+  const dashRef = useRef(null)   // panel del chat (pantalla completa en móvil)
+
+  // Chat a pantalla completa en móvil — mismo mecanismo que el dashboard del
+  // abogado: --chat-vh con visualViewport (en iOS un overlay fijo no se encoge
+  // con el teclado) y la marca en <body> para apartar riel, título y campana.
+  useEffect(() => {
+    const el = dashRef.current
+    if (!activeRoom || !el) return
+    const movil = () => window.innerWidth <= 700
+    const vv = window.visualViewport
+    const aplicar = () => {
+      if (!movil()) {
+        el.style.removeProperty('--chat-vh'); el.style.removeProperty('top')
+        document.body.style.overflow = ''
+        document.body.classList.remove('aap-chat-fullscreen')
+        return
+      }
+      document.body.classList.add('aap-chat-fullscreen')
+      document.body.style.overflow = 'hidden'
+      if (vv) {
+        el.style.setProperty('--chat-vh', `${Math.round(vv.height)}px`)
+        el.style.top = `${Math.round(vv.offsetTop)}px`
+      }
+      if (mensajesRef.current) mensajesRef.current.scrollTop = mensajesRef.current.scrollHeight
+    }
+    aplicar()
+    vv?.addEventListener('resize', aplicar)
+    vv?.addEventListener('scroll', aplicar)
+    window.addEventListener('orientationchange', aplicar)
+    window.addEventListener('resize', aplicar)
+    return () => {
+      vv?.removeEventListener('resize', aplicar)
+      vv?.removeEventListener('scroll', aplicar)
+      window.removeEventListener('orientationchange', aplicar)
+      window.removeEventListener('resize', aplicar)
+      el.style.removeProperty('--chat-vh')
+      el.style.removeProperty('top')
+      document.body.style.overflow = ''
+      document.body.classList.remove('aap-chat-fullscreen')
+    }
+  }, [activeRoom])
   const [messages,     setMessages]     = useState([])
   const [input,        setInput]        = useState('')
   const [sending,      setSending]      = useState(false)
@@ -1018,7 +1059,7 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
   })
 
   return (
-    <div className={`${styles.dashboard} ${activeRoom ? styles.dashboardChatOpen : ''}`}>
+    <div ref={dashRef} className={`${styles.dashboard} ${activeRoom ? styles.dashboardChatOpen : ''}`}>
 
       {/* ── Sidebar de salas ── */}
       <div className={styles.sidebar}>
@@ -1562,7 +1603,12 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
                   disabled={recording ? uploadingAudio : (sending || !input.trim())}
                   aria-label={recording ? 'Enviar nota de voz' : 'Enviar mensaje'}
                 >
-                  Enviar
+                  {/* En móvil el botón es redondo y solo muestra la flecha. */}
+                  <span className={styles.sendTexto}>Enviar</span>
+                  <svg className={styles.sendIcono} viewBox="0 0 24 24" width="17" height="17"
+                    fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M4 12h15" /><path d="m13 6 6 6-6 6" />
+                  </svg>
                 </button>
               </div>
             )}

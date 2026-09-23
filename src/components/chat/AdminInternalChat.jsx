@@ -1,6 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
 import { getAuthHeaders, timeoutSignal } from '../../lib/supabase'
-import { openChatFile, ChatImage, ChatLightbox } from '../../lib/chatFiles'
+import {
+  downloadChatFile, ChatImage, ChatLightbox,
+  crearGrabadorAudio, AUDIO_CONSTRAINTS, describirErrorMicrofono,
+} from '../../lib/chatFiles'
 import styles from './AdminInternalChat.module.css'
 import AudioPlayer from './AudioPlayer'
 import { IconMic, IconPaperclip } from '../shared/Icons'
@@ -143,6 +146,7 @@ export default function AdminInternalChat({ miId, initialSelectedId, onOpenRoom 
   const mediaRecorderRef  = useRef(null)
   const audioChunksRef    = useRef([])
   const recordingTimerRef = useRef(null)
+  const descartarGrabacionRef = useRef(false)   // el micrófono cancela; el botón de enviar manda
 
   // ── Adjuntos ─────────────────────────────────────────────────────────────
   const [uploadingFile, setUploadingFile] = useState(false)
@@ -421,24 +425,33 @@ export default function AdminInternalChat({ miId, initialSelectedId, onOpenRoom 
     })
   }
 
+  // Mismo comportamiento que la consulta cliente↔profesional: el micrófono
+  // inicia y CANCELA la grabación; el botón de enviar es el que la manda.
+  // Usa los helpers compartidos (formato por navegador, Content-Type limpio y
+  // errores de micrófono legibles) en vez de detectar el mimeType a mano.
   async function startRecording() {
     if (!selected) return
+    setSendError('')
+    let stream = null
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus'
-        : MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm'
-        : MediaRecorder.isTypeSupported('audio/ogg;codecs=opus') ? 'audio/ogg;codecs=opus' : ''
-      const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream)
+      if (!navigator.mediaDevices?.getUserMedia) throw new Error('MediaRecorder no disponible')
+      stream = await navigator.mediaDevices.getUserMedia(AUDIO_CONSTRAINTS)
+      const recorder = crearGrabadorAudio(stream)
       mediaRecorderRef.current = recorder
       audioChunksRef.current = []
+      descartarGrabacionRef.current = false
       recorder.ondataavailable = e => { if (e.data.size > 0) audioChunksRef.current.push(e.data) }
+      recorder.onerror = () => setSendError('La grabación se interrumpió. Intenta de nuevo.')
       recorder.onstop = async () => {
         stream.getTracks().forEach(t => t.stop())
         const actualType = recorder.mimeType || 'audio/webm'
         const blob = new Blob(audioChunksRef.current, { type: actualType })
+        if (descartarGrabacionRef.current) { descartarGrabacionRef.current = false; audioChunksRef.current = []; return }
         if (blob.size > 0) {
           const fixedBlob = await fixAudioDuration(blob)
           await uploadAudio(fixedBlob, actualType)
+        } else {
+          setSendError('La nota de voz quedó vacía. Mantén la grabación al menos un segundo.')
         }
       }
       recorder.start(100)
@@ -446,12 +459,15 @@ export default function AdminInternalChat({ miId, initialSelectedId, onOpenRoom 
       setRecordingTime(0)
       recordingTimerRef.current = setInterval(() => setRecordingTime(t => t + 1), 1000)
     } catch (err) {
-      alert('No se pudo acceder al micrófono: ' + err.message)
+      stream?.getTracks().forEach(t => t.stop())
+      setSendError(describirErrorMicrofono(err))
     }
   }
 
-  function stopRecording() {
-    mediaRecorderRef.current?.stop()
+  // enviar=true → la manda; false → el micrófono la descarta.
+  function stopRecording(enviar = true) {
+    descartarGrabacionRef.current = !enviar
+    try { mediaRecorderRef.current?.stop() } catch { /* ya detenido */ }
     clearInterval(recordingTimerRef.current)
     setRecording(false)
     setRecordingTime(0)
@@ -878,7 +894,7 @@ export default function AdminInternalChat({ miId, initialSelectedId, onOpenRoom 
                       ) : (
                         <button
                           className={styles.fileBtn}
-                          onClick={() => openChatFile(m.file_url)}
+                          onClick={() => downloadChatFile(m.file_url, m.file_name)}
                           title={m.file_name}
                         >
                           <IconPaperclip size={16} />
@@ -975,9 +991,9 @@ export default function AdminInternalChat({ miId, initialSelectedId, onOpenRoom 
               {/* Grabar voz */}
               <button
                 className={recording ? styles.recordingBtn : styles.attachBtn}
-                onClick={recording ? stopRecording : startRecording}
+                onClick={recording ? () => stopRecording(false) : startRecording}
                 disabled={uploadingAudio || uploadingFile}
-                title={recording ? `Detener (${recordingTime}s)` : 'Grabar mensaje de voz'}
+                title={recording ? `Cancelar grabación (${recordingTime}s)` : 'Grabar mensaje de voz'}
               >
                 {recording
                   ? <><span className={styles.recordDot}/>{recordingTime}s</>
@@ -993,8 +1009,9 @@ export default function AdminInternalChat({ miId, initialSelectedId, onOpenRoom 
               />
               <button
                 className={styles.btnEnviar}
-                onClick={enviar}
-                disabled={sending || !texto.trim()}
+                onClick={recording ? () => stopRecording(true) : enviar}
+                disabled={recording ? false : (sending || !texto.trim())}
+                title={recording ? 'Enviar nota de voz' : 'Enviar mensaje'}
               >
                 ➤
               </button>

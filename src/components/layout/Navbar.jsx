@@ -30,7 +30,14 @@ export default function Navbar({ onLogin, onRegister }) {
     return () => window.removeEventListener('resize', handleResize)
   }, [])
 
-  const displayName = profile?.nombre ?? user?.user_metadata?.nombre ?? user?.email ?? 'Usuario'
+  // El usuario antes del correo: los gestores se registran sin nombre y en el
+  // menú aparecía su dirección de correo, que no es un identificador para mostrar.
+  const displayName =
+    profile?.nombre
+    ?? user?.user_metadata?.nombre
+    ?? (profile?.username ? `@${profile.username}` : null)
+    ?? (user?.user_metadata?.username ? `@${user.user_metadata.username}` : null)
+    ?? 'Usuario'
   const isSuperAdmin = profile?.rol === 'superadmin'
   const perfilHref =
     profile?.rol === 'contador' ? '/perfil-contador'
