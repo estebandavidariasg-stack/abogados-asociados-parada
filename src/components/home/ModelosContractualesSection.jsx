@@ -4,6 +4,7 @@ import { headerStagger, eyebrowReveal, fadeUp, VIEWPORT } from '../../lib/motion
 import { useAuth } from '../../context/AuthContext'
 import { supabase } from '../../lib/supabase'
 import styles from './ModelosContractualesSection.module.css'
+import { downloadChatFile } from '../../lib/chatFiles'
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
@@ -171,7 +172,8 @@ export default function ModelosContractualesSection() {
   function handleDownload(modelo) {
     // Bucket público — URL directa, sin signed URL
     const { data } = supabase.storage.from('contract-templates').getPublicUrl(modelo.storage_path)
-    if (data?.publicUrl) window.open(data.publicUrl, '_blank', 'noopener,noreferrer')
+    // Descarga real (blob), no una pestaña con la URL del bucket.
+    if (data?.publicUrl) downloadChatFile(data.publicUrl, modelo.nombre || 'modelo.pdf')
   }
 
   // ── Preview ──────────────────────────────────────────────────────────

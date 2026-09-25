@@ -354,12 +354,14 @@ export default function RegisterModal({ onClose }) {
   }
 
   // POST /api/send-verification-code — reutilizado por "Reenviar código".
-  async function sendVerificationCode() {
+  // `emailOverride` permite reenviar a un correo recien corregido, cuyo
+  // setState todavia no se refleja en `regEmail` en este render.
+  async function sendVerificationCode(emailOverride) {
     const res = await fetch('/api/send-verification-code', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        email: regEmail.trim().toLowerCase(),
+        email: (emailOverride ?? regEmail).trim().toLowerCase(),
         tipoRegistro: rol,          // 'abogado' | 'contador' | 'gestor'
         recaptchaToken: captchaValue,
       }),
@@ -407,6 +409,18 @@ export default function RegisterModal({ onClose }) {
     } finally {
       setOtpSubmitting(false)
     }
+  }
+
+  // Cambiar el correo sin volver al formulario: valida, lo reemplaza y
+  // reenvia el codigo. Util cuando se descubre la errata al no recibir nada.
+  async function handleCambiarCorreo(nuevo) {
+    const limpio = String(nuevo || '').trim()
+    if (!validarCorreo(limpio).valid) throw new Error('El correo no es válido')
+    setOtpError('')
+    setRegEmail(limpio)
+    // sendVerificationCode lee `regEmail` del estado, que aún no se ha
+    // actualizado en este render: se le pasa el nuevo explícitamente.
+    await sendVerificationCode(limpio)
   }
 
   async function handleResendCode() {
@@ -725,7 +739,10 @@ export default function RegisterModal({ onClose }) {
         {error && <p className={styles.msgError}>{error}</p>}
 
         {/* ══════════════════ SELECTOR DE ROL ══════════════════ */}
-        <div className={extra.roleSelector} style={verificationStep === 'docs' ? { display: 'none' } : undefined}>
+        {/* Solo visible mientras se elige y se llena el formulario. Una vez
+            enviado el codigo, cambiar de rol invalidaria lo ya escrito. */}
+        <div className={extra.roleSelector}
+          style={verificationStep === 'docs' || verificationStep === 'verify' ? { display: 'none' } : undefined}>
           {ROLES.map(({ key, label, Icon }) => (
             <button
               key={key}
@@ -755,6 +772,7 @@ export default function RegisterModal({ onClose }) {
             onSubmit={handleVerifyCode}
             onResend={handleResendCode}
             onBack={() => { setVerificationStep('form'); setOtpError('') }}
+            onCambiarCorreo={handleCambiarCorreo}
           />
         )}
 

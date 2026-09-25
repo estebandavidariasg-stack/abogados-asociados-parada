@@ -118,13 +118,13 @@ export default function AdminStats({
           { n: approved.length, label: 'Profesionales', icon: 'users' },
         ]
       case 'roles': {
-        // Conteos por rol de TODAS las cuentas (los manda RolesAdmin al cargar).
+        // Solo cuentas de PANEL: la pestana ya no gestiona profesionales ni
+        // gestores, y contarlos aqui daria siempre cero.
         const r = roles || {}
         return [
           { n: r.superadmin ?? 0, label: 'Superadministradores', tone: 'ok', icon: 'shield' },
-          { n: r.abogado ?? 0, label: 'Abogados', icon: 'scale' },
-          { n: r.contador ?? 0, label: 'Contadores', icon: 'calc' },
-          { n: r.gestor ?? 0, label: 'Gestores', icon: 'users' },
+          { n: r.admin ?? 0, label: 'Administradores', icon: 'users' },
+          { n: r.todos ?? 0, label: 'Cuentas de panel', icon: 'shield' },
         ]
       }
       case 'pending':

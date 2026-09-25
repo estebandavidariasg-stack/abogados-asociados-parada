@@ -95,6 +95,88 @@ export function RevisionCard({ rev, fecha, styles, onVerConversacion }) {
   )
 }
 
+// Detecta el mensaje de bienvenida que el admin envia al aprobar (mismo texto
+// para profesional y gestor) y lo descompone en intro + lista + cierre, para
+// pintarlo como tarjeta en vez de una burbuja de texto corrido.
+export function parseBienvenida(m) {
+  if (!m || m.message_type === 'audio' || m.message_type === 'file') return null
+  const txt = (m.mensaje || '').trim()
+  if (!/^¡Bienvenid[oa] a Parada Bridge!/i.test(txt)) return null
+  const lineas = txt.split('\n').map(l => l.trim()).filter(Boolean)
+  const puntos = lineas.filter(l => l.startsWith('•')).map(l => l.replace(/^•\s*/, ''))
+  const subtitulo = lineas.find(l => l.endsWith(':')) || ''
+  const ultima = lineas[lineas.length - 1]
+  return {
+    intro: lineas[0],
+    subtitulo,
+    puntos,
+    cierre: ultima && !ultima.startsWith('•') && ultima !== lineas[0] && ultima !== subtitulo ? ultima : '',
+  }
+}
+
+// Tarjeta de bienvenida, centrada y compartida por los dos lados del chat.
+// Estilos en linea a proposito: el componente se usa desde dos modulos CSS
+// distintos, y duplicar las reglas en ambos solo abriria la puerta a que se
+// desincronicen.
+export function BienvenidaCard({ b, fecha }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'center', margin: '10px 0 14px' }}>
+      <div style={{
+        maxWidth: 460, width: '100%',
+        background: 'linear-gradient(160deg, #fffdf4 0%, #fdf6e6 100%)',
+        border: '1px solid rgba(201, 168, 76, 0.45)',
+        borderRadius: 16, padding: '18px 20px 16px',
+        boxShadow: '0 6px 22px rgba(109, 60, 27, 0.08)',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 10 }}>
+          <span style={{
+            width: 30, height: 30, borderRadius: '50%', flexShrink: 0,
+            display: 'grid', placeItems: 'center',
+            background: 'linear-gradient(140deg, #e8c96a, #c9a84c)', color: '#4a330f',
+          }} aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"
+              strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M20 6 9 17l-5-5" />
+            </svg>
+          </span>
+          <strong style={{
+            fontFamily: "'Cinzel', Georgia, serif", fontSize: '0.95rem',
+            color: '#6d3c1b', letterSpacing: '0.01em',
+          }}>Bienvenido a Parada Bridge</strong>
+          <span style={{ marginLeft: 'auto', fontSize: '0.64rem', color: '#8a7663', whiteSpace: 'nowrap' }}>{fecha}</span>
+        </div>
+
+        <p style={{ margin: '0 0 10px', fontSize: '0.84rem', lineHeight: 1.55, color: '#472f29' }}>
+          {b.intro.replace(/^¡Bienvenid[oa] a Parada Bridge!\s*/i, '')}
+        </p>
+
+        {b.subtitulo && (
+          <p style={{ margin: '0 0 8px', fontSize: '0.72rem', fontWeight: 700, color: '#7a5a3c', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+            {b.subtitulo.replace(/:$/, '')}
+          </p>
+        )}
+
+        {b.puntos.length > 0 && (
+          <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: 7 }}>
+            {b.puntos.map((p, i) => (
+              <li key={i} style={{ display: 'flex', gap: 9, fontSize: '0.82rem', lineHeight: 1.5, color: '#472f29' }}>
+                <span aria-hidden="true" style={{ width: 6, height: 6, borderRadius: '50%', background: '#c9a84c', marginTop: 7, flexShrink: 0 }} />
+                <span>{p}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {b.cierre && (
+          <p style={{ margin: '12px 0 0', paddingTop: 10, borderTop: '1px solid rgba(109,60,27,0.1)', fontSize: '0.78rem', color: '#6f5c48' }}>
+            {b.cierre}
+          </p>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export default function AdminInternalChat({ miId, initialSelectedId, onOpenRoom }) {
   const [abogados, setAbogados]         = useState([])
   const [selected, setSelected]         = useState(null)
@@ -871,6 +953,10 @@ export default function AdminInternalChat({ miId, initialSelectedId, onOpenRoom 
                     <RevisionCard key={m.id} rev={rev} fecha={fmtFechaHora(m.created_at)} styles={styles}
                       onVerConversacion={onOpenRoom} />
                   )
+                }
+                const bienv = parseBienvenida(m)
+                if (bienv) {
+                  return <BienvenidaCard key={m.id} b={bienv} fecha={fmtFechaHora(m.created_at)} />
                 }
                 return (
                   <div

@@ -26,6 +26,9 @@ const SITE_BASE = 'https://paradabridge.com'
 
 const SUPABASE_URL =
   process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL
+// Un solo patron de correo para todo el archivo: tenerlo repetido en linea
+// fue justo como se colo una version rota (sin las barras de escape).
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
 
 /* ── Resuelve email de profesional por su ID, usando service role ─────────
@@ -732,6 +735,140 @@ export default async function handler(req, res) {
     // 2) perfil con rol + aprobado vía RPC admin_alta_cuenta (service-role;
     //    docs/sql/admin-roles-2026-09-17.sql), 3) correo con la contraseña.
     // Si el perfil falla, se borra el usuario recién creado (sin huérfanos).
+    // ── Borrar una cuenta de panel (admin o superadmin) ──
+    //  Solo superadmin. Se niega a dejar la plataforma sin ningun superadmin:
+    //  esa es la invariante que protegia la "cuenta maestra", y vale aunque la
+    //  cuenta que se borra sea la maestra o la propia.
+    // ── Editar una cuenta de panel ──
+    //  Correo y contrasena viven en auth.users, no en profiles, asi que se
+    //  cambian con la API de administracion y DESPUES se sincroniza el perfil.
+    //  Hacerlo solo en profiles dejaria a la persona sin poder entrar.
+    if (type === 'editar_cuenta_panel') {
+      const caller = await getCallerProfile(req)
+      if (caller?.rol !== 'superadmin') return res.status(401).json({ error: 'No autorizado.' })
+
+      const id = String(data?.id || '').trim()
+      if (!id) return res.status(400).json({ error: 'Falta el id.' })
+      const filas = await fetch(
+        `${SUPABASE_URL}/rest/v1/profiles?id=eq.${encodeURIComponent(id)}&select=id,rol,email,username`,
+        { headers: svcHeaders() }
+      ).then(r => r.json()).catch(() => [])
+      const actual = Array.isArray(filas) ? filas[0] : null
+      if (!actual) return res.status(404).json({ error: 'La cuenta no existe.' })
+      if (!['superadmin', 'admin'].includes(actual.rol)) {
+        return res.status(400).json({ error: 'Esa cuenta no es de panel.' })
+      }
+
+      const nombre   = String(data?.nombre   || '').trim().slice(0, 60)
+      const apellido = String(data?.apellido || '').trim().slice(0, 60)
+      const username = String(data?.username || '').trim().toLowerCase().replace(/[^a-z0-9._-]+/g, '')
+      const email    = String(data?.email    || '').trim().toLowerCase()
+      const password = String(data?.password || '')
+
+      if (!nombre) return res.status(400).json({ error: 'El nombre no puede quedar vacío.' })
+      if (username.length < 3) {
+        return res.status(400).json({ error: 'Usuario inválido (mínimo 3 caracteres, sin espacios).' })
+      }
+      if (!EMAIL_RE.test(email)) {
+        return res.status(400).json({ error: 'Escribe un correo válido.' })
+      }
+      // La contrasena es opcional: vacia significa "dejala como esta".
+      if (password) {
+        const pwOk = password.length >= 8 && /[a-z]/.test(password) &&
+                     /[A-Z]/.test(password) && /[0-9]/.test(password)
+        if (!pwOk) {
+          return res.status(400).json({ error: 'La contraseña necesita 8 caracteres, una mayúscula, una minúscula y un número.' })
+        }
+      }
+
+      // Choques, comprobados ANTES de tocar nada (excluyendo la propia fila).
+      const choque = await fetch(
+        `${SUPABASE_URL}/rest/v1/profiles?id=neq.${encodeURIComponent(id)}` +
+        `&or=(username.eq.${encodeURIComponent(username)},email.eq.${encodeURIComponent(email)})&select=username,email&limit=1`,
+        { headers: svcHeaders() }
+      ).then(r => r.json()).catch(() => [])
+      if (Array.isArray(choque) && choque.length > 0) {
+        const c = choque[0]
+        return res.status(409).json({
+          error: c.username === username ? 'Ese nombre de usuario ya está tomado.' : 'Ese correo ya tiene una cuenta.',
+        })
+      }
+
+      // 1. auth.users: correo y/o contrasena.
+      const cambiosAuth = {}
+      if (email !== (actual.email || '').toLowerCase()) {
+        cambiosAuth.email = email
+        cambiosAuth.email_confirm = true   // no se le pide reconfirmar
+      }
+      if (password) cambiosAuth.password = password
+      if (Object.keys(cambiosAuth).length > 0) {
+        const au = await fetch(`${SUPABASE_URL}/auth/v1/admin/users/${encodeURIComponent(id)}`, {
+          method: 'PUT', headers: svcHeaders(), body: JSON.stringify(cambiosAuth),
+        })
+        if (!au.ok) {
+          const t = await au.text().catch(() => '')
+          console.error('[notify] editar_cuenta_panel auth:', au.status, t)
+          return res.status(au.status === 422 ? 409 : 500).json({
+            error: au.status === 422 ? 'Ese correo ya está en uso.' : 'No se pudo actualizar el acceso.',
+          })
+        }
+      }
+
+      // 2. profiles, via la RPC que ya sabe saltarse el disparador.
+      const rp = await fetch(`${SUPABASE_URL}/rest/v1/rpc/admin_alta_cuenta`, {
+        method: 'POST', headers: svcHeaders(),
+        body: JSON.stringify({
+          p_id: id, p_email: email, p_username: username,
+          p_nombre: nombre, p_apellido: apellido, p_rol: actual.rol,
+        }),
+      })
+      if (!rp.ok) {
+        const j = await rp.json().catch(() => ({}))
+        console.error('[notify] editar_cuenta_panel perfil:', rp.status, j?.message)
+        return res.status(500).json({ error: 'El acceso se actualizó, pero el perfil no. Revísalo.' })
+      }
+      return res.status(200).json({ ok: true, cambioAcceso: Object.keys(cambiosAuth).length > 0 })
+    }
+
+    if (type === 'borrar_cuenta_panel') {
+      const caller = await getCallerProfile(req)
+      if (caller?.rol !== 'superadmin') {
+        return res.status(401).json({ error: 'No autorizado.' })
+      }
+      const id = String(data?.id || '').trim()
+      if (!id) return res.status(400).json({ error: 'Falta el id.' })
+
+      const perfiles = await fetch(
+        `${SUPABASE_URL}/rest/v1/profiles?id=eq.${encodeURIComponent(id)}&select=id,rol,email`,
+        { headers: svcHeaders() }
+      ).then(r => r.json()).catch(() => [])
+      const perfil = Array.isArray(perfiles) ? perfiles[0] : null
+      if (!perfil) return res.status(404).json({ error: 'La cuenta no existe.' })
+      if (!['superadmin', 'admin'].includes(perfil.rol)) {
+        return res.status(400).json({ error: 'Esa cuenta no es de panel; bórrala desde su pestaña.' })
+      }
+
+      if (perfil.rol === 'superadmin') {
+        const otros = await fetch(
+          `${SUPABASE_URL}/rest/v1/profiles?rol=eq.superadmin&id=neq.${encodeURIComponent(id)}&select=id&limit=1`,
+          { headers: svcHeaders() }
+        ).then(r => r.json()).catch(() => [])
+        if (!Array.isArray(otros) || otros.length === 0) {
+          return res.status(409).json({
+            error: 'Es el único superadministrador. Crea otro antes de borrar este, o nadie podrá gestionar roles.',
+          })
+        }
+      }
+
+      await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${encodeURIComponent(id)}`, {
+        method: 'DELETE', headers: svcHeaders({ Prefer: 'return=minimal' }),
+      })
+      const delAuth = await fetch(`${SUPABASE_URL}/auth/v1/admin/users/${encodeURIComponent(id)}`, {
+        method: 'DELETE', headers: svcHeaders(),
+      })
+      return res.status(200).json({ ok: true, authBorrado: delAuth.ok, propia: id === caller.id })
+    }
+
     if (type === 'crear_admin') {
       const caller = await getCallerProfile(req)
       if (caller?.rol !== 'superadmin') {
@@ -740,14 +877,34 @@ export default async function handler(req, res) {
       const nombre   = String(data?.nombre   || '').trim().slice(0, 60)
       const apellido = String(data?.apellido || '').trim().slice(0, 60)
       const email    = String(data?.email    || '').trim().toLowerCase()
-      const rol      = data?.rol === 'superadmin' ? 'superadmin' : ''
-      if (!nombre || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !rol) {
+      // Dos roles de panel: 'superadmin' gestiona roles, 'admin' no.
+      const rol = ['superadmin', 'admin'].includes(data?.rol) ? data.rol : ''
+      if (!nombre || !EMAIL_RE.test(email) || !rol) {
         return res.status(400).json({ error: 'Faltan datos: nombre, correo válido y rol.' })
       }
-      // username: parte local del correo + sufijo aleatorio (la columna es única).
-      const base = email.split('@')[0].toLowerCase().replace(/[^a-z0-9]+/g, '').slice(0, 20) || 'admin'
-      const username = `${base}-${crypto.randomBytes(2).toString('hex')}`
-      const password = passwordTemporal()
+      // La contrasena la elige el superadmin en el formulario. Se revalida
+      // aqui: el navegador no es una frontera de confianza.
+      const password = String(data?.password || '')
+      const pwOk = password.length >= 8 && /[a-z]/.test(password) &&
+                   /[A-Z]/.test(password) && /[0-9]/.test(password)
+      if (!pwOk) {
+        return res.status(400).json({ error: 'La contraseña necesita 8 caracteres, una mayúscula, una minúscula y un número.' })
+      }
+      // El usuario lo escribe quien crea la cuenta y es obligatorio; se
+      // revalida aqui porque el navegador no es frontera de confianza.
+      const username = String(data?.username || '').trim().toLowerCase().replace(/[^a-z0-9._-]+/g, '')
+      if (username.length < 3) {
+        return res.status(400).json({ error: 'Escribe un nombre de usuario (mínimo 3 caracteres, sin espacios).' })
+      }
+      // La columna es unica: avisar ANTES de crear el usuario en Auth evita
+      // dejar una cuenta huerfana que luego hay que borrar.
+      const yaExiste = await fetch(
+        `${SUPABASE_URL}/rest/v1/profiles?username=eq.${encodeURIComponent(username)}&select=id&limit=1`,
+        { headers: svcHeaders() }
+      ).then(r => r.json()).catch(() => [])
+      if (Array.isArray(yaExiste) && yaExiste.length > 0) {
+        return res.status(409).json({ error: 'Ese nombre de usuario ya está tomado.' })
+      }
 
       const au = await fetch(`${SUPABASE_URL}/auth/v1/admin/users`, {
         method: 'POST',

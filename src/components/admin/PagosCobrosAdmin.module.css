@@ -320,3 +320,50 @@
 @media (prefers-reduced-motion: reduce) {
   .subTab, .chip, .presetBtn, .pageBtn, .refresh, .payBtn, .searchClear { transition: none; }
 }
+
+/* ── Acciones por fila: icono desnudo ─────────────────────────
+   Sin pastilla ni círculo. En una tabla, encerrar cada icono en su propio
+   contenedor multiplica los bordes y compite con los datos, que es lo que
+   la persona vino a leer. El área de pulsación sigue siendo cómoda (32px)
+   aunque no se dibuje nada alrededor. */
+.accionesCell {
+  white-space: nowrap;
+  text-align: center;
+}
+.accionesGrupo {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+.iconBtn {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: none;
+  color: #8a6a4a;
+  cursor: pointer;
+  transition: color 0.18s ease-out, background-color 0.18s ease-out;
+}
+.iconBtn:hover {
+  color: var(--navy, #6d3c1b);
+  background: rgba(109, 60, 27, 0.07);
+}
+.iconBtn:focus-visible {
+  outline: 2px solid var(--gold-dk, #8a6a28);
+  outline-offset: -2px;
+}
+/* #a23b3b da 6.42:1 sobre el blanco de la tabla. */
+.iconBtnDanger { color: #a23b3b; }
+.iconBtnDanger:hover {
+  color: #8c2f2f;
+  background: rgba(162, 59, 59, 0.09);
+}
+.iconBtnDanger:focus-visible { outline-color: #a23b3b; }
+
+@media (prefers-reduced-motion: reduce) {
+  .iconBtn { transition: none; }
+}

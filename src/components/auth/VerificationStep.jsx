@@ -132,12 +132,92 @@ const VERIFY_STYLES = `
     opacity: 0.55;
   }
   .aap-verify-back  { color: #888888; }
+  /* Corregir el correo sin salir del paso. Va en voz baja bajo la direccion:
+     es una salida para la errata, no una accion principal que compita con
+     escribir el codigo. */
+  .aap-verify-edit {
+    color: #8a6a28;
+    margin-top: 6px;
+    font-size: 0.76rem;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+  .aap-verify-edit:hover { color: #6d3c1b; }
+
+  .aap-verify-edit-box {
+    margin: 10px auto 14px;
+    max-width: 320px;
+    text-align: left;
+  }
+  .aap-verify-edit-label {
+    display: block;
+    font-size: 0.62rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #7d6046;
+    margin-bottom: 5px;
+  }
+  .aap-verify-edit-input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 10px 12px;
+    border: 1px solid rgba(109, 60, 27, 0.22);
+    border-radius: 10px;
+    background: #fff;
+    font-family: 'Poppins', sans-serif;
+    /* 16px exactos, no menos: por debajo, Safari de iOS hace zoom al enfocar
+       el campo y descoloca el modal. */
+    font-size: 16px;
+    color: #472f29;
+  }
+  .aap-verify-edit-input:focus {
+    outline: none;
+    border-color: #c9a84c;
+    box-shadow: 0 0 0 3px rgba(201, 168, 76, 0.18);
+  }
+  .aap-verify-edit-err {
+    display: block;
+    margin-top: 5px;
+    font-size: 0.72rem;
+    color: #a23b3b;
+  }
+  .aap-verify-edit-acciones {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 10px;
+  }
+  .aap-verify-edit-enviar {
+    padding: 9px 16px;
+    border: none;
+    border-radius: 9px;
+    background: #6d3c1b;
+    color: #fff;
+    font-family: 'Poppins', sans-serif;
+    font-size: 0.76rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    cursor: pointer;
+  }
+  .aap-verify-edit-enviar:disabled { opacity: 0.55; cursor: default; }
   .aap-verify-resend { color: #c9a84c; font-weight: 600; }
 
   @media (max-width: 480px) {
     .aap-otp-row    { gap: 8px; }
     .aap-otp-input  { width: 40px; height: 50px; font-size: 22px; }
     .aap-verify-wrap{ padding: 4px 4px 8px; }
+    /* El editor ocupa el ancho y sus acciones se apilan, con el boton
+       primero: es la accion, y asi queda bajo el pulgar. */
+    .aap-verify-edit-box { max-width: none; }
+    .aap-verify-edit-acciones {
+      flex-direction: column-reverse;
+      align-items: stretch;
+      gap: 8px;
+    }
+    .aap-verify-edit-enviar { width: 100%; padding: 12px 16px; }
   }
 `
 
@@ -154,10 +234,17 @@ export default function VerificationStep({
   onSubmit,
   onResend,
   onBack,
+  // Corregir SOLO el correo sin salir del paso: el caso real es la errata
+  // que se descubre al no recibir nada. Devuelve promesa; reenvia el codigo.
+  onCambiarCorreo,
 }) {
   const [digits, setDigits]     = useState(['', '', '', '', '', ''])
   const [resendIn, setResendIn] = useState(60)   // 60s desde el primer envío
   const [resending, setResending] = useState(false)
+  const [editando, setEditando]   = useState(false)
+  const [correoNuevo, setCorreoNuevo] = useState(email)
+  const [errCorreo, setErrCorreo] = useState('')
+  const [enviandoCorreo, setEnviandoCorreo] = useState(false)
   const inputsRef = useRef([])
 
   // Focus inicial al montar
@@ -251,10 +338,71 @@ export default function VerificationStep({
       <style>{VERIFY_STYLES}</style>
       <div className="aap-verify-wrap">
         <h3 className="aap-verify-title">Verifica Tu Correo</h3>
-        <p className="aap-verify-subtitle">
-          Ingresa el código de 6 dígitos que enviamos a{' '}
-          <strong>{email}</strong>
-        </p>
+        {!editando ? (
+          <p className="aap-verify-subtitle">
+            Ingresa el código de 6 dígitos que enviamos a{' '}
+            <strong>{email}</strong>
+            {onCambiarCorreo && (
+              <>
+                <br />
+                <button
+                  type="button"
+                  className="aap-verify-link aap-verify-edit"
+                  onClick={() => { setCorreoNuevo(email); setErrCorreo(''); setEditando(true) }}
+                  disabled={submitting}
+                >
+                  ¿Lo escribiste mal? Corregir correo
+                </button>
+              </>
+            )}
+          </p>
+        ) : (
+          <div className="aap-verify-edit-box">
+            <label className="aap-verify-edit-label" htmlFor="aapNuevoCorreo">Corrige tu correo</label>
+            <input
+              id="aapNuevoCorreo"
+              type="email"
+              className="aap-verify-edit-input"
+              value={correoNuevo}
+              onChange={(e) => { setCorreoNuevo(e.target.value); setErrCorreo('') }}
+              placeholder="correo@ejemplo.com"
+              autoComplete="email"
+              disabled={enviandoCorreo}
+            />
+            {errCorreo && <span className="aap-verify-edit-err">{errCorreo}</span>}
+            <div className="aap-verify-edit-acciones">
+              <button
+                type="button"
+                className="aap-verify-link"
+                onClick={() => setEditando(false)}
+                disabled={enviandoCorreo}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="aap-verify-edit-enviar"
+                disabled={enviandoCorreo || !correoNuevo.trim()}
+                onClick={async () => {
+                  setEnviandoCorreo(true); setErrCorreo('')
+                  try {
+                    await onCambiarCorreo(correoNuevo)
+                    setDigits(['', '', '', '', '', ''])
+                    setResendIn(60)
+                    setEditando(false)
+                    setTimeout(() => inputsRef.current[0]?.focus(), 0)
+                  } catch (err) {
+                    setErrCorreo(err?.message || 'No se pudo enviar el código')
+                  } finally {
+                    setEnviandoCorreo(false)
+                  }
+                }}
+              >
+                {enviandoCorreo ? 'Enviando…' : 'Enviar código'}
+              </button>
+            </div>
+          </div>
+        )}
 
         <div className="aap-otp-row" onPaste={handlePaste}>
           {digits.map((d, i) => (

@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { supabase, getAuthHeaders } from '../../lib/supabase'
 import { IconCheck } from '../shared/Icons'
 import styles from './PagosCobrosAdmin.module.css'
+import { VisorArchivo } from '../../lib/chatFiles'
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
 
@@ -201,6 +202,8 @@ function EstadoPill({ estado }) {
    Componente principal
    ══════════════════════════════════════════════════════════════════ */
 export default function PagosCobrosAdmin() {
+  // Archivo que se ve DENTRO de la plataforma ({ url, nombre }).
+  const [verArchivo, setVerArchivo] = useState(null)
   const [sub, setSub]       = useState('pagos') // 'pagos' | 'cobros' | 'asesorias'
   const [loading, setLoading] = useState(true)
   const [msg, setMsg]       = useState('')
@@ -438,9 +441,9 @@ export default function PagosCobrosAdmin() {
   async function verCertificado(gestorId) {
     const val = gestById.get(gestorId)?.certificado_bancario_url
     if (!val) { flash('Ese gestor aún no subió su certificado bancario.'); return }
-    if (/^https?:\/\//.test(val)) { window.open(val, '_blank', 'noopener'); return }
+    if (val.startsWith('http')) { setVerArchivo({ url: val, nombre: 'Certificado bancario.pdf' }); return }
     const { data } = await supabase.storage.from('tarjetas-profesionales').createSignedUrl(val, 3600)
-    if (data?.signedUrl) window.open(data.signedUrl, '_blank', 'noopener')
+    if (data?.signedUrl) setVerArchivo({ url: data.signedUrl, nombre: 'Certificado bancario.pdf' })
     else flash('No se pudo abrir el certificado.')
   }
 
@@ -448,7 +451,7 @@ export default function PagosCobrosAdmin() {
   async function verComprobante(c) {
     if (!c.comprobante_path) return
     const { data } = await supabase.storage.from('comprobantes').createSignedUrl(c.comprobante_path, 3600)
-    if (data?.signedUrl) window.open(data.signedUrl, '_blank', 'noopener')
+    if (data?.signedUrl) setVerArchivo({ url: data.signedUrl, nombre: 'Comprobante de pago.pdf' })
     else flash('No se pudo abrir el comprobante.')
   }
 
@@ -1287,6 +1290,7 @@ export default function PagosCobrosAdmin() {
         </div>,
         document.body
       )}
+      <VisorArchivo archivo={verArchivo} onClose={() => setVerArchivo(null)} />
     </div>
   )
 }

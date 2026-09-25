@@ -135,7 +135,9 @@ export default function AdminPage() {
     // Cuenta eliminada: el token ya emitido sigue valido hasta caducar, asi
     // que sin perfil se cierra la sesion en vez de dejarla viva.
     if (!profile) { signOut().finally(() => navigate('/')); return }
-    if (profile.rol !== 'superadmin') { navigate('/'); return }
+    // 'admin' tiene el mismo acceso al panel; lo unico que no puede es
+    // gestionar roles, y eso se decide por pestana mas abajo.
+    if (profile.rol !== 'superadmin' && profile.rol !== 'admin') { navigate('/'); return }
     fetchAll()
     fetchAlertas()
     fetchChatsCerrados()
@@ -1016,10 +1018,16 @@ export default function AdminPage() {
       </div>
     )
 
+  // Distingue los dos roles del panel: el 'admin' ve todo menos roles.
+  const esSuperadmin = profile?.rol === 'superadmin'
+
   const TABS = [
     { key: 'pending',      label: 'Solicitudes',         count: pending.length,       Icon: IconInbox },
     { key: 'approved',     label: 'Aprobados',            count: approved.length,      Icon: IconUsers },
-    { key: 'roles',        label: 'Gestión de Roles',                                  Icon: IconShield },
+    // Gestion de Roles: SOLO superadmin. Es la unica diferencia con 'admin'.
+    ...(esSuperadmin
+      ? [{ key: 'roles', label: 'Gestión de Roles', Icon: IconShield }]
+      : []),
     { key: 'gestores',     label: 'Gestores',             count: gestores.filter(g => !g.aprobado).length, Icon: IconGestor },
     { key: 'pagos',        label: 'Pagos y cobros',                                    Icon: IconWallet },
     { key: 'chats',        label: 'Historial chats',                                   Icon: IconChat },
@@ -1715,7 +1723,9 @@ export default function AdminPage() {
           )}
 
           {/* ── Gestión de roles (abogado / contador / gestor) ── */}
-          {activeTab === 'roles' && (
+          {/* Doble llave: aunque la pestana no se pinte para un 'admin', el
+              panel tampoco se monta si alguien fuerza el estado. */}
+          {activeTab === 'roles' && esSuperadmin && (
             <div className={styles.section}>
               <RolesAdmin
                 miId={user?.id}

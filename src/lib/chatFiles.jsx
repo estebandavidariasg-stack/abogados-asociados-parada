@@ -728,3 +728,135 @@ export function PdfVisor({ url, titulo = 'Documento', fondo = '#fff' }) {
     </div>
   )
 }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   VisorArchivo — todo archivo se ve DENTRO de la plataforma.
+
+   Antes varios sitios hacían `window.open(signedUrl)`, y eso saca al usuario
+   a una pestaña con la URL cruda de Supabase: se ve el bucket, el token y la
+   ruta interna. Además rompe el hilo de lo que estaba haciendo.
+
+   Decide por extensión:
+     · imagen → se muestra a pantalla completa
+     · PDF    → se rasteriza y se pinta aquí (PdfVisor), sin visor externo
+     · resto  → no hay nada que mostrar: se descarga y no se abre ventana
+
+   Siempre ofrece descargar, que es la otra salida legítima.
+   ═══════════════════════════════════════════════════════════════════════ */
+const VISOR_CSS = `
+  .aapVisor {
+    position: fixed; inset: 0; z-index: 10000;
+    background: rgba(30, 18, 8, 0.9);
+    backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+    display: flex; flex-direction: column;
+    animation: aapVisorIn 0.2s ease-out;
+  }
+  @keyframes aapVisorIn { from { opacity: 0 } to { opacity: 1 } }
+  @media (prefers-reduced-motion: reduce) { .aapVisor { animation: none } }
+  .aapVisorBarra {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 14px; color: #fff; flex-shrink: 0;
+  }
+  .aapVisorNombre {
+    font-family: 'Poppins', sans-serif; font-size: 0.82rem; font-weight: 600;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1;
+  }
+  .aapVisorBtn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 7px 13px; border-radius: 9px; cursor: pointer;
+    border: 1px solid rgba(255,255,255,0.28); background: rgba(255,255,255,0.1);
+    color: #fff; font-family: 'Poppins', sans-serif; font-size: 0.76rem; font-weight: 600;
+    white-space: nowrap;
+  }
+  .aapVisorBtn:hover { background: rgba(255,255,255,0.2); }
+  .aapVisorBtn:focus-visible { outline: 2px solid #e8c96a; outline-offset: 2px; }
+  .aapVisorCuerpo {
+    flex: 1; min-height: 0; overflow: auto;
+    display: flex; align-items: center; justify-content: center;
+    padding: 0 14px 16px;
+  }
+  .aapVisorImg {
+    max-width: 100%; max-height: 100%; object-fit: contain;
+    border-radius: 8px; user-select: none; -webkit-user-select: none;
+  }
+  .aapVisorPdf { width: 100%; max-width: 900px; align-self: flex-start; }
+  @media (max-width: 600px) {
+    .aapVisorBarra { padding: 8px 10px; gap: 8px; }
+    .aapVisorCuerpo { padding: 0 8px 12px; }
+    .aapVisorBtn { padding: 7px 10px; }
+  }
+`
+
+const ES_IMAGEN = /\.(png|jpe?g|webp|gif|avif)$/i
+const ES_PDF    = /\.pdf$/i
+
+// `archivo`: { url, nombre } o null. `nombre` decide el tipo y el nombre de
+// descarga, así que conviene pasarlo siempre.
+export function VisorArchivo({ archivo, onClose }) {
+  const [bajando, setBajando] = useState(false)
+
+  useEffect(() => {
+    if (!archivo) return
+    const onKey = (e) => { if (e.key === 'Escape') onClose?.() }
+    document.addEventListener('keydown', onKey)
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      document.body.style.overflow = prev
+    }
+  }, [archivo, onClose])
+
+  // Un archivo que no se puede mostrar no abre ventana: se descarga y punto.
+  useEffect(() => {
+    if (!archivo) return
+    const n = archivo.nombre || archivo.url || ''
+    if (!ES_IMAGEN.test(n) && !ES_PDF.test(n)) {
+      downloadChatFile(archivo.url, archivo.nombre || 'documento')
+      onClose?.()
+    }
+  }, [archivo, onClose])
+
+  if (!archivo) return null
+  const nombre = archivo.nombre || 'Documento'
+  const esImagen = ES_IMAGEN.test(nombre) || ES_IMAGEN.test(archivo.url || '')
+  const esPdf    = ES_PDF.test(nombre)    || ES_PDF.test(archivo.url || '')
+  if (!esImagen && !esPdf) return null   // ya se disparó la descarga
+
+  async function descargar() {
+    setBajando(true)
+    try { await downloadChatFile(archivo.url, nombre) }
+    finally { setBajando(false) }
+  }
+
+  return createPortal(
+    <>
+      <style>{VISOR_CSS}</style>
+      <div className="aapVisor" role="dialog" aria-modal="true" aria-label={nombre}
+        onClick={(e) => { if (e.target === e.currentTarget) onClose?.() }}>
+        <div className="aapVisorBarra">
+          <span className="aapVisorNombre">{nombre}</span>
+          <button type="button" className="aapVisorBtn" onClick={descargar} disabled={bajando}>
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"
+              strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M12 3v12M7 11l5 5 5-5M4 21h16" />
+            </svg>
+            {bajando ? 'Descargando…' : 'Descargar'}
+          </button>
+          <button type="button" className="aapVisorBtn" onClick={onClose} aria-label="Cerrar">✕</button>
+        </div>
+        <div className="aapVisorCuerpo" onClick={(e) => { if (e.target === e.currentTarget) onClose?.() }}>
+          {esImagen ? (
+            <img src={archivo.url} alt={nombre} className="aapVisorImg"
+              onContextMenu={(e) => e.preventDefault()} draggable="false" />
+          ) : (
+            <div className="aapVisorPdf">
+              <PdfVisor url={archivo.url} titulo={nombre} />
+            </div>
+          )}
+        </div>
+      </div>
+    </>,
+    document.body
+  )
+}

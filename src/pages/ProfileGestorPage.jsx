@@ -14,6 +14,7 @@ import pStyles from './ProfilePage.module.css'
 // clicable + botón fantasma. Reusar su CSS module evita duplicar estilos.
 import TarjetaPreview from '../components/profile/TarjetaPreview'
 import docStyles from '../components/profile/DocumentosConfianza.module.css'
+import { VisorArchivo } from '../lib/chatFiles'
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
 
@@ -845,6 +846,8 @@ function EstadoPill({ estado }) {
 }
 
 function SeccionCobros({ aprobado, userId, tieneCert, onIrAPerfil }) {
+  // Archivo que se ve DENTRO de la plataforma ({ url, nombre }).
+  const [verArchivo, setVerArchivo] = useState(null)
   const [cobros, setCobros] = useState([])
   const [estado, setEstado] = useState('loading') // loading | ready | error
   const [pidiendoSemanal, setPidiendoSemanal] = useState(false)
@@ -863,7 +866,7 @@ function SeccionCobros({ aprobado, userId, tieneCert, onIrAPerfil }) {
   async function verComprobante(c) {
     if (!c.comprobante_path) return
     const { data } = await supabase.storage.from('comprobantes').createSignedUrl(c.comprobante_path, 3600)
-    if (data?.signedUrl) window.open(data.signedUrl, '_blank', 'noopener')
+    if (data?.signedUrl) setVerArchivo({ url: data.signedUrl, nombre: 'Comprobante de pago.pdf' })
     else setAviso({ tone: 'error', text: 'No se pudo abrir el comprobante. Intenta de nuevo.' })
   }
 
@@ -1265,6 +1268,7 @@ function SeccionCobros({ aprobado, userId, tieneCert, onIrAPerfil }) {
           </div>
         </div>
       )}
+      <VisorArchivo archivo={verArchivo} onClose={() => setVerArchivo(null)} />
     </section>
   )
 }

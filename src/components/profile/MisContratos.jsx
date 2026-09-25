@@ -5,6 +5,7 @@ import { listarEvidencia, urlFirmada } from '../../lib/firmaService'
 import EnviarAFirmar from '../firma/EnviarAFirmar'
 import { IconFirma, IconDoc, IconFolder, IconUpload, IconDownload } from '../shared/Icons'
 import styles from './MisContratos.module.css'
+import { VisorArchivo } from '../../lib/chatFiles'
 
 // Papelera clara (estilo Lucide trash-2) — más legible que el icono base
 const IconTrash = (p) => (
@@ -75,6 +76,8 @@ function fechaFirmado(s) {
 }
 
 export default function MisContratos({ abogadoId, isSuperAdmin = false }) {
+  // Archivo que se ve DENTRO de la plataforma ({ url, nombre }).
+  const [verArchivo, setVerArchivo] = useState(null)
   const [contratos, setContratos]   = useState([])
   const [loading, setLoading]       = useState(true)
   const [uploading, setUploading]   = useState(false)
@@ -111,7 +114,7 @@ export default function MisContratos({ abogadoId, isSuperAdmin = false }) {
       const headers = await getAuthHeaders()
       const url = await urlFirmada(s.doc_firmado_path, headers)
       if (!url) throw new Error('No se pudo obtener el documento firmado')
-      window.open(url, '_blank', 'noopener,noreferrer')
+      setVerArchivo({ url, nombre: s.doc_firmado_path?.split('/').pop() || 'Documento firmado.pdf' })
     } catch (e) {
       setError('No se pudo abrir el documento firmado. ' + (e?.message || ''))
     }
@@ -500,6 +503,7 @@ export default function MisContratos({ abogadoId, isSuperAdmin = false }) {
           onDone={() => { cargarEvidencia(); }}
         />
       )}
+      <VisorArchivo archivo={verArchivo} onClose={() => setVerArchivo(null)} />
     </div>
   )
 }

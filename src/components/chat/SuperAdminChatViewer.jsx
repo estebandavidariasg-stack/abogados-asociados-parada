@@ -195,15 +195,13 @@ export default function SuperAdminChatViewer({ initialRoomId = null }) {
   const [searchQuery, setSearchQuery]   = useState('')
   const [searching, setSearching]       = useState(false)
   const [searchError, setSearchError]   = useState('')
-  // Envío de fichas de contacto
-  const [sending, setSending]       = useState(false)
-  const [sendStatus, setSendStatus] = useState('idle') // 'idle' | 'success' | 'error'
-  const [confirmOpen, setConfirmOpen] = useState(false)
   // Cobro al profesional (split empresa/gestor) — atado a la verificación.
   const [pago, setPago]             = useState(null)     // fila de pagos_profesional | null
   const [pagoLoading, setPagoLoading] = useState(false)  // cargando estado del cobro
   const [pagoConfirmado, setPagoConfirmado] = useState(false) // luz verde (chat_rooms.pago_confirmado)
   const [pagoGenerando, setPagoGenerando] = useState(false) // POST generar_cobro en curso
+  // Modal con el detalle de la consulta (código, partes y desglose del cobro).
+  const [detallesOpen, setDetallesOpen] = useState(false)
   const [pagoOk, setPagoOk]         = useState(false)    // toast inline "✓ Cobro generado"
   const [pagoError, setPagoError]   = useState('')       // mensaje de error inline (dismissible)
   // Modal "Definir cobro" + sus campos (total / % empresa / % gestor).
@@ -727,82 +725,6 @@ export default function SuperAdminChatViewer({ initialRoomId = null }) {
     loadRooms()
   }
 
-  // Abre el modal de confirmación. Validación previa para evitar abrir el
-  // modal cuando seguro no se va a poder enviar.
-  function openSendConfirm() {
-    if (!activeRoom) return
-    if (!lawyers.length || !activeRoom.client_email) {
-      setSendStatus('error')
-      return
-    }
-    setSendStatus('idle')
-    setConfirmOpen(true)
-  }
-
-  async function handleSendContactCards() {
-    if (!activeRoom) return
-    setConfirmOpen(false)
-
-    // Re-validación defensiva (por si algo cambió mientras estaba abierto el modal)
-    if (!lawyers.length || !activeRoom.client_email) {
-      setSendStatus('error')
-      return
-    }
-
-    // Preferimos el abogado con status 'active'; si no, el primero asignado
-    const target = lawyers.find(l => l.status === 'active') || lawyers[0]
-
-    setSending(true)
-    setSendStatus('idle')
-
-    try {
-      const headers = await getAuthHeaders()
-
-      // Datos completos del abogado (email + telefono)
-      const lawyerRes = await fetch(
-        `${SUPABASE_URL}/rest/v1/profiles?id=eq.${target.lawyer_id}&select=nombre,apellido,email,telefono`,
-        { headers }
-      )
-      const profiles = await lawyerRes.json()
-      const lawyerProfile = Array.isArray(profiles) ? profiles[0] : null
-      if (!lawyerProfile?.email) throw new Error('Abogado sin email')
-
-      // Consolidado en /api/notify (type: 'contact_card') para no superar el
-      // límite de 12 Serverless Functions del plan Hobby de Vercel.
-      const res = await fetch('/api/notify', {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          type: 'contact_card',
-          // profiles.telefono se mapea a celular del contrato API
-          lawyerData: {
-            nombre:   lawyerProfile.nombre,
-            apellido: lawyerProfile.apellido,
-            email:    lawyerProfile.email,
-            celular:  lawyerProfile.telefono || '',
-          },
-          clientData: {
-            nombre:  activeRoom.client_nombre   || '',
-            email:   activeRoom.client_email    || '',
-            celular: activeRoom.client_celular  || '',
-          },
-          codigoReferencia: activeRoom.codigo_referencia || '',
-        }),
-      })
-
-      const json = await res.json().catch(() => ({}))
-      if (!res.ok || !json.success) throw new Error(json.error || 'send failed')
-
-      setSendStatus('success')
-      // Reset solo si seguimos en 'success' (no pisar otro estado posterior)
-      setTimeout(() => setSendStatus(s => (s === 'success' ? 'idle' : s)), 3000)
-    } catch {
-      setSendStatus('error')
-    } finally {
-      setSending(false)
-    }
-  }
-
   async function deleteMessage(mid) {
     await supabase.from('chat_messages').delete().eq('id', mid)
     setMessages(prev => prev.filter(m => m.id !== mid))
@@ -1084,21 +1006,21 @@ export default function SuperAdminChatViewer({ initialRoomId = null }) {
                     {activeRoom.client_email && ` · ${activeRoom.client_email}`}
                   </p>
                 )}
-                {/* ← NUEVO: código de referencia en header */}
-                {activeRoom.codigo_referencia && (
-                  <div className={styles.codigoRef}>
-                    <span className={styles.codigoRefLabel}>Código de referencia:</span>
-                    <span className={styles.codigoRefValue}>{activeRoom.codigo_referencia}</span>
-                  </div>
-                )}
-                <div className={styles.lawyerTags}>
-                  {lawyers.map(l => (
-                    <span key={l.lawyer_id} className={styles.lawyerTag}
-                      style={{ color: l.status === 'active' ? '#4caf50' : '#888' }}>
-                      {l.nombre}
+                {/* Metadatos en una línea: el código y el profesional no
+                    necesitan caja propia, y apilados sumaban dos renglones. */}
+                <p className={styles.chatMeta}>
+                  {lawyers.length > 0 && (
+                    <span className={styles.chatMetaPro}>
+                      {lawyers.map(l => l.nombre).join(', ')}
                     </span>
-                  ))}
-                </div>
+                  )}
+                  {activeRoom.codigo_referencia && (
+                    <>
+                      {lawyers.length > 0 && <span aria-hidden="true"> · </span>}
+                      <span className={styles.chatMetaCod}>{activeRoom.codigo_referencia}</span>
+                    </>
+                  )}
+                </p>
               </div>
               <div className={styles.headerActions}>
                 {/* ── Cobro al profesional (split empresa/gestor) — atado a la verificación ── */}
@@ -1108,8 +1030,13 @@ export default function SuperAdminChatViewer({ initialRoomId = null }) {
                   <div className={styles.cobroResumenWrap}>
                     <div className={styles.cobroChipRow}>
                       {pago.estado === 'pagado' ? (
-                        <span className={`${styles.cobroChip} ${styles.cobroChipPagado}`}
-                          title="Cobro pagado por el profesional">
+                        // El propio chip abre el detalle: ya es el elemento que
+                        // resume el cobro, así que no hace falta un botón al lado.
+                        <button type="button"
+                          className={`${styles.cobroChip} ${styles.cobroChipPagado} ${styles.cobroChipBtn}`}
+                          onClick={() => setDetallesOpen(true)}
+                          aria-haspopup="dialog"
+                          title="Ver el detalle de la consulta y el desglose del cobro">
                           <IconVerif size={13} />
                           Pagado · {formatCOP(pago.monto)}
                           {pago.pagado_at && (
@@ -1119,49 +1046,17 @@ export default function SuperAdminChatViewer({ initialRoomId = null }) {
                               })}
                             </span>
                           )}
-                        </span>
+                        </button>
                       ) : (
-                        <span className={`${styles.cobroChip} ${styles.cobroChipPendiente}`}
-                          title="Cobro pendiente de pago por el profesional">
+                        <button type="button"
+                          className={`${styles.cobroChip} ${styles.cobroChipPendiente} ${styles.cobroChipBtn}`}
+                          onClick={() => setDetallesOpen(true)}
+                          aria-haspopup="dialog"
+                          title="Ver el detalle de la consulta y el desglose del cobro">
                           Cobro pendiente · {formatCOP(pago.monto)}
-                        </span>
+                        </button>
                       )}
                     </div>
-
-                    {/* Aprobada — el profesional ya pagó */}
-                    {pagoConfirmado && (
-                      <span className={styles.luzVerde} title="El profesional confirmó el pago">
-                        <IconVerif size={14} />
-                        ✓ Pago confirmado · contacto y descargas habilitados
-                      </span>
-                    )}
-
-                    {/* Desglose del split */}
-                    <table className={styles.cobroTabla}>
-                      <tbody>
-                        <tr>
-                          <td className={styles.cobroTd}>Total de la consulta</td>
-                          <td className={styles.cobroTdNum}>{formatCOP(pago.total_consulta)}</td>
-                        </tr>
-                        <tr>
-                          <td className={styles.cobroTd}>Empresa ({pago.pct_empresa}%)</td>
-                          <td className={styles.cobroTdNum}>{formatCOP(pago.monto_empresa)}</td>
-                        </tr>
-                        <tr>
-                          <td className={styles.cobroTd}>
-                            Gestor ({pago.pct_gestor}% de la parte empresa)
-                            {!pago.gestor_id && !pago.codigo && (
-                              <span className={styles.cobroSinGestor}> · sin gestor</span>
-                            )}
-                          </td>
-                          <td className={styles.cobroTdNum}>{formatCOP(pago.comision_gestor)}</td>
-                        </tr>
-                        <tr className={styles.cobroTrPaga}>
-                          <td className={styles.cobroTd}>El profesional paga</td>
-                          <td className={styles.cobroTdNum}>{formatCOP(pago.monto)}</td>
-                        </tr>
-                      </tbody>
-                    </table>
                   </div>
                 ) : (
                   <button
@@ -1192,27 +1087,6 @@ export default function SuperAdminChatViewer({ initialRoomId = null }) {
                     >✕</button>
                   </span>
                 )}
-                <button
-                  type="button"
-                  className={`${styles.btnSendCard} ${sendStatus === 'success' ? styles.btnSendCardSuccess : ''} ${sendStatus === 'error' ? styles.btnSendCardError : ''}`}
-                  onClick={openSendConfirm}
-                  disabled={sending || !lawyers.length || !activeRoom.client_email}
-                  title={
-                    !lawyers.length
-                      ? 'No hay abogado asignado todavía'
-                      : !activeRoom.client_email
-                        ? 'Este chat no tiene email del cliente'
-                        : 'Enviar ficha de contacto a cliente y abogado'
-                  }
-                >
-                  {sending
-                    ? 'Enviando...'
-                    : sendStatus === 'success'
-                      ? '✅ Enviadas'
-                      : sendStatus === 'error'
-                        ? '❌ Error — reintentar'
-                        : 'Enviar Fichas de Contacto'}
-                </button>
                 {activeRoom.status !== 'closed' && (
                   <button className={styles.btnForceClose}
                     onClick={() => forceCloseRoom(activeRoom.id)}>
@@ -1499,42 +1373,67 @@ export default function SuperAdminChatViewer({ initialRoomId = null }) {
         document.body
       )}
 
-      {/* ── Modal de confirmación: Enviar fichas de contacto ──
-          Portal a <body>: así el position:fixed se ancla al viewport y no a
-          un ancestro con transform/backdrop-filter (queda fijo y centrado). */}
-      {confirmOpen && createPortal(
-        <div
-          className={styles.confirmOverlay}
-          onClick={() => !sending && setConfirmOpen(false)}
-          role="dialog"
-          aria-modal="true"
-        >
-          <div
-            className={styles.confirmModal}
-            onClick={e => e.stopPropagation()}
-          >
-            <h3 className={styles.confirmTitle}>Enviar fichas de contacto</h3>
-            <p className={styles.confirmText}>
-              ¿Enviar ficha de contacto a ambas partes?<br />
-              El cliente recibirá los datos del abogado y viceversa.
-            </p>
-            <div className={styles.confirmActions}>
-              <button
-                type="button"
-                className={styles.confirmCancel}
-                onClick={() => setConfirmOpen(false)}
-                disabled={sending}
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                className={styles.confirmConfirm}
-                onClick={handleSendContactCards}
-                disabled={sending}
-              >
-                {sending ? 'Enviando…' : 'Enviar fichas'}
-              </button>
+      {/* Detalle de la consulta. Portal a <body>: el panel del admin anima
+          con transform y un position:fixed dentro quedaría anclado a él. */}
+      {detallesOpen && activeRoom && createPortal(
+        <div className={styles.confirmOverlay} onClick={() => setDetallesOpen(false)} role="presentation">
+          <div className={styles.confirmModal} onClick={e => e.stopPropagation()}
+            role="dialog" aria-modal="true" aria-labelledby="detConsultaTitulo">
+            <h3 id="detConsultaTitulo" className={styles.confirmTitle}>Detalle de la consulta</h3>
+
+            <dl className={styles.detGrid}>
+              {activeRoom.codigo_referencia && (<>
+                <dt className={styles.detDt}>Código de referencia</dt>
+                <dd className={styles.detDd}>{activeRoom.codigo_referencia}</dd>
+              </>)}
+              {lawyers.length > 0 && (<>
+                <dt className={styles.detDt}>Profesional</dt>
+                <dd className={styles.detDd}>{lawyers.map(l => l.nombre).join(', ')}</dd>
+              </>)}
+              {activeRoom.client_nombre && (<>
+                <dt className={styles.detDt}>Cliente</dt>
+                <dd className={styles.detDd}>{activeRoom.client_nombre}</dd>
+              </>)}
+              {activeRoom.client_email && (<>
+                <dt className={styles.detDt}>Correo</dt>
+                <dd className={styles.detDd}>{activeRoom.client_email}</dd>
+              </>)}
+            </dl>
+
+            {pago && (
+              <>
+                <h4 className={styles.detSubtitulo}>Desglose del cobro</h4>
+                    <table className={styles.cobroTabla}>
+                      <tbody>
+                        <tr>
+                          <td className={styles.cobroTd}>Total de la consulta</td>
+                          <td className={styles.cobroTdNum}>{formatCOP(pago.total_consulta)}</td>
+                        </tr>
+                        <tr>
+                          <td className={styles.cobroTd}>Empresa ({pago.pct_empresa}%)</td>
+                          <td className={styles.cobroTdNum}>{formatCOP(pago.monto_empresa)}</td>
+                        </tr>
+                        <tr>
+                          <td className={styles.cobroTd}>
+                            Gestor ({pago.pct_gestor}% de la parte empresa)
+                            {!pago.gestor_id && !pago.codigo && (
+                              <span className={styles.cobroSinGestor}> · sin gestor</span>
+                            )}
+                          </td>
+                          <td className={styles.cobroTdNum}>{formatCOP(pago.comision_gestor)}</td>
+                        </tr>
+                        <tr className={styles.cobroTrPaga}>
+                          <td className={styles.cobroTd}>El profesional paga</td>
+                          <td className={styles.cobroTdNum}>{formatCOP(pago.monto)}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+              </>
+            )}
+
+            <div className={styles.detAcciones}>
+              <button type="button" className={styles.btnDetalles}
+                onClick={() => setDetallesOpen(false)}>Cerrar</button>
             </div>
           </div>
         </div>,

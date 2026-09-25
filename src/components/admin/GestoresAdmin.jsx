@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { supabase, getAuthHeaders } from '../../lib/supabase'
+import { VisorArchivo } from '../../lib/chatFiles'
 import { IconCheck, IconX, IconQR } from '../shared/Icons'
 import SocialLinks from '../profile/SocialLinks'
 import CodigosReferencia from './CodigosReferencia'
@@ -21,13 +22,16 @@ function nuevoCodigo() {
 
 // Certificado bancario del gestor: el valor guardado puede ser un path del
 // bucket privado `tarjetas-profesionales` o una URL antigua ya pública.
-async function abrirCertificado(valor) {
-  if (!valor) return
-  if (/^https?:\/\//.test(valor)) { window.open(valor, '_blank', 'noopener'); return }
+// Solo RESUELVE la URL firmada; mostrarla es cosa del visor, que la pinta
+// dentro de la plataforma en vez de mandar al usuario a la URL cruda del
+// bucket (donde se ven la ruta interna y el token).
+async function urlCertificado(valor) {
+  if (!valor) return null
+  if (valor.startsWith('http')) return valor   // URL antigua ya pública
   const { data } = await supabase.storage
     .from('tarjetas-profesionales')
     .createSignedUrl(valor, 3600)
-  if (data?.signedUrl) window.open(data.signedUrl, '_blank', 'noopener')
+  return data?.signedUrl || null
 }
 
 /* ── Iconos locales (mismo estilo stroke Lucide del set compartido) ── */
@@ -595,6 +599,8 @@ function GestorCard({
   onToggle, onAprobar, onAsignar, onCrearCodigo, creando,
   onMarcarResultado, onMarcarPagado,
 }) {
+  // Archivo que se ve DENTRO de la plataforma ({ url, nombre }).
+  const [verArchivo, setVerArchivo] = useState(null)
   const codeStr = asignado?.codigo || null
 
   return (
@@ -626,7 +632,10 @@ function GestorCard({
                 <button
                   type="button"
                   className={styles.certTag}
-                  onClick={() => abrirCertificado(g.certificado_bancario_url)}
+                  onClick={async () => {
+                    const url = await urlCertificado(g.certificado_bancario_url)
+                    if (url) setVerArchivo({ url, nombre: `Certificado bancario.${(g.certificado_bancario_url || '').split('.').pop() || 'pdf'}` })
+                  }}
                   title="Abrir el certificado bancario del gestor"
                 >
                   Ver certificado bancario
@@ -694,6 +703,7 @@ function GestorCard({
           )}
         </div>
       </div>
+      <VisorArchivo archivo={verArchivo} onClose={() => setVerArchivo(null)} />
     </div>
   )
 }
@@ -764,6 +774,8 @@ function GestorDetalleModal({
 
 /* ── Perfil: comunidad + redes + certificado bancario ── */
 function PerfilGestor({ gestor: g }) {
+  // Archivo que se ve DENTRO de la plataforma ({ url, nombre }).
+  const [verArchivo, setVerArchivo] = useState(null)
   const [certUrl, setCertUrl] = useState(null)
   const raw = g.certificado_bancario_url
 
@@ -798,9 +810,11 @@ function PerfilGestor({ gestor: g }) {
             {!raw ? (
               <em className={styles.muted}>No cargado</em>
             ) : certUrl ? (
-              <a className={styles.certLink} href={certUrl} target="_blank" rel="noopener noreferrer">
+              <button type="button" className={styles.certLink}
+                style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
+                onClick={() => setVerArchivo({ url: certUrl, nombre: 'Certificado bancario.pdf' })}>
                 Ver certificado
-              </a>
+              </button>
             ) : (
               <em className={styles.muted}>Generando enlace…</em>
             )}
@@ -811,6 +825,7 @@ function PerfilGestor({ gestor: g }) {
           {hasSocial ? <SocialLinks profile={g} size="sm" /> : <em className={styles.muted}>Ninguna</em>}
         </div>
       </div>
+      <VisorArchivo archivo={verArchivo} onClose={() => setVerArchivo(null)} />
     </div>
   )
 }
