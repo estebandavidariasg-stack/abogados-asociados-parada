@@ -385,7 +385,10 @@ select.input option {
 .actions {
   display: flex;
   align-items: center;
-  gap: 1.5rem;
+  /* Separacion generosa entre la accion principal y la destructiva: van
+     centradas juntas, pero no tan pegadas como para confundirlas al pulsar. */
+  gap: 2.25rem;
+  justify-content: center;
   flex-wrap: wrap;
   padding-top: 2rem;
   border-top: 1px solid rgba(109,60,27, 0.09);
@@ -393,20 +396,58 @@ select.input option {
   grid-column: 1 / -1;
 }
 
+/* Acción destructiva. Estaba en #c0ac9a (2.15:1 sobre la crema): casi
+   invisible, sin área de pulsación (padding 0) y a 24px del botón principal.
+   Para algo irreversible eso es lo contrario de lo que conviene.
+
+   Ahora es legible (#a23b3b, 6.42:1, el mismo rojo del modal de cerrar
+   sesión), tiene área propia y `margin-left: auto` la empuja al extremo
+   opuesto del formulario: sigue siendo secundaria, pero deja de estar al lado
+   de "Guardar cambios". */
 .deleteBtn {
   background: none;
-  border: none;
-  color: #c0ac9a;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  color: #a23b3b;
   font-size: 0.66rem;
   font-family: 'Poppins', sans-serif;
   font-weight: 700;
   letter-spacing: 0.16em;
   text-transform: uppercase;
   cursor: pointer;
-  transition: color 0.25s;
-  padding: 0;
+  transition: background-color 0.2s ease-out, border-color 0.2s ease-out;
+  padding: 0.6rem 0.95rem;
 }
-.deleteBtn:hover { color: #e05555; }
+.deleteBtn:hover {
+  background: rgba(162, 59, 59, 0.08);
+  border-color: rgba(162, 59, 59, 0.3);
+}
+.deleteBtn:focus-visible { outline: 2px solid #a23b3b; outline-offset: 2px; }
+
+/* Móvil: en una columna, "Eliminar cuenta" quedaba pegada justo debajo del
+   botón principal, que es donde más se pulsa a ciegas. El primario pasa a
+   ancho completo y la destructiva baja separada, con su propio contorno para
+   que se lea como otra cosa y no como una continuación del primario. */
+@media (max-width: 600px) {
+  .actions {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+    padding-top: 1.5rem;
+  }
+  .actions button[type="submit"] { width: 100%; }
+  .deleteBtn {
+    margin: 1.1rem 0 0;
+    width: 100%;
+    padding: 0.8rem 1rem;
+    border-color: rgba(162, 59, 59, 0.28);
+    border-radius: 10px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .deleteBtn { transition: none; }
+}
 
 .confirmDelete {
   display: flex;

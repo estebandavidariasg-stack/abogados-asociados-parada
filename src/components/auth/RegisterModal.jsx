@@ -146,8 +146,15 @@ export default function RegisterModal({ onClose }) {
   const [whatsapp, setWhatsapp]       = useState('')
   const [tiktok, setTiktok]           = useState('')
   const [comunidad, setComunidad]     = useState('')
+  // Certificado bancario del gestor: obligatorio en el registro. Sin él no hay
+  // a dónde pagarle la comisión, y el perfil ya bloqueaba los cobros por eso;
+  // pedirlo al final era dejar cuentas aprobadas a las que no se puede pagar.
+  const [gestorCertFile, setGestorCertFile] = useState(null)
+  const gestorCertInputRef = useRef(null)
 
   const recaptchaRef = useRef()
+  // Para llevar el foco al primer campo marcado tras un intento fallido.
+  const formRef = useRef(null)
 
   // ── Campos adicionales configurados por el admin maestro ───────────────
   // (tabla registro_campos; las respuestas van a profiles.datos_adicionales)
@@ -209,14 +216,6 @@ export default function RegisterModal({ onClose }) {
 
   const isPro = rol === 'abogado' || rol === 'contador'
 
-  const canRegister = (() => {
-    const base = pwValid && emailVal.valid === true && aceptaTerminos && captchaValue && !loading
-    if (!base) return false
-    if (rol === 'gestor') return cedulaVal.valid === true && !!username.trim()
-    // Profesional: nombre, apellido, cédula, celular y tarjeta son obligatorios.
-    return !!nombre.trim() && !!apellido.trim() && !!username.trim()
-      && cedulaVal.valid === true && telVal.valid === true && !!tarjetaFile
-  })()
 
   const AREAS_LIST = rol === 'contador' ? AREAS_CONTADURIA : AREAS_DERECHO
 
@@ -229,6 +228,49 @@ export default function RegisterModal({ onClose }) {
       document.body.style.overflow = ''
     }
   })
+
+  /* ── Validacion del formulario ────────────────────────────────────────
+     Antes se paraba en el PRIMER fallo y solo se mostraba un mensaje: el
+     usuario corregia, volvia a enviar, y aparecia el siguiente. Ahora se
+     revisa todo de una y se devuelve un mapa campo -> motivo.
+
+     `errores` se RECALCULA en cada render (no se guarda en estado) una vez
+     que ya se intento enviar. Asi el rojo de un campo desaparece solo en
+     cuanto el usuario lo corrige, sin necesidad de limpiar campo por campo
+     desde cada onChange. */
+  function validarTodo() {
+    const e = {}
+    if (!nombre.trim())   e.nombre = 'Escribe tu nombre'
+    if (!apellido.trim()) e.apellido = 'Escribe tu apellido'
+    if (!username.trim()) e.username = 'Elige un nombre de usuario'
+    if (telVal.valid !== true)    e.telefono = 'Celular de 10 dígitos que empiece por 3'
+    if (cedulaVal.valid !== true) e.cedula = 'Cédula de 6 a 12 dígitos'
+    if (!emailVal.valid)  e.email = 'Correo no válido'
+    if (!pwValid)         e.password = 'La contraseña no cumple los requisitos'
+    if (isPro) {
+      if (!universidad.trim()) e.universidad = 'Selecciona tu universidad'
+      if (!tarjetaFile)        e.tarjeta = 'Adjunta tu tarjeta profesional'
+    }
+    if (rol === 'gestor' && !gestorCertFile) e.certificado = 'Adjunta tu certificado bancario'
+    if (!departamento)  e.ubicacion = 'Selecciona departamento y municipio'
+    else if (!ciudad.trim()) e.ubicacion = 'Selecciona tu municipio o localidad'
+    for (const c of camposExtra) {
+      if (c.requerido && c.tipo !== 'checkbox' && !String(respuestasExtra[c.id] ?? '').trim()) {
+        e[`extra_${c.id}`] = `Completa "${c.etiqueta}"`
+      }
+    }
+    if (!aceptaTerminos) e.terminos = 'Debes aceptar los términos y condiciones'
+    if (!captchaValue)   e.captcha = 'Completa el captcha'
+    return e
+  }
+
+  // Solo se marcan campos DESPUES del primer intento: nadie quiere ver el
+  // formulario en rojo antes de haber escrito nada.
+  const [intentado, setIntentado] = useState(false)
+  const errores = intentado ? validarTodo() : {}
+  const nErrores = Object.keys(errores).length
+  // Clase del campo: roja solo si ese campo concreto esta mal.
+  const cls = (campo) => `${styles.input}${errores[campo] ? " " + extra.inputError : ""}`
 
   function borderFor(valid, touched, value) {
     if (!touched || !value) return {}
@@ -274,28 +316,22 @@ export default function RegisterModal({ onClose }) {
   // ── Paso A: validar formulario y enviar el código de verificación ────────
   async function handleRegister(e) {
     e.preventDefault()
-    if (!captchaValue)   { setError('Por favor completa el captcha'); return }
-    if (rol === 'gestor') {
-      if (!username.trim())         { setError('Elige un nombre de usuario'); return }
-      if (cedulaVal.valid !== true) { setError('Ingresa una cédula válida (6–12 dígitos)'); setCedulaTouched(true); return }
+    // Una sola pasada: se recogen TODOS los fallos, se marcan los campos y se
+    // lleva el foco al primero, en vez de ir revelandolos de uno en uno.
+    setIntentado(true)
+    setCedulaTouched(true); setTelTouched(true); setEmailTouched(true); setPwTouched(true)
+    const errs = validarTodo()
+    if (Object.keys(errs).length > 0) {
+      setError(null)
+      // El campo marcado puede haber quedado fuera de la vista en un
+      // formulario largo: se lo trae y se le da el foco.
+      requestAnimationFrame(() => {
+        const primero = formRef.current?.querySelector(`.${extra.inputError}, [data-error="1"]`)
+        primero?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+        if (primero?.focus) primero.focus({ preventScroll: true })
+      })
+      return
     }
-    if (isPro) {
-      if (cedulaVal.valid !== true) { setError('Ingresa una cédula válida (6–12 dígitos)'); setCedulaTouched(true); return }
-      if (telVal.valid !== true)    { setError('Ingresa un celular válido (10 dígitos, empieza por 3)'); setTelTouched(true); return }
-      if (!universidad.trim())      { setError('Selecciona tu universidad'); return }
-      if (!departamento)            { setError('Selecciona tu departamento'); return }
-      if (!ciudad.trim())           { setError('Selecciona tu municipio o localidad'); return }
-      if (!tarjetaFile)             { setError('Adjunta tu tarjeta profesional (PDF o imagen)'); return }
-    }
-    if (!pwValid)        { setError('La contraseña no cumple los requisitos'); setPwTouched(true); return }
-    if (!emailVal.valid) { setError('El correo no es válido'); setEmailTouched(true); return }
-    // Campos personalizados obligatorios (configurados por el admin maestro).
-    const extraFaltante = camposExtra.find(c =>
-      c.requerido && c.tipo !== 'checkbox' &&
-      !String(respuestasExtra[c.id] ?? '').trim()
-    )
-    if (extraFaltante) { setError(`Completa el campo "${extraFaltante.etiqueta}"`); return }
-    if (!aceptaTerminos) { setError('Debes aceptar los términos y condiciones'); return }
 
     setError(null); setEmailErrorInline(''); setLoading(true)
     try {
@@ -394,10 +430,7 @@ export default function RegisterModal({ onClose }) {
     const emailNorm = regEmail.trim().toLowerCase()
     // 1. signUp — crea auth.users. El trigger crea la fila en profiles con
     //    rol='abogado' por defecto; la corregimos en el UPSERT (paso 4).
-    const metaData =
-      rol === 'gestor'
-        ? { username }
-        : { nombre, apellido, username, telefono }
+    const metaData = { nombre, apellido, username, telefono }
     const { error: signUpError } = await supabase.auth.signUp({
       email: emailNorm,
       password: regPassword,
@@ -439,6 +472,30 @@ export default function RegisterModal({ onClose }) {
     }
     setTarjetaSubidaPath(tarjetaPath)
 
+    // 3b. Certificado bancario del gestor → mismo bucket y misma carpeta que
+    //     usa su perfil (`<uid>/certificados/certificado.<ext>`), para que
+    //     ProfileGestorPage lo encuentre sin cambios. Se sube AQUÍ, con la
+    //     sesión temporal viva: el bucket es privado y su RLS exige que la
+    //     carpeta sea el auth.uid() del que sube.
+    let gestorCertPath = null
+    if (rol === 'gestor' && gestorCertFile) {
+      const hdrs = await getAuthHeaders()
+      const ext  = gestorCertFile.name.split('.').pop().toLowerCase()
+      const path = `${userId}/certificados/certificado.${ext}`
+      const up = await fetch(
+        `${SUPABASE_URL}/storage/v1/object/tarjetas-profesionales/${path}`,
+        {
+          method: 'POST',
+          headers: { ...hdrs, 'Content-Type': gestorCertFile.type, 'x-upsert': 'true' },
+          body: gestorCertFile,
+        }
+      )
+      // Si la subida falla no se aborta la cuenta: el perfil del gestor ya
+      // tiene su propio bloque para cargarlo, y allí se le exige antes de
+      // poder cobrar.
+      if (up.ok) gestorCertPath = path
+    }
+
     // 4. UPSERT en profiles con el rol y campos correctos.
     const headers = await getAuthHeaders()
     // Respuestas a los campos personalizados → jsonb {etiqueta: valor}
@@ -455,12 +512,16 @@ export default function RegisterModal({ onClose }) {
       email: emailNorm,
       rol,
       aprobado: false,
+      // Basicos de toda cuenta, sea profesional o gestor.
+      nombre,
+      apellido,
+      telefono,
+      cedula,
       ...(Object.keys(datosAdicionales).length ? { datos_adicionales: datosAdicionales } : {}),
     }
 
     if (isPro) {
       Object.assign(payload, {
-        nombre, apellido, telefono, cedula,
         // area_derecho guarda la lista separada por comas (para contador
         // significa especialidades contables — misma columna, ver CLAUDE.md).
         area_derecho: areas.length ? areas.join(', ') : null,
@@ -474,9 +535,13 @@ export default function RegisterModal({ onClose }) {
         tarjeta_archivo_url: tarjetaPath,
       })
     } else {
-      // Gestor: cédula + redes + comunidad.
+      // Gestor: cédula + redes + comunidad + certificado bancario.
       Object.assign(payload, {
-        cedula,
+        certificado_bancario_url: gestorCertPath,
+        departamento: departamento || null,
+        // Mismo formato que ProfilePage: el nivel 3 se guarda dentro de
+        // `ciudad` como "Municipio - Barrio" (no hay columna barrio).
+        ciudad: (barrio.trim() ? `${ciudad.trim()} - ${barrio.trim()}` : ciudad.trim()) || null,
         instagram: instagram.trim() || null,
         linkedin:  linkedin.trim()  || null,
         facebook:  facebook.trim()  || null,
@@ -950,28 +1015,27 @@ export default function RegisterModal({ onClose }) {
 
         {/* ══════════════════ REGISTRO — Paso A (formulario) ══════════════════ */}
         {rol && verificationStep === 'form' && (
-          <form className={styles.form} onSubmit={handleRegister}>
+          <form className={styles.form} onSubmit={handleRegister} ref={formRef} noValidate>
 
-            {/* Nombre + Apellido (solo profesional) */}
-            {isPro && (
-              <div className={styles.row}>
+            {/* Nombre + Apellido: los pide todo rol, gestor incluido. Es a quien
+                se le paga una comision, hace falta saber quien es. */}
+            <div className={styles.row}>
                 <div className={styles.field}>
                   <label className={styles.label}>Nombre <span className={styles.req}>*</span></label>
-                  <input type="text" className={styles.input} placeholder="Nombre"
+                  <input type="text" className={cls('nombre')} placeholder="Nombre"
                     value={nombre} onChange={(e) => setNombre(e.target.value)} required />
                 </div>
                 <div className={styles.field}>
                   <label className={styles.label}>Apellido <span className={styles.req}>*</span></label>
-                  <input type="text" className={styles.input} placeholder="Apellido"
+                  <input type="text" className={cls('apellido')} placeholder="Apellido"
                     value={apellido} onChange={(e) => setApellido(e.target.value)} required />
-                </div>
               </div>
-            )}
+            </div>
 
             {/* Username */}
             <div className={styles.field}>
               <label className={styles.label}>Nombre de usuario <span className={styles.req}>*</span></label>
-              <input type="text" className={styles.input} placeholder="Ej: juanperez"
+              <input type="text" className={cls('username')} placeholder="Ej: juanperez"
                 value={username}
                 onChange={(e) => setUsername(e.target.value.replace(/\s/g, '').toLowerCase())} required />
             </div>
@@ -983,7 +1047,7 @@ export default function RegisterModal({ onClose }) {
                 <input
                   type="text"
                   inputMode="numeric"
-                  className={styles.input}
+                  className={cls('cedula')}
                   placeholder="Número de cédula"
                   value={cedula}
                   onChange={(e) => setCedula(e.target.value.replace(/\D/g, ''))}
@@ -996,14 +1060,13 @@ export default function RegisterModal({ onClose }) {
               </div>
             )}
 
-            {/* Teléfono (solo profesional) */}
-            {isPro && (
-              <div className={styles.field}>
+            {/* Celular: tambien para el gestor, es el contacto si un pago falla. */}
+            <div className={styles.field}>
                 <label className={styles.label}>Celular <span className={styles.req}>*</span></label>
                 <input
                   type="tel"
                   inputMode="numeric"
-                  className={styles.input}
+                  className={cls('telefono')}
                   placeholder="3001234567"
                   value={telefono}
                   onChange={(e) => setTelefono(normalizarCelular(e.target.value))}
@@ -1012,16 +1075,15 @@ export default function RegisterModal({ onClose }) {
                   required
                   style={borderFor(telVal.valid, telTouched, telefono)}
                 />
-                <FieldHint valid={telVal.valid} msg={telVal.msg} touched={telTouched && !!telefono} />
-              </div>
-            )}
+              <FieldHint valid={telVal.valid} msg={telVal.msg} touched={telTouched && !!telefono} />
+            </div>
 
             {/* Correo */}
             <div className={styles.field}>
               <label className={styles.label}>Correo electrónico <span className={styles.req}>*</span></label>
               <input
                 type="email"
-                className={styles.input}
+                className={cls('email')}
                 placeholder="correo@ejemplo.com"
                 value={regEmail}
                 onChange={(e) => { setRegEmail(e.target.value); setEmailErrorInline('') }}
@@ -1050,7 +1112,7 @@ export default function RegisterModal({ onClose }) {
               <div className={styles.pwWrap}>
                 <input
                   type={showPassword ? 'text' : 'password'}
-                  className={styles.input}
+                  className={cls('password')}
                   placeholder="Mínimo 8 caracteres"
                   value={regPassword}
                   onChange={(e) => setRegPassword(e.target.value)}
@@ -1148,7 +1210,7 @@ export default function RegisterModal({ onClose }) {
                     Universidad <span className={styles.req}>*</span>
                   </label>
                   <select
-                    className={styles.input}
+                    className={cls('universidad')}
                     value={universidadOtra ? 'Otra' : universidad}
                     onChange={(e) => {
                       const v = e.target.value
@@ -1179,7 +1241,7 @@ export default function RegisterModal({ onClose }) {
                   municipio={ciudad}
                   barrio={barrio}
                   required
-                  classes={{ field: styles.field, label: styles.label, select: styles.input }}
+                  classes={{ field: styles.field, label: styles.label, select: cls('ubicacion') }}
                   onChange={({ departamento: d, municipio, barrio: b }) => {
                     setDepartamento(d); setCiudad(municipio); setBarrio(b)
                   }}
@@ -1191,6 +1253,8 @@ export default function RegisterModal({ onClose }) {
                     Tarjeta profesional <span className={styles.req}>*</span> <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0, opacity: 0.6 }}>(PDF o imagen)</span>
                   </label>
                   <button type="button" className={extra.uploadBtn}
+                    data-error={errores.tarjeta ? '1' : undefined}
+                    style={errores.tarjeta ? { borderColor: '#a23b3b', color: '#a23b3b' } : undefined}
                     onClick={() => tarjetaInputRef.current?.click()}>
                     {tarjetaFile ? 'Cambiar archivo' : 'Subir tarjeta profesional'}
                   </button>
@@ -1231,6 +1295,59 @@ export default function RegisterModal({ onClose }) {
                       {comunidad.length}/{COMUNIDAD_MAX}
                     </span>
                   </div>
+                </div>
+
+                {/* Ubicacion — obligatoria. El selector ya distingue Bogota (Localidad)
+                    del resto del pais (Municipio) y ofrece Barrio / Comuna cuando existe. */}
+                <UbicacionSelector
+                  departamento={departamento}
+                  municipio={ciudad}
+                  barrio={barrio}
+                  required
+                  classes={{ field: styles.field, label: styles.label, select: cls('ubicacion') }}
+                  onChange={({ departamento: d, municipio, barrio: b }) => {
+                    setDepartamento(d); setCiudad(municipio); setBarrio(b)
+                  }}
+                />
+
+                {/* Certificado bancario — obligatorio: es la cuenta a la que
+                    se le consignan las comisiones. Mismo patrón visual que la
+                    tarjeta profesional del abogado. */}
+                <div className={styles.field}>
+                  <label className={styles.label}>
+                    Certificado bancario <span className={styles.req}>*</span>{' '}
+                    <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0, opacity: 0.6 }}>(PDF o imagen)</span>
+                  </label>
+                  <button type="button" className={extra.uploadBtn}
+                    data-error={errores.certificado ? '1' : undefined}
+                    style={errores.certificado ? { borderColor: '#a23b3b', color: '#a23b3b' } : undefined}
+                    onClick={() => gestorCertInputRef.current?.click()}>
+                    {gestorCertFile ? 'Cambiar archivo' : 'Subir certificado bancario'}
+                  </button>
+                  <input
+                    ref={gestorCertInputRef}
+                    type="file"
+                    accept="application/pdf,image/png,image/jpeg,image/webp"
+                    style={{ display: 'none' }}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0]
+                      e.target.value = ''
+                      if (!file) return
+                      const permitidos = ['application/pdf', 'image/png', 'image/jpeg', 'image/webp']
+                      if (!permitidos.includes(file.type)) {
+                        setError('Formato no permitido. Usa PDF, PNG, JPG o WEBP.'); return
+                      }
+                      if (file.size / (1024 * 1024) > 10) {
+                        setError('El certificado no puede superar 10 MB'); return
+                      }
+                      setError(null)
+                      setGestorCertFile(file)
+                    }}
+                  />
+                  {gestorCertFile && <div className={extra.fileName}>✓ {gestorCertFile.name}</div>}
+                  <span style={{ fontSize: '0.68rem', color: 'var(--muted, #6f5c48)', marginTop: 4, display: 'block' }}>
+                    Es la cuenta donde recibirás tus comisiones.
+                  </span>
                 </div>
 
                 <div className={styles.field}>
@@ -1325,7 +1442,25 @@ export default function RegisterModal({ onClose }) {
               />
             </div>
 
-            <button type="submit" className={`btn-solid ${styles.submit}`} disabled={!canRegister}>
+            {/* Resumen de lo que falta, pegado al boton: es donde mira el
+                usuario cuando pulsa y no pasa nada. Enumera los campos en vez
+                de decir solo "revisa los datos", para no obligar a buscarlos. */}
+            {nErrores > 0 && (
+              <div className={extra.resumenErrores} role="alert">
+                {nErrores === 1 ? (
+                  <><strong>Falta un dato:</strong>{' '}{Object.values(errores)[0]}.</>
+                ) : (
+                  <><strong>Revisa los datos:</strong>{' '}quedan {nErrores} campos por completar.</>
+                )}
+                {nErrores > 1 && (
+                  <ul className={extra.resumenLista}>
+                    {Object.entries(errores).map(([k, msg]) => <li key={k}>{msg}</li>)}
+                  </ul>
+                )}
+              </div>
+            )}
+
+            <button type="submit" className={`btn-solid ${styles.submit}`} disabled={loading}>
               {loading ? 'Creando cuenta...' : 'Crear cuenta →'}
             </button>
 

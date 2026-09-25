@@ -375,6 +375,10 @@
   font-size: 0.82rem;
   line-height: 1.55;
   word-break: break-word;
+  /* Respeta los saltos de linea del mensaje. Sin esto, cualquier texto
+     escrito en varias lineas (o una bienvenida con lista) se aplastaba en
+     un unico parrafo. */
+  white-space: pre-wrap;
 }
 /* Convención de rol: el ADMIN (mensajes propios, .mia) es blanco/dorado;
    el PROFESIONAL (.suya) es navy. Coherente con LawyerInternalChat. */

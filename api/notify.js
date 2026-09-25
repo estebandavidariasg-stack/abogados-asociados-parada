@@ -179,8 +179,10 @@ function emailAprobacion({ nombre, rol, ctaUrl }) {
         greetingHtml: `Hola ${b(esc(nombre))},`,
         bodyHtml:
           `${b('¡Bienvenido a Parada Bridge!')} Tu cuenta de ${b('gestor')} ya está activa.<br><br>` +
-          `Cuando la administración te asigne tu ${b('código de referencia')}, lo verás en tu perfil ` +
-          `junto a su ${b('código QR')} para compartirlo, y desde ahí podrás seguir tus casos y tus comisiones.<br><br>` +
+          `${b('Cómo sigue desde aquí:')}<br><br>` +
+          `&bull; La administración te asigna tu ${b('código de referencia')}.<br>` +
+          `&bull; Lo verás en tu perfil junto a su ${b('código QR')}, listo para compartir.<br>` +
+          `&bull; Cada consulta que llegue con tu código queda a tu nombre, y desde ahí sigues tus casos y tus comisiones.<br><br>` +
           `Este mismo mensaje te queda en tu chat interno con la administración.`,
         ctaLabel: 'Entrar a mi perfil',
         ctaUrl,
@@ -194,10 +196,12 @@ function emailAprobacion({ nombre, rol, ctaUrl }) {
       preheader: 'Tu cuenta ya está activa. Lee tu compromiso antes de atender la primera consulta.',
       greetingHtml: `Estimado/a ${b(esc(nombre))},`,
       bodyHtml:
-        `Tu cuenta como ${b(rolLabel)} ya está aprobada y apareces en la plataforma.<br><br>` +
-        `${b('Tu compromiso:')} debes ${b('cobrar la consulta')}, ` +
-        `${b('no puedes enviar datos de contacto')} al cliente dentro del chat, ` +
-        `y si vas a enviar un archivo o poder, ${b('adjúntalo por el chat de la plataforma')}.<br><br>` +
+        `${b('¡Bienvenido a Parada Bridge!')} Tu cuenta como ${b(rolLabel)} ya está aprobada ` +
+        `y tu perfil ya aparece en el inicio.<br><br>` +
+        `${b('Tres acuerdos antes de tu primera consulta:')}<br><br>` +
+        `&bull; ${b('Cobra la consulta.')} Tú defines el valor y lo confirmas con el cliente antes de empezar.<br>` +
+        `&bull; ${b('No compartas datos de contacto')} dentro del chat: ni teléfonos, ni correos, ni redes.<br>` +
+        `&bull; ${b('Envía los archivos y poderes por el chat')} de la plataforma, así queda el respaldo.<br><br>` +
         `Este mismo mensaje te queda en tu chat interno con la administración.`,
       ctaLabel: 'Ingresar a mi cuenta',
       ctaUrl,

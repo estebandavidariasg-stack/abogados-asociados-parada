@@ -8,13 +8,19 @@ export function AuthProvider({ children }) {
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
 
+  // `profile === null` con sesión viva significa "esta cuenta ya no existe", y
+  // las páginas de perfil lo usan para cerrar sesión. Por eso hay que separar
+  // los dos casos: si la consulta FALLÓ (red, timeout) se conserva el perfil
+  // que ya había, porque un corte momentáneo no puede expulsar a nadie. Solo
+  // se pone a null cuando la consulta respondió bien y la fila no está.
   async function loadProfile(userId) {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('profiles')
       .select('*')
       .eq('id', userId)
       .single()
-    setProfile(data)
+    if (error) return
+    setProfile(data ?? null)
   }
 
   useEffect(() => {
@@ -70,6 +76,11 @@ export function AuthProvider({ children }) {
       user, profile, loading,
       isSuperAdmin, isApproved,
       signUp, signIn, signOut,
+      // Releer el perfil desde la base. Las páginas de perfil guardaban con un
+      // PATCH pero este `profile` se quedaba con los valores viejos, y como los
+      // formularios se rehidratan desde él al volver a su pestaña, los cambios
+      // recién guardados "desaparecían" hasta recargar la página.
+      refreshProfile: async () => { if (user?.id) await loadProfile(user.id) },
     }}>
       {children}
     </AuthContext.Provider>

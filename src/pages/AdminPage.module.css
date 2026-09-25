@@ -2031,6 +2031,9 @@
 
 /* ── Modal de aprobación: compromiso + adjunto opcional ── */
 .aprobarTexto {
+  /* La vista previa debe verse igual que la burbuja del chat: el mensaje
+     ahora lleva lista y saltos de linea. */
+  white-space: pre-wrap;
   position: relative;
   margin: 0 0 18px;
   padding: 30px 18px 17px;
@@ -2158,4 +2161,56 @@
   border-radius: 8px;
   padding: 8px 12px;
   margin: 0 0 14px;
+}
+/* ── Botones de acción de una ficha: una sola medida ───────────
+   Dos problemas distintos y una corrección para cada uno. */
+
+/* 1. ALTURA. Convivían dos medidas en la misma columna: el interruptor de
+      descargas traía `min-height: 44px` y aprobar/rechazar ninguna (quedaban
+      en ~32px). Se igualan los tres y el contenido se centra, para que al
+      estirarse en la columna la etiqueta no quede pegada a la izquierda. */
+.btnApprove,
+.btnReject,
+.toggleDescarga {
+  min-height: 40px;
+  justify-content: center;
+  box-sizing: border-box;
+}
+
+/* 2. ANCHO, en Aprobados. La columna la dimensiona su hijo más ancho, y ahí
+      no todas las filas tienen los mismos hijos: la del profesional lleva el
+      interruptor ("Descargar archivos", ~230px) y la del gestor solo el botón
+      de eliminar (~200px). Resultado: cada fila medía distinto.
+
+      Un `min-width` no lo arregla, porque las dos ya lo superaban. Hace falta
+      un ancho FIJO, que ambas adopten por igual; dentro, los botones se
+      estiran solos (la columna es flex y estira en el eje transversal).
+      15rem deja holgura sobre los ~230px que mide el interruptor.
+
+      Va en una clase aparte y no en `.cardActions` porque en Solicitudes las
+      filas ya son homogéneas (todas con Aprobar + Rechazar) y ahí un ancho
+      fijo solo dejaría botones enormes con etiquetas cortas. */
+.cardActionsFijo {
+  flex: 0 0 15.5rem;
+  width: 15.5rem;
+}
+
+/* Seguro: el ancho fijo se calculó con holgura sobre lo que mide hoy el
+   interruptor, pero las métricas de la fuente varían entre sistemas. Si la
+   etiqueta no cupiera, se recorta con puntos suspensivos; nunca desborda ni
+   descuadra la columna, que es lo que se está arreglando aquí. */
+.cardActionsFijo .toggleDescargaLabel {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.btnApprove:disabled,
+.btnReject:disabled { cursor: default; opacity: 0.7; }
+
+/* En pantalla estrecha la ficha apila y el ancho fijo solo robaría espacio
+   a los datos de la persona. */
+@media (max-width: 640px) {
+  .cardActionsFijo { flex: 1 1 auto; width: auto; }
 }

@@ -1998,8 +1998,17 @@ export default function ChatSection() {
     return null
   }
 
+  // Se piden en cuanto hay sala, SIN esperar a que la sala pase a 'active'.
+  // El profesional queda asignado al elegirlo (fila en chat_room_lawyers con
+  // status 'invited'), así que sus credenciales ya se pueden consultar; exigir
+  // 'active' obligaba al cliente a esperar a que el otro se conectara justo
+  // cuando más necesita decidir si confía en él. El endpoint ya acepta una
+  // asignación 'invited', y si no hay nadie asignado todavía (caso de consulta
+  // publicada) responde `sin_profesional` y la fila no se pinta.
+  // `roomStatus` sigue en las dependencias para recargar cuando alguien toma
+  // una consulta publicada.
   useEffect(() => {
-    if (step === 'chat' && roomStatus === 'active' && roomId) cargarDocsProfesional(true)
+    if (step === 'chat' && roomId) cargarDocsProfesional(true)
     else if (!roomId) setDocsInfo(null)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roomId, roomStatus, step])
@@ -2853,14 +2862,20 @@ export default function ChatSection() {
   // (activo) usamos ese; si el cliente lo eligió (deep-link) o lo sugirió la IA,
   // lo mostramos ya desde "Esperando profesional" para que el header diga a
   // quién le está escribiendo. Profesión = abogado/contador.
+  // `docsInfo.profesional` va antes que el deep-link y la IA porque lo resuelve
+  // el servidor desde la asignación real de la sala: si hubo reasignación, es
+  // el nombre correcto. Además cubre al cliente que eligió de la lista manual,
+  // que antes veía el encabezado sin nombre mientras esperaba.
   const profNombreHeader =
     (roomStatus === 'active' && profesionalNombre)
       ? profesionalNombre
-      : profesionalDeepLink
-        ? `${profesionalDeepLink.nombre || ''} ${profesionalDeepLink.apellido || ''}`.trim()
-        : profesionalIA
-          ? `${profesionalIA.nombre || ''} ${profesionalIA.apellido || ''}`.trim()
-          : ''
+      : docsInfo?.ok && docsInfo.profesional
+        ? docsInfo.profesional
+        : profesionalDeepLink
+          ? `${profesionalDeepLink.nombre || ''} ${profesionalDeepLink.apellido || ''}`.trim()
+          : profesionalIA
+            ? `${profesionalIA.nombre || ''} ${profesionalIA.apellido || ''}`.trim()
+            : ''
   const profProfesionHeader = form.tipo_profesional === 'contador' ? 'Contador' : 'Abogado'
 
   return (
@@ -2949,7 +2964,7 @@ export default function ChatSection() {
 
                 {/* ── Confianza: documentos del profesional (solo-ver) + cédula.
                     Desplegable para no saturar la cabecera del chat. ── */}
-                {roomStatus === 'active' && docsInfo?.ok &&
+                {docsInfo?.ok &&
                   (docsInfo.docs?.tarjeta || docsInfo.docs?.certBancario || docsInfo.docs?.certDisciplinario || docsInfo.cedula) && (
                   <details className={styles.confianzaWrap}>
                     <summary className={styles.confianzaSummary}>

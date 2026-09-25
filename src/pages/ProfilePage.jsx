@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import { useNavigate } from 'react-router-dom'
@@ -47,7 +48,7 @@ const SECCIONES = [
 ]
 
 export default function ProfilePage() {
-  const { user, profile, signOut, loading } = useAuth()
+  const { user, profile, signOut, loading, refreshProfile } = useAuth()
   const navigate = useNavigate()
   const fileInputRef    = useRef(null)
   const videoInputRef   = useRef(null)
@@ -106,6 +107,14 @@ export default function ProfilePage() {
   useEffect(() => {
     if (loading) return
     if (!user) { navigate('/'); return }
+    // Cuenta eliminada: el admin borra el usuario de auth, pero el token ya
+    // emitido sigue valido hasta que caduca (~1 h). En esa ventana `user`
+    // existe y `profile` es null, y antes la pagina se pintaba vacia. Sin
+    // perfil no hay cuenta: se cierra la sesion y fuera.
+    if (!profile) { signOut().finally(() => navigate('/')); return }
+    // Cada perfil es de su rol: sin esto un contador podia abrir /perfil
+    // (y al reves), y veia un formulario que no le corresponde.
+    if (profile.rol !== 'abogado') { navigate('/'); return }
     if (profile) {
       setNombre(profile.nombre       || '')
       setApellido(profile.apellido   || '')
@@ -354,6 +363,10 @@ export default function ProfilePage() {
         throw new Error('Error guardando perfil')
       }
       setMsg('¡Perfil actualizado correctamente!')
+      // Refrescar el perfil del contexto: sin esto el PATCH quedaba en la base
+      // pero la app seguía con los datos viejos, y al volver a esta pestaña el
+      // formulario se rehidrataba con ellos. Por eso había que recargar.
+      await refreshProfile()
     } catch (err) {
       setError(err.message)
     } finally {
@@ -736,16 +749,36 @@ export default function ProfilePage() {
               <button type="submit" className="btn-solid btn-lg" disabled={saving}>
                 {saving ? 'Guardando...' : 'Guardar cambios'}
               </button>
-              {!confirmDelete
-                ? <button type="button" className={styles.deleteBtn} onClick={() => setConfirmDelete(true)}>Eliminar cuenta</button>
-                : <div className={styles.confirmDelete}>
-                    <span>¿Seguro? Esta acción no se puede deshacer.</span>
-                    <button type="button" className={styles.deleteBtnConfirm} onClick={handleDeleteAccount} disabled={deleting}>
-                      {deleting ? 'Eliminando...' : 'Sí, eliminar'}
-                    </button>
-                    <button type="button" className="btn-ghost" onClick={() => setConfirmDelete(false)}>Cancelar</button>
-                  </div>
-              }
+              <button type="button" className={styles.deleteBtn} onClick={() => setConfirmDelete(true)}>Eliminar cuenta</button>
+          {/* Portal a <body>. La tarjeta del formulario lleva backdrop-filter, y un
+              ancestro con backdrop-filter (o transform) pasa a ser el bloque contenedor
+              de los position:fixed que cuelgan de el. Sin portal, el overlay se anclaba
+              a esa tarjeta en vez de a la ventana: en movil el dialogo caia fuera de la
+              vista y solo se veia el fondo difuminado. Mismo motivo que en LawyerCard. */}
+          {confirmDelete && createPortal((
+            <div className={styles.logoutOverlay} role="dialog" aria-modal="true" aria-labelledby="delTitle"
+              onClick={() => { if (!deleting) setConfirmDelete(false) }}>
+              <div className={styles.logoutModal} onClick={(e) => e.stopPropagation()}>
+                <span className={styles.logoutIcon}>
+                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor"
+                    strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2m2 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+                    <path d="M10 11v6M14 11v6" />
+                  </svg>
+                </span>
+                <h2 id="delTitle" className={styles.logoutTitle}>¿Eliminar tu cuenta?</h2>
+                <p className={styles.logoutText}>
+                  Se borrarán tu perfil y tus datos de la plataforma. Esta acción no se puede deshacer.
+                </p>
+                <div className={styles.logoutActions}>
+                  <button type="button" className={styles.logoutCancel} disabled={deleting}
+                    onClick={() => setConfirmDelete(false)}>Cancelar</button>
+                  <button type="button" className={styles.logoutConfirm} disabled={deleting}
+                    onClick={handleDeleteAccount}>{deleting ? 'Eliminando…' : 'Eliminar cuenta'}</button>
+                </div>
+              </div>
+            </div>
+          ), document.body)}
             </div>
 
           </div>

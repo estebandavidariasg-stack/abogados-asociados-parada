@@ -217,3 +217,35 @@
   .areasBox { grid-template-columns: 1fr; }
   .roleBtn { font-size: 0.66rem; padding: 0.75rem 0.3rem; }
 }
+
+/* ── Campo con error tras intentar enviar ─────────────────────
+   Solo se aplica despues del primer intento: el formulario no recibe a nadie
+   en rojo. El borde no es lo unico que lo dice (el resumen de arriba del boton
+   enumera los motivos), porque el color por si solo no sirve a quien no lo
+   distingue. */
+.inputError {
+  border-color: #a23b3b !important;
+  background: rgba(162, 59, 59, 0.04);
+}
+.inputError:focus {
+  border-color: #a23b3b !important;
+  box-shadow: 0 0 0 3px rgba(162, 59, 59, 0.14);
+}
+
+/* ── Resumen de errores, encima del boton ── */
+.resumenErrores {
+  border: 1px solid rgba(162, 59, 59, 0.3);
+  background: rgba(162, 59, 59, 0.06);
+  border-radius: 10px;
+  padding: 0.7rem 0.9rem;
+  margin-bottom: 0.9rem;
+  /* #a23b3b da 6.42:1 sobre la crema del modal. */
+  color: #a23b3b;
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+.resumenLista {
+  margin: 0.4rem 0 0;
+  padding-left: 1.1rem;
+}
+.resumenLista li { margin-bottom: 2px; }

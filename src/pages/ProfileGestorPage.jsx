@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts'
 import { useAuth } from '../context/AuthContext'
@@ -9,6 +10,10 @@ import styles from './ProfileGestorPage.module.css'
 // Reutilizamos el MISMO módulo de estilos del perfil profesional para que el
 // formulario "Mi perfil" tenga idéntica tipografía y formato.
 import pStyles from './ProfilePage.module.css'
+// Mismo lenguaje visual que los documentos del abogado/contador: miniatura
+// clicable + botón fantasma. Reusar su CSS module evita duplicar estilos.
+import TarjetaPreview from '../components/profile/TarjetaPreview'
+import docStyles from '../components/profile/DocumentosConfianza.module.css'
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
 
@@ -135,7 +140,13 @@ export default function ProfileGestorPage() {
   // Guard: solo gestores autenticados.
   useEffect(() => {
     if (loading) return
-    if (!user || profile?.rol !== 'gestor') { navigate('/'); return }
+    if (!user) { navigate('/'); return }
+    // Cuenta eliminada: el admin borra el usuario de auth, pero el token ya
+    // emitido sigue valido hasta que caduca (~1 h). En esa ventana `user`
+    // existe y `profile` es null, y antes la pagina se pintaba vacia. Sin
+    // perfil no hay cuenta: se cierra la sesion y fuera.
+    if (!profile) { signOut().finally(() => navigate('/')); return }
+    if (profile.rol !== 'gestor') { navigate('/'); return }
   }, [user, profile, loading, navigate])
 
   // Carga el código asignado (RLS: el gestor solo ve el suyo → gestor_id = uid).
@@ -1272,6 +1283,9 @@ const REDES = [
 const COMUNIDAD_MAX = 500
 
 function SeccionPerfil({ aprobado, profile, userId, email, onEliminada }) {
+  // Guardar vive aquí, pero `profile` llega por prop: el refresco se pide al
+  // contexto para que el padre reciba los valores nuevos y los baje otra vez.
+  const { refreshProfile } = useAuth()
   const certInputRef = useRef(null)
 
   const [redes, setRedes] = useState(() => ({
@@ -1316,7 +1330,9 @@ function SeccionPerfil({ aprobado, profile, userId, email, onEliminada }) {
   }, [profile])
 
   // Resolver de URL de visualización para el certificado (bucket privado).
-  // Puede ser un path "certificados/<uid>.pdf" → signed URL; o una URL legacy.
+  // El path que se guarda es "<uid>/certificados/certificado.<ext>", tanto si
+  // lo subió aquí como si vino del registro. Se firma al vuelo; si el valor es
+  // una URL completa (perfiles antiguos) se usa tal cual.
   useEffect(() => {
     if (!certUrl) { setCertDisplayUrl(null); return }
     if (/^https?:\/\//.test(certUrl)) { setCertDisplayUrl(certUrl); return }
@@ -1332,17 +1348,29 @@ function SeccionPerfil({ aprobado, profile, userId, email, onEliminada }) {
 
   async function handleCertChange(e) {
     const file = e.target.files[0]
+    // Permite reintentar con el MISMO archivo: sin esto, si la primera vez
+    // falla, volver a elegirlo no dispara 'change' y parece que no responde.
+    e.target.value = ''
     if (!file) return
+    const ext = (file.name.split('.').pop() || '').toLowerCase().replace(/[^a-z0-9]/g, '')
+    // Algunos navegadores reportan `type` vacío (y Windows a veces manda
+    // 'application/octet-stream' para PDF), así que la extensión también vale
+    // como prueba. Antes eso se rechazaba como "formato no permitido".
     const allowed = ['application/pdf', 'image/png', 'image/jpeg', 'image/webp']
-    if (!allowed.includes(file.type)) { setError('Formato no permitido. Usa PDF, PNG, JPG o WEBP.'); return }
+    const extOk = ['pdf', 'png', 'jpg', 'jpeg', 'webp'].includes(ext)
+    if (!allowed.includes(file.type) && !extOk) {
+      setError('Formato no permitido. Usa PDF, PNG, JPG o WEBP.'); return
+    }
     if (file.size / (1024 * 1024) > 10) { setError('El archivo no puede superar 10 MB'); return }
+    if (!userId) {
+      setError('Tu sesión aún no está lista. Recarga la página e inténtalo de nuevo.'); return
+    }
     setUploading(true); setError(null); setMsg(null)
     try {
       const headers = await getAuthHeaders()
-      const ext  = file.name.split('.').pop().toLowerCase().replace(/[^a-z0-9]/g, '') || 'pdf'
       // Primer segmento = user.id (exigido por la RLS del bucket, igual que la
       // tarjeta profesional) y dentro, la carpeta certificados/ pedida.
-      const path = `${userId}/certificados/certificado.${ext}`
+      const path = `${userId}/certificados/certificado.${ext || 'pdf'}`
       const res  = await fetch(
         `${SUPABASE_URL}/storage/v1/object/tarjetas-profesionales/${path}`,
         {
@@ -1351,11 +1379,26 @@ function SeccionPerfil({ aprobado, profile, userId, email, onEliminada }) {
           body: file,
         }
       )
-      if (!res.ok) throw new Error('No se pudo subir el certificado')
+      if (!res.ok) {
+        // El motivo real importa: 403 es permiso del bucket, 413 tamaño, etc.
+        // Tragárselo dejaba al gestor con un "no se pudo" sin nada que hacer.
+        const detalle = await res.text().catch(() => '')
+        let motivo = ''
+        try { motivo = JSON.parse(detalle)?.message || '' } catch { motivo = '' }
+        throw new Error(
+          res.status === 403
+            ? 'El servidor rechazó la subida por permisos. Avísale al administrador.'
+            : `No se pudo subir el certificado (error ${res.status}${motivo ? ': ' + motivo : ''}).`
+        )
+      }
       // Guardamos el path (bucket privado). El useEffect lo firma para verlo.
       setCertUrl(path)
       // Persistimos de inmediato para que quede aunque no pulse "Guardar".
       await patchProfile({ certificado_bancario_url: path })
+      // Mismo motivo que al guardar: sin refrescar el contexto, al cambiar de
+      // sección el formulario se rehidrataba sin el certificado recién subido
+      // y parecía que la subida no había funcionado.
+      await refreshProfile()
       setMsg('Certificado bancario subido correctamente.')
     } catch (err) {
       setError(err.message || 'Error subiendo el certificado')
@@ -1388,6 +1431,10 @@ function SeccionPerfil({ aprobado, profile, userId, email, onEliminada }) {
         comunidad_descripcion: comunidad.trim() || null,
       })
       setMsg('¡Perfil actualizado correctamente!')
+      // Refrescar el perfil del contexto: sin esto el PATCH quedaba en la base
+      // pero la app seguía con los datos viejos, y al volver a esta pestaña el
+      // formulario se rehidrataba con ellos. Por eso había que recargar.
+      await refreshProfile()
     } catch (err) {
       setError(err.message)
     } finally {
@@ -1479,27 +1526,31 @@ function SeccionPerfil({ aprobado, profile, userId, email, onEliminada }) {
                 Lo usamos para pagarte tus cobros.
               </p>
             ) : (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
-                <button
-                  type="button"
-                  className={styles.ghostBtn}
-                  onClick={() => certInputRef.current?.click()}
-                  disabled={uploading}
-                >
-                  {uploading ? 'Subiendo…' : certUrl ? 'Cambiar certificado' : 'Subir certificado'}
-                </button>
-                {certUrl && (
-                  certDisplayUrl ? (
-                    <a className={styles.fileLink} href={certDisplayUrl} target="_blank" rel="noopener noreferrer">
-                      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6" />
-                      </svg>
-                      Ver certificado actual
-                    </a>
-                  ) : (
-                    <span className={styles.lockNote}>Generando enlace seguro…</span>
-                  )
+              <div className={docStyles.doc} style={{ maxWidth: 260 }}>
+                {certUrl ? (
+                  certDisplayUrl
+                    ? <TarjetaPreview
+                        key={certUrl}
+                        displayUrl={certDisplayUrl}
+                        storagePath={certUrl}
+                        label="Certificado bancario"
+                      />
+                    : <div className={docStyles.signing}>Generando enlace seguro…</div>
+                ) : (
+                  <button type="button" className={docStyles.empty} disabled={uploading}
+                    onClick={() => certInputRef.current?.click()}>
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"
+                      strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M12 16V4" /><path d="m6 10 6-6 6 6" /><path d="M4 20h16" />
+                    </svg>
+                    {uploading ? 'Subiendo…' : 'Sin archivo'}
+                  </button>
                 )}
+
+                <button type="button" className="btn-ghost" disabled={uploading}
+                  onClick={() => certInputRef.current?.click()}>
+                  {uploading ? 'Subiendo…' : certUrl ? 'Cambiar archivo' : 'Subir archivo'}
+                </button>
                 <input
                   ref={certInputRef}
                   type="file"
@@ -1519,19 +1570,42 @@ function SeccionPerfil({ aprobado, profile, userId, email, onEliminada }) {
             <button type="submit" className="btn-solid btn-lg" disabled={saving}>
               {saving ? 'Guardando…' : 'Guardar cambios'}
             </button>
-          {!confirmDelete ? (
-            <button type="button" className={pStyles.deleteBtn} onClick={() => setConfirmDelete(true)}>
-              Eliminar cuenta
-            </button>
-          ) : (
-            <div className={pStyles.confirmDelete}>
-              <span>¿Seguro? Esta acción no se puede deshacer.</span>
-              <button type="button" className={pStyles.deleteBtnConfirm} onClick={handleEliminarCuenta} disabled={deleting}>
-                {deleting ? 'Eliminando…' : 'Sí, eliminar'}
-              </button>
-              <button type="button" className="btn-ghost" onClick={() => setConfirmDelete(false)}>Cancelar</button>
+          <button type="button" className={pStyles.deleteBtn} onClick={() => setConfirmDelete(true)}>
+            Eliminar cuenta
+          </button>
+
+          {/* Borrar la cuenta es irreversible: merece una interrupción, no una
+              línea al pie que se puede pulsar sin leer. Mismo lenguaje que el
+              modal de cerrar sesión, que ya vive en ProfilePage.module.css. */}
+          {/* Portal a <body>. La tarjeta del formulario lleva backdrop-filter, y un
+              ancestro con backdrop-filter (o transform) pasa a ser el bloque contenedor
+              de los position:fixed que cuelgan de el. Sin portal, el overlay se anclaba
+              a esa tarjeta en vez de a la ventana: en movil el dialogo caia fuera de la
+              vista y solo se veia el fondo difuminado. Mismo motivo que en LawyerCard. */}
+          {confirmDelete && createPortal((
+            <div className={pStyles.logoutOverlay} role="dialog" aria-modal="true" aria-labelledby="delTitle"
+              onClick={() => { if (!deleting) setConfirmDelete(false) }}>
+              <div className={pStyles.logoutModal} onClick={(e) => e.stopPropagation()}>
+                <span className={pStyles.logoutIcon}>
+                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor"
+                    strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2m2 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+                    <path d="M10 11v6M14 11v6" />
+                  </svg>
+                </span>
+                <h2 id="delTitle" className={pStyles.logoutTitle}>¿Eliminar tu cuenta?</h2>
+                <p className={pStyles.logoutText}>
+                  Se borrarán tu perfil y tus datos de la plataforma. Esta acción no se puede deshacer.
+                </p>
+                <div className={pStyles.logoutActions}>
+                  <button type="button" className={pStyles.logoutCancel} disabled={deleting}
+                    onClick={() => setConfirmDelete(false)}>Cancelar</button>
+                  <button type="button" className={pStyles.logoutConfirm} disabled={deleting}
+                    onClick={handleEliminarCuenta}>{deleting ? 'Eliminando…' : 'Eliminar cuenta'}</button>
+                </div>
+              </div>
             </div>
-          )}
+          ), document.body)}
           </div>
         </div>
       </form>

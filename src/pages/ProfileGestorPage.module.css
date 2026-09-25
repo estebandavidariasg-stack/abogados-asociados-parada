@@ -1194,3 +1194,19 @@
   .status { font-size: 0.54rem; }
   .redesGrid { grid-template-columns: 1fr; }
 }
+
+/* ── Fila de acciones del perfil del gestor ───────────────────
+   Mismo criterio que en el perfil del profesional: el botón destructivo se
+   va al extremo opuesto, y en móvil el primario ocupa el ancho y la
+   eliminación baja separada. El estilo del botón en sí vive en
+   ProfilePage.module.css (`deleteBtn`), que esta página ya importa. */
+.actionsRow { gap: 2.25rem; justify-content: center; }
+
+@media (max-width: 600px) {
+  .actionsRow {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+  }
+  .actionsRow button[type="submit"] { width: 100%; }
+}

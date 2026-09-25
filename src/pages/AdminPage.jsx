@@ -39,19 +39,40 @@ const IconLey    = (p) => (<svg viewBox="0 0 24 24" width="18" height="18" fill=
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
 
-// Mensaje que recibe todo profesional al ser aprobado, por el chat interno y
-// por correo (el correo lo arma api/notify.js con este mismo texto).
-const TEXTO_COMPROMISO =
-  'Fuiste aprobado en Parada Bridge. Tu compromiso: debes cobrar la consulta, ' +
-  'no puedes enviar datos de contacto al cliente dentro del chat, y si vas a enviar ' +
-  'un archivo o poder, adjúntalo por el chat de la plataforma.'
-// El gestor no atiende consultas: su mensaje es solo de bienvenida.
-const TEXTO_BIENVENIDA_GESTOR =
-  '¡Bienvenido a Parada Bridge! Tu cuenta de gestor ya está activa. Cuando la ' +
-  'administración te asigne tu código de referencia, lo verás en tu perfil junto a ' +
-  'su código QR para compartirlo, y desde ahí podrás seguir tus casos y tus comisiones.'
-// Texto y rótulo según el rol aprobado.
-const textoAprobacion = (rol) => (rol === 'gestor' ? TEXTO_BIENVENIDA_GESTOR : TEXTO_COMPROMISO)
+// Mensajes de bienvenida del chat interno. Van en varias lineas a proposito:
+// la burbuja respeta los saltos (white-space: pre-wrap en el modulo del chat),
+// y una lista se lee mucho mejor que un parrafo corrido con tres obligaciones
+// seguidas. api/notify.js manda el mismo contenido por correo.
+const bienvenidaProfesional = (rol) => {
+  const oficio = rol === 'contador' ? 'contador' : 'abogado'
+  return [
+    `¡Bienvenido a Parada Bridge! Tu cuenta como ${oficio} ya está aprobada y tu perfil ya aparece en el inicio.`,
+    '',
+    'Tres acuerdos antes de tu primera consulta:',
+    '',
+    '• Cobra la consulta. Tú defines el valor y lo confirmas con el cliente antes de empezar.',
+    '• No compartas datos de contacto dentro del chat: ni teléfonos, ni correos, ni redes.',
+    '• Envía los archivos y poderes por el chat de la plataforma, así queda el respaldo.',
+    '',
+    'Cualquier duda, escríbenos por aquí mismo.',
+  ].join('\n')
+}
+
+// El gestor no atiende consultas: se le explica como empieza a trabajar.
+const TEXTO_BIENVENIDA_GESTOR = [
+  '¡Bienvenido a Parada Bridge! Tu cuenta de gestor ya está activa.',
+  '',
+  'Cómo sigue desde aquí:',
+  '',
+  '• La administración te asigna tu código de referencia.',
+  '• Lo verás en tu perfil junto a su código QR, listo para compartir.',
+  '• Cada consulta que llegue con tu código queda a tu nombre, y desde ahí sigues tus casos y tus comisiones.',
+  '',
+  'Cualquier duda, escríbenos por aquí mismo.',
+].join('\n')
+
+// Texto y rotulo segun el rol aprobado.
+const textoAprobacion = (rol) => (rol === 'gestor' ? TEXTO_BIENVENIDA_GESTOR : bienvenidaProfesional(rol))
 const rotuloAprobacion = (rol) => (rol === 'gestor' ? 'Mensaje de bienvenida' : 'Compromiso del profesional')
 const ADJUNTO_MAX_BYTES = 10 * 1024 * 1024
 
@@ -110,7 +131,11 @@ export default function AdminPage() {
 
   useEffect(() => {
     if (loading) return
-    if (!user || profile?.rol !== 'superadmin') { navigate('/'); return }
+    if (!user) { navigate('/'); return }
+    // Cuenta eliminada: el token ya emitido sigue valido hasta caducar, asi
+    // que sin perfil se cierra la sesion en vez de dejarla viva.
+    if (!profile) { signOut().finally(() => navigate('/')); return }
+    if (profile.rol !== 'superadmin') { navigate('/'); return }
     fetchAll()
     fetchAlertas()
     fetchChatsCerrados()
@@ -319,7 +344,12 @@ export default function AdminPage() {
       } catch { /* el correo es secundario; la aprobación ya quedó */ }
       // Salida optimista de Solicitudes (fetchAll confirma después).
       setPending(prev => prev.filter(p => p.id !== id))
-      setAvisoAprobado('Aprobado. Se envió el compromiso por chat interno y correo. Visible en el home en máximo 2 minutos.' + avisoAdjunto)
+      // El gestor NO se publica en el inicio (allí solo salen abogados y
+      // contadores), así que el aviso termina en el envío.
+      const aviso = rol === 'gestor'
+        ? 'Aprobado. Se envió el compromiso por chat interno y correo.'
+        : 'Aprobado. Se envió el compromiso por chat interno y correo. Visible en el home en máximo 2 minutos.'
+      setAvisoAprobado(aviso + avisoAdjunto)
       setAprobarModal(null); setAprobarFile(null)
       await fetchAll()
       fetchGestores()
@@ -851,7 +881,8 @@ export default function AdminPage() {
   const alertasAccionables  = alertas.filter(r => r.escalada || !r.notificada).length
 
   // Enlaces sociales de un perfil (usado en tarjetas de gestor). Solo renderiza
-  // los que existan; guarda campos ausentes.
+  // los que existan. El certificado bancario NO va aqui: la ficha entera abre
+  // el detalle, y alli sale con su miniatura.
   const PersonSocialLinks = ({ p }) => {
     const redes = [
       ['Instagram', p.instagram],
@@ -859,8 +890,7 @@ export default function AdminPage() {
       ['Facebook',  p.facebook],
       ['TikTok',    p.tiktok],
     ].filter(([, url]) => !!url)
-    const cert = p.certificado_bancario_url
-    if (redes.length === 0 && !cert) return null
+    if (redes.length === 0) return null
     return (
       <div className={styles.socialRow}>
         {redes.map(([label, url]) => (
@@ -875,17 +905,7 @@ export default function AdminPage() {
             {label}
           </a>
         ))}
-        {cert && (
-          <a
-            href={cert}
-            target="_blank"
-            rel="noopener noreferrer"
-            className={styles.cardTarjetaLink}
-            onClick={e => e.stopPropagation()}
-          >
-            Certificado bancario
-          </a>
-        )}
+
       </div>
     )
   }
@@ -1219,15 +1239,21 @@ export default function AdminPage() {
                 </div>
               ) : approvedFiltered.map(p => {
                 const esGestor = p.rol === 'gestor'
+                // `removeApproved` ya marcaba 'eliminando', pero esta tarjeta no
+                // lo leía: el borrado tarda (correo + borrado real) y la fila se
+                // quedaba intacta, sin señal de que algo estaba pasando. Mismo
+                // pulso en gris que el rechazo de una solicitud.
+                const procesando = procesandoIds.get(p.id) || null   // 'eliminando' | null
                 return (
                 <div
                   key={p.id}
-                  className={styles.card}
-                  onClick={() => setPreviewProfile(p)}
+                  className={`${styles.card} ${procesando ? 'aap-procesando' : ''}`}
+                  onClick={() => { if (!procesando) setPreviewProfile(p) }}
                   role="button"
                   tabIndex={0}
-                  onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setPreviewProfile(p) } }}
-                  title="Click para ver perfil completo"
+                  onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (!procesando) setPreviewProfile(p) } }}
+                  title={procesando ? 'Eliminando cuenta…' : 'Click para ver perfil completo'}
+                  style={{ transition: 'opacity 0.35s ease-out, transform 0.35s ease-out, filter 0.35s ease-out' }}
                 >
                   <div className={styles.cardPhoto}>
                     {p.foto_url
@@ -1260,7 +1286,7 @@ export default function AdminPage() {
                       </>
                     )}
                   </div>
-                  <div className={styles.cardActions}>
+                  <div className={`${styles.cardActions} ${styles.cardActionsFijo}`}>
                     {!esGestor && (
                       <button
                         type="button"
@@ -1279,6 +1305,7 @@ export default function AdminPage() {
                     )}
                     <button
                       className={styles.btnReject}
+                      disabled={!!procesando}
                       onClick={e => {
                         e.stopPropagation()
                         const quien = (p.nombre || p.apellido) ? `${p.nombre || ''} ${p.apellido || ''}`.trim() : `@${p.username || 'este usuario'}`
@@ -1293,7 +1320,7 @@ export default function AdminPage() {
                         })
                       }}
                     >
-                      <IconX /> Eliminar cuenta
+                      {procesando === 'eliminando' ? 'Eliminando…' : <><IconX /> Eliminar cuenta</>}
                     </button>
                   </div>
                 </div>
