@@ -16,45 +16,7 @@ import { useProBadges, CampanaPro } from '../components/profile/NotificacionesPr
 import { getAuthHeaders } from '../lib/supabase'
 import { AREAS_DERECHO } from '../lib/areasDerecho'
 import { compressImage } from '../utils/compressMedia'
-
-const UNIVERSIDADES = [
-  'Universidad Nacional de Colombia',
-  'Universidad de los Andes',
-  'Universidad de Antioquia',
-  'Universidad Javeriana',
-  'Universidad del Rosario',
-  'Universidad Externado de Colombia',
-  'Universidad Libre',
-  'Universidad de La Sabana',
-  'Universidad EAFIT',
-  'Universidad del Norte',
-  'Universidad Industrial de Santander',
-  'Universidad de Cartagena',
-  'Universidad de Nariño',
-  'Universidad del Cauca',
-  'Universidad Surcolombiana',
-  'Universidad de Córdoba',
-  'Universidad Popular del Cesar',
-  'Universidad de La Guajira',
-  'Universidad Francisco de Paula Santander',
-  'Universidad de Pamplona',
-  'Universidad Autónoma de Bucaramanga',
-  'Universidad Cooperativa de Colombia',
-  'Universidad Santo Tomás',
-  'Universidad Militar Nueva Granada',
-  'Universidad Distrital Francisco José de Caldas',
-  'Universidad Pedagógica Nacional',
-  'Universidad de Caldas',
-  'Universidad de Manizales',
-  'Universidad del Quindío',
-  'Universidad Tecnológica de Pereira',
-  'Universidad del Valle',
-  'Universidad Santiago de Cali',
-  'Universidad Autónoma de Occidente',
-  'Universidad de San Buenaventura',
-  'Universidad Piloto de Colombia',
-  'Otra',
-]
+import { UNIVERSIDADES } from '../lib/universidades'
 
 const EXPERIENCIA_OPTIONS = [
   'Menos de 1 año', '1 - 3 años', '3 - 5 años',
@@ -66,22 +28,22 @@ const MAX_VIDEO_MB = 200
 // ── Iconos SVG (estilo Lucide, currentColor) — sin emojis como iconos ──
 const IconUser     = (p) => (<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>)
 const IconChat     = (p) => (<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>)
-const IconSparkles = (p) => (<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M12 3l1.9 4.6L18.5 9.5 13.9 11.4 12 16l-1.9-4.6L5.5 9.5l4.6-1.9z"/><path d="M19 14l.7 1.8L21.5 16.5 19.7 17.2 19 19l-.7-1.8L16.5 16.5l1.8-.7z"/></svg>)
-const IconIA = (p) => (<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}><rect x="7" y="7" width="10" height="10" rx="2.5"/><path d="M10 10.5h4M10 13.5h2.5"/><path d="M10 3v3M14 3v3M10 18v3M14 18v3M3 10h3M3 14h3M18 10h3M18 14h3"/></svg>)
+const IconIA = (p) => (<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M20.2 12.2a6 6 0 0 0-8.5-8.5L5 10.5V19h8.5z"/><path d="M16 8 3 21"/><path d="M17.5 15H9"/></svg>)
 const IconShield   = (p) => (<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>)
-const IconChatInterno = (p) => (<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M8 10.5h7M8 14h4"/><path d="M21 12.5a7.5 7.5 0 0 1-10.9 6.7L4 21l1.8-4.1A7.5 7.5 0 1 1 21 12.5z"/></svg>)
+const IconChatInterno = (p) => (<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M14 9a2 2 0 0 1-2 2H6l-4 4V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2z"/><path d="M18 9h2a2 2 0 0 1 2 2v11l-4-4h-6a2 2 0 0 1-2-2v-1"/></svg>)
 const IconDoc      = (p) => (<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 13h6M9 17h6"/></svg>)
 const IconHome     = (p) => (<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>)
 const IconLogout   = (p) => (<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg>)
 const IconWallet   = (p) => (<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M19 7V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-2"/><path d="M3 7h16a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H3"/><circle cx="16" cy="13" r="1.2"/></svg>)
 
 const SECCIONES = [
-  { id: 'perfil',    label: 'Mi perfil',    Icon: IconUser },
-  { id: 'consultas', label: 'Consultas',    Icon: IconChat },
-  { id: 'asistente', label: 'IA Parada Precise', Icon: IconIA },
-  { id: 'interno',   label: 'Chat interno', Icon: IconChatInterno },
-  { id: 'contratos', label: 'Contratos',    Icon: IconDoc },
-  { id: 'pagos',     label: 'Pagos',        Icon: IconWallet },
+  // `corto`: etiqueta bajo el icono en el riel móvil, donde no cabe la larga.
+  { id: 'perfil',    label: 'Mi perfil',         corto: 'Perfil',       Icon: IconUser },
+  { id: 'consultas', label: 'Consultas',         corto: 'Consultas',    Icon: IconChat },
+  { id: 'asistente', label: 'IA Parada Precise', corto: 'IA Parada',    Icon: IconIA },
+  { id: 'interno',   label: 'Chat interno',      corto: 'Chat interno', Icon: IconChatInterno },
+  { id: 'contratos', label: 'Contratos',         corto: 'Contratos',    Icon: IconDoc },
+  { id: 'pagos',     label: 'Pagos',             corto: 'Pagos',        Icon: IconWallet },
 ]
 
 export default function ProfilePage() {
@@ -445,7 +407,7 @@ export default function ProfilePage() {
             </div>
 
             <nav className={styles.sideNav} aria-label="Secciones del panel">
-              {SECCIONES.map(({ id, label, Icon }) => {
+              {SECCIONES.map(({ id, label, corto, Icon }) => {
                 const n = badgePorSeccion[id] || 0
                 return (
                   <button
@@ -455,9 +417,11 @@ export default function ProfilePage() {
                     onClick={() => { setSeccion(id); if (n) refreshBadges() }}
                     aria-current={seccion === id ? 'page' : undefined}
                     title={n ? `${label} · ${n} sin leer` : label}
+                    aria-label={n ? `${label}, ${n} sin leer` : label}
                   >
                     <Icon className={styles.navIcon} aria-hidden="true" />
                     <span className={styles.navLabel}>{label}</span>
+                    <span className={styles.navLabelCorto} aria-hidden="true">{corto || label}</span>
                     {n > 0 && <span className={styles.navBadge}>{n > 9 ? '9+' : n}</span>}
                   </button>
                 )

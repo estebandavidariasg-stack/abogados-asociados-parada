@@ -279,12 +279,34 @@ export default function LawyersSection() {
    siguen desplazándola. */
 function ProfesionalesCinta({ items, isSuperAdmin, calm }) {
   const reduce = useReducedMotion()
-  const loop = !reduce && !calm && items.length >= 4
+  const wrapRef = useRef(null)
+  const [anchoVisible, setAnchoVisible] = useState(0)
+
+  // Antes el bucle se activaba con `items.length >= 4`, y con 3 profesionales
+  // la cinta quedaba inmóvil. Pero que haga falta desplazarse no depende del
+  // número de tarjetas sino de si DESBORDAN el ancho disponible: 3 caben en
+  // escritorio y no caben en un teléfono. Así que se mide.
+  useEffect(() => {
+    const el = wrapRef.current
+    if (!el) return
+    setAnchoVisible(el.clientWidth)
+    if (!('ResizeObserver' in window)) return
+    const ro = new ResizeObserver(([e]) => setAnchoVisible(e.contentRect.width))
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+
+  // Espejo de .slide en el CSS: clamp(240px, 25vw, 280px) + 1.5rem de margen.
+  const anchoTarjeta =
+    Math.min(280, Math.max(240, (typeof window !== 'undefined' ? window.innerWidth : 1200) * 0.25)) + 24
+  const desborda = anchoVisible > 0 && items.length * anchoTarjeta > anchoVisible + 8
+
+  const loop = !reduce && !calm && desborda && items.length >= 2
   const { scrollerRef, step, handlers } = useCarrusel({ speed: 34, loop })
   const copias = loop ? [0, 1] : [0]
 
   return (
-    <div className={styles.cintaWrap}>
+    <div className={styles.cintaWrap} ref={wrapRef}>
       <div className={styles.cinta} ref={scrollerRef} {...handlers}>
         <div className={styles.track}>
           {copias.flatMap((copia) =>

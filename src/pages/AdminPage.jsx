@@ -10,7 +10,6 @@ import PagosCobrosAdmin from '../components/admin/PagosCobrosAdmin'
 import MisContratos from '../components/profile/MisContratos'
 import AdminInternalChat from '../components/chat/AdminInternalChat'
 import ProfileDetailModal from '../components/admin/ProfileDetailModal'
-import TarjetaPreview from '../components/profile/TarjetaPreview'
 import NotificationBell from '../components/admin/NotificationBell'
 import ResenasAdmin from '../components/admin/ResenasAdmin'
 import PqrsAdmin from '../components/admin/PqrsAdmin'
@@ -27,7 +26,7 @@ const IconChat   = (p) => (<svg viewBox="0 0 24 24" width="18" height="18" fill=
 const IconRecover= (p) => (<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>)
 const IconAlert  = (p) => (<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg>)
 const IconShield = (p) => (<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>)
-const IconChatInterno = (p) => (<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M8 10.5h7M8 14h4"/><path d="M21 12.5a7.5 7.5 0 0 1-10.9 6.7L4 21l1.8-4.1A7.5 7.5 0 1 1 21 12.5z"/></svg>)
+const IconChatInterno = (p) => (<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M14 9a2 2 0 0 1-2 2H6l-4 4V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2z"/><path d="M18 9h2a2 2 0 0 1 2 2v11l-4-4h-6a2 2 0 0 1-2-2v-1"/></svg>)
 const IconDoc    = (p) => (<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 13h6M9 17h6"/></svg>)
 const IconStar   = (p) => (<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>)
 const IconPqr    = (p) => (<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M4 4h16v12H7l-3 3z"/><path d="M9 9h6M9 12h3"/></svg>)
@@ -1181,13 +1180,6 @@ export default function AdminPage() {
                             {p.ciudad}{p.departamento ? `, ${p.departamento}` : ''}
                           </span>
                         )}
-                        {p.tarjeta_archivo_url && (
-                          <TarjetaPreview
-                            rawPath={p.tarjeta_archivo_url}
-                            storagePath={p.tarjeta_archivo_url}
-                            compact
-                          />
-                        )}
                         {p.descripcion && <p className={styles.cardDesc}>{p.descripcion}</p>}
                       </>
                     )}
@@ -1264,13 +1256,6 @@ export default function AdminPage() {
                           <span className={styles.cardMeta}>
                             {p.ciudad}{p.departamento ? `, ${p.departamento}` : ''}
                           </span>
-                        )}
-                        {p.tarjeta_archivo_url && (
-                          <TarjetaPreview
-                            rawPath={p.tarjeta_archivo_url}
-                            storagePath={p.tarjeta_archivo_url}
-                            compact
-                          />
                         )}
                       </>
                     )}

@@ -241,7 +241,9 @@
 }
 
 .modalPhotoWrap {
-  width: 84px; height: 84px;
+  /* 84 → 104px: el recorte circular deja poca cara cuando el retrato está
+     encuadrado de lejos. Con más diámetro se reconoce sin tener que abrirla. */
+  width: 104px; height: 104px;
   border-radius: 50%;
   background: linear-gradient(145deg, #fbf4ee, #f5e8dd);
   border: 2px solid rgba(201,168,76,0.3);
@@ -429,7 +431,7 @@
   font-size: 0.68rem;
   text-transform: uppercase;
   letter-spacing: 0.2em;
-  color: #96765a;
+  color: #7a5a3c;
   font-weight: 600;
   margin: 0 0 0.85rem;
 }
@@ -519,7 +521,7 @@
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: #b09577;
+  color: #8A6A28;
 }
 
 /* ── Secciones ───────────────────────────────── */
@@ -538,15 +540,18 @@
 .modalDesc {
   font-size: 0.88rem;
   line-height: 1.8;
-  color: #96765a;
+  color: #6f5c48;
   margin: 0;
 }
 
 /* ── Info rows ───────────────────────────────── */
 .modalDetails {
+  /* Una columna de filas "etiqueta | valor". Antes eran dos columnas de
+     celdas apiladas, pero en un grid la fila toma la altura de la celda más
+     alta: un valor de 6 lineas (las especialidades del contador) junto a uno
+     de 1 dejaba un hueco enorme al lado. Aquí cada fila mide lo suyo. */
   display: flex;
   flex-direction: column;
-  gap: 11px;
   margin-bottom: 1.5rem;
 }
 
@@ -554,6 +559,19 @@
   display: flex;
   align-items: flex-start;
   gap: 12px;
+  padding: 7px 0;
+}
+
+/* El envoltorio de etiqueta + valor pasa a ser la rejilla de dos columnas.
+   La etiqueta ocupa un ancho estable para que todos los valores arranquen
+   en la misma vertical y la lista se pueda recorrer de un vistazo. */
+.infoRow > div {
+  display: grid;
+  grid-template-columns: minmax(104px, 30%) 1fr;
+  gap: 2px 16px;
+  align-items: baseline;
+  flex: 1;
+  min-width: 0;
 }
 
 .infoIcon {
@@ -569,15 +587,18 @@
   font-size: 0.58rem;
   text-transform: uppercase;
   letter-spacing: 0.15em;
-  color: #c0ac9a;
-  margin-bottom: 2px;
+  color: #7d6046;
+  line-height: 1.5;
 }
 
 .infoValue {
   display: block;
   font-size: 0.86rem;
   color: #6d3c1b;
-  word-break: break-word;
+  /* `break-word`, no `break-all`: parte solo la palabra que de verdad no
+     cabe (un correo largo), no cualquiera que llegue al borde. */
+  overflow-wrap: break-word;
+  min-width: 0;
   font-weight: 500;
   line-height: 1.5;
 }
@@ -625,10 +646,30 @@
   .photoWrap { width: 80px; height: 80px; }
   .initials { font-size: 1.5rem; }
   .name { font-size: 0.92rem; }
-  .modal { padding: 2rem 1.2rem 1.5rem; border-radius: 16px; max-height: 92vh; }
-  .modalHeader { flex-direction: column; text-align: center; gap: 1rem; }
-  .modalHeaderText { align-items: center; }
-  .modalPhotoWrap { width: 72px; height: 72px; }
+  .overlay { padding: 0.75rem; }
+  .modal { padding: 1.75rem 1.1rem 1.4rem; border-radius: 16px; max-height: 94vh; }
+  /* Rejilla de documentos y filas de datos: menos aire lateral, que en
+     pantalla estrecha es lo que empuja el contenido contra el borde. */
+  .docsGrid { gap: 4px 12px; }
+  .infoRow { gap: 10px; padding: 6px 0; }
+  .infoIcon { width: 20px; }
+  .modalHeader { flex-direction: column; text-align: center; gap: 0.9rem; }
+  .modalHeaderText { align-items: center; width: 100%; }
+  /* .modalAreas es un contenedor flex: `text-align: center` no lo afecta y
+     sus áreas quedaban pegadas a la izquierda mientras el nombre, la ciudad
+     y las estrellas sí iban centrados. */
+  .modalAreas { justify-content: center; margin-bottom: 2px; }
+  /* Sin el tirón de -0.25rem el botón queda centrado de verdad; y si las
+     estrellas más "Ver más comentarios" no caben en una línea, bajan en
+     lugar de apretarse contra los bordes. */
+  .ratingBtn {
+    margin-left: 0;
+    flex-wrap: wrap;
+    justify-content: center;
+    row-gap: 0.15rem;
+  }
+  .modalLocation { margin-top: 1px; }
+  .modalPhotoWrap { width: 88px; height: 88px; }
   .modalName { font-size: 1.05rem; }
   .modalCta { padding: 11px 18px; font-size: 0.82rem; }
   .rolPill { font-size: 0.5rem; padding: 1px 6px; }
@@ -667,4 +708,152 @@
   background: rgba(31, 122, 77, 0.12);
   color: #1f7a4d;
   border: 1px solid rgba(31, 122, 77, 0.35);
+}
+/* ── Lista de documentos del profesional ─────────────────────── */
+.docsLista {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Esqueleto de carga: mantiene la altura de la sección mientras se
+   firman los enlaces, para que el modal no dé un salto al llegar. */
+.docSkeleton {
+  height: 64px;
+  border-radius: 12px;
+  border: 1px solid rgba(109, 60, 27, 0.1);
+  background:
+    linear-gradient(90deg,
+      rgba(230, 193, 148, 0.16) 0%,
+      rgba(230, 193, 148, 0.34) 50%,
+      rgba(230, 193, 148, 0.16) 100%);
+  background-size: 200% 100%;
+  animation: docShimmer 1.4s ease-in-out infinite;
+}
+
+@keyframes docShimmer {
+  from { background-position: 200% 0; }
+  to   { background-position: -200% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .docSkeleton {
+    animation: none;
+    background: rgba(230, 193, 148, 0.22);
+  }
+}
+
+/* ── Rejilla de documentos (modal de revisión del admin) ───────
+   Mosaicos iguales que se acomodan solos: 3 en escritorio, 2 o 1 al
+   estrecharse. `auto-fit` + minmax evita cualquier breakpoint y, sobre
+   todo, evita que una miniatura de ancho fijo desborde su celda. */
+.docsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
+  gap: 6px 16px;
+  align-items: start;
+}
+
+.docTile {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.docTileLabel {
+  display: block;
+  font-size: 0.58rem;
+  text-transform: uppercase;
+  letter-spacing: 0.13em;
+  color: #7d6046;
+  line-height: 1.4;
+  /* Dos líneas de alto fijo: los rótulos largos ("Cuenta bancaria
+     certificada") no deben desalinear las miniaturas entre sí. */
+  min-height: 2.8em;
+}
+
+.docTileEsqueleto {
+  width: 100%;
+  height: 148px;
+  margin: 10px 0 14px;
+  border-radius: 14px;
+  border: 1.5px solid rgba(109, 60, 27, 0.1);
+  background: rgba(230, 193, 148, 0.18);
+  animation: docShimmer 1.4s ease-in-out infinite;
+  background-image: linear-gradient(90deg,
+    rgba(230, 193, 148, 0.14) 0%,
+    rgba(230, 193, 148, 0.32) 50%,
+    rgba(230, 193, 148, 0.14) 100%);
+  background-size: 200% 100%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .docTileEsqueleto { animation: none; }
+}
+
+/* Bajo ~460px la etiqueta al lado deja al valor sin ancho útil: vuelve a
+   apilarse encima, que es lo legible en móvil. */
+@media (max-width: 460px) {
+  .infoRow > div {
+    grid-template-columns: 1fr;
+    gap: 1px;
+  }
+}
+
+/* Bajo ~420px la rejilla de documentos ya es de una sola columna, así que
+   reservar dos líneas de rótulo para alinear mosaicos entre sí solo añade
+   hueco muerto: no hay con quién alinearse. */
+@media (max-width: 420px) {
+  .docTileLabel { min-height: 0; }
+  .docsGrid { gap: 2px; }
+}
+
+/* ── Retrato ampliable ────────────────────────────────────────
+   El círculo recorta (object-fit: cover), así que la foto completa solo se ve
+   en el visor.
+
+   La pista NO es un distintivo en la esquina: sobre un círculo, un disco
+   anclado al recuadro se lee como una mancha encima de la cara. Se usa el
+   mismo lenguaje que las miniaturas de documentos, una capa sobre toda la
+   pieza, que aquí además respeta la forma redonda. */
+.modalPhotoBtn {
+  position: relative;
+  padding: 0;
+  cursor: zoom-in;
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease-out;
+}
+.modalPhotoBtn:hover {
+  transform: scale(1.03);
+  box-shadow: 0 8px 22px rgba(109, 60, 27, 0.2);
+}
+.modalPhotoBtn:focus-visible {
+  outline: 2px solid var(--gold-dk, #8a6a28);
+  outline-offset: 3px;
+}
+
+.modalPhotoLupa {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: rgba(71, 47, 41, 0.52);
+  color: #fff;
+  opacity: 0;
+  transition: opacity 0.18s ease-out;
+}
+.modalPhotoBtn:hover .modalPhotoLupa,
+.modalPhotoBtn:focus-visible .modalPhotoLupa { opacity: 1; }
+
+/* En táctil no se muestra ninguna pista encima: cualquier capa sobre un
+   retrato de 88px se come la cara, que es justo lo que se quiere enseñar.
+   El retrato sigue siendo pulsable; tocar una foto para ampliarla es un gesto
+   que la gente ya trae aprendido. */
+@media (hover: none) {
+  .modalPhotoLupa { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .modalPhotoBtn, .modalPhotoLupa { transition: none; }
+  .modalPhotoBtn:hover { transform: none; }
 }

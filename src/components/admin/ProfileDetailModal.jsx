@@ -118,6 +118,14 @@ export default function ProfileDetailModal({ profile, onClose }) {
 
   if (!profile) return null
 
+  // Documentos presentes, en orden fijo. `url` es el enlace firmado; mientras
+  // llega se pinta un esqueleto del mismo tamaño para que la rejilla no salte.
+  const documentos = [
+    { key: 'tarjeta', label: 'Tarjeta profesional',        path: profile.tarjeta_archivo_url,           url: tarjetaDisplayUrl },
+    { key: 'banc',    label: 'Cuenta bancaria certificada', path: profile.certificado_bancario_url,      url: certBancUrl },
+    { key: 'disc',    label: 'Certificado disciplinario',   path: profile.certificado_disciplinario_url, url: certDiscUrl },
+  ].filter(d => d.path)
+
   const esGestor = profile.rol === 'gestor'
   // El gestor se registra solo con usuario (sin nombre/apellido) → iniciales y
   // nombre caen al @username para que el modal no quede vacío.
@@ -255,43 +263,32 @@ export default function ProfileDetailModal({ profile, onClose }) {
           <InfoRow icon={ICONS.card}
             label="Tarjeta profesional (número)"
             value={profile.tarjeta_profesional} />
-          {profile.tarjeta_archivo_url && (
-            <div className={styles.infoRow}>
-              <span className={styles.infoIcon}>{ICONS.paperclip}</span>
-              <div>
-                <span className={styles.infoLabel}>Tarjeta profesional (archivo)</span>
-                {tarjetaDisplayUrl
-                  ? <TarjetaPreview displayUrl={tarjetaDisplayUrl} storagePath={profile.tarjeta_archivo_url} />
-                  : <span style={{ display: 'block', fontSize: '0.82rem', color: '#888', marginTop: 4 }}>Generando enlace seguro…</span>
-                }
-              </div>
-            </div>
-          )}
-          {profile.certificado_bancario_url && (
-            <div className={styles.infoRow}>
-              <span className={styles.infoIcon}>{ICONS.paperclip}</span>
-              <div>
-                <span className={styles.infoLabel}>Cuenta bancaria certificada</span>
-                {certBancUrl
-                  ? <TarjetaPreview displayUrl={certBancUrl} storagePath={profile.certificado_bancario_url} />
-                  : <span style={{ display: 'block', fontSize: '0.82rem', color: '#888', marginTop: 4 }}>Generando enlace seguro…</span>
-                }
-              </div>
-            </div>
-          )}
-          {profile.certificado_disciplinario_url && (
-            <div className={styles.infoRow}>
-              <span className={styles.infoIcon}>{ICONS.paperclip}</span>
-              <div>
-                <span className={styles.infoLabel}>Certificado disciplinario</span>
-                {certDiscUrl
-                  ? <TarjetaPreview displayUrl={certDiscUrl} storagePath={profile.certificado_disciplinario_url} />
-                  : <span style={{ display: 'block', fontSize: '0.82rem', color: '#888', marginTop: 4 }}>Generando enlace seguro…</span>
-                }
-              </div>
-            </div>
-          )}
         </div>
+
+        {/* ── Documentos ─────────────────────────────────────────────────
+            Sección propia, fuera de la rejilla de datos. Antes eran filas de
+            esa rejilla: una miniatura de 220px no cabe en una celda pensada
+            para un valor de texto, así que se desbordaba y el tercero
+            quedaba suelto. Aquí las tres son mosaicos iguales. */}
+        {documentos.length > 0 && (
+          <>
+            <div className={styles.modalDivider} />
+            <div className={styles.modalSection}>
+              <h4 className={styles.modalSectionTitle}>Documentos</h4>
+              <div className={styles.docsGrid}>
+                {documentos.map(d => (
+                  <div key={d.key} className={styles.docTile}>
+                    <span className={styles.docTileLabel}>{d.label}</span>
+                    {d.url
+                      ? <TarjetaPreview displayUrl={d.url} storagePath={d.path} label={d.label} />
+                      : <div className={styles.docTileEsqueleto} aria-label="Generando enlace seguro" />
+                    }
+                  </div>
+                ))}
+              </div>
+            </div>
+          </>
+        )}
 
         {tieneRedes && (
           <>

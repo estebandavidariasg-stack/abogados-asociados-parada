@@ -729,6 +729,8 @@ select.input option {
 .navItem:hover { background: rgba(109,60,27, 0.06); color: #6d3c1b; }
 .navItem:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
 .navIcon { flex: 0 0 auto; }
+/* Solo se usa en el riel móvil (ver el bloque de 480px). */
+.navLabelCorto { display: none; }
 
 .navItemActive,
 .navItemActive:hover {
@@ -925,10 +927,37 @@ select.input option {
     flex: 1 1 100%;
     gap: 0.5rem 0.3rem;
   }
+  /* Con solo el icono no se distinguía una sección de otra. Cada mosaico
+     pasa a icono ARRIBA y nombre DEBAJO; con 3 por fila hay ancho real para
+     el nombre (con 5 no cabía ni "Pagos"), y las 6 secciones quedan en dos
+     filas parejas. */
   .navLabel,
   .sidebar:hover .navLabel { display: none; }
+  .navLabelCorto,
+  .sidebar:hover .navLabelCorto {
+    display: block;
+    font-size: 0.62rem;
+    font-weight: 600;
+    line-height: 1.25;
+    letter-spacing: 0.01em;
+    text-align: center;
+    /* Dos líneas reservadas: los nombres de una y de dos líneas conviven sin
+       descuadrar la altura de los mosaicos vecinos. */
+    min-height: 2.5em;
+  }
   .navItem,
-  .sidebar:hover .navItem { flex: 0 0 calc(20% - 0.24rem); width: auto; padding: 0.55rem 0; justify-content: center; }
+  .sidebar:hover .navItem {
+    flex: 0 0 calc(33.333% - 0.34rem);
+    width: auto;
+    flex-direction: column;
+    justify-content: flex-start;
+    gap: 0.3rem;
+    padding: 0.6rem 0.25rem 0.5rem;
+  }
+  /* El badge se ancla al icono, no a la esquina del mosaico, que ahora es
+     mucho más alto por la etiqueta. */
+  .navBadge,
+  .sidebar:hover .navBadge { top: 4px; right: calc(50% - 20px); }
   /* Pie (inicio / salir) en su propia fila, centrado y con separador */
   .sideFoot,
   .sidebar:hover .sideFoot {

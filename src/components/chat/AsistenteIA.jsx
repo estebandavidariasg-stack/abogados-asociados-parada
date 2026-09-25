@@ -91,7 +91,7 @@ const phLetter = {
   exit: { opacity: 0, filter: 'blur(10px)', y: -8, transition: { duration: 0.18 } },
 };
 
-const IconChispa = (p) => (<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true" {...p}><path d="M12 2l1.9 5.6L19.5 9.4 14 11.4 12 17l-2-5.6L4.5 9.4 10.1 7.6z" /><path d="M19 14l.8 2.2L22 17l-2.2.8L19 20l-.8-2.2L16 17l2.2-.8z" /></svg>);
+const IconAsistente = (p) => (<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...p}><path d="M20.2 12.2a6 6 0 0 0-8.5-8.5L5 10.5V19h8.5z"/><path d="M16 8 3 21"/><path d="M17.5 15H9"/></svg>);
 const IconPlus = (p) => (<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...p}><path d="M12 5v14M5 12h14" /></svg>);
 const IconTrash = (p) => (<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...p}><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2m2 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" /></svg>);
 const IconMensaje = (p) => (<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...p}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>);
@@ -668,7 +668,7 @@ export default function AsistenteIA() {
           }}
           transition={reduce ? undefined : { duration: 4.2, repeat: Infinity, ease: 'easeInOut' }}
         >
-          <IconChispa />
+          <IconAsistente />
         </motion.span>
         <h2 className={styles.heroTitulo}>
           {saludo.hora}{saludo.nombre ? <>, <em>{saludo.nombre}</em></> : ''}
@@ -681,7 +681,7 @@ export default function AsistenteIA() {
   ) : (
     <>
       <header className={styles.topBar}>
-        <span className={styles.topMark}><IconChispa /></span>
+        <span className={styles.topMark}><IconAsistente /></span>
         <strong className={styles.topName}>IA Parada <em>Precise</em></strong>
       </header>
 

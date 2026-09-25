@@ -16,14 +16,27 @@ function PdfIcon({ size = 36 }) {
   )
 }
 
+function ImgIcon({ size = 36 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.4"
+      strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="3" y="3" width="18" height="18" rx="2"/>
+      <circle cx="8.5" cy="8.5" r="1.5"/>
+      <path d="M21 15l-5-5L5 21"/>
+    </svg>
+  )
+}
+
 // displayUrl  — pre-signed URL (profile pages sign eagerly in their useEffect)
 // rawPath     — raw tarjeta_archivo_url value; URL signed lazily on first click (admin cards)
 // storagePath — path used for type detection when displayUrl is already provided
 // compact     — smaller inline variant for card lists; no centering wrapper
+// variant     — 'row' renderiza una fila de documento (tipo + nombre + chevron)
+//               para listas; gana sobre `compact` cuando se pasa
 // label       — nombre del documento (aria-label, overlay y visor). Por defecto
 //               "Tarjeta profesional"; DocumentosConfianza lo reutiliza para
 //               certificados y modelo contractual.
-export default function TarjetaPreview({ displayUrl, rawPath, storagePath, compact = false, label = 'Tarjeta profesional' }) {
+export default function TarjetaPreview({ displayUrl, rawPath, storagePath, compact = false, variant, label = 'Tarjeta profesional' }) {
   const [open, setOpen] = useState(false)
   const [resolvedUrl, setResolvedUrl] = useState(displayUrl || null)
   const [resolving, setResolving] = useState(false)
@@ -61,7 +74,31 @@ export default function TarjetaPreview({ displayUrl, rawPath, storagePath, compa
 
   function close() { setOpen(false) }
 
-  const thumbContent = compact ? (
+  const thumbContent = variant === 'row' ? (
+    // Fila de documento: mosaico con el tipo de archivo + nombre + chevron.
+    // Pensada para listas de documentos (modal del profesional en el home),
+    // donde un enlace suelto no comunica que hay un archivo detrás.
+    <button
+      type="button"
+      className={styles.docRow}
+      onClick={handleOpen}
+      disabled={resolving}
+      aria-label={`Ver ${label.toLowerCase()}`}
+    >
+      <span className={styles.docTipo} aria-hidden="true">
+        {isImage ? <ImgIcon size={16} /> : <PdfIcon size={16} />}
+        <span className={styles.docExt}>{isImage ? 'IMG' : 'PDF'}</span>
+      </span>
+      <span className={styles.docTexto}>
+        <span className={styles.docNombre}>{label}</span>
+        <span className={styles.docPista}>{resolving ? 'Abriendo…' : 'Verificado por Parada Bridge'}</span>
+      </span>
+      <svg className={styles.docChevron} viewBox="0 0 24 24" width="16" height="16" fill="none"
+        stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M9 6l6 6-6 6" />
+      </svg>
+    </button>
+  ) : compact ? (
     // Compact: small pill-button that fits inline in admin card rows
     <button
       type="button"
@@ -92,8 +129,11 @@ export default function TarjetaPreview({ displayUrl, rawPath, storagePath, compa
             </div>
           )
         }
+        {/* El nombre del documento ya está en la etiqueta de arriba: repetirlo
+            dentro de la miniatura era ruido, y en tarjetas estrechas se partía
+            en dos líneas. Una sola palabra. */}
         <span className={styles.thumbOverlay} aria-hidden="true">
-          {resolving ? 'Cargando…' : label === 'Tarjeta profesional' ? 'Ver tarjeta' : 'Ver documento'}
+          {resolving ? 'Abriendo…' : 'Ver'}
         </span>
       </button>
     </div>

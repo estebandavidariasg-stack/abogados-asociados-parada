@@ -11,6 +11,8 @@ import { IconX } from '../shared/Icons'
 import VerificationStep from './VerificationStep'
 import { AREAS_DERECHO } from '../../lib/areasDerecho'
 import { AREAS_CONTADURIA } from '../../lib/areasContaduria'
+import { UNIVERSIDADES } from '../../lib/universidades'
+import UbicacionSelector from '../profile/UbicacionSelector'
 import {
   PASSWORD_RULES, getPasswordStrength, isPasswordValid,
   validarCelular, validarCorreo, normalizarCelular,
@@ -26,6 +28,12 @@ const EXPERIENCIA_OPTIONS = [
 ]
 
 const COMUNIDAD_MAX = 500
+
+// Presentación pública del profesional (profiles.descripcion). El tope 500 es
+// el mismo que usa el perfil; el mínimo evita el "asdf" que dejaría la tarjeta
+// del home tan vacía como si no se hubiera escrito nada.
+const DESCRIPCION_MAX = 500
+const DESCRIPCION_MIN = 60
 
 // ── Ícono ojo ─────────────────────────────────────────────────────────────
 function EyeIcon({ open }) {
@@ -119,6 +127,14 @@ export default function RegisterModal({ onClose }) {
   const [experiencia, setExperiencia] = useState('')
   const [tarjetaFile, setTarjetaFile] = useState(null)        // File | null
   const tarjetaInputRef = useRef(null)
+  // Universidad y ubicación se piden AQUÍ (no solo en el perfil): antes eran
+  // editables únicamente en /perfil, así que un profesional podía quedar
+  // aprobado sin llenarlas y salir en el home con la tarjeta medio vacía.
+  const [universidad, setUniversidad]       = useState('')
+  const [universidadOtra, setUniversidadOtra] = useState(false)
+  const [departamento, setDepartamento]     = useState('')
+  const [ciudad, setCiudad]                 = useState('')
+  const [barrio, setBarrio]                 = useState('')
 
   // ── Campos de gestor ────────────────────────────────────────────────────
   const [cedula, setCedula]           = useState('')
@@ -164,6 +180,7 @@ export default function RegisterModal({ onClose }) {
   const [certDiscFile, setCertDiscFile]   = useState(null)
   const [direccionOficina, setDireccionOficina] = useState('')
   const [paginaWeb, setPaginaWeb]         = useState('')
+  const [descripcionPublica, setDescripcionPublica] = useState('')
   const [docsSubmitting, setDocsSubmitting] = useState(false)
   const [docsError, setDocsError]         = useState('')
   // Tarjeta profesional: se sube en el Paso C (con la cuenta). Aquí guardamos
@@ -265,6 +282,9 @@ export default function RegisterModal({ onClose }) {
     if (isPro) {
       if (cedulaVal.valid !== true) { setError('Ingresa una cédula válida (6–12 dígitos)'); setCedulaTouched(true); return }
       if (telVal.valid !== true)    { setError('Ingresa un celular válido (10 dígitos, empieza por 3)'); setTelTouched(true); return }
+      if (!universidad.trim())      { setError('Selecciona tu universidad'); return }
+      if (!departamento)            { setError('Selecciona tu departamento'); return }
+      if (!ciudad.trim())           { setError('Selecciona tu municipio o localidad'); return }
       if (!tarjetaFile)             { setError('Adjunta tu tarjeta profesional (PDF o imagen)'); return }
     }
     if (!pwValid)        { setError('La contraseña no cumple los requisitos'); setPwTouched(true); return }
@@ -445,6 +465,12 @@ export default function RegisterModal({ onClose }) {
         // significa especialidades contables — misma columna, ver CLAUDE.md).
         area_derecho: areas.length ? areas.join(', ') : null,
         experiencia: experiencia || null,
+        universidad: universidad.trim() || null,
+        departamento: departamento || null,
+        // Mismo formato que ProfilePage: el nivel 3 (barrio/comuna) se guarda
+        // dentro de `ciudad` como "Municipio - Barrio" (no hay columna barrio),
+        // y así el perfil lo rehidrata al editar.
+        ciudad: (barrio.trim() ? `${ciudad.trim()} - ${barrio.trim()}` : ciudad.trim()) || null,
         tarjeta_archivo_url: tarjetaPath,
       })
     } else {
@@ -509,7 +535,8 @@ export default function RegisterModal({ onClose }) {
   }
 
   // Reglas del paso: foto + tarjeta (path del Paso C o archivo nuevo) +
-  // al menos UN certificado. Modelo contractual, oficina y web: opcionales.
+  // ambos certificados + presentación pública. Modelo contractual, oficina y
+  // web: opcionales.
   const tieneTarjeta      = !!tarjetaSubidaPath || !!tarjetaDocsFile
   const tieneCertificado  = !!certBancFile && !!certDiscFile
 
@@ -518,6 +545,9 @@ export default function RegisterModal({ onClose }) {
     if (!tieneTarjeta)     return 'Adjunta tu tarjeta profesional (obligatoria).'
     if (!certBancFile)     return 'Adjunta la cuenta bancaria certificada (obligatoria).'
     if (!certDiscFile)     return 'Adjunta el certificado disciplinario (obligatorio).'
+    if (descripcionPublica.trim().length < DESCRIPCION_MIN) {
+      return `Escribe tu presentación: al menos ${DESCRIPCION_MIN} caracteres (es lo que los clientes leen en tu tarjeta).`
+    }
     return ''
   }
 
@@ -583,6 +613,7 @@ export default function RegisterModal({ onClose }) {
           ...cambios,
           direccion_oficina: direccionOficina.trim() || null,
           pagina_web: paginaWeb.trim() || null,
+          descripcion: descripcionPublica.trim(),
         }),
       })
       if (!patchRes.ok) throw new Error('No se pudo guardar la información del perfil.')
@@ -813,6 +844,42 @@ export default function RegisterModal({ onClose }) {
               <span className={extra.docHint}>
                 Tu contrato base para enviar a firma desde cualquier chat. Podrás subirlo o cambiarlo luego en tu perfil.
               </span>
+            </div>
+
+            {/* Presentación pública (obligatoria) — es el "Sobre mí" que el
+                cliente lee al abrir su tarjeta en el home. Se pide aquí y no
+                en el paso anterior porque es lo único del formulario que el
+                aspirante tiene que redactar, y venía quedando en blanco. */}
+            <div className={styles.field}>
+              <label className={styles.label}>
+                Tu presentación
+                <span className={`${extra.tag} ${extra.tagReq}`}>Obligatorio</span>
+              </label>
+              <textarea
+                className={styles.input}
+                rows={4}
+                maxLength={DESCRIPCION_MAX}
+                placeholder="Cuéntale a tus futuros clientes quién eres. Ej: Soy abogado especializado en derecho laboral, con 6 años acompañando a trabajadores en procesos de despido injustificado y liquidaciones. He llevado casos ante el Ministerio de Trabajo y tribunales de Bogotá."
+                value={descripcionPublica}
+                onChange={(e) => setDescripcionPublica(e.target.value.slice(0, DESCRIPCION_MAX))}
+                style={{ resize: 'vertical', minHeight: 96, fontFamily: 'inherit', lineHeight: 1.6 }}
+              />
+              <div style={{
+                display: 'flex', justifyContent: 'space-between', gap: 8,
+                marginTop: 4, fontSize: '0.68rem', color: 'var(--muted, #6f5c48)',
+              }}>
+                <span>Es lo primero que lee un cliente en tu tarjeta del inicio.</span>
+                <span style={{
+                  color: descripcionPublica.trim().length < DESCRIPCION_MIN
+                    ? '#9a5b3a'
+                    : (descripcionPublica.length >= DESCRIPCION_MAX - 20 ? '#9a5b3a' : 'var(--gold-dk, #8a6a28)'),
+                  fontWeight: 600, whiteSpace: 'nowrap',
+                }}>
+                  {descripcionPublica.trim().length < DESCRIPCION_MIN
+                    ? `${DESCRIPCION_MIN - descripcionPublica.trim().length} caracteres más`
+                    : `${descripcionPublica.length}/${DESCRIPCION_MAX}`}
+                </span>
+              </div>
             </div>
 
             {/* Dirección de oficina (opcional) */}
@@ -1073,6 +1140,50 @@ export default function RegisterModal({ onClose }) {
                     {EXPERIENCIA_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
                   </select>
                 </div>
+
+                {/* Universidad — obligatoria: sale en la tarjeta del home.
+                    "Otra" revela un input libre (mismo patrón que el perfil). */}
+                <div className={styles.field}>
+                  <label className={styles.label}>
+                    Universidad <span className={styles.req}>*</span>
+                  </label>
+                  <select
+                    className={styles.input}
+                    value={universidadOtra ? 'Otra' : universidad}
+                    onChange={(e) => {
+                      const v = e.target.value
+                      if (v === 'Otra') { setUniversidadOtra(true); setUniversidad('') }
+                      else { setUniversidadOtra(false); setUniversidad(v) }
+                    }}
+                  >
+                    <option value="">Selecciona…</option>
+                    {UNIVERSIDADES.map(u => <option key={u} value={u}>{u}</option>)}
+                  </select>
+                  {universidadOtra && (
+                    <input
+                      type="text"
+                      className={styles.input}
+                      style={{ marginTop: '0.5rem' }}
+                      placeholder="Escribe el nombre de tu universidad"
+                      value={universidad}
+                      onChange={(e) => setUniversidad(e.target.value)}
+                      aria-label="Nombre de tu universidad"
+                    />
+                  )}
+                </div>
+
+                {/* Ubicación — obligatoria: los clientes filtran el home por
+                    departamento y ciudad. Mismo selector en cascada del perfil. */}
+                <UbicacionSelector
+                  departamento={departamento}
+                  municipio={ciudad}
+                  barrio={barrio}
+                  required
+                  classes={{ field: styles.field, label: styles.label, select: styles.input }}
+                  onChange={({ departamento: d, municipio, barrio: b }) => {
+                    setDepartamento(d); setCiudad(municipio); setBarrio(b)
+                  }}
+                />
 
                 {/* Tarjeta profesional */}
                 <div className={styles.field}>

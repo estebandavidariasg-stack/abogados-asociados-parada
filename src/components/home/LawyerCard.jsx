@@ -1,8 +1,56 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { supabase } from '../../lib/supabase'
 import SocialLinks from '../profile/SocialLinks'
+import TarjetaPreview from '../profile/TarjetaPreview'
+import { ChatLightbox } from '../../lib/chatFiles'
 import styles from './LawyerCard.module.css'
+
+/* Documentos del profesional. Los buckets son PRIVADOS: nunca hay URL pública,
+   siempre se firma una temporal.
+
+   Dos caminos, a propósito:
+   · Visitante  → GET /api/professionals?docs=<id>, que firma server-side y
+     devuelve SOLO los documentos de confianza públicos (licencia,
+     disciplinario, modelo). La cuenta bancaria NO sale por ahí.
+   · Superadmin → lectura directa a Supabase con su sesión, con los cuatro,
+     igual que en admin/ProfileDetailModal. */
+const DOCS_ADMIN = [
+  { col: 'tarjeta_archivo_url',           bucket: 'tarjetas-profesionales', label: 'Tarjeta profesional' },
+  { col: 'certificado_bancario_url',      bucket: 'tarjetas-profesionales', label: 'Cuenta bancaria certificada' },
+  { col: 'certificado_disciplinario_url', bucket: 'tarjetas-profesionales', label: 'Certificado disciplinario' },
+  { col: 'modelo_contrato_path',          bucket: 'contratos',              label: 'Modelo contractual' },
+]
+
+/* Caché de documentos a nivel de módulo, compartida por todas las tarjetas.
+   Reabrir un perfil ya visto es instantáneo, y la precarga al pasar el cursor
+   escribe aquí, así que al abrir el modal casi siempre ya están listos.
+   10 min de vida: muy por debajo de la hora que dura la URL firmada. */
+const CACHE_DOCS = new Map()   // clave → { t, docs }
+const CACHE_TTL  = 10 * 60 * 1000
+
+function docsEnCache(clave) {
+  const hit = CACHE_DOCS.get(clave)
+  if (!hit) return null
+  if (Date.now() - hit.t > CACHE_TTL) { CACHE_DOCS.delete(clave); return null }
+  return hit.docs
+}
+
+// Pide (y cachea) los documentos públicos de un profesional. La usa tanto la
+// apertura del modal como la precarga en hover, de ahí que viva fuera.
+async function pedirDocsPublicos(id) {
+  const clave = `${id}:false`
+  const yaEsta = docsEnCache(clave)
+  if (yaEsta) return yaEsta
+  const res = await fetch(`/api/professionals?docs=${encodeURIComponent(id)}`)
+  const json = res.ok ? await res.json() : []
+  // `ext` sustituye al path para detectar el tipo: el visitante no necesita
+  // saber dónde vive el archivo, solo si es PDF o imagen.
+  const docs = (Array.isArray(json) ? json : [])
+    .map(d => ({ label: d.label, url: d.url, path: `x.${d.ext || 'pdf'}` }))
+  CACHE_DOCS.set(clave, { t: Date.now(), docs })
+  return docs
+}
 
 
 // Muestra estrellas doradas (solo lectura)
@@ -79,13 +127,73 @@ export default function LawyerCard({
     return () => { cancelled = true }
   }, [lawyer.id, lawyer.rating_promedio])
 
+  // Se piden al ABRIR el modal, no con la lista: así el grid del home sigue
+  // costando una sola petición cacheada y solo se firma lo que alguien mira.
+  const [docs, setDocs]             = useState([])   // [{label, url, path}]
+  const [docsState, setDocsState]   = useState('idle') // idle|loading|done
+  const [tarjetaNum, setTarjetaNum] = useState(null)
+  // Foto del profesional a tamaño completo (se abre al pulsar el retrato).
+  const [fotoAmpliada, setFotoAmpliada] = useState(null)
+
+  // Precarga al apuntar la tarjeta: cuando el clic llega, la respuesta ya
+  // suele estar en CACHE_DOCS y la sección se pinta sin esqueleto. Solo para
+  // visitantes (el superadmin lee con su sesión, fuera de esta caché), y se
+  // ignora cualquier fallo: es una optimización, no un requisito.
+  function precargarDocs() {
+    if (isSuperAdmin || ghost) return
+    pedirDocsPublicos(lawyer.id).catch(() => {})
+  }
+
+  // El "ya lo pedí" vive en un ref, NO en docsState: si el estado estuviera en
+  // las dependencias, ponerlo en 'loading' relanzaría el efecto, su limpieza
+  // marcaría cancelled y la petición recién lanzada moriría antes de pintar.
+  const pedidoRef = useRef(null)
+
+  useEffect(() => {
+    if (!open) return
+    const clave = `${lawyer.id}:${isSuperAdmin}`
+    if (pedidoRef.current === clave) return
+    pedidoRef.current = clave
+    // Si la precarga ya lo trajo, se pinta de una y no hay esqueleto.
+    const cacheado = !isSuperAdmin && docsEnCache(clave)
+    if (cacheado) { setDocs(cacheado); setDocsState('done'); return }
+    let cancelled = false
+    ;(async () => {
+      setDocsState('loading')
+      try {
+        if (isSuperAdmin) {
+          const cols = ['tarjeta_profesional', ...DOCS_ADMIN.map(d => d.col)].join(',')
+          const { data } = await supabase
+            .from('profiles').select(cols).eq('id', lawyer.id).single()
+          if (cancelled || !data) { setDocsState('done'); return }
+          setTarjetaNum(data.tarjeta_profesional || null)
+          const firmados = await Promise.all(DOCS_ADMIN.map(async ({ col, bucket, label }) => {
+            const v = data[col]
+            if (!v) return null
+            // Compat: perfiles viejos guardaron la URL completa en vez del path.
+            if (/^https?:\/\//.test(v)) return { label, url: v, path: v }
+            const { data: s } = await supabase.storage.from(bucket).createSignedUrl(v, 3600)
+            return s?.signedUrl ? { label, url: s.signedUrl, path: v } : null
+          }))
+          if (!cancelled) setDocs(firmados.filter(Boolean))
+        } else {
+          const publicos = await pedirDocsPublicos(lawyer.id)
+          if (!cancelled) setDocs(publicos)
+        }
+      } catch { /* sin documentos → la sección no se pinta */ }
+      if (!cancelled) setDocsState('done')
+    })()
+    return () => { cancelled = true }
+  }, [open, isSuperAdmin, lawyer.id])
+
   useEffect(() => {
     document.body.style.overflow = open ? 'hidden' : ''
     return () => { document.body.style.overflow = '' }
   }, [open])
 
-  // Al cerrar el modal, colapsa el panel de comentarios (próxima apertura limpia).
-  useEffect(() => { if (!open) setReviewsOpen(false) }, [open])
+  // Al cerrar el modal, colapsa el panel de comentarios y el visor de la foto
+  // (próxima apertura limpia).
+  useEffect(() => { if (!open) { setReviewsOpen(false); setFotoAmpliada(null) } }, [open])
 
   // Carga perezosa de los comentarios: solo la primera vez que se despliegan.
   async function toggleReviews() {
@@ -140,6 +248,8 @@ export default function LawyerCard({
         tabIndex={ghost ? -1 : 0}
         aria-hidden={ghost || undefined}
         onKeyDown={(e) => e.key === 'Enter' && setOpen(true)}
+        onMouseEnter={precargarDocs}
+        onFocus={precargarDocs}
       >
         <div className={styles.photoWrap}>
           {lawyer.foto_url
@@ -215,22 +325,37 @@ export default function LawyerCard({
 
             {/* Header */}
             <div className={styles.modalHeader}>
-              <div className={styles.modalPhotoWrap}>
-                {lawyer.foto_url
-                  ? (
-                    <img
-                      src={lawyer.foto_url}
-                      alt={lawyer.nombre}
-                      className={styles.modalPhoto}
-                      width="84"
-                      height="84"
-                      loading="eager"
-                      decoding="async"
-                    />
-                  )
-                  : <span className={styles.modalInitials}>{initials}</span>
-                }
-              </div>
+              {/* La foto se recorta en círculo (object-fit: cover), así que
+                  una cara encuadrada de lejos quedaba diminuta. Al pulsarla se
+                  abre completa y sin recortar en el visor. */}
+              {lawyer.foto_url ? (
+                <button
+                  type="button"
+                  className={`${styles.modalPhotoWrap} ${styles.modalPhotoBtn}`}
+                  onClick={() => setFotoAmpliada(lawyer.foto_url)}
+                  aria-label={`Ver la foto de ${lawyer.nombre} ${lawyer.apellido || ''}`.trim()}
+                >
+                  <img
+                    src={lawyer.foto_url}
+                    alt={lawyer.nombre}
+                    className={styles.modalPhoto}
+                    width="104"
+                    height="104"
+                    loading="eager"
+                    decoding="async"
+                  />
+                  <span className={styles.modalPhotoLupa} aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor"
+                      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5M11 8v6M8 11h6" />
+                    </svg>
+                  </span>
+                </button>
+              ) : (
+                <div className={styles.modalPhotoWrap}>
+                  <span className={styles.modalInitials}>{initials}</span>
+                </div>
+              )}
               <div className={styles.modalHeaderText}>
                 {lawyer.area_derecho && (
                   <p className={styles.modalAreas}>
@@ -381,8 +506,36 @@ export default function LawyerCard({
               {isSuperAdmin && <InfoRow icon={<svg viewBox="0 0 24 24" fill="none" stroke="var(--gold)" strokeWidth="1.5" width="18" height="18"><path d="M22 16.92v3a2 2 0 0 1-2.18 2A19.86 19.86 0 0 1 3.09 5.18 2 2 0 0 1 5.08 3h3a2 2 0 0 1 2 1.72c.13.81.36 1.6.68 2.34a2 2 0 0 1-.45 2.11L8.91 10.6a16 16 0 0 0 6.49 6.49l1.43-1.43a2 2 0 0 1 2.11-.45c.74.32 1.53.55 2.34.68A2 2 0 0 1 22 16.92z"/></svg>} label="Teléfono" value={lawyer.telefono} />}
               {isSuperAdmin && <InfoRow icon={<svg viewBox="0 0 24 24" fill="none" stroke="var(--gold)" strokeWidth="1.5" width="18" height="18"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>} label="Email" value={lawyer.email} />}
               <InfoRow icon={<svg viewBox="0 0 24 24" fill="none" stroke="var(--gold)" strokeWidth="1.5" width="18" height="18"><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/></svg>} label="Años de experiencia" value={lawyer.experiencia} />
-              <InfoRow icon={<svg viewBox="0 0 24 24" fill="none" stroke="var(--gold)" strokeWidth="1.5" width="18" height="18"><rect x="2" y="3" width="20" height="18" rx="2"/><path d="M2 8h20M8 3v5"/></svg>} label="Tarjeta profesional" value={lawyer.tarjeta_profesional} />
+              <InfoRow icon={<svg viewBox="0 0 24 24" fill="none" stroke="var(--gold)" strokeWidth="1.5" width="18" height="18"><rect x="2" y="3" width="20" height="18" rx="2"/><path d="M2 8h20M8 3v5"/></svg>} label="Tarjeta profesional" value={lawyer.tarjeta_profesional || tarjetaNum} />
             </div>
+
+            {/* Documentos de confianza. Visibles para cualquiera; el visitante
+                recibe solo los públicos (sin la cuenta bancaria) y enlaces
+                firmados que caducan — ver el useEffect y api/professionals.js. */}
+            {(docsState === 'loading' || docs.length > 0) && (
+              <div className={styles.modalSection}>
+                <h4 className={styles.modalSectionTitle}>Documentos</h4>
+                {docsState === 'loading' ? (
+                  // Esqueleto, no un texto de espera: conserva la altura de la
+                  // sección para que el modal no salte cuando llegan las filas.
+                  <div className={styles.docsLista} aria-busy="true" aria-label="Cargando documentos">
+                    {[0, 1, 2].map(i => <div key={i} className={styles.docSkeleton} />)}
+                  </div>
+                ) : (
+                  <div className={styles.docsLista}>
+                    {docs.map(d => (
+                      <TarjetaPreview
+                        key={d.label}
+                        displayUrl={d.url}
+                        storagePath={d.path}
+                        label={d.label}
+                        variant="row"
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* CTA — lleva a la sección de consulta privada */}
             <button
@@ -418,6 +571,13 @@ export default function LawyerCard({
         </div>,
         document.body
       )}
+
+      {/* FUERA del portal del modal, a propósito. React propaga los eventos por
+          su árbol de componentes, no por el DOM: dentro del portal, el clic en
+          la X del visor subía hasta el overlay del modal (que cierra al recibir
+          clic) y se cerraban los dos a la vez. Como hermano, cerrar la foto solo
+          cierra la foto. */}
+      <ChatLightbox src={fotoAmpliada} onClose={() => setFotoAmpliada(null)} />
     </>
   )
 }
