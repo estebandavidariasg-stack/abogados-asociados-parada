@@ -122,6 +122,19 @@
   </section>
 
   <section>
+    <h2>3b · El motor del navegador (lo que usa la app hoy)</h2>
+    <p class="nota">
+      Esto es exactamente lo que hace el chat: grabar y, al mismo tiempo, pedirle
+      al navegador que transcriba. Es gratis e instantáneo. La duda es si en este
+      teléfono el micrófono deja hacer las dos cosas a la vez.
+    </p>
+    <button id="btnWeb">Probar el motor del navegador</button>
+    <p class="nota" id="estadoW"></p>
+    <table id="tablaW" hidden></table>
+    <div id="salidaW"></div>
+  </section>
+
+  <section>
     <h2>4 · Resultado</h2>
     <p class="nota">Copia esto y pégamelo en el chat.</p>
     <button id="btnCopiar" class="sec" disabled>Copiar resultados</button>
@@ -241,7 +254,9 @@ async function procesar(blob) {
       ['Tardó en revisarla', seg(medido.proceso)],
       ['Velocidad', veces.toFixed(1) + '× el tiempo real'],
     ])
-    const digitos = /\d[\d .-]{6,}/.test(medido.texto)
+    // Con comas, puntos o espacios entre cifras: "312 408 67 34", "1,2,3".
+    const soloCifras = (medido.texto.match(/\d/g) || []).length
+    const digitos = /\d[\d ,.\-]{6,}/.test(medido.texto) || soloCifras >= 7
     $('salida').innerHTML =
       `<p class="grande">${seg(medido.proceso)}</p>` +
       `<p class="nota">es lo que esperaría el filtro por una nota de ${medido.audio.toFixed(0)} s</p>` +
@@ -289,6 +304,84 @@ $('archivo').addEventListener('change', (e) => {
   if (f) procesar(f)
 })
 
+/* ── 3b · El motor del navegador ────────────────────────────────────────
+   Reproduce el orden EXACTO de la app: getUserMedia, MediaRecorder.start() y
+   despues SpeechRecognition.start(). Si en Android el microfono es exclusivo,
+   el reconocedor no recibe nada y devuelve vacio, o lanza 'audio-capture'.
+   Se anota el error para poder distinguir "no hay motor" de "no hay micro". */
+const web = { soporta: false, texto: '', error: '', eventos: 0 }
+let recW = null, srW = null, streamW = null
+
+$('btnWeb').addEventListener('click', async () => {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition
+  if (!SR) {
+    web.error = 'este navegador no trae el motor'
+    $('estadoW').innerHTML = '<span class="err">No existe SpeechRecognition en este navegador.</span>'
+    filas($('tablaW'), [['Motor de voz', 'no existe'], ['Conclusion', 'aqui nunca se podra revisar asi']])
+    return
+  }
+  web.soporta = true
+
+  if (recW) {                       // segunda pulsacion: parar
+    try { srW && srW.stop() } catch {}
+    try { recW.stop() } catch {}
+    return
+  }
+
+  try {
+    streamW = await navigator.mediaDevices.getUserMedia({ audio: true })
+  } catch (e) {
+    $('estadoW').innerHTML = '<span class="err">Sin microfono: ' + e.message + '</span>'
+    return
+  }
+
+  let finales = []
+  web.texto = ''; web.error = ''; web.eventos = 0
+
+  recW = new MediaRecorder(streamW)
+  recW.onstop = () => {
+    streamW.getTracks().forEach(t => t.stop())
+    recW = null
+    $('btnWeb').textContent = 'Probar otra vez'
+    $('btnWeb').classList.remove('rec')
+    // Se da un momento a que lleguen los ultimos resultados.
+    setTimeout(() => {
+      web.texto = finales.join(' ').trim()
+      const cifras = (web.texto.match(/\d/g) || []).length
+      $('estadoW').textContent = ''
+      filas($('tablaW'), [
+        ['Motor de voz', 'existe'],
+        ['Resultados recibidos', web.eventos],
+        ['Error del motor', web.error || 'ninguno'],
+        ['Veredicto', web.texto ? 'SI transcribe mientras graba' : 'NO transcribe mientras graba'],
+      ])
+      $('salidaW').innerHTML = web.texto
+        ? '<div class="texto"><b>Transcripcion:</b> ' + web.texto + '</div>' +
+          '<p class="nota">' + (cifras >= 7
+            ? 'Se oyeron ' + cifras + ' cifras: esta nota se habria bloqueado.'
+            : 'Solo ' + cifras + ' cifras sueltas.') + '</p>'
+        : '<p class="nota">Vacio. El grabador se quedo el microfono y el motor no oyo nada.</p>'
+      $('btnCopiar').disabled = false
+    }, 700)
+  }
+
+  srW = new SR()
+  srW.lang = 'es-CO'; srW.continuous = true; srW.interimResults = true
+  srW.onresult = (e) => {
+    web.eventos++
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      if (e.results[i].isFinal) finales.push(String(e.results[i][0]?.transcript || '').trim())
+    }
+  }
+  srW.onerror = (e) => { web.error = e?.error || 'desconocido' }
+
+  recW.start(100)
+  try { srW.start() } catch (e) { web.error = 'start: ' + e.message }
+  $('btnWeb').textContent = 'Detener'
+  $('btnWeb').classList.add('rec')
+  $('estadoW').textContent = 'Grabando y escuchando a la vez… di un numero de telefono.'
+})
+
 /* ── 4 · Copiar ────────────────────────────────────────────────────────── */
 $('btnCopiar').addEventListener('click', async () => {
   const veces = medido.audio ? (medido.audio / (medido.proceso / 1000)).toFixed(1) : '-'
@@ -302,6 +395,11 @@ $('btnCopiar').addEventListener('click', async () => {
     'Nota de ' + (medido.audio ? medido.audio.toFixed(1) : '-') + ' s',
     'Transcribir: ' + (medido.proceso != null ? seg(medido.proceso) : '-') + ' (' + veces + 'x tiempo real)',
     'Texto: ' + medido.texto,
+    '--- motor del navegador ---',
+    'Motor: ' + (web.soporta ? 'existe' : 'no existe'),
+    'Transcribe mientras graba: ' + (web.texto ? 'SI' : 'NO'),
+    'Error del motor: ' + (web.error || 'ninguno'),
+    'Texto del motor: ' + web.texto,
   ].join('\n')
   try {
     await navigator.clipboard.writeText(txt)
