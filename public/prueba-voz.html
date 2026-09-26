@@ -1,0 +1,315 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Prueba de transcripción en el teléfono · Parada Bridge</title>
+<!--
+  PÁGINA DE MEDICIÓN, NO DE PRODUCCIÓN. Sirve para saber cuánto tarda de
+  verdad Whisper dentro del navegador de un celular, antes de construir la
+  revisión de notas de voz en segundo plano. Bórrala cuando ya tengas los
+  números: public/prueba-voz.html
+
+  Está suelta en /public a propósito: no entra en el bundle de la app, no
+  añade una ruta y no carga nada mientras nadie la abra.
+-->
+<style>
+  :root {
+    --ink:    #472F29;
+    --crema:  #FFFEF1;
+    --oro:    #C9A84C;
+    --oro-dk: #8A6A28;
+    --borde:  rgba(109, 60, 27, 0.28);
+    --suave:  #5b4636;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 20px 16px 56px;
+    background: var(--crema);
+    color: var(--ink);
+    font: 16px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif;
+    -webkit-text-size-adjust: 100%;
+  }
+  main { max-width: 640px; margin: 0 auto; }
+  h1 { font-size: 1.32rem; line-height: 1.25; margin: 0 0 4px; text-wrap: balance; }
+  .sub { margin: 0 0 22px; color: var(--suave); font-size: 0.92rem; }
+
+  section {
+    border: 1px solid var(--borde);
+    border-radius: 14px;
+    background: #fff;
+    padding: 16px;
+    margin-bottom: 14px;
+  }
+  h2 { font-size: 0.98rem; margin: 0 0 10px; }
+  p  { margin: 0 0 10px; }
+  .nota { font-size: 0.85rem; color: var(--suave); }
+
+  button {
+    font: inherit;
+    font-weight: 600;
+    border-radius: 11px;
+    padding: 14px 18px;
+    width: 100%;
+    cursor: pointer;
+    border: 1px solid var(--ink);
+    background: var(--ink);
+    color: #fff;
+    transition: opacity .15s ease;
+  }
+  button.sec { background: #fff; color: var(--ink); }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  button + button { margin-top: 9px; }
+  button:focus-visible { outline: 3px solid var(--oro); outline-offset: 2px; }
+
+  .barra { height: 8px; border-radius: 999px; background: rgba(109,60,27,.14); overflow: hidden; margin: 12px 0 6px; }
+  .barra > i { display: block; height: 100%; width: 0; background: var(--oro-dk); transition: width .2s ease; }
+
+  .rec { color: #8e2f1d; font-weight: 700; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+  td { padding: 7px 0; border-bottom: 1px solid rgba(109,60,27,.12); vertical-align: top; }
+  td:first-child { color: var(--suave); padding-right: 12px; }
+  td:last-child  { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+  tr:last-child td { border-bottom: 0; }
+
+  .grande { font-size: 1.9rem; font-weight: 700; line-height: 1.1; margin: 2px 0 0; }
+  .texto {
+    margin-top: 10px; padding: 11px 13px; border-radius: 10px;
+    background: rgba(201,168,76,.12); font-size: 0.9rem;
+  }
+  .err { color: #8e2f1d; font-size: 0.9rem; }
+  [hidden] { display: none !important; }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>¿Cuánto tarda revisar una nota de voz en este teléfono?</h1>
+  <p class="sub">
+    Descarga el modelo de transcripción, graba una nota y cronometra. Todo ocurre
+    dentro de este navegador: el audio no se envía a ningún lado.
+  </p>
+
+  <section>
+    <h2>1 · Este dispositivo</h2>
+    <table id="equipo"></table>
+  </section>
+
+  <section>
+    <h2>2 · Descargar el modelo</h2>
+    <p class="nota">Son unos 40 MB. Se descargan una sola vez y quedan en la caché del navegador.</p>
+    <div class="barra" hidden id="barraM"><i id="fillM"></i></div>
+    <p class="nota" id="estadoM"></p>
+    <button id="btnM">Descargar y preparar</button>
+    <table id="tablaM" hidden></table>
+  </section>
+
+  <section>
+    <h2>3 · Grabar y cronometrar</h2>
+    <p class="nota">
+      Graba unos 20 o 30 segundos hablando normal. Di un número de teléfono a
+      propósito: así ves si lo detectaría.
+    </p>
+    <button id="btnGrabar" disabled>Grabar</button>
+    <button id="btnArchivo" class="sec" disabled>Usar un audio del teléfono</button>
+    <input type="file" id="archivo" accept="audio/*" hidden>
+    <p class="nota" id="estadoG"></p>
+    <table id="tablaG" hidden></table>
+    <div id="salida"></div>
+  </section>
+
+  <section>
+    <h2>4 · Resultado</h2>
+    <p class="nota">Copia esto y pégamelo en el chat.</p>
+    <button id="btnCopiar" class="sec" disabled>Copiar resultados</button>
+    <p class="nota" id="copiado"></p>
+  </section>
+</main>
+
+<script type="module">
+/* Se carga la versión 2.17.2 por ser la más rodada de transformers.js. El
+   modelo (Xenova/whisper-tiny, multilingüe y cuantizado) lo trae la CDN de
+   Hugging Face y el navegador lo cachea. */
+const URL_LIB = 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2'
+
+const $ = (id) => document.getElementById(id)
+const seg = (ms) => (ms / 1000).toFixed(1) + ' s'
+const mb  = (b)  => (b / 1024 / 1024).toFixed(1) + ' MB'
+const filas = (tabla, pares) => {
+  tabla.hidden = false
+  tabla.innerHTML = pares.map(([k, v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join('')
+}
+
+/* ── 1 · El equipo ─────────────────────────────────────────────────────── */
+const datos = {
+  navegador: navigator.userAgent,
+  nucleos:   navigator.hardwareConcurrency || 'desconocido',
+  memoria:   navigator.deviceMemory ? navigator.deviceMemory + ' GB' : 'no informa',
+  // Sin aislamiento de origen el modelo va a un solo núcleo: es la diferencia
+  // más grande entre un número bueno y uno malo.
+  hilos:     self.crossOriginIsolated ? 'sí (varios núcleos)' : 'no (un solo núcleo)',
+  webgpu:    ('gpu' in navigator) ? 'disponible' : 'no disponible',
+}
+filas($('equipo'), [
+  ['Núcleos', datos.nucleos],
+  ['Memoria', datos.memoria],
+  ['Varios hilos', datos.hilos],
+  ['WebGPU', datos.webgpu],
+  ['Navegador', `<span style="font-weight:400;font-size:.76rem">${navigator.userAgent}</span>`],
+])
+
+/* ── 2 · El modelo ─────────────────────────────────────────────────────── */
+let transcribir = null
+let bytes = 0
+const medido = { carga: null, audio: null, proceso: null, texto: '' }
+
+$('btnM').addEventListener('click', async () => {
+  $('btnM').disabled = true
+  $('barraM').hidden = false
+  $('estadoM').textContent = 'Cargando la librería…'
+  const t0 = performance.now()
+  try {
+    const { pipeline, env } = await import(URL_LIB)
+    env.allowLocalModels = false           // todo viene de la CDN
+    const vistos = new Map()
+    transcribir = await pipeline('automatic-speech-recognition', 'Xenova/whisper-tiny', {
+      quantized: true,
+      progress_callback: (p) => {
+        if (p.status === 'progress' && p.total) {
+          vistos.set(p.file, p.loaded)
+          bytes = [...vistos.values()].reduce((a, b) => a + b, 0)
+          $('fillM').style.width = Math.min(100, Math.round((p.loaded / p.total) * 100)) + '%'
+          $('estadoM').textContent = `Descargando ${p.file} · ${mb(bytes)}`
+        } else if (p.status === 'ready') {
+          $('fillM').style.width = '100%'
+        }
+      },
+    })
+    medido.carga = performance.now() - t0
+    $('estadoM').textContent = 'Listo. Ya puedes grabar.'
+    filas($('tablaM'), [
+      ['Tiempo de preparación', seg(medido.carga)],
+      ['Descargado ahora', bytes ? mb(bytes) : 'ya estaba en caché'],
+    ])
+    $('btnGrabar').disabled = false
+    $('btnArchivo').disabled = false
+  } catch (e) {
+    $('estadoM').innerHTML = `<span class="err">No se pudo cargar: ${e.message}</span>`
+    $('btnM').disabled = false
+  }
+})
+
+/* ── 3 · Grabar ────────────────────────────────────────────────────────── */
+/* A 16 kHz y mono, que es lo que espera Whisper. Se decodifica con el formato
+   que produzca cada sistema (webm/opus en Android, mp4/aac en iPhone) y se
+   remuestrea con un OfflineAudioContext, que es lo único que funciona igual
+   en los dos. */
+async function aMono16k(blob) {
+  const AC  = window.AudioContext || window.webkitAudioContext
+  const OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext
+  const ctx = new AC()
+  const decodificado = await ctx.decodeAudioData(await blob.arrayBuffer())
+  ctx.close?.()
+  const off = new OAC(1, Math.max(1, Math.ceil(decodificado.duration * 16000)), 16000)
+  const src = off.createBufferSource()
+  src.buffer = decodificado
+  src.connect(off.destination)
+  src.start()
+  const salida = await off.startRendering()
+  return { audio: salida.getChannelData(0), duracion: decodificado.duration }
+}
+
+async function procesar(blob) {
+  $('estadoG').textContent = 'Preparando el audio…'
+  $('salida').innerHTML = ''
+  try {
+    const { audio, duracion } = await aMono16k(blob)
+    medido.audio = duracion
+    $('estadoG').textContent = 'Transcribiendo… (no cierres la pestaña)'
+    const t0 = performance.now()
+    const r = await transcribir(audio, { language: 'spanish', task: 'transcribe' })
+    medido.proceso = performance.now() - t0
+    medido.texto = (r?.text || '').trim()
+
+    const veces = medido.audio ? (medido.audio / (medido.proceso / 1000)) : 0
+    $('estadoG').textContent = ''
+    filas($('tablaG'), [
+      ['Duración de la nota', medido.audio.toFixed(1) + ' s'],
+      ['Tardó en revisarla', seg(medido.proceso)],
+      ['Velocidad', veces.toFixed(1) + '× el tiempo real'],
+    ])
+    const digitos = /\d[\d .-]{6,}/.test(medido.texto)
+    $('salida').innerHTML =
+      `<p class="grande">${seg(medido.proceso)}</p>` +
+      `<p class="nota">es lo que esperaría el filtro por una nota de ${medido.audio.toFixed(0)} s</p>` +
+      `<div class="texto"><b>Transcripción:</b> ${medido.texto || '(vacía)'}</div>` +
+      `<p class="nota">${digitos ? '✓ Se detectó una ristra de números: esta nota se habría bloqueado.' : 'No se detectaron números seguidos.'}</p>`
+    $('btnCopiar').disabled = false
+  } catch (e) {
+    $('estadoG').innerHTML = `<span class="err">Falló: ${e.message}</span>`
+  }
+}
+
+let rec = null, trozos = [], stream = null
+$('btnGrabar').addEventListener('click', async () => {
+  if (rec) {                       // segunda pulsación: parar
+    rec.stop()
+    return
+  }
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+  } catch (e) {
+    $('estadoG').innerHTML = `<span class="err">Sin micrófono: ${e.message}</span>`
+    return
+  }
+  trozos = []
+  rec = new MediaRecorder(stream)
+  rec.ondataavailable = (e) => { if (e.data.size) trozos.push(e.data) }
+  rec.onstop = async () => {
+    stream.getTracks().forEach(t => t.stop())
+    const blob = new Blob(trozos, { type: rec.mimeType || 'audio/webm' })
+    rec = null
+    $('btnGrabar').textContent = 'Grabar otra'
+    $('btnGrabar').classList.remove('rec')
+    await procesar(blob)
+  }
+  rec.start()
+  $('btnGrabar').textContent = 'Detener y medir'
+  $('btnGrabar').classList.add('rec')
+  $('estadoG').textContent = 'Grabando…'
+})
+
+$('btnArchivo').addEventListener('click', () => $('archivo').click())
+$('archivo').addEventListener('change', (e) => {
+  const f = e.target.files?.[0]
+  e.target.value = ''
+  if (f) procesar(f)
+})
+
+/* ── 4 · Copiar ────────────────────────────────────────────────────────── */
+$('btnCopiar').addEventListener('click', async () => {
+  const veces = medido.audio ? (medido.audio / (medido.proceso / 1000)).toFixed(1) : '-'
+  const txt = [
+    'PRUEBA DE TRANSCRIPCION EN EL NAVEGADOR',
+    'Navegador: ' + datos.navegador,
+    'Nucleos: ' + datos.nucleos + ' | Memoria: ' + datos.memoria,
+    'Varios hilos: ' + datos.hilos + ' | WebGPU: ' + datos.webgpu,
+    'Preparar el modelo: ' + (medido.carga != null ? seg(medido.carga) : '-'),
+    'Descargado: ' + (bytes ? mb(bytes) : 'estaba en cache'),
+    'Nota de ' + (medido.audio ? medido.audio.toFixed(1) : '-') + ' s',
+    'Transcribir: ' + (medido.proceso != null ? seg(medido.proceso) : '-') + ' (' + veces + 'x tiempo real)',
+    'Texto: ' + medido.texto,
+  ].join('\n')
+  try {
+    await navigator.clipboard.writeText(txt)
+    $('copiado').textContent = 'Copiado. Pégamelo en el chat.'
+  } catch {
+    $('copiado').innerHTML = '<textarea style="width:100%;height:150px;font:12px/1.4 monospace">' + txt + '</textarea>'
+  }
+})
+</script>
+</body>
+</html>

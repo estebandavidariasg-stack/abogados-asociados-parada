@@ -662,6 +662,37 @@ export async function revisarContactoArchivo(file, { roomId, authHeader } = {}) 
   return { contiene: data?.contiene_contacto === true, motivo: data?.motivo || '', revisado: true, aviso: '' }
 }
 
+/* ── Notas de voz que nadie pudo revisar ──────────────────────────
+   La revisión de una nota de voz se apoya en la Web Speech API del propio
+   navegador, que es gratis pero no está en todas partes:
+
+     · Escritorio Chrome/Edge → transcribe, y la nota se revisa como un texto.
+     · Android → el micrófono es EXCLUSIVO. Se lo queda el MediaRecorder y el
+       reconocedor no recibe audio: devuelve vacío siempre.
+     · Firefox e iOS → no existe el motor.
+
+   Bloquear el envío sin transcripción dejaba las notas de voz inservibles en
+   casi todo teléfono, que es donde se usa esta plataforma. Así que la nota se
+   envía y la falta de revisión se MUESTRA: el profesional y el administrador
+   ven que esa nota no pasó por el filtro y pueden oírla. No hace falta columna
+   nueva: la ausencia de `transcripcion` ya lo dice.
+
+   Es un aflojamiento consciente del filtro, y solo para las notas de voz: el
+   texto y los archivos se siguen revisando siempre, en todos los equipos. */
+export const audioSinRevisar = (m) =>
+  m?.message_type === 'audio' && !String(m?.transcripcion || '').trim()
+
+export function AvisoAudioSinRevisar() {
+  return (
+    <span
+      className="aapAudioNr"
+      title="El navegador de quien la grabó no pudo transcribirla, así que esta nota no pasó por el filtro de datos de contacto."
+    >
+      sin revisar
+    </span>
+  )
+}
+
 /* ── Transcripción de notas de voz con la Web Speech API (gratis) ──────────
    Corre EN PARALELO al MediaRecorder mientras se graba: el navegador
    reconoce el habla (es-CO) y al parar devuelve el texto, que uploadAudio
@@ -877,6 +908,22 @@ const ADJ_CSS = `
 .aapAdjDl:disabled { opacity: 0.38; cursor: not-allowed; }
 .aapAdjDl svg { display: block; }
 @media (prefers-reduced-motion: reduce) { .aapAdjDl { transition: none; } }
+
+/* Distintivo de nota de voz que no pudo revisarse. Hereda el color de la
+   burbuja y se apoya en el borde, no en un fondo de color: tiene que leerse
+   igual sobre burbuja clara y oscura. */
+.aapAudioNr {
+  display: inline-block;
+  margin-top: 4px;
+  padding: 1px 7px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  opacity: 0.75;
+  cursor: help;
+}
 `
 
 // Un solo <style> para toda la app: el bloque va en el <head> al importar el

@@ -1610,6 +1610,10 @@ export default function ChatSection() {
   // Aviso ligero de fallo de envío/adjunto (se autolimpia) — antes esos
   // errores eran silenciosos y el cliente perdía el mensaje sin enterarse.
   const [sendError, setSendError] = useState('')
+  /* Se enciende cuando una nota de voz sale sin transcribir (Android,
+     Firefox, iOS). Se avisa UNA vez por sesión: repetirlo en cada nota
+     sería ruido, y lo que hay que dejar claro es la regla, no el hecho. */
+  const [avisoAudio, setAvisoAudio] = useState(false)
   useEffect(() => {
     if (!sendError) return
     const t = setTimeout(() => setSendError(''), 4000)
@@ -2872,11 +2876,14 @@ export default function ChatSection() {
   async function uploadAudio(blob, mimeType = 'audio/webm', transcripcion = '') {
     if (!roomId) return
     const texto = String(transcripcion || '').trim()
-    // Sin transcripción no hay nada que revisar, y una nota de voz es la
-    // forma más fácil de dictar un teléfono. Antes se enviaba igual: en un
-    // navegador sin Web Speech (Firefox) NINGÚN audio se revisaba jamás.
-    if (!texto) { setSendError('No se pudo transcribir la nota de voz para revisarla, así que no se envió. Escribe el mensaje o adjunta un archivo.'); return }
-    if (contieneContacto(texto)) { setContactoWarning(true); return }
+    /* Cuando el navegador SÍ transcribe, la nota se revisa como un texto y se
+       bloquea igual. Cuando no puede (Android se queda el micrófono, Firefox e
+       iOS no tienen el motor) la nota se envía de todos modos y queda marcada
+       «sin revisar» para el profesional y el administrador: exigir la
+       transcripción dejaba las notas de voz inservibles en casi todo teléfono.
+       Ver `audioSinRevisar` en chatFiles.jsx. */
+    if (texto && contieneContacto(texto)) { setContactoWarning(true); return }
+    if (!texto) setAvisoAudio(true)
     setUploading(true); setSendError('')
     let path = null
     try {
@@ -3406,6 +3413,15 @@ export default function ChatSection() {
                   <div role="alert" onClick={() => setSendError('')}
                     style={{ margin:'6px 0 0', padding:'8px 12px', borderRadius:8, background:'#fee2e2', color:'#991b1b', fontSize:13, cursor:'pointer' }}>
                     {sendError}
+                  </div>
+                )}
+
+                {avisoAudio && (
+                  <div role="status" onClick={() => setAvisoAudio(false)}
+                    style={{ margin:'6px 0 0', padding:'8px 12px', borderRadius:8, background:'#fdf6e3', color:'#6b4e16', fontSize:13, cursor:'pointer' }}>
+                    Tu nota de voz se envió. Este navegador no pudo transcribirla, así que queda
+                    marcada como <b>sin revisar</b> para el profesional. Recuerda que compartir
+                    teléfonos, correos o direcciones por el chat incumple los términos.
                   </div>
                 )}
 

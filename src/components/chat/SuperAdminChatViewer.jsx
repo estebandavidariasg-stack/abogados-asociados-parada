@@ -4,7 +4,8 @@ import { supabase, getAuthHeaders } from '../../lib/supabase'
 import styles from './SuperAdminChatViewer.module.css'
 import { IconTrash, IconPaperclip, IconFirma, IconMic } from '../shared/Icons'
 import AudioPlayer from './AudioPlayer'
-import { downloadChatFile, descargarDesdeUrl, AdjuntoChat, VisorArchivo, ChatImage, ChatLightbox, parseFichas, FichasContacto } from '../../lib/chatFiles'
+import { downloadChatFile, descargarDesdeUrl, AdjuntoChat, VisorArchivo, ChatImage, ChatLightbox, parseFichas, FichasContacto, audioSinRevisar, AvisoAudioSinRevisar
+} from '../../lib/chatFiles'
 import { urlFirmada } from '../../lib/firmaService'
 
 // Mensajes de firma electrónica: su `content` es un JSON (t: 'firma' | 'firma_ok').
@@ -1131,6 +1132,7 @@ export default function SuperAdminChatViewer({ initialRoomId = null }) {
                             {msg.file_size ? <span className={styles.fileSize}> · {formatSize(msg.file_size)}</span> : null}
                           </span>
                           <AudioPlayer src={msg.file_url} mine={true} />
+                          {audioSinRevisar(msg) && <AvisoAudioSinRevisar />}
                         </div>
                       ) : firma ? (
                         // Mensaje de firma electrónica: preview de los documentos

@@ -9,7 +9,7 @@ import AudioPlayer from './AudioPlayer'
 import {
   ChatImage, AdjuntoChat, VisorArchivo, subirArchivoChat, parseFichas, FichasContacto,
   validarAdjuntoChat, CHAT_FILE_ACCEPT, prepararAdjuntoChat, nombreArchivoSeguro, describirErrorSubida, revisarContactoArchivo, crearTranscriptor,
-  crearGrabadorAudio, extAudio, mimeAudioLimpio, describirErrorMicrofono, AUDIO_CONSTRAINTS,
+  crearGrabadorAudio, extAudio, mimeAudioLimpio, describirErrorMicrofono, AUDIO_CONSTRAINTS, audioSinRevisar, AvisoAudioSinRevisar,
 } from '../../lib/chatFiles'
 import { IconPaperclip, IconMic, IconFirma, IconCheck } from '../shared/Icons'
 import { pedirIA } from '../../lib/aiClient'
@@ -876,8 +876,10 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
     // Sin transcripción no hay nada que revisar, y una nota de voz es la
     // forma más fácil de dictar un teléfono. Antes se enviaba igual: en un
     // navegador sin Web Speech (Firefox) NINGÚN audio se revisaba jamás.
-    if (!texto) { setToast('No se pudo transcribir la nota de voz para revisarla, así que no se envió. Escribe el mensaje o adjunta un archivo.'); return }
-    if (contieneContacto(texto)) { setContactoBlocked(true); return }
+    /* Si el navegador transcribe, la nota se revisa como un texto. Si no puede
+       (Android se queda el micrófono; Firefox e iOS no traen el motor) se
+       envía igual y se marca «sin revisar». Ver chatFiles.jsx. */
+    if (texto && contieneContacto(texto)) { setContactoBlocked(true); return }
     setUploadingAudio(true)
     let path = null
     try {
@@ -1529,7 +1531,10 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
                       {isAudio ? (
                         // Color por rol: profesional (esMio) → player navy (theme light);
                         // cliente → player dorado (theme dark).
-                        <AudioPlayer src={m.file_url} mine={true} theme={esMio ? 'light' : 'dark'} />
+                        <>
+                          <AudioPlayer src={m.file_url} mine={true} theme={esMio ? 'light' : 'dark'} />
+                          {audioSinRevisar(m) && <AvisoAudioSinRevisar />}
+                        </>
                       ) : (m.message_type === 'file' || m.file_url) ? (
                         isImage(m.file_name) ? (
                           <ChatImage
