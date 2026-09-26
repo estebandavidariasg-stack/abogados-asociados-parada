@@ -1,8 +1,9 @@
-// src/components/chat/TriagePanel.jsx — Asistente de admisión del cliente
+// src/components/chat/TriagePanel.jsx — Asistente de Consulta (lado del cliente)
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { pedirIA } from '../../lib/aiClient';
 import styles from './TriagePanel.module.css';
+import { AVISO_COSTO_ANTES } from '../../lib/cobroAsesoria'
 
 const PLANTILLAS = [
   'Tengo un problema de [área]. Pasó [cuándo]. Quiero [objetivo].',
@@ -12,7 +13,17 @@ const PLANTILLAS = [
 
 const SALUDO = '¡Hola! Cuéntame brevemente tu situación y te oriento, además de recomendarte al profesional ideal. ¿Qué necesitas?';
 
-const IconChispa = (p) => (<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true" {...p}><path d="M12 2l1.9 5.6L19.5 9.4 14 11.4 12 17l-2-5.6L4.5 9.4 10.1 7.6z" /><path d="M19 14l.8 2.2L22 17l-2.2.8L19 20l-.8-2.2L16 17l2.2-.8z" /></svg>);
+/* Pluma de escribano. Antes eran dos destellos: el cliché universal de "IA",
+   que no dice nada de lo que hace este asistente ni de dónde está el cliente.
+   La pluma sí: es el oficio. Trazo, como el resto del set de iconos. */
+const IconPluma = (p) => (
+  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"
+    strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...p}>
+    <path d="M20.2 12.2a6 6 0 0 0-8.5-8.5L5 10.5V19h8.5z" />
+    <path d="M16 8 2 22" />
+    <path d="M17.5 15H9" />
+  </svg>
+)
 const IconEnviar = (p) => (<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...p}><path d="M22 2 11 13" /><path d="M22 2 15 22l-4-9-9-4z" /></svg>);
 const IconBombilla = (p) => (<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...p}><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.3 1 2.1V17h6v-.2c0-.8.4-1.6 1-2.1A7 7 0 0 0 12 2z" /></svg>);
 const IconChevron = (p) => (<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...p}><path d="m6 9 6 6 6-6" /></svg>);
@@ -141,15 +152,36 @@ export default function TriagePanel({ tipoProfesional = 'abogado', onIniciarChat
       )}
       <div className={styles.card}>
         <header className={styles.header}>
-          <span className={styles.brandMark}><IconChispa /></span>
+          <span className={styles.brandMark}><IconPluma /></span>
           <div className={styles.headText}>
-            <strong className={styles.brandName}>Asistente de admisión</strong>
+            <strong className={styles.brandName}>Asistente de Consulta</strong>
             <span className={styles.disclaimer}>Orientación general. No constituye asesoría legal ni genera relación abogado-cliente.</span>
           </div>
           {restantes != null && <span className={styles.restantes}>Te quedan {restantes}</span>}
         </header>
 
         <div className={styles.body}>
+          {/* El precio, desde el primer segundo. Este panel es donde el cliente
+              cuenta su caso: enterarse del costo al final, después de haberlo
+              escrito todo, ya no le sirve para decidir. Mismo texto y misma
+              cifra que el aviso del formulario (lib/cobroAsesoria). */}
+          <div className={styles.avisoCosto}>
+            <span className={styles.avisoCostoIcono} aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor"
+                strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="8.5" />
+                <path d="M14.4 9.3a2.8 2.8 0 0 0-2.4-1.1c-1.5 0-2.4.8-2.4 1.8 0 2.4 5 1 5 3.6 0 1.1-1 1.9-2.6 1.9a2.9 2.9 0 0 1-2.5-1.2" />
+                <path d="M12 6.6v1.6M12 15.6v1.6" />
+              </svg>
+            </span>
+            <span className={styles.avisoCostoCuerpo}>
+              <span className={styles.avisoCostoCifra}>
+                <strong>{AVISO_COSTO_ANTES.cifra}</strong> {AVISO_COSTO_ANTES.sufijo}
+              </span>
+              <span className={styles.avisoCostoTexto}>{AVISO_COSTO_ANTES.texto}</span>
+            </span>
+          </div>
+
           <div className={styles.thread} ref={threadRef}>
             {thread.map((m, i) => (
               m.role === 'user' ? (
@@ -158,14 +190,14 @@ export default function TriagePanel({ tipoProfesional = 'abogado', onIniciarChat
                 </motion.div>
               ) : (
                 <motion.div key={i} className={styles.aiRow} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.22 }}>
-                  <span className={styles.aiAvatar}><IconChispa /></span>
+                  <span className={styles.aiAvatar}><IconPluma /></span>
                   <div className={styles.bubAi}>{m.content}</div>
                 </motion.div>
               )
             ))}
             {busy && (
               <div className={styles.aiRow}>
-                <span className={styles.aiAvatar}><IconChispa /></span>
+                <span className={styles.aiAvatar}><IconPluma /></span>
                 <div className={styles.thinking} aria-label="Pensando"><span /><span /><span /></div>
               </div>
             )}

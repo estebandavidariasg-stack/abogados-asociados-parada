@@ -4,7 +4,7 @@ import { supabase, getAuthHeaders } from '../../lib/supabase'
 import styles from './SuperAdminChatViewer.module.css'
 import { IconTrash, IconPaperclip, IconFirma, IconMic } from '../shared/Icons'
 import AudioPlayer from './AudioPlayer'
-import { openChatFile, ChatImage, ChatLightbox, parseFichas, FichasContacto } from '../../lib/chatFiles'
+import { downloadChatFile, descargarDesdeUrl, AdjuntoChat, VisorArchivo, ChatImage, ChatLightbox, parseFichas, FichasContacto } from '../../lib/chatFiles'
 import { urlFirmada } from '../../lib/firmaService'
 
 // Mensajes de firma electrónica: su `content` es un JSON (t: 'firma' | 'firma_ok').
@@ -17,17 +17,17 @@ function parseFirmaMsg(content) {
   return null
 }
 
-// Abre un documento del bucket privado de firmas en pestaña nueva. Abrimos la
-// ventana de forma síncrona (antes del await) para no dispararla en los popups.
-async function verDocFirma(path) {
-  if (!path) return
-  const win = window.open('', '_blank')
+// Descarga un documento del bucket privado de firmas. Antes abría una pestaña
+// con la URL firmada a la vista; ahora el archivo baja al equipo y nada sale
+// de la plataforma. `nombre` es con el que se guarda.
+async function verDocFirma(path, nombre) {
+  if (!path) return false
   try {
     const headers = await getAuthHeaders()
     const url = await urlFirmada(path, headers)
-    if (url && win) win.location = url
-    else if (win) win.close()
-  } catch { if (win) win.close() }
+    if (!url) return false
+    return await descargarDesdeUrl(url, nombre || path.split('/').pop() || 'documento.pdf')
+  } catch { return false }
 }
 
 // Icono de verificación estilo Lucide (shield-check), currentColor. Se usa en
@@ -213,6 +213,8 @@ export default function SuperAdminChatViewer({ initialRoomId = null }) {
   const [cfgDefaults, setCfgDefaults] = useState(null)
   // Tabs Chats / PQR
   const [lightbox,        setLightbox]        = useState(null)      // URL imagen ampliada
+  // Archivo abierto DENTRO de la plataforma (nunca en otra pestaña).
+  const [verArchivo,      setVerArchivo]      = useState(null)
   const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
   const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
 
@@ -1143,21 +1145,21 @@ export default function SuperAdminChatViewer({ initialRoomId = null }) {
                           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                             {firma.t === 'firma_ok' ? (
                               <>
-                                <button className={styles.fileBtn} onClick={() => verDocFirma(`${firma.solicitudId}/firmado.pdf`)} title="Ver documento firmado">
+                                <button className={styles.fileBtn} onClick={() => verDocFirma(`${firma.solicitudId}/firmado.pdf`, 'documento-firmado.pdf')} title="Descargar el documento firmado">
                                   <IconPaperclip size={14} /> <span className={styles.fileName}>Documento firmado</span>
                                 </button>
-                                <button className={styles.fileBtn} onClick={() => verDocFirma(`${firma.solicitudId}/certificado.pdf`)} title="Ver certificado de firma">
+                                <button className={styles.fileBtn} onClick={() => verDocFirma(`${firma.solicitudId}/certificado.pdf`, 'certificado-de-firma.pdf')} title="Descargar el certificado de firma">
                                   <IconPaperclip size={14} /> <span className={styles.fileName}>Certificado</span>
                                 </button>
                                 {(firma.origPath || firma.docPath) && (
-                                  <button className={styles.fileBtn} onClick={() => verDocFirma(firma.origPath || firma.docPath)} title="Ver documento original">
+                                  <button className={styles.fileBtn} onClick={() => verDocFirma(firma.origPath || firma.docPath, 'documento-original.pdf')} title="Descargar el documento original">
                                     <IconPaperclip size={14} /> <span className={styles.fileName}>Original</span>
                                   </button>
                                 )}
                               </>
                             ) : (
-                              <button className={styles.fileBtn} onClick={() => verDocFirma(firma.docPath || firma.origPath)} title="Ver documento a firmar">
-                                <IconPaperclip size={14} /> <span className={styles.fileName}>Ver documento a firmar</span>
+                              <button className={styles.fileBtn} onClick={() => verDocFirma(firma.docPath || firma.origPath, 'documento-a-firmar.pdf')} title="Descargar el documento a firmar">
+                                <IconPaperclip size={14} /> <span className={styles.fileName}>Documento a firmar</span>
                               </button>
                             )}
                           </div>
@@ -1172,13 +1174,15 @@ export default function SuperAdminChatViewer({ initialRoomId = null }) {
                             onOpen={setLightbox}
                           />
                         ) : (
-                          <button className={styles.fileBtn}
-                            onClick={() => openChatFile(msg.file_url)}
-                            title={msg.file_name || 'Abrir archivo'}>
-                            <IconPaperclip size={16} />
-                            <span className={styles.fileName}>{msg.file_name || msg.content || 'Archivo adjunto'}</span>
-                            {msg.file_size ? <span className={styles.fileSize}>{formatSize(msg.file_size)}</span> : null}
-                          </button>
+                          <AdjuntoChat
+                            src={msg.file_url}
+                            nombre={msg.file_name || msg.content || 'Archivo adjunto'}
+                            tamano={msg.file_size ? formatSize(msg.file_size) : null}
+                            btnClassName={styles.fileBtn}
+                            nombreClassName={styles.fileName}
+                            tamanoClassName={styles.fileSize}
+                            onVer={setVerArchivo}
+                          />
                         )
                       ) : (
                         <p className={styles.msgText}>{renderMensaje(msg.content)}</p>
@@ -1441,6 +1445,7 @@ export default function SuperAdminChatViewer({ initialRoomId = null }) {
       )}
 
       <ChatLightbox src={lightbox} onClose={() => setLightbox(null)} />
+      <VisorArchivo archivo={verArchivo} onClose={() => setVerArchivo(null)} />
     </div>
   )
 }

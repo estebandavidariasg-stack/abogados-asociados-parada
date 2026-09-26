@@ -6,18 +6,18 @@ import { contieneContacto } from '../../lib/validaciones'
 import styles from './ContadorChatDashboard.module.css'
 import AudioPlayer from './AudioPlayer'
 import {
-  ChatImage, openChatFile, subirArchivoChat, parseFichas, FichasContacto,
-  validarAdjuntoChat, prepararAdjuntoChat, nombreArchivoSeguro, describirErrorSubida, revisarContactoArchivo, crearTranscriptor,
+  ChatImage, AdjuntoChat, VisorArchivo, subirArchivoChat, parseFichas, FichasContacto,
+  validarAdjuntoChat, CHAT_FILE_ACCEPT, prepararAdjuntoChat, nombreArchivoSeguro, describirErrorSubida, revisarContactoArchivo, crearTranscriptor,
   crearGrabadorAudio, extAudio, mimeAudioLimpio, describirErrorMicrofono, AUDIO_CONSTRAINTS,
 } from '../../lib/chatFiles'
-import { IconPaperclip, IconMic, IconFirma } from '../shared/Icons'
+import { IconPaperclip, IconMic, IconFirma, IconCheck } from '../shared/Icons'
 import { pedirIA } from '../../lib/aiClient'
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
 import Markdown from '../shared/Markdown'
 import EnviarAFirmar from '../firma/EnviarAFirmar'
 import { firmantesPendientes } from '../../lib/firmaService'
 import {
-  COP, fetchCobroProfesional, fijarCobro, confirmarPagoAsesoria, formatMiles, parseMiles,
+  COP, fetchCobroProfesional, fijarCobro, confirmarPagoAsesoria, formatMiles, parseMiles, COBRO_MINIMO,
   AVISO_COBRO_PROFESIONAL,
 } from '../../lib/cobroAsesoria'
 
@@ -216,6 +216,9 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
   const [cobroNota, setCobroNota]   = useState('')
   const [cobroBusy, setCobroBusy]   = useState(false)
   const [cobroErr, setCobroErr]     = useState('')
+  // El boton de cobro cambia de peso segun haga falta actuar o no:
+  // dorado solido mientras no haya valor, discreto cuando ya esta puesto.
+  const cobroDefinido = cobro?.estado === 'pagado' || Number(cobro?.monto) > 0
 
   // ── Filtros del sidebar (búsqueda por nombre + rango de fechas) ──
   // Estado en el componente padre → los inputs se renderizan inline y no
@@ -300,6 +303,8 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
 
   // ── Lightbox para imagenes (click en thumbnail = abrir fullscreen) ──
   const [lightbox, setLightbox] = useState(null)
+  // Archivo que se está viendo dentro de la plataforma (no en otra pestaña).
+  const [verArchivo, setVerArchivo] = useState(null)
   const [firmaOpen, setFirmaOpen] = useState(false)
   const [adjuntarMenu, setAdjuntarMenu] = useState(false)
   const [dragging, setDragging] = useState(false)
@@ -720,6 +725,9 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
       const headers = await getAuthHeaders()
       const revision = await revisarContactoArchivo(file, { roomId: activeRoom.id, authHeader: headers.Authorization })
       if (revision.contiene) { setContactoBlocked(true); return }
+      // Si el revisor no pudo leerlo, NO se envía. Dejarlo pasar convertía
+      // cualquier fallo del filtro en una vía libre para datos de contacto.
+      if (!revision.revisado) { setToast('No pudimos revisar este archivo, así que no se envió. Intenta de nuevo en un momento.'); return }
       path = `chats/${activeRoom.id}/${Date.now()}_${nombreArchivoSeguro(file.name)}`
       const { error: upErr } = await subirArchivoChat({
         path, file, contentType: file.type || 'application/octet-stream', onProgress: setUploadPct,
@@ -840,7 +848,11 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
   async function uploadAudio(blob, mimeType = 'audio/webm', transcripcion = '') {
     if (!activeRoom) return
     const texto = String(transcripcion || '').trim()
-    if (texto && contieneContacto(texto)) { setContactoBlocked(true); return }
+    // Sin transcripción no hay nada que revisar, y una nota de voz es la
+    // forma más fácil de dictar un teléfono. Antes se enviaba igual: en un
+    // navegador sin Web Speech (Firefox) NINGÚN audio se revisaba jamás.
+    if (!texto) { setToast('No se pudo transcribir la nota de voz para revisarla, así que no se envió. Escribe el mensaje o adjunta un archivo.'); return }
+    if (contieneContacto(texto)) { setContactoBlocked(true); return }
     setUploadingAudio(true)
     let path = null
     try {
@@ -938,7 +950,13 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
     if (cobroBusy) return
     // Toda consulta tiene cobro: el valor es obligatorio y mayor a 0.
     const m = parseMiles(cobroMonto)
-    if (!m || m <= 0) { setCobroErr('Ingresa el valor de la consulta (mayor a 0).'); return }
+    if (!m || m <= 0) { setCobroErr('Ingresa el valor de la consulta.'); return }
+    // El mínimo se acepta al registrarse; si solo estuviera en el texto sería
+    // una regla de adorno. Aquí es donde de verdad se cumple.
+    if (m < COBRO_MINIMO) {
+      setCobroErr(`El mínimo por consulta es ${COP.format(COBRO_MINIMO)}.`)
+      return
+    }
     setCobroBusy(true); setCobroErr('')
     try {
       // Solo el precio: la cuenta para consignar es el certificado bancario
@@ -1215,76 +1233,109 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
         ) : (
           <>
             <div className={styles.chatHeader}>
+              {/* Solo la flecha, a la izquierda y centrada contra las dos líneas.
+                  Antes era una pastilla con la palabra "Volver" ENCIMA del título:
+                  se comía una línea entera de una cabecera que ya iba justa. */}
+              <button
+                type="button"
+                className={styles.btnBack}
+                onClick={() => setActiveRoom(null)}
+                aria-label="Volver a la lista de consultas"
+              >
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M15 18l-6-6 6-6" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </button>
               <div className={styles.chatMeta}>
-                <button
-                  type="button"
-                  className={styles.btnBackMobile}
-                  onClick={() => setActiveRoom(null)}
-                  aria-label="Volver a la lista de consultas"
-                >
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                    <path d="M15 18l-6-6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
-                  Volver
-                </button>
-                <p className={styles.chatTitle}>{activeRoom.area_derecho}</p>
-                <p className={styles.chatSubtitle}>
-                  Cliente · {activeRoom.client_nombre || 'Anónimo'}
-                  {activeRoom.ciudad ? ` · ${activeRoom.ciudad}` : ''}
+                {/* Mismo encabezado que ve el cliente al otro lado: una línea con
+                    a quién le hablas y otra con el estado. Antes eran tres cosas
+                    distintas (área en negrita, datos en gris claro y tres botones
+                    de colores) apiñadas en la misma banda blanca. */}
+                <p className={styles.chatTitle}
+                  title={`Consulta con ${activeRoom.client_nombre || 'cliente anónimo'}`}>
+                  Consulta con {activeRoom.client_nombre || 'cliente anónimo'}
+                </p>
+                <p className={styles.chatStatus}>
+                  <span
+                    aria-hidden="true"
+                    className={styles.chatStatusDot}
+                    style={{ background: pagoConfirmado ? '#43c465'
+                      : activeRoom.status === 'active' ? '#43c465'
+                      : activeRoom.status === 'waiting' ? '#e0b53c'
+                      : 'rgba(253,246,227,0.4)' }}
+                  />
+                  <span className={styles.chatStatusEstado}>
+                    {activeRoom.status === 'closed' ? 'Finalizada'
+                      : pagoConfirmado ? 'Pagada'
+                      : activeRoom.status === 'active' ? 'En curso'
+                      : 'Esperando'}
+                  </span>
+                  {activeRoom.area_derecho && (
+                    <span className={styles.chatStatusArea}> · {activeRoom.area_derecho}</span>
+                  )}
+                  {activeRoom.ciudad && <span className={styles.chatStatusMeta}> · {activeRoom.ciudad}</span>}
                   {activeRoom.created_at && (
-                    <span> · Inicio: {fmtHora(activeRoom.created_at)}</span>
+                    <span className={styles.chatStatusMeta}> · Inicio: {fmtHora(activeRoom.created_at)}</span>
                   )}
                 </p>
               </div>
+            </div>
 
-              {activeRoom.status !== 'closed' && (
+            {/* Acciones en franja propia bajo la cabecera. Mezcladas con el
+                título competían con él y con el estado por la misma banda. */}
+            {activeRoom.status !== 'closed' && (
                 <div className={styles.headerActions}>
-                  {!confirmClose && (
+                  {/* Con el pago confirmado, cobrar y pedir revisión ya no son
+                      acciones posibles: el dinero entró y el caso quedó cerrado
+                      en lo económico. Dejarlos ahí era ofrecer callejones sin
+                      salida; el estado lo cuenta la franja verde de abajo. */}
+                  {!confirmClose && !pagoConfirmado && (
                     verifiedRooms.has(activeRoom.id)
-                      ? <span className={styles.verificadoTag}>✓ Revisión solicitada</span>
+                      ? <span className="aap-chip aap-chip--ok"><IconCheck size={12} /> Revisión solicitada</span>
                       : <button
-                          className={styles.btnVerificar}
+                          className="aap-accion aap-accion--neutra"
                           onClick={() => setConfirmVerificar(true)}
                           title="Notificar al administrador para revisión de proceso"
                         >
                           Verificar
                         </button>
                   )}
-                  {!confirmClose && (
+                  {!confirmClose && !pagoConfirmado && (
                     cobro?.estado === 'pendiente' && cobro?.marcado_cliente_at ? (
                       <>
                         {cobro?.comprobante_path && (
                           <button
                             type="button"
-                            className={styles.btnVerificar}
-                            onClick={() => openChatFile(cobro.comprobante_path)}
+                            className="aap-accion aap-accion--neutra"
+                            onClick={() => setVerArchivo({ url: cobro.comprobante_path, nombre: (cobro.comprobante_path || '').split('/').pop() || 'comprobante' })}
                             title="Ver el comprobante de pago que adjuntó el cliente"
                           >
-                            📎 Comprobante del cliente
+                            <IconPaperclip size={14} />
+                            Comprobante del cliente
                           </button>
                         )}
                         <button
                           type="button"
-                          className={styles.btnVerificar}
-                          style={{ background: '#e8f5ec', borderColor: '#2e9e5f', color: '#1f5e3c', fontWeight: 700 }}
+                          className="aap-accion aap-accion--exito"
                           disabled={cobroBusy}
                           onClick={confirmarRecibido}
                           title="El cliente marcó que ya pagó — confirma que recibiste el pago"
                         >
-                          {cobroBusy ? 'Confirmando…' : '✓ Confirmar pago recibido'}
+                          {cobroBusy ? 'Confirmando…' : <><IconCheck size={12} /> Confirmar pago recibido</>}
                         </button>
                       </>
                     ) : (
-                      <button type="button" className={styles.btnVerificar} onClick={abrirCobro}
-                        title="Fijar el valor de la consulta">
-                        {cobro?.estado === 'pagado' ? '✓ Cobrado'
+                      <button type="button" onClick={abrirCobro}
+                        className={cobroDefinido ? "aap-accion aap-accion--sutil" : "aap-accion aap-accion--primaria"}
+                        title={cobroDefinido ? "Ver o cambiar el cobro de la consulta" : "Fijar el valor de la consulta"}>
+                        {cobro?.estado === 'pagado' ? <><IconCheck size={12} /> Cobrado</>
                           : Number(cobro?.monto) > 0 ? `Cobro · ${COP.format(Number(cobro.monto))}`
-                          : 'Cobro'}
+                          : 'Definir cobro'}
                       </button>
                     )
                   )}
                   {!confirmClose
-                    ? <button className={styles.btnClose} onClick={() => setConfirmClose(true)}>
+                    ? <button className="aap-accion aap-accion--peligro" onClick={() => setConfirmClose(true)}>
                         Finalizar consulta
                       </button>
                     : <div className={styles.confirmRow}>
@@ -1298,8 +1349,7 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
                       </div>
                   }
                 </div>
-              )}
-            </div>
+            )}
 
             {/* Luz verde — pago confirmado habilita datos de contacto y descargas */}
             {pagoConfirmado && (
@@ -1466,18 +1516,19 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
                             }}
                           />
                         ) : (
-                          <button
-                            className={styles.fileBtn}
-                            onClick={() => puedeDescargarSala
-                              ? openChatFile(m.file_url)
-                              : setToast('Por políticas de privacidad no puedes descargar este archivo.')
-                            }
-                            title={puedeDescargarSala ? 'Descargar archivo' : 'Archivo bloqueado por políticas de privacidad'}
-                          >
-                            <IconPaperclip size={16} />
-                            <span className={styles.fileName}>{m.file_name}</span>
-                            {m.file_size && <span className={styles.fileSize}>{formatSize(m.file_size)}</span>}
-                          </button>
+                          <AdjuntoChat
+                            src={m.file_url}
+                            nombre={m.file_name}
+                            tamano={m.file_size ? formatSize(m.file_size) : null}
+                            btnClassName={styles.fileBtn}
+                            nombreClassName={styles.fileName}
+                            tamanoClassName={styles.fileSize}
+                            onVer={setVerArchivo}
+                            bloqueado={!puedeDescargarSala}
+                            tituloBloqueo="Bloqueado por políticas de privacidad: se habilita cuando la consulta queda pagada"
+                            onBloqueado={() => setToast('Por políticas de privacidad no puedes abrir ni descargar este archivo.')}
+                            onError={setToast}
+                          />
                         )
                       ) : m.message_type === 'firma' ? (
                         <span className={styles.firmaMsg}>
@@ -1570,9 +1621,11 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
                     </>
                   )}
                 </div>
+                {/* Se aceptan TODOS los tipos: lo que no se pueda previsualizar se descarga. */}
                 <input
                   ref={fileRef}
                   type="file"
+                  accept={CHAT_FILE_ACCEPT}
                   style={{ display: 'none' }}
                   onChange={handleFile}
                 />
@@ -1698,7 +1751,7 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
               <label className={styles.cobroLabel}>Valor de la consulta (COP)</label>
               <input type="text" inputMode="numeric" value={cobroMonto}
                 onChange={e => { setCobroMonto(formatMiles(e.target.value)); setCobroErr('') }}
-                placeholder="Ej: 80.000"
+                placeholder={`Mínimo ${formatMiles(COBRO_MINIMO)}`}
                 className={`${styles.cobroInput} ${styles.cobroAmount}`} />
               <p className={styles.cobroHint}>
                 El cliente verá tu cuenta bancaria certificada (la del registro)
@@ -1786,6 +1839,9 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
           >×</button>
         </div>
       )}
+      {/* El visor vive en la raiz, no dentro de una burbuja: se porta a <body>
+          y asi no lo recorta el scroll del chat. */}
+      <VisorArchivo archivo={verArchivo} onClose={() => setVerArchivo(null)} />
     </div>
   )
 }

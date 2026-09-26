@@ -29,22 +29,53 @@ export function parseMiles(v) {
   return Number(String(v ?? '').replace(/\D/g, '')) || 0
 }
 
+// Piso del cobro de una asesoría. NO es una sugerencia: es el mínimo que el
+// profesional acepta al registrarse y el que valida el formulario de cobro.
+// Vive aquí, en un solo sitio, para que cambiarlo sea cambiar un número: lo
+// leen el aviso del chat, la validación del cobro y las condiciones que se
+// muestran antes del registro.
+export const COBRO_MINIMO = 200000
+
 /* Aviso de apertura de la consulta: toda consulta tiene cobro. Se pinta como
    banner destacado en los tres chats (cliente, abogado y contador). No se
    guarda como mensaje: el cliente no puede escribir mensajes de sistema
    (RLS) y así el profesional lo ve siempre, aunque entre días después. */
 export const AVISO_COBRO_CLIENTE = {
   titulo: 'Esta consulta tiene cobro',
+  // El piso SÍ se dice: el cliente merece saber de qué orden de precio habla
+  // antes de contar su caso. El valor exacto sigue siendo del profesional.
   texto:
-    'El profesional definirá el valor antes de asesorarte. Lo verás aquí mismo en el chat ' +
-    'y el pago se hace directamente a él.',
+    `Desde ${COP.format(COBRO_MINIMO)}. El profesional te dice el valor exacto aquí mismo, ` +
+    'antes de asesorarte. Le pagas a él directamente.',
 }
 
+/* Una línea para los botones que CREAN la consulta (formulario y modal de
+   nueva consulta). Va ahí, y no solo dentro del chat, porque es el único
+   momento en el que saber el precio todavía sirve para decidir: dentro del
+   chat el cliente ya escribió su caso y ya eligió con quién hablar. */
+/* La cifra va separada del resto a propósito: es el dato que decide, y en un
+   párrafo corrido pesaba lo mismo que la palabra "directamente".
+
+   Una idea por frase. La versión anterior metía cuatro en una sola oración
+   (quién pone el precio, cuándo, a quién se le paga y de qué forma) y con
+   tres actores enredados: "El profesional confirma el valor exacto antes de
+   asesorarte y le pagas directamente a él". Además decía "confirma", que
+   suena a que el precio ya se sabía; no se sabe, lo pone él. */
+export const AVISO_COSTO_ANTES = {
+  cifra: `Desde ${COP.format(COBRO_MINIMO)}`,
+  // Sin esto la cifra no dice de qué es: el lector tenía que deducirlo.
+  sufijo: 'por la consulta',
+  texto: 'El profesional te dice el valor exacto antes de empezar. Le pagas a él directamente.',
+}
+
+// Este aviso lo ven SOLO los profesionales (abogado y contador). Al cliente se
+// le dice el piso, no el valor: el exacto lo pone el profesional en cada caso.
 export const AVISO_COBRO_PROFESIONAL = {
   titulo: 'Define el cobro antes de asesorar',
   texto:
-    'Esta consulta tiene cobro obligatorio. Usa el botón Cobro del encabezado para fijar el valor; ' +
-    'el cliente te paga directamente.',
+    'Fija el valor con el botón Cobro antes de asesorar. ' +
+    `El mínimo es ${COP.format(COBRO_MINIMO)}; de ahí hacia arriba lo decides tú. ` +
+    'El cliente te paga directamente a ti.',
 }
 
 // Etiquetas legibles de estado (para chips).

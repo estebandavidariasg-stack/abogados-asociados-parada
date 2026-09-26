@@ -1210,3 +1210,16 @@
   }
   .actionsRow button[type="submit"] { width: 100%; }
 }
+
+/* Dos lecturas en paralelo (tasa de éxito y reparto) en vez de dos bloques
+   apilados a ancho completo. `align-items: start` es deliberado: sin él la
+   tarjeta más corta se estira hasta la altura de la otra y queda medio metro
+   de blanco debajo de su contenido. Por debajo de ~760 px de rejilla vuelven
+   a apilarse solas, sin breakpoint. */
+.statsCols {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  gap: 1.25rem;
+  margin-top: 1.25rem;
+  align-items: start;
+}

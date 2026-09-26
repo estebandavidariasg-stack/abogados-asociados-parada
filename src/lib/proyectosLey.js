@@ -37,6 +37,86 @@ export const apoyaMeta = (k) => APOYA.find(a => a.key === k) || { key: k, label:
 
 export const OBS_MAX = 500
 
+/* ── Títulos de la norma ────────────────────────────────────────────────────
+   Una ley se divide en TÍTULO I, TÍTULO II… y los artículos cuelgan de ellos.
+   Cada artículo guarda el NOMBRE de su título en `seccion`; el numeral NO se
+   guarda: se calcula por orden de aparición. Es a propósito.
+
+   El numeral del documento no sirve como dato: el OCR lo destroza ("TÍTULO 11"
+   por "TÍTULO II") y, sobre todo, deja de ser cierto en cuanto el admin añade
+   o quita un título en el editor. Derivarlo del orden hace que la numeración
+   siempre esté bien sin que nadie la mantenga. */
+const ROMANOS = [
+  [1000, 'M'], [900, 'CM'], [500, 'D'], [400, 'CD'], [100, 'C'], [90, 'XC'],
+  [50, 'L'], [40, 'XL'], [10, 'X'], [9, 'IX'], [5, 'V'], [4, 'IV'], [1, 'I'],
+]
+export function romano(n) {
+  let x = Math.floor(Number(n))
+  if (!Number.isFinite(x) || x < 1 || x > 3999) return String(n)
+  let out = ''
+  for (const [valor, letra] of ROMANOS) {
+    while (x >= valor) { out += letra; x -= valor }
+  }
+  return out
+}
+
+/* ── Nombre del proyecto en Title Case ────────────────────────────
+   Los documentos vienen GRITADOS ("SEGURIDAD HÍDRICA Y RIEGO PARA EL
+   DESARROLLO") y así se veían en las tarjetas del listado. En español las
+   palabras de enlace van en minúscula salvo la primera:
+   "Seguridad Hídrica y Riego para el Desarrollo".
+
+   Las siglas de un texto que YA viene en mayúsculas y minúsculas se respetan
+   (IVA, ICBF, DANE): si el nombre entero está en mayúsculas no hay forma de
+   distinguir una sigla de una palabra, así que ahí sí se normaliza todo. */
+const ENLACES = new Set([
+  'a', 'al', 'ante', 'bajo', 'con', 'contra', 'de', 'del', 'desde', 'e', 'el',
+  'en', 'entre', 'hacia', 'hasta', 'la', 'las', 'lo', 'los', 'o', 'u', 'para',
+  'por', 'segun', 'sin', 'so', 'sobre', 'tras', 'un', 'una', 'unas', 'unos',
+  'y', 'que', 'su', 'sus', 'se', 'como',
+])
+const sinTildes = (t) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+
+export function tituloCase(txt) {
+  const base = String(txt || '').trim().replace(/\s+/g, ' ')
+  if (!base) return ''
+  const gritado = base === base.toUpperCase()
+  const trozos = base.split(/(\s+)/)
+  let palabra = 0
+  return trozos.map((tro) => {
+    if (!tro || /^\s+$/.test(tro)) return tro
+    const esPrimera = palabra++ === 0
+    // Sigla en un texto ya mixto: se deja como está.
+    if (!gritado && /[A-ZÁÉÍÓÚÜÑ]/.test(tro.slice(1))) return tro
+    const bajo = tro.toLocaleLowerCase('es')
+    const letras = sinTildes(bajo).replace(/[^a-z]/g, '')
+    if (!esPrimera && ENLACES.has(letras)) return bajo
+    return bajo.replace(/\p{Ll}/u, (c) => c.toLocaleUpperCase('es'))
+  }).join('')
+}
+
+/* Dice, para CADA artículo, si ahí empieza un título y con qué numeral.
+   Devuelve un arreglo paralelo al de artículos: `{ orden, nombre }` donde
+   empieza uno, `null` donde el artículo continúa el título anterior. Los
+   bloques se cuentan por posición, no por nombre: dos títulos distintos que
+   se llamaran igual siguen siendo dos. */
+export function marcasDeTitulo(articulos = []) {
+  const out = []
+  let orden = 0
+  let previo = ''
+  for (const a of articulos) {
+    const nombre = (a?.seccion || '').trim()
+    if (nombre && nombre !== previo) {
+      orden += 1
+      out.push({ orden, nombre })
+    } else {
+      out.push(null)
+    }
+    previo = nombre
+  }
+  return out
+}
+
 /* ═══════════════════════════════════════════════════════════════════════════
    MODO DEMOSTRACIÓN — se activa con ?demo=1 en la URL (persiste en
    localStorage; ?demo=0 lo apaga). Simula el backend en el navegador para
@@ -468,14 +548,30 @@ export const DEMO_CODIGO = '000000'
 // Se pone en true cuando NO hay backend real detrás (modo demo, o `npm run dev`
 // sin las funciones serverless de Vercel): el paso de código se simula y se
 // acepta DEMO_CODIGO. En producción SIEMPRE es false → correo real obligatorio.
+// Solo se simula cuando de verdad no hay backend. Se deja constancia en
+// consola: el aviso salió de la pantalla y sin esto no habría forma de
+// saber por qué el correo no llega.
+function avisarSimulado() {
+  console.warn(
+    '[voto] Sin funciones de api/: el codigo NO se envio por correo. Usa ' + DEMO_CODIGO +
+    '. Para probar el envio real, levanta el proyecto con: vercel dev'
+  )
+}
 let _otpSimulado = false
 export const otpSimulado = () => _otpSimulado || esDemo()
 
 export async function enviarCodigo(email) {
-  // Demo o desarrollo local (Vite NO ejecuta las funciones /api): se simula el
-  // envío y se acepta el código DEMO_CODIGO. En producción (Vercel) esto nunca
-  // ocurre (import.meta.env.DEV = false) → se envía el correo real.
-  if (esDemo() || import.meta.env.DEV) { _otpSimulado = true; return { ok: true, demo: true } }
+  /* CAUSA de "no me llega el código con vercel dev": aquí había un corte
+     `if (esDemo() || import.meta.env.DEV)` que devolvía "enviado" SIN llamar
+     al endpoint. `import.meta.env.DEV` también es true bajo `vercel dev`, y
+     ahí las funciones de api/ SÍ existen, así que el correo nunca se intentaba
+     y el flujo caía en el código de prueba.
+
+     `DEV` no distingue "vite pelado" de "vercel dev". Lo que sí distingue es
+     la respuesta: si el endpoint no está, contesta 404/405 o revienta la red,
+     y para eso ya existe el respaldo de más abajo. Así que se intenta siempre
+     y se simula solo cuando de verdad no hay backend. */
+  if (esDemo()) { _otpSimulado = true; avisarSimulado(); return { ok: true, demo: true } }
   try {
     const res = await fetch('/api/send-verification-code', {
       method: 'POST',
@@ -486,19 +582,22 @@ export async function enviarCodigo(email) {
     // En desarrollo local (Vite, sin /api) la ruta no existe → simular para
     // poder probar el flujo. NUNCA ocurre en producción (import.meta.env.DEV=false).
     if (import.meta.env.DEV && (res.status === 404 || res.status === 405)) {
-      _otpSimulado = true; return { ok: true, demo: true }
+      _otpSimulado = true; avisarSimulado(); return { ok: true, demo: true }
     }
     const data = await res.json().catch(() => null)
     if (res.status === 429) return { ok: false, error: 'Demasiados intentos. Espera unos minutos e intenta de nuevo.' }
     return { ok: false, error: data?.error || 'No se pudo enviar el código. Intenta de nuevo.' }
   } catch {
-    if (import.meta.env.DEV) { _otpSimulado = true; return { ok: true, demo: true } }
+    if (import.meta.env.DEV) { _otpSimulado = true; avisarSimulado(); return { ok: true, demo: true } }
     return { ok: false, error: 'No hay conexión para enviar el código.' }
   }
 }
 
 export async function verificarCodigo(email, code) {
-  if (otpSimulado() || import.meta.env.DEV) return { ok: String(code).trim() === DEMO_CODIGO }
+  // Solo el código de prueba cuando el envío REALMENTE se simuló. Con
+  // `|| import.meta.env.DEV` se rechazaba el código verdadero que el usuario
+  // acababa de recibir, porque solo aceptaba DEMO_CODIGO.
+  if (otpSimulado()) return { ok: String(code).trim() === DEMO_CODIGO }
   try {
     const res = await fetch('/api/verify-code', {
       method: 'POST',
@@ -520,7 +619,8 @@ export async function verificarCodigo(email, code) {
 /* ── Emitir voto(s) ─────────────────────────────────────────────────────────
    SEGURIDAD (2026-08-10): el voto ya NO se inserta directo con la anon key.
    Se emite por la función SECURITY DEFINER `pl_emitir_votos`, que:
-     · exige un OTP 'voto' verificado (used=true) para el correo en <15 min,
+     · exige un OTP 'voto' verificado (used=true) para el correo, con menos
+       de 2 horas desde que se USÓ el código (docs/sql/voto-ventana-2026-09-26.sql),
      · hashea la cédula con una sal SECRETA del servidor (no en el navegador),
      · inserta de forma atómica y deduplica por el UNIQUE.
    El INSERT anónimo directo sobre votos_proyecto queda revocado en la BD.
@@ -577,10 +677,30 @@ export async function emitirVotos(filas, identidad) {
       return { ok: false, code: 'error', msg: body.msg || 'No se pudo registrar el voto.' }
     }
     if (res.status === 409) return { ok: false, code: 'duplicado' }
-    return { ok: false, code: 'error', msg: body?.message || `HTTP ${res.status}` }
+    /* El mensaje crudo de Postgres no le sirve a un ciudadano («function
+       digest(text, unknown) does not exist» es una extensión que falta en la
+       base, no algo que él pueda arreglar). Va completo a la consola, que es
+       donde se diagnostica, y a la pantalla va algo accionable. */
+    console.error('[proyectos] pl_emitir_votos falló:', res.status, body)
+    return { ok: false, code: 'error', msg: mensajeDeFallo(body?.message, res.status) }
   } catch (err) {
-    return { ok: false, code: 'error', msg: err.message }
+    console.error('[proyectos] pl_emitir_votos sin respuesta:', err)
+    return { ok: false, code: 'error', msg: 'No se pudo conectar para registrar tu voto. Revisa tu conexión e inténtalo de nuevo.' }
   }
+}
+
+/* Un fallo de configuración de la base no se parece en nada a uno de red, y
+   decirle «inténtalo de nuevo» a quien se topa con el primero es mandarlo a
+   repetir algo que va a fallar siempre. */
+function mensajeDeFallo(detalle, status) {
+  const d = String(detalle || '')
+  if (/does not exist|no existe/i.test(d) || /sal de voto/i.test(d)) {
+    return 'El registro de votos no está disponible en este momento. Ya avisamos al equipo; vuelve a intentarlo más tarde.'
+  }
+  if (status === 401 || status === 403) {
+    return 'Tu verificación por correo venció. Vuelve a identificarte y lo intentamos otra vez.'
+  }
+  return 'No se pudo registrar tu voto. Inténtalo de nuevo en un momento.'
 }
 
 /* ── Admin (superadmin) ─────────────────────────────────────────────────── */
@@ -634,15 +754,30 @@ export async function reemplazarArticulos(proyectoId, articulos) {
       numero: a.numero != null && a.numero !== '' ? Number(a.numero) : i + 1,
       titulo: a.titulo?.trim() || null,
       contenido: a.contenido?.trim() || null,
+      seccion: a.seccion?.trim() || null,
       orden: i,
     }))
     .filter(a => a.titulo || a.contenido)
   if (!filas.length) return true
-  const res = await fetch(`${URL}/rest/v1/articulos_proyecto`, {
+
+  /* `seccion` es columna nueva (docs/sql/proyectos-2026-09-17.sql). Mientras no
+     esté aplicada, PostgREST rechaza el lote entero por columna desconocida y se
+     perdería TODO el articulado. Se intenta con ella y, si la rechaza, se
+     reinserta sin ella: los artículos se guardan igual y solo se pierde el
+     título del que cuelgan. */
+  const insertar = (cuerpo) => fetch(`${URL}/rest/v1/articulos_proyecto`, {
     method: 'POST',
     headers: { ...headers, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
-    body: JSON.stringify(filas),
+    body: JSON.stringify(cuerpo),
   })
+  let res = await insertar(filas)
+  if (!res.ok) {
+    const txt = await res.text().catch(() => '')
+    if (/column .* does not exist|PGRST204|schema cache/i.test(txt)) {
+      console.warn('[proyectos] la columna `seccion` aún no existe; se guarda el articulado sin ella.')
+      res = await insertar(filas.map(({ seccion, ...resto }) => resto))
+    }
+  }
   return res.ok
 }
 

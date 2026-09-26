@@ -34,6 +34,194 @@
 }
 .newBtn:hover { background: var(--navy-md, #6d3c1b); }
 
+/* Dos acciones en la cabecera: la masiva es secundaria (contorno) para que
+   la de siempre siga siendo la obvia. */
+.headAcciones { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+.loteBtn {
+  font-family: 'Poppins', sans-serif;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #5a3a1c;
+  background: #fff;
+  border: 1px solid rgba(109, 60, 27, 0.62);
+  border-radius: 10px;
+  padding: 0.6rem 1rem;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: border-color 0.2s, background 0.2s;
+}
+.loteBtn:hover { border-color: var(--navy, #472f29); background: rgba(109, 60, 27, 0.05); }
+.loteBtn:focus-visible { outline: 2px solid var(--gold, #c9a84c); outline-offset: 2px; }
+
+/* ── Carga masiva ────────────────────────────────────────────────────────── */
+.loteLista {
+  margin: 0; padding-left: 1.1rem;
+  display: flex; flex-direction: column; gap: 0.45rem;
+  font-size: 0.86rem; line-height: 1.55; color: #5b4636;
+}
+.loteBox { display: flex; flex-direction: column; gap: 0.7rem; }
+
+/* Zona para añadir documentos: arrastrar o tocar. Es el único punto de
+   entrada, a propósito: un botón en el cuerpo y otro en el pie para lo
+   mismo solo obligaba a decidir cuál de los dos era el bueno.
+   Cuando ya hay lista se encoge (.loteZonaMini) para no robarle sitio. */
+.loteZona {
+  display: flex; align-items: center; gap: 0.85rem; flex-wrap: wrap;
+  border: 1px dashed rgba(109, 60, 27, 0.62);
+  border-radius: 12px;
+  padding: 0.85rem 1rem;
+  margin-bottom: 0.9rem;
+  background: #fff;
+  cursor: pointer;
+  transition: background 0.2s, box-shadow 0.2s, border-color 0.2s;
+}
+.loteZona:hover { background: rgba(201, 168, 76, 0.08); border-color: var(--gold-dk, #8A6A28); }
+.loteZona:focus-visible { outline: 2px solid var(--gold-dk, #8A6A28); outline-offset: 3px; }
+/* Arrastre activo: se resalta toda la zona como blanco de soltado. */
+.loteZonaDrag {
+  background: rgba(201, 168, 76, 0.2);
+  border-color: var(--gold, #C9A84C);
+  box-shadow: inset 0 0 0 2px var(--gold, #C9A84C);
+}
+.loteZonaDrag .loteZonaIcon { transform: scale(1.08); }
+.loteZonaBusy { cursor: progress; opacity: 0.55; }
+/* Los hijos no capturan el puntero: así el arrastre no parpadea al pasar
+   sobre el icono o el texto, y el clic siempre lo maneja la zona. */
+.loteZona > * { pointer-events: none; }
+
+.loteZonaIcon {
+  flex-shrink: 0;
+  width: 40px; height: 40px;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--gold-dk, #8A6A28);
+  background: rgba(201, 168, 76, 0.16);
+  border-radius: 11px;
+  transition: transform 0.2s;
+}
+.loteZonaTexto { flex: 1 1 220px; min-width: 0; display: flex; flex-direction: column; gap: 0.15rem; }
+.loteZonaTexto strong { font-size: 0.88rem; font-weight: 600; color: #472f29; }
+.loteZonaTexto > span { font-size: 0.8rem; line-height: 1.5; color: #5b4636; }
+
+.loteZonaMini { padding: 0.55rem 0.8rem; margin-bottom: 0.7rem; }
+.loteZonaMini .loteZonaIcon { width: 30px; height: 30px; border-radius: 9px; }
+.loteZonaMini .loteZonaTexto > span { font-size: 0.76rem; }
+
+.loteCabecera {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 0.7rem; flex-wrap: wrap;
+}
+.loteCuenta { font-size: 0.82rem; font-weight: 600; color: #472f29; }
+.loteVaciar {
+  font-family: 'Poppins', sans-serif;
+  font-size: 0.76rem;
+  color: #8e2f1d;
+  background: none;
+  border: none;
+  padding: 2px 4px;
+  border-radius: 6px;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.loteVaciar:hover { background: rgba(180, 68, 47, 0.08); }
+.loteVaciar:focus-visible { outline: 2px solid var(--gold, #c9a84c); outline-offset: 1px; }
+
+/* Quitar de la lista y reintentar: acciones de fila, discretas pero siempre
+   visibles. Con cientos de documentos, esconderlas tras un hover obliga a
+   cazarlas una por una. */
+.loteReintentar {
+  flex-shrink: 0;
+  align-self: center;
+  font-family: 'Poppins', sans-serif;
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: #5a3a1c;
+  background: #fff;
+  border: 1px solid rgba(109, 60, 27, 0.62);
+  border-radius: 8px;
+  padding: 4px 10px;
+  cursor: pointer;
+  transition: background 0.18s ease, border-color 0.18s ease;
+}
+.loteReintentar:hover { background: rgba(109, 60, 27, 0.07); border-color: var(--navy, #472f29); }
+.loteReintentar:focus-visible { outline: 2px solid var(--gold, #c9a84c); outline-offset: 1px; }
+
+.loteQuitar {
+  flex-shrink: 0;
+  align-self: center;
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: #7a3f1f;
+  font-size: 0.8rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.18s ease, border-color 0.18s ease;
+}
+.loteQuitar:hover { background: #fff; border-color: rgba(122, 63, 31, 0.35); }
+.loteQuitar:focus-visible { outline: 2px solid var(--gold, #c9a84c); outline-offset: 1px; }
+.loteBarra {
+  height: 6px; border-radius: 999px; overflow: hidden;
+  background: rgba(109, 60, 27, 0.12);
+}
+.loteBarraFill {
+  height: 100%; border-radius: 999px;
+  background: var(--gold-dk, #8A6A28);
+  transition: width 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.loteEstado { margin: 0; font-size: 0.85rem; color: #5b4636; }
+.lotePie { font-size: 0.82rem; color: #5b4636; margin-right: auto; }
+
+.loteList {
+  list-style: none; margin: 0; padding: 0;
+  display: flex; flex-direction: column; gap: 0.4rem;
+  max-height: 48vh; overflow-y: auto;
+}
+.loteItem {
+  display: flex; align-items: flex-start; gap: 0.6rem;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid rgba(109, 60, 27, 0.14);
+  border-radius: 10px;
+  background: #fff;
+}
+.loteChip {
+  flex-shrink: 0;
+  min-width: 76px;
+  text-align: center;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: rgba(109, 60, 27, 0.1);
+  color: #5b4636;
+}
+.lote_ok .loteChip       { background: rgba(46, 125, 91, 0.14); color: #1f5c41; }
+.lote_error .loteChip    { background: rgba(180, 68, 47, 0.14); color: #8e2f1d; }
+.lote_proceso .loteChip  { background: rgba(201, 168, 76, 0.22); color: #6b5312; }
+.lote_error { border-color: rgba(180, 68, 47, 0.35); }
+.lote_ok    { border-color: rgba(46, 125, 91, 0.3); }
+
+.loteCuerpo { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 0.2rem; }
+.loteNombre {
+  font-size: 0.84rem; font-weight: 600; color: #472f29;
+  overflow-wrap: anywhere;
+}
+.loteMsg { font-size: 0.78rem; line-height: 1.45; color: #5b4636; }
+.loteMini {
+  height: 4px; margin-top: 0.15rem; border-radius: 999px; overflow: hidden;
+  background: rgba(109, 60, 27, 0.12);
+}
+.loteMiniFill {
+  height: 100%; border-radius: 999px; background: var(--gold-dk, #8A6A28);
+  transition: width 0.3s ease;
+}
+
 /* Filtros de la lista (texto + rango de fechas) */
 .filtros {
   display: flex; align-items: flex-end; gap: 0.7rem;
@@ -285,16 +473,69 @@
   box-shadow: 0 0 0 3px rgba(201, 168, 76, 0.16);
 }
 
-.switches { display: flex; flex-direction: column; gap: 0.6rem; margin-bottom: 1.5rem; }
+/* ── Interruptores del proyecto ────────────────────────────────────────────
+   Eran casillas nativas de 17 px sueltas sobre el crema del formulario: sin
+   marcar apenas se distinguían del fondo, y con una nota debajo del rótulo el
+   cuadrito quedaba centrado contra dos líneas, descolgado del texto.
+
+   Ahora cada una es una fila seleccionable completa: se ve el recuadro, se
+   pulsa en cualquier parte, y al activarla la fila entera se tiñe de dorado.
+   El estado se nota antes de leer el rótulo, que es de lo que se trata. */
+.switches { display: flex; flex-direction: column; gap: 0.7rem; margin-bottom: 1.5rem; }
+
 .switch {
   display: flex;
-  align-items: center;
-  gap: 0.6rem;
+  align-items: flex-start;
+  gap: 0.7rem;
+  padding: 0.75rem 0.9rem;
+  /* 0,65 y no 0,22: el borde es lo único que dice que esto es pulsable,
+     y al 22 % daba 1,45:1 contra el crema. Ahora 3,6:1. */
+  border: 1.5px solid rgba(109, 60, 27, 0.65);
+  border-radius: 11px;
+  background: #ffffff;
   font-size: 0.88rem;
-  color: #5a4636;
+  font-weight: 600;
+  color: var(--navy, #472f29);
   cursor: pointer;
+  transition: border-color 160ms cubic-bezier(0.22, 1, 0.36, 1),
+              background-color 160ms cubic-bezier(0.22, 1, 0.36, 1);
 }
-.switch input { width: 17px; height: 17px; accent-color: var(--navy, #472f29); cursor: pointer; }
+.switch:hover { border-color: var(--navy-md, #6d3c1b); background: rgba(109, 60, 27, 0.04); }
+.switch:has(input:checked) {
+  border-color: var(--gold, #c9a84c);
+  background: rgba(201, 168, 76, 0.1);
+}
+.switch:has(input:focus-visible) {
+  outline: 2px solid var(--gold-dk, #8a6a28);
+  outline-offset: 2px;
+}
+
+/* La casilla se dibuja aquí: la nativa depende del navegador y en este fondo
+   se perdía. 22 px, borde propio y el chulo en dorado sobre café. */
+.switch input {
+  appearance: none;
+  -webkit-appearance: none;
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  border: 2px solid rgba(109, 60, 27, 0.7);   /* 4,1:1 sobre el blanco de la fila */
+  border-radius: 6px;
+  background: #ffffff;
+  cursor: pointer;
+  transition: background-color 160ms cubic-bezier(0.22, 1, 0.36, 1),
+              border-color 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.switch input:checked {
+  background: var(--navy, #472f29)
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23e8c96a' stroke-width='3.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6 9 17l-5-5'/%3E%3C/svg%3E")
+    center / 15px 15px no-repeat;
+  border-color: var(--navy, #472f29);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .switch, .switch input { transition: none; }
+}
 
 /* Editor de artículos */
 .artsEditor {
@@ -689,4 +930,171 @@
   .progressFill, .importProgFill { transition: none; }
   .importIcon { transition: none; }
   .importZoneDrag .importIcon { transform: none; }
+}
+
+/* Nota bajo el switch: dice qué pasa al activarlo o apagarlo, en vez de
+   dejar el efecto a la imaginación del administrador. */
+.switchNota {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.72rem;
+  font-weight: 500;
+  line-height: 1.4;
+  color: #6f5c48;
+}
+
+/* Aviso de que el lector asistido no entró. Naranja, no rojo: el archivo sí se
+   importó, pero el texto viene sin limpiar y hay que saberlo antes de guardar. */
+.importAviso {
+  margin: 8px 0 0;
+  padding: 10px 12px;
+  border-radius: 9px;
+  background: rgba(180, 90, 30, 0.1);
+  border: 1px solid rgba(180, 90, 30, 0.35);
+  font-size: 0.78rem;
+  line-height: 1.5;
+  color: #7a3f12;
+}
+.importAviso strong { color: #5f300c; }
+
+/* Aclaración junto al rótulo de un campo: dice para qué sirve, que en «nombre»
+   y «título oficial» es justo lo que los distingue. */
+.fieldNota {
+  display: block;
+  margin-top: 1px;
+  font-size: 0.7rem;
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0;
+  color: #6f5c48;
+}
+
+/* Cabecera del título o capítulo del que cuelgan los artículos siguientes.
+   Va entre filas, no dentro de ellas: la estructura de la norma se lee de un
+   vistazo y no hay que repetir el mismo dato en cada artículo. */
+.artSeccion {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 0.6rem;
+  padding: 8px 10px;
+  border-radius: 9px;
+  background: rgba(109, 60, 27, 0.07);
+}
+/* Aire solo ENTRE bloques: la primera cabecera ya va pegada a su encabezado. */
+.artBloque + .artBloque > .artSeccion { margin-top: 1.1rem; }
+.artSeccionEtiqueta {
+  flex-shrink: 0;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #6f5c48;
+}
+.artSeccion input {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  padding: 5px 8px;
+  font-family: inherit;
+  font-size: 0.86rem;
+  font-weight: 700;
+  color: var(--navy, #472f29);
+}
+.artSeccion input:hover  { border-color: rgba(109, 60, 27, 0.25); background: #fff; }
+.artSeccion input:focus  { border-color: var(--gold, #c9a84c); background: #fff; outline: none; }
+
+/* ── Quitar un título ──────────────────────────────────────────────────────
+   No borra artículos: los devuelve al título anterior. Vive dentro de la
+   cabecera, no en la fila del artículo, porque eso es lo que elimina. */
+.artSeccionQuitar {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: #7a3f1f;
+  font-size: 0.82rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.18s ease, border-color 0.18s ease;
+}
+.artSeccionQuitar:hover { background: #fff; border-color: rgba(122, 63, 31, 0.35); }
+.artSeccionQuitar:focus-visible { outline: 2px solid var(--gold, #c9a84c); outline-offset: 1px; }
+
+/* ── Abrir un título en este artículo ──────────────────────────────────────
+   Hay uno por artículo sin cabecera, así que se mantiene fuera de la vista
+   hasta que el ratón entra en el bloque: con 19 artículos, mostrarlos todos
+   convertiría el editor en una escalera de botones. En pantallas sin ratón
+   no hay hover que esperar, así que ahí se ven siempre. */
+.artBloque { position: relative; }
+.artSeccionAdd {
+  display: block;
+  margin: 0.55rem 0 0.15rem;
+  padding: 3px 9px;
+  border: 1px dashed rgba(109, 60, 27, 0.45);
+  border-radius: 999px;
+  background: #fff;
+  color: #6f5c48;
+  font-family: inherit;
+  font-size: 0.7rem;
+  font-weight: 600;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+}
+.artBloque:hover > .artSeccionAdd,
+.artSeccionAdd:focus-visible { opacity: 1; }
+.artSeccionAdd:hover { border-color: var(--gold, #c9a84c); color: #472f29; }
+.artSeccionAdd:focus-visible { outline: 2px solid var(--gold, #c9a84c); outline-offset: 1px; }
+@media (hover: none) {
+  .artSeccionAdd { opacity: 1; }
+}
+
+/* ── Paginación ───────────────────────────────────────────────
+   Tres bloques: cuántos por página, qué rango se está viendo y a dónde ir.
+   En móvil se apilan centrados en vez de estirarse. */
+.pager {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 14px; flex-wrap: wrap;
+  margin-top: 1.1rem;
+  padding: 4px 2px;
+}
+.perPage { display: inline-flex; align-items: center; gap: 8px; }
+.perPageLbl { font-size: 0.78rem; font-weight: 600; color: #7a6655; }
+.perPageSel {
+  border: 1px solid rgba(109, 60, 27, 0.62); background: #fff; border-radius: 8px;
+  font-family: inherit; font-size: 0.82rem; font-weight: 600; color: #6d3c1b;
+  padding: 6px 8px; cursor: pointer;
+}
+.perPageSel:focus-visible { outline: none; border-color: #c9a84c; box-shadow: 0 0 0 3px rgba(201, 168, 76, 0.3); }
+.pagerInfo { font-size: 0.82rem; color: #7a6655; font-variant-numeric: tabular-nums; }
+.pagerInfo strong { color: #6d3c1b; }
+.pagerBtns { display: inline-flex; align-items: center; gap: 4px; }
+/* El contorno es el único límite visible del botón, así que va a 3:1 (WCAG
+   1.4.11). El 0.14 que se usa en otros paneles da 1.26:1: no se ve. */
+.pageBtn {
+  min-width: 34px; height: 34px; padding: 0 8px;
+  border: 1px solid rgba(109, 60, 27, 0.62); background: #fff; color: #5b4633;
+  font-family: inherit; font-size: 0.82rem; font-weight: 600; border-radius: 8px;
+  display: inline-flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  transition: background 0.16s ease, border-color 0.16s ease, color 0.16s ease;
+}
+.pageBtn:hover:not(:disabled) { border-color: #6d3c1b; background: #fcf8f4; }
+.pageBtn:focus-visible { outline: 2px solid #c9a84c; outline-offset: 2px; }
+.pageBtn:disabled { opacity: 0.4; cursor: not-allowed; }
+.pageBtnActive, .pageBtnActive:hover { background: #6d3c1b; border-color: #6d3c1b; color: #fff; }
+.pageGap { color: #7a6655; padding: 0 4px; font-size: 0.82rem; }
+
+@media (max-width: 560px) {
+  .pager { justify-content: center; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pageBtn { transition: none; }
 }

@@ -41,8 +41,13 @@ const PUBLIC_COLS = [
 const ROLES_VALIDOS = new Set(['abogado', 'contador'])
 
 /* ── Documentos de confianza públicos ────────────────────────────────────
-   Los que un cliente puede consultar antes de contratar: la licencia, los
-   antecedentes disciplinarios y el modelo de contrato.
+   Los dos que responden a "¿puedo confiar en esta persona?": la tarjeta
+   profesional (ejerce) y el certificado disciplinario (está al día).
+
+   NO incluye `modelo_contrato_path`: es una herramienta de trabajo del
+   profesional, no una credencial, y en la tarjeta solo hacía ruido. Sigue
+   disponible donde se usa de verdad, dentro del chat y al enviar a firmar,
+   que lo leen directo de `profiles`.
 
    NO incluye `certificado_bancario_url`: ese documento lleva el número de
    cuenta del profesional. Lo sube para cobrar, no para publicarlo, y
@@ -54,7 +59,6 @@ const ROLES_VALIDOS = new Set(['abogado', 'contador'])
 const DOCS_PUBLICOS = [
   { col: 'tarjeta_archivo_url',           bucket: 'tarjetas-profesionales', label: 'Tarjeta profesional' },
   { col: 'certificado_disciplinario_url', bucket: 'tarjetas-profesionales', label: 'Certificado disciplinario' },
-  { col: 'modelo_contrato_path',          bucket: 'contratos',              label: 'Modelo contractual' },
 ]
 
 const ES_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i

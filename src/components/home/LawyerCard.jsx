@@ -6,20 +6,21 @@ import TarjetaPreview from '../profile/TarjetaPreview'
 import { ChatLightbox } from '../../lib/chatFiles'
 import styles from './LawyerCard.module.css'
 
-/* Documentos del profesional. Los buckets son PRIVADOS: nunca hay URL pública,
-   siempre se firma una temporal.
+/* Documentos que acreditan al profesional ante quien mira su tarjeta. Los
+   buckets son PRIVADOS: nunca hay URL pública, siempre se firma una temporal.
+
+   Son DOS, y solo dos, porque solo estos dos responden a "¿puedo confiar en
+   esta persona?": la tarjeta dice que ejerce y el disciplinario que está al
+   día. La cuenta bancaria es un dato financiero que solo hace falta a la hora
+   de pagar (y ahí sale, dentro de la consulta); el modelo contractual es una
+   herramienta de trabajo del profesional, no una credencial.
 
    Dos caminos, a propósito:
-   · Visitante  → GET /api/professionals?docs=<id>, que firma server-side y
-     devuelve SOLO los documentos de confianza públicos (licencia,
-     disciplinario, modelo). La cuenta bancaria NO sale por ahí.
-   · Superadmin → lectura directa a Supabase con su sesión, con los cuatro,
-     igual que en admin/ProfileDetailModal. */
+   · Visitante  → GET /api/professionals?docs=<id>, que firma server-side.
+   · Superadmin → lectura directa a Supabase con su sesión. */
 const DOCS_ADMIN = [
   { col: 'tarjeta_archivo_url',           bucket: 'tarjetas-profesionales', label: 'Tarjeta profesional' },
-  { col: 'certificado_bancario_url',      bucket: 'tarjetas-profesionales', label: 'Cuenta bancaria certificada' },
   { col: 'certificado_disciplinario_url', bucket: 'tarjetas-profesionales', label: 'Certificado disciplinario' },
-  { col: 'modelo_contrato_path',          bucket: 'contratos',              label: 'Modelo contractual' },
 ]
 
 /* Caché de documentos a nivel de módulo, compartida por todas las tarjetas.

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import Footer from '../components/layout/Footer'
@@ -8,9 +8,10 @@ import {
   validarCelular, validarCorreo, normalizarCelular, formatCedula,
 } from '../lib/validaciones'
 import {
-  APOYA, apoyaMeta, OBS_MAX, hashCedula, fmtFecha, DEMO_CODIGO,
+  APOYA, apoyaMeta, OBS_MAX, hashCedula, fmtFecha,
   fetchProyectosPublicos, fetchArticulos, emitirVotos,
-  enviarCodigo, verificarCodigo, otpSimulado,
+  enviarCodigo, verificarCodigo,
+  romano, marcasDeTitulo,
 } from '../lib/proyectosLey'
 import VerificationStep from '../components/auth/VerificationStep'
 import styles from './ProyectosLeyPage.module.css'
@@ -129,7 +130,7 @@ function IdentidadGate({ onListo, initial }) {
 
   // Paso 2 → 3: confirma los datos y dispara SIEMPRE el código de verificación.
   // (Seguridad: cada sesión de voto exige un OTP fresco; el RPC pl_emitir_votos
-  // requiere un código 'voto' consumido en los últimos 15 min. Ya no se salta
+  // requiere un código 'voto' consumido en las últimas 2 horas. Ya no se salta
   // la verificación aunque el correo no haya cambiado.)
   async function confirmarDatos() {
     if (!identPend) return
@@ -154,6 +155,24 @@ function IdentidadGate({ onListo, initial }) {
     } finally { setVerifying(false) }
   }
 
+  /* Corregir el correo sin salir del paso. Es la errata que se descubre al no
+     recibir nada, y hasta ahora obligaba a volver atrás y rehacer los datos.
+     Si el reenvío falla no se toca nada, para no dejar el paso apuntando a una
+     dirección a la que nunca salió un código. */
+  async function cambiarCorreoVotante(nuevo) {
+    const limpio = String(nuevo || '').trim().toLowerCase()
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(limpio)) {
+      throw new Error('Escribe un correo válido.')
+    }
+    if (limpio === String(identPend.correo || '').trim().toLowerCase()) {
+      throw new Error('Ese es el mismo correo que ya tienes.')
+    }
+    const r = await enviarCodigo(limpio)
+    if (!r.ok) throw new Error(r.error || 'No se pudo enviar el código.')
+    setIdentPend(p => ({ ...p, correo: limpio }))
+    setCodeErr('')
+  }
+
   /* ── Paso 3: verificación por correo (OTP) ── */
   if (fase === 'verify' && identPend) {
     return (
@@ -162,17 +181,16 @@ function IdentidadGate({ onListo, initial }) {
         initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
       >
-        <h2 className={styles.gateTitle}>Verifica Tu Correo</h2>
-        <p className={styles.gateSub}>
-          Enviamos un código de 6 dígitos a <strong>{identPend.correo}</strong> para confirmar que eres una persona real.
-          {otpSimulado() && <> <strong>Modo de prueba:</strong> usa el código <strong>{DEMO_CODIGO}</strong>.</>}
-        </p>
+        {/* El título y el subtítulo los pone VerificationStep, que es el mismo
+            componente del registro. Aquí había otro par encima diciendo lo
+            mismo: "Verifica Tu Correo" dos veces y la explicación duplicada. */}
         <VerificationStep
           email={identPend.correo}
           error={codeErr}
           submitting={verifying}
           onSubmit={confirmarCodigo}
           onResend={() => enviarCodigo(identPend.correo)}
+          onCambiarCorreo={cambiarCorreoVotante}
           onBack={() => { setFase('review'); setCodeErr('') }}
         />
       </motion.div>
@@ -283,9 +301,37 @@ function IdentidadGate({ onListo, initial }) {
   )
 }
 
+/* Lleva la vista al bloque que acaba de cambiar.
+
+   Sin esto, al pulsar "Revisar mi voto" tras marcar quince artículos el
+   formulario se encoge a un resumen de tres líneas, pero el navegador
+   conserva el desplazamiento: uno se queda mirando el pie de página y el
+   resumen que hay que confirmar está arriba, fuera de pantalla.
+
+   El destino lleva `scroll-margin-top` en el CSS porque el encabezado es
+   sticky y si no el título queda tapado debajo. */
+function subirA(el) {
+  if (!el) return
+  const suave = !window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  el.scrollIntoView({ behavior: suave ? 'smooth' : 'auto', block: 'start' })
+}
+
 /* ═══════════════ Formulario de voto de un proyecto ══════════════════════ */
 function VotoForm({ proyecto, articulos, identidad, onVotado }) {
-  const puedeArticular = proyecto.permite_articulado && articulos.length > 0
+  /* El toggle aparece SIEMPRE que el proyecto tenga artículos. Antes solo
+     salía si además `permite_articulado` estaba activo, y entonces el
+     ciudadano no tenía forma de saber que existía esa posibilidad ni por qué
+     no la veía: simplemente no estaba.
+
+     `permite_articulado` sigue mandando, pero ahora de forma visible: si el
+     administrador no lo habilitó, la opción se muestra deshabilitada y con el
+     motivo, en vez de desaparecer. */
+  const hayArticulos   = articulos.length > 0
+  /* Los titulos de la norma (TITULO I, II...) se pintan donde cambian. El
+     numeral sale del orden, no del documento: ver `marcasDeTitulo`. */
+  const titulos = useMemo(() => marcasDeTitulo(articulos), [articulos])
+  const articuladoOn   = !!proyecto.permite_articulado
+  const puedeArticular = hayArticulos && articuladoOn
   const [modo, setModo] = useState('completo')          // 'completo' | 'articulado'
   const [comp, setComp] = useState({ apoya: '', obs: '' })
   const [arts, setArts] = useState({})                  // articuloId → { apoya, obs }
@@ -294,6 +340,15 @@ function VotoForm({ proyecto, articulos, identidad, onVotado }) {
   const [verArts, setVerArts] = useState(false)         // revisar articulado (modo completo)
   const [paso, setPaso] = useState('form')              // 'form' | 'revisar'
   const [filasPend, setFilasPend] = useState([])        // votos listos por confirmar
+
+  // Al cambiar de paso (form ↔ revisar) se sube al panel, no en el primer
+  // render: ahí la tarjeta se acaba de abrir y ya está donde el usuario mira.
+  const panelRef = useRef(null)
+  const montado  = useRef(false)
+  useEffect(() => {
+    if (!montado.current) { montado.current = true; return }
+    subirA(panelRef.current)
+  }, [paso])
 
   const setArt = (id, patch) => setArts(p => ({ ...p, [id]: { apoya: '', obs: '', ...p[id], ...patch } }))
   const artsConPostura = Object.entries(arts).filter(([, v]) => v.apoya)
@@ -330,7 +385,9 @@ function VotoForm({ proyecto, articulos, identidad, onVotado }) {
     else if (r.code === 'duplicado') { marcarVotado(identidad.hash, proyecto.id); onVotado('duplicado') }
     else if (r.code === 'otp') {
       setEstado('error')
-      setErr('Tu verificación por correo expiró (más de 15 min). Pulsa “Volver” arriba para verificar tu correo otra vez y luego vota.')
+      /* No se dice el plazo en el mensaje: el ciudadano no lleva la cuenta
+         desde cuándo, y decirle un número solo sirve para discutirlo. */
+      setErr('Tu verificación por correo ya no está vigente. Pulsa “Volver” arriba, verifica tu correo otra vez y vuelve a marcar tu postura.')
     }
     else { setEstado('error'); setErr(r.msg || 'No se pudo registrar tu voto. Intenta de nuevo.') }
   }
@@ -339,6 +396,7 @@ function VotoForm({ proyecto, articulos, identidad, onVotado }) {
   if (paso === 'revisar') {
     return (
       <motion.div
+        ref={panelRef}
         className={styles.voto}
         initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
@@ -382,23 +440,30 @@ function VotoForm({ proyecto, articulos, identidad, onVotado }) {
   }
 
   return (
-    <div className={styles.voto}>
-      {puedeArticular && (
+    <div className={styles.voto} ref={panelRef}>
+      {hayArticulos && (
         <div className={styles.modoChoice} role="radiogroup" aria-label="¿Cómo quieres votar?">
           <span className={styles.modoChoiceTitle}>¿Cómo quieres votar?</span>
           <div className={styles.modoOpts}>
             {[
               ['completo', 'Proyecto completo', 'Una sola postura y observación para toda la iniciativa.'],
               ['articulado', 'Artículo por artículo', 'Fija tu postura y deja observaciones en cada artículo.'],
-            ].map(([k, titulo, desc]) => (
-              <button key={k} type="button" role="radio" aria-checked={modo === k}
-                className={`${styles.modoOpt} ${modo === k ? styles.modoOptOn : ''}`}
-                onClick={() => setModo(k)}>
-                <span className={styles.modoOptCheck} aria-hidden="true" />
-                <strong>{titulo}</strong>
-                <small>{desc}</small>
-              </button>
-            ))}
+            ].map(([k, titulo, desc]) => {
+              const bloqueado = k === 'articulado' && !articuladoOn
+              return (
+                <button key={k} type="button" role="radio" aria-checked={modo === k}
+                  aria-disabled={bloqueado || undefined}
+                  disabled={bloqueado}
+                  className={`${styles.modoOpt} ${modo === k ? styles.modoOptOn : ''}`}
+                  onClick={() => { if (!bloqueado) setModo(k) }}>
+                  <span className={styles.modoOptCheck} aria-hidden="true" />
+                  <strong>{titulo}</strong>
+                  <small>{bloqueado
+                    ? 'En este proyecto solo se puede votar la iniciativa completa.'
+                    : desc}</small>
+                </button>
+              )
+            })}
           </div>
         </div>
       )}
@@ -418,12 +483,20 @@ function VotoForm({ proyecto, articulos, identidad, onVotado }) {
                     initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
                     transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
                   >
-                    {articulos.map(a => (
-                      <li key={a.id} className={styles.revItem}>
+                    {articulos.map((a, i) => (
+                      <Fragment key={a.id}>
+                      {titulos[i] && (
+                        <li className={styles.revSeccion}>
+                          <span className={styles.revSeccionNum}>Título {romano(titulos[i].orden)}</span>
+                          <span className={styles.revSeccionNom}>{titulos[i].nombre}</span>
+                        </li>
+                      )}
+                      <li className={styles.revItem}>
                         <span className={styles.revNum}>Art. {a.numero ?? '—'}</span>
                         {a.titulo && <strong className={styles.revTitle}>{a.titulo}</strong>}
                         {a.contenido && <p className={styles.revBody}>{a.contenido}</p>}
                       </li>
+                      </Fragment>
                     ))}
                   </motion.ol>
                 )}
@@ -439,8 +512,15 @@ function VotoForm({ proyecto, articulos, identidad, onVotado }) {
         </div>
       ) : (
         <div className={styles.artList}>
-          {articulos.map(a => (
-            <div key={a.id} className={styles.artItem}>
+          {articulos.map((a, i) => (
+            <Fragment key={a.id}>
+            {titulos[i] && (
+              <div className={styles.artSeccion}>
+                <span className={styles.artSeccionNum}>Título {romano(titulos[i].orden)}</span>
+                <span className={styles.artSeccionNom}>{titulos[i].nombre}</span>
+              </div>
+            )}
+            <div className={styles.artItem}>
               <div className={styles.artHead}>
                 <span className={styles.artNum}>Art. {a.numero ?? '—'}</span>
                 <span className={styles.artTitle}>{a.titulo || 'Artículo'}</span>
@@ -452,6 +532,7 @@ function VotoForm({ proyecto, articulos, identidad, onVotado }) {
               </div>
               <ObsField id={`obs-${a.id}`} value={arts[a.id]?.obs || ''} onChange={v => setArt(a.id, { obs: v })} />
             </div>
+            </Fragment>
           ))}
         </div>
       )}
@@ -462,6 +543,63 @@ function VotoForm({ proyecto, articulos, identidad, onVotado }) {
         Revisar mi voto
       </button>
       <p className={styles.votoNota}>Podrás votar una sola vez por este proyecto.</p>
+    </div>
+  )
+}
+
+/* ═══════════════ Paginación ═════════════════════════════════
+   Cada tarjeta abierta es un formulario de voto completo, así que diez por
+   página ya es una página larga. Sin selector de cuántos ver: el ciudadano
+   viene a votar un proyecto, no a configurar una tabla. */
+const POR_PAGINA = 10
+
+function ventanaPags(actual, total) {
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1)
+  const out = [1]
+  const lo = Math.max(2, actual - 1)
+  const hi = Math.min(total - 1, actual + 1)
+  if (lo > 2) out.push('…')
+  for (let i = lo; i <= hi; i++) out.push(i)
+  if (hi < total - 1) out.push('…')
+  out.push(total)
+  return out
+}
+
+function Paginador({ pagina, total, onPagina }) {
+  const pags = Math.max(1, Math.ceil(total / POR_PAGINA))
+  const actual = Math.min(pagina, pags)
+  const desde = total === 0 ? 0 : (actual - 1) * POR_PAGINA + 1
+  const hasta = Math.min(actual * POR_PAGINA, total)
+
+  return (
+    <div className={styles.pager}>
+      <span className={styles.pagerInfo} aria-live="polite">
+        Proyectos <strong>{desde}–{hasta}</strong> de {total}
+      </span>
+      <div className={styles.pagerBtns} role="navigation" aria-label="Paginación de proyectos">
+        <button type="button" className={styles.pageBtn} onClick={() => onPagina(actual - 1)} disabled={actual <= 1} aria-label="Página anterior">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6" /></svg>
+        </button>
+        {ventanaPags(actual, pags).map((n, i) => (
+          n === '…'
+            ? <span key={`s${i}`} className={styles.pageGap}>…</span>
+            : (
+              <button
+                type="button"
+                key={n}
+                className={`${styles.pageBtn} ${n === actual ? styles.pageBtnActive : ''}`}
+                onClick={() => onPagina(n)}
+                aria-current={n === actual ? 'page' : undefined}
+                aria-label={`Página ${n}`}
+              >
+                {n}
+              </button>
+            )
+        ))}
+        <button type="button" className={styles.pageBtn} onClick={() => onPagina(actual + 1)} disabled={actual >= pags} aria-label="Página siguiente">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6" /></svg>
+        </button>
+      </div>
     </div>
   )
 }
@@ -482,10 +620,14 @@ function ProyectoCard({ proyecto, identidad, votadoInicial, index }) {
     return () => { cancel = true }
   }, [abierto, articulos, proyecto.id])
 
+  const cardRef = useRef(null)
   function handleVotado(motivo) {
     setVotado(true)
     setTab('resultados')
     setRefresh(x => x + 1)
+    // La tarjeta cambia de alto al pasar a resultados: sin esto el aviso de
+    // "voto registrado" queda arriba, fuera de la vista.
+    subirA(cardRef.current)
     setAviso(motivo === 'duplicado'
       ? 'Ya habías registrado tu voto para este proyecto. Estos son los resultados.'
       : '¡Gracias! Tu voto quedó registrado.')
@@ -493,6 +635,7 @@ function ProyectoCard({ proyecto, identidad, votadoInicial, index }) {
 
   return (
     <motion.article
+      ref={cardRef}
       className={styles.card}
       initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, margin: '-60px' }}
@@ -511,6 +654,12 @@ function ProyectoCard({ proyecto, identidad, votadoInicial, index }) {
           )}
         </div>
         <h3 className={styles.cardTitle}>{proyecto.nombre}</h3>
+        {/* El título legal íntegro, debajo y en pequeño. La tarjeta se lee por
+            el nombre corto, pero citar la norma entera es lo correcto y el
+            ciudadano tiene derecho a verla tal cual la escribió el Congreso. */}
+        {proyecto.titulo_oficial && proyecto.titulo_oficial !== proyecto.nombre && (
+          <p className={styles.cardTituloOficial}>{proyecto.titulo_oficial}</p>
+        )}
         {proyecto.descripcion && <p className={styles.cardDesc}>{proyecto.descripcion}</p>}
         <span className={styles.cardCta}>
           {votado ? 'Ver resultados' : 'Participar en el debate'}
@@ -602,6 +751,19 @@ export default function ProyectosLeyPage() {
   }, [proyectos, busqueda, desde, hasta])
 
   const hayFiltro = !!(busqueda.trim() || desde || hasta)
+
+  /* Paginación. Al cambiar de página se sube al principio de la lista: si no,
+     uno aterriza a la mitad de la página nueva sin saber dónde quedó. */
+  const [pagina, setPagina] = useState(1)
+  const listaRef = useRef(null)
+  useEffect(() => { setPagina(1) }, [busqueda, desde, hasta])
+  const totalPags = Math.max(1, Math.ceil(proyectosFiltrados.length / POR_PAGINA))
+  const pagSegura = Math.min(pagina, totalPags)
+  const enPagina  = proyectosFiltrados.slice((pagSegura - 1) * POR_PAGINA, pagSegura * POR_PAGINA)
+  const irAPagina = (n) => {
+    setPagina(n)
+    subirA(listaRef.current)
+  }
   const limpiarFiltros = () => { setBusqueda(''); setDesde(''); setHasta('') }
 
   useEffect(() => { window.scrollTo(0, 0) }, [])
@@ -708,14 +870,20 @@ export default function ProyectosLeyPage() {
                     <button type="button" className={styles.limpiarBtn} onClick={limpiarFiltros}>Limpiar filtros</button>
                   </div>
                 ) : (
-                  <div className={styles.list}>
-                    {proyectosFiltrados.map((p, i) => (
-                      <ProyectoCard
-                        key={p.id} proyecto={p} identidad={identidad}
-                        votadoInicial={votados.includes(p.id)} index={i}
-                      />
-                    ))}
-                  </div>
+                  <>
+                    <div className={styles.list} ref={listaRef}>
+                      {enPagina.map((p, i) => (
+                        <ProyectoCard
+                          key={p.id} proyecto={p} identidad={identidad}
+                          votadoInicial={votados.includes(p.id)} index={i}
+                        />
+                      ))}
+                    </div>
+                    {/* Fuera de la lista: el paginador no es una tarjeta mas. */}
+                    {proyectosFiltrados.length > POR_PAGINA && (
+                      <Paginador pagina={pagSegura} total={proyectosFiltrados.length} onPagina={irAPagina} />
+                    )}
+                  </>
                 )}
               </>
             )}

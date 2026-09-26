@@ -157,6 +157,8 @@
   flex-direction: column;
   gap: 2px;
   min-width: 0;
+  flex: 1;
+  min-width: 0;
 }
 .deepLinkLabel {
   display: inline-flex;
@@ -593,29 +595,44 @@
 
 .chatHeadRow {
   display: flex;
-  align-items: flex-start;
-  gap: 12px;
+  align-items: center;
+  gap: 10px;
 }
 
 .chatBackBtn {
-  background: linear-gradient(135deg, #f2d580, #c9a84c 60%, #b8942f);
-  border: none;
-  color: #4a330f;
-  border-radius: 10px;
-  padding: 7px 12px;
-  cursor: pointer;
-  font-size: 0.74rem;
-  font-weight: 800;
-  white-space: nowrap;
+  /* Solo la flecha, como en el panel del profesional. La pastilla dorada con
+     "Mis casos" era lo más llamativo del encabezado y lo que menos importa:
+     le ganaba la mirada al nombre del profesional con el que estás hablando. */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+  width: 40px;
+  height: 40px;
+  /* La punta de la flecha alinea con el borde óptico del texto, no con su caja. */
+  margin-left: -10px;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  color: #fdf6e3;
+  cursor: pointer;
+  transition: background-color 160ms cubic-bezier(0.22, 1, 0.36, 1);
 }
+.chatBackBtn:hover { background: rgba(255,255,255,0.14); }
+.chatBackBtn:active { background: rgba(255,255,255,0.22); }
+.chatBackBtn:focus-visible { outline: 2px solid var(--gold-lt, #E8C96A); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .chatBackBtn { transition: none; } }
 
 .chatTitle {
   color: #ffffff;
   font-family: 'Cinzel', serif;
   font-size: 0.95rem;
   margin: 0 0 3px;
+  /* Cinzel está dibujada sobre la capital romana: en mayúsculas es
+     donde encaja, y su minúscula ya parecía versalita a medias. Un
+     pelo de tracking porque las capitales pegadas se leen peor. */
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
   /* Una sola línea: el título es el nombre del profesional o "Consulta". */
   white-space: nowrap;
   overflow: hidden;
@@ -1231,7 +1248,9 @@
     flex-shrink: 0;
   }
   .chatHeadRow { gap: 8px; }
-  .chatBackBtn { padding: 6px 9px; font-size: 0.68rem; }
+  /* La flecha NO encoge en móvil: es el único objetivo táctil del
+     encabezado y ahí es donde más se usa. */
+  .chatBackBtn { margin-left: -8px; }
   .chatTitle { font-size: 0.8rem; letter-spacing: 0.01em; }
   .chatStatus { font-size: 0.7rem; }
 
@@ -2184,3 +2203,117 @@
 .otpWrap :global(.aap-verify-subtitle strong) { color: #8a6a28; }
 .otpWrap :global(.aap-verify-back) { color: #6b5a4c; }
 .otpWrap :global(.aap-verify-resend) { color: #8a6a28; }
+
+/* ── Aviso de costo, pegado al botón que crea la consulta ─────────────────
+   El intento anterior era una caja con tinte dorado al 10 %. Sobre el crema
+   del formulario (--ivory) eso da 1,08:1 de separación: como forma, no
+   existía. Blanco puro tampoco servía (1,01:1). El crema no admite otro
+   crema encima.
+
+   Así que la separación no la hace el relleno, la hacen tres cosas juntas:
+   el borde dorado de 2 px (2,25:1, se ve como línea), la elevación, y sobre
+   todo la unión física con el botón. Van como UN bloque: el aviso es la
+   condición y el botón es el acto, y no se puede pulsar sin haberlo pasado
+   por encima. Esa es la razón de que no necesite gritar. */
+.bloqueCosto {
+  border: 2px solid var(--gold, #c9a84c);
+  border-radius: 12px;
+  overflow: hidden;              /* recorta el botón a las esquinas del bloque */
+  box-shadow: 0 6px 18px rgba(109, 60, 27, 0.13);
+}
+
+.avisoCosto {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  padding: 14px 15px;
+  background: #ffffff;
+  text-align: left;
+}
+/* Suelto (modal de nueva consulta): ahí la fila es Cancelar + Iniciar, así que
+   no se pega a nada y tiene que traer su propio borde. */
+.avisoCostoSuelto {
+  border: 2px solid var(--gold, #c9a84c);
+  border-radius: 12px;
+  box-shadow: 0 6px 18px rgba(109, 60, 27, 0.13);
+}
+
+/* Moneda en círculo dorado lleno: un punto de color saturado es lo único que
+   destaca de verdad sobre tanto crema, y ancla la mirada en la cifra. */
+.avisoCostoIcono {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--gold, #c9a84c);
+  color: #3a2408;
+}
+
+.avisoCostoCuerpo {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+/* La cifra es el dato que decide: va a escala de titular, no de párrafo. El
+   sufijo va en la misma línea y en peso normal, para que la cifra siga siendo
+   lo primero que se lee pero ya diga de qué es. */
+.avisoCostoCifra {
+  font-size: 1.15rem;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  color: #6b501c;
+}
+.avisoCostoCifra strong { font-weight: 800; }
+.avisoCostoSufijo {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #7d5f22;
+}
+.avisoCostoTexto {
+  font-size: 0.78rem;
+  line-height: 1.5;
+  color: #5b4a3c;
+  text-wrap: pretty;
+}
+
+/* El botón cierra el bloque: sin esquinas arriba y sin separación. */
+.btnGoldPegado {
+  border-radius: 0;
+  border-top: 2px solid var(--gold, #c9a84c);
+}
+
+@media (max-width: 480px) {
+  .avisoCosto { padding: 12px 12px; gap: 9px; }
+  .avisoCostoCifra { font-size: 1.05rem; }
+}
+
+/* Quitar al profesional preelegido. Discreto: es una salida, no la acción
+   principal de la tarjeta, pero tiene que estar donde el ojo la busca
+   (esquina superior derecha) y con área táctil de verdad. */
+.deepLinkQuitar {
+  flex-shrink: 0;
+  align-self: flex-start;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  margin: -4px -4px 0 0;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  color: #6f5c48;
+  cursor: pointer;
+  transition: background-color 160ms cubic-bezier(0.22, 1, 0.36, 1), color 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.deepLinkQuitar:hover {
+  background: rgba(109, 60, 27, 0.1);
+  color: #472f29;
+}
+.deepLinkQuitar:focus-visible {
+  outline: 2px solid var(--gold-dk, #8a6a28);
+  outline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) { .deepLinkQuitar { transition: none; } }

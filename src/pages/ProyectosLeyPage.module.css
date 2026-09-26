@@ -271,6 +271,10 @@
   .limpiarBtn { align-self: flex-start; }
 }
 
+/* El encabezado de la página es sticky (46 px de logo más 1 rem arriba y
+   abajo). Sin este margen, todo lo que se lleva a la vista con
+   scrollIntoView aterriza debajo de él y se pierde el título. */
+.list, .card, .voto { scroll-margin-top: 94px; }
 .list { display: flex; flex-direction: column; gap: 1.2rem; }
 
 .card {
@@ -489,6 +493,30 @@
 }
 .revTitle { font-size: 0.9rem; color: #472f29; }
 .revBody { font-size: 0.84rem; line-height: 1.55; color: #6f5c48; margin: 0.35rem 0 0; }
+
+/* ── Titulos de la norma ───────────────────────────────────────────────────
+   Una ley va dividida en TITULO I, TITULO II..., y saberlo cambia como se
+   lee un articulo. El numeral sale del orden de los bloques, no del PDF:
+   el OCR lo destroza y deja de ser cierto en cuanto el admin reordena. */
+.revSeccion {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin: 0.55rem 0 0.1rem;
+  padding: 0 0.2rem 0.3rem;
+  border-bottom: 1px solid rgba(109, 60, 27, 0.16);
+}
+.revSeccion:first-child { margin-top: 0; }
+.revSeccionNum {
+  font-family: 'Cinzel', serif;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--gold-dk, #8A6A28);
+}
+.revSeccionNom { font-size: 0.86rem; font-weight: 600; color: #472f29; }
 .votoRow {
   display: flex;
   align-items: center;
@@ -561,6 +589,25 @@
 
 /* Lista de artículos */
 .artList { display: flex; flex-direction: column; gap: 1rem; }
+.artSeccion {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin: 0.6rem 0 -0.2rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 1px solid rgba(109, 60, 27, 0.18);
+}
+.artSeccion:first-child { margin-top: 0; }
+.artSeccionNum {
+  font-family: 'Cinzel', serif;
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--gold-dk, #8A6A28);
+}
+.artSeccionNom { font-size: 0.95rem; font-weight: 600; color: #472f29; }
 .artItem {
   background: rgba(255, 254, 241, 0.7);
   border: 1px solid rgba(109, 60, 27, 0.1);
@@ -788,4 +835,58 @@
 @media (prefers-reduced-motion: reduce) {
   .skeleton { animation: none; }
   .chev { transition: none; }
+}
+
+/* La opción "Artículo por artículo" cuando el administrador no la habilitó:
+   se ve, pero no se puede elegir, y el texto dice por qué. Ocultarla dejaba
+   al ciudadano sin saber que esa forma de votar existe. */
+.modoOpt:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.modoOpt:disabled strong { color: #6f5c48; }
+
+/* El título legal completo, bajo el nombre corto de la tarjeta. Pequeño y en
+   cursiva: es una cita textual de la norma, no el rótulo por el que se lee. */
+.cardTituloOficial {
+  margin: 0.35rem 0 0;
+  font-size: 0.78rem;
+  font-style: italic;
+  line-height: 1.5;
+  color: #5b4a3c;
+  text-wrap: pretty;
+}
+
+/* ── Paginación ───────────────────────────────────────────────
+   Qué rango se está viendo y a dónde ir. En móvil se apila centrado. */
+.pager {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 14px; flex-wrap: wrap;
+  margin-top: 1.1rem;
+  padding: 4px 2px;
+}
+.pagerInfo { font-size: 0.82rem; color: #7a6655; font-variant-numeric: tabular-nums; }
+.pagerInfo strong { color: #6d3c1b; }
+.pagerBtns { display: inline-flex; align-items: center; gap: 4px; }
+/* El contorno es el único límite visible del botón, así que va a 3:1 (WCAG
+   1.4.11). El 0.14 que se usa en otros paneles da 1.26:1: no se ve. */
+.pageBtn {
+  min-width: 34px; height: 34px; padding: 0 8px;
+  border: 1px solid rgba(109, 60, 27, 0.62); background: #fff; color: #5b4633;
+  font-family: inherit; font-size: 0.82rem; font-weight: 600; border-radius: 8px;
+  display: inline-flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  transition: background 0.16s ease, border-color 0.16s ease, color 0.16s ease;
+}
+.pageBtn:hover:not(:disabled) { border-color: #6d3c1b; background: #fcf8f4; }
+.pageBtn:focus-visible { outline: 2px solid #c9a84c; outline-offset: 2px; }
+.pageBtn:disabled { opacity: 0.4; cursor: not-allowed; }
+.pageBtnActive, .pageBtnActive:hover { background: #6d3c1b; border-color: #6d3c1b; color: #fff; }
+.pageGap { color: #7a6655; padding: 0 4px; font-size: 0.82rem; }
+
+@media (max-width: 560px) {
+  .pager { justify-content: center; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pageBtn { transition: none; }
 }

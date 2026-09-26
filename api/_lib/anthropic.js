@@ -5,6 +5,14 @@ export const MODELOS = {
   cliente: 'claude-haiku-4-5-20251001',
   abogado: 'claude-sonnet-4-6', // usado por el Plan 2
   censura: 'claude-haiku-4-5-20251001', // revisión de imágenes/PDF escaneados del chat (barato)
+  // Lectura de proyectos de ley: Sonnet, no Haiku. El documento llega con la
+  // capa OCR sucia de un escaneo (palabras partidas, mayúsculas sueltas,
+  // renglones perdidos) y hay que reconstruir el articulado entendiéndolo, no
+  // reconociendo formas. Se importa un proyecto cada tantos días: el coste es
+  // irrelevante frente a tener que corregir 19 artículos a mano.
+  // Sonnet 5, no 4.6: es más nuevo y además más barato ($2/$10 por millón
+  // frente a $3/$15). Unos $0,12 por documento de 10 páginas.
+  proyecto: 'claude-sonnet-5',
 };
 
 // El cliente se construye de forma lazy (en cada llamada) para leer

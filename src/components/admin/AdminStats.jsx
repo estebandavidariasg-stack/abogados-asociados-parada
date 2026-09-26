@@ -89,13 +89,6 @@ export default function AdminStats({
           { n: conProf, label: 'Con profesional', icon: 'users' },
           { n: rWaiting + rActive, label: 'Consultas abiertas', icon: 'chat' },
         ]
-      case 'chat_interno':
-        return [
-          { n: approved.length, label: 'Profesionales', sub: `${aAb} ab · ${aCont} cont`, icon: 'users' },
-          { n: aAb, label: 'Abogados', icon: 'scale' },
-          { n: aCont, label: 'Contadores', icon: 'calc' },
-          { n: rActive, label: 'Consultas activas', tone: 'ok', icon: 'activity' },
-        ]
       case 'contratos':
         return [
           { n: contratos, label: 'Contratos subidos', icon: 'doc' },
@@ -149,10 +142,17 @@ export default function AdminStats({
   // (Solicitudes), no repetida en cada apartado.
   const mostrarGrafica = activeTab === 'pending' && chartData.some(d => d.Registros || d.Consultas)
 
-  // Gestores y Pagos y cobros tienen su propio módulo con sub-pestañas y
-  // resúmenes propios, así que las tarjetas genéricas del panel sobran ahí —
-  // se ocultan para no duplicar información.
-  if (activeTab === 'gestores' || activeTab === 'pagos' || activeTab === 'proyectos') return null
+  /* Pestañas sin tarjetas, por el mismo motivo en todas: lo que contarían ya
+     está a la vista un centímetro más abajo.
+
+     · gestores, pagos, proyectos → traen su propio módulo con resúmenes.
+     · chat_interno → tres de sus cuatro tarjetas contaban profesionales, y la
+       lista de la izquierda los muestra uno por uno con nombre, rol y ciudad;
+       la primera incluso repetía las otras dos ("4 profesionales · 3 ab · 0
+       cont" encima de "3 abogados" y "0 contadores"). La cuarta, consultas
+       activas, es de otra pestaña. Ocupaban el alto que necesita el chat. */
+  const SIN_TARJETAS = ['gestores', 'pagos', 'proyectos', 'chat_interno']
+  if (SIN_TARJETAS.includes(activeTab)) return null
 
   return (
     <div className={styles.wrap}>

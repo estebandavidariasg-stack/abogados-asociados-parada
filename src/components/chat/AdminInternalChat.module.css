@@ -2,7 +2,12 @@
 .wrap {
   font-family: 'Poppins', sans-serif;
   display: flex;
-  height: clamp(420px, 62vh, 640px);
+  /* Sin la fila de tarjetas encima, el chat se queda con el alto que ellas
+     ocupaban. Antes topaba en 640 px y en un monitor normal dejaba un
+     palmo de blanco debajo mientras los mensajes scrolleaban en una
+     ventanita. El mínimo no se toca: en portátiles pequeños 420 px ya es
+     lo justo para ver la lista y el hilo a la vez. */
+  height: clamp(420px, 74vh, 820px);
   border-radius: 16px;
   overflow: hidden;
   background: rgba(255, 255, 255, 0.78);

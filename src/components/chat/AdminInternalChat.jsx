@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { getAuthHeaders, timeoutSignal } from '../../lib/supabase'
 import {
-  downloadChatFile, ChatImage, ChatLightbox,
+  downloadChatFile, AdjuntoChat, VisorArchivo, ChatImage, ChatLightbox,
   crearGrabadorAudio, AUDIO_CONSTRAINTS, describirErrorMicrofono,
 } from '../../lib/chatFiles'
 import styles from './AdminInternalChat.module.css'
@@ -240,6 +240,8 @@ export default function AdminInternalChat({ miId, initialSelectedId, onOpenRoom 
 
   // ── Lightbox para imágenes ──
   const [lightbox, setLightbox] = useState(null)
+  // Archivo abierto DENTRO de la plataforma, nunca en otra pestaña.
+  const [verArchivo, setVerArchivo] = useState(null)
 
   const bottomRef    = useRef()
   const mensajesRef  = useRef(null)
@@ -978,15 +980,15 @@ export default function AdminInternalChat({ miId, initialSelectedId, onOpenRoom 
                           onOpen={setLightbox}
                         />
                       ) : (
-                        <button
-                          className={styles.fileBtn}
-                          onClick={() => downloadChatFile(m.file_url, m.file_name)}
-                          title={m.file_name}
-                        >
-                          <IconPaperclip size={16} />
-                          <span className={styles.fileName}>{m.file_name}</span>
-                          <span className={styles.fileSize}>{fmtFileSize(m.file_size)}</span>
-                        </button>
+                        <AdjuntoChat
+                          src={m.file_url}
+                          nombre={m.file_name}
+                          tamano={fmtFileSize(m.file_size)}
+                          btnClassName={styles.fileBtn}
+                          nombreClassName={styles.fileName}
+                          tamanoClassName={styles.fileSize}
+                          onVer={setVerArchivo}
+                        />
                       )
                     ) : (
                       <p className={styles.burbujaTexto}>{m.mensaje}</p>
@@ -1069,7 +1071,9 @@ export default function AdminInternalChat({ miId, initialSelectedId, onOpenRoom 
               <input
                 ref={fileInputRef}
                 type="file"
-                accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.gif,.webp,.txt,.csv,.zip"
+                /* Cualquier tipo: un expediente puede traer un .zip de anexos, un
+                   .csv, un audio o un plano. El límite real es el tamaño. */
+                accept="*/*"
                 onChange={handleFileSelect}
                 style={{ display: 'none' }}
               />
@@ -1107,6 +1111,7 @@ export default function AdminInternalChat({ miId, initialSelectedId, onOpenRoom 
       </div>
 
       <ChatLightbox src={lightbox} onClose={() => setLightbox(null)} />
+      <VisorArchivo archivo={verArchivo} onClose={() => setVerArchivo(null)} />
     </div>
   )
 }

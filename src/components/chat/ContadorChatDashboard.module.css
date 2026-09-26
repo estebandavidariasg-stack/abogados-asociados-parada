@@ -179,33 +179,75 @@
 
 /* Header del chat */
 .chatHeader {
-  background: #ffffff;
-  padding: 12px 18px;
-  border-bottom: 1px solid rgba(109,60,27,0.08);
+  /* La misma cabecera que ve el cliente al otro lado (ChatSection): café con
+     degradado y hairline dorado. Antes era una banda blanca donde el área, los
+     datos del cliente y tres botones de colores competían por el mismo sitio;
+     con la identidad en oscuro y las acciones abajo, cada cosa tiene su franja. */
+  background: linear-gradient(135deg, #5a3617 0%, #472f29 100%);
+  border-bottom: 2px solid rgba(201,168,76,0.4);
+  padding: 13px 18px;
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
+  align-items: center;
   gap: 12px;
   flex-shrink: 0;
-  flex-wrap: wrap;              /* la meta y las acciones bajan de línea antes de aplastarse */
 }
 
 .chatMeta {
   min-width: 0;
-  flex: 1 1 220px;             /* mantiene un ancho legible; empuja las acciones a otra fila si no caben */
+  flex: 1;
 }
 
 .chatTitle {
-  color: #6d3c1b;
-  font-family: 'Poppins', sans-serif;
-  font-size: 0.85rem;
-  margin: 0 0 4px;
+  color: #ffffff;
+  font-family: 'Cinzel', serif;
+  font-size: 0.95rem;
+  margin: 0 0 3px;
+  /* Cinzel está dibujada sobre la capital romana: en mayúsculas es
+     donde encaja, y su minúscula ya parecía versalita a medias. Un
+     pelo de tracking porque las capitales pegadas se leen peor. */
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  /* Una sola línea: el título es a quién le estás hablando. */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.chatSubtitle {
-  color: #b59e8a;
-  font-size: 0.75rem;
+/* Estado en una línea: punto de color + situación + área + cuándo empezó.
+   El punto dice el estado antes de leer, igual que en el chat del cliente. */
+.chatStatus {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   margin: 0;
+  min-width: 0;
+  color: rgba(252, 241, 232, 0.82);
+  font-size: 0.74rem;
+}
+.chatStatusDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.chatStatusEstado {
+  font-weight: 600;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.chatStatusArea {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Ciudad y hora son lo primero que sobra cuando falta ancho. */
+.chatStatusMeta {
+  white-space: nowrap;
+  flex-shrink: 0;
+  color: rgba(252, 241, 232, 0.62);
+}
+@media (max-width: 720px) {
+  .chatStatusMeta { display: none; }
 }
 
 /* Botones de cierre */
@@ -215,23 +257,6 @@
   gap: 8px;
   flex-shrink: 0;
 }
-
-.btnClose {
-  background: rgba(220, 60, 60, 0.1);
-  border: 1px solid rgba(220, 60, 60, 0.3);
-  border-radius: 6px;
-  color: rgba(220, 100, 100, 0.9);
-  font-family: inherit;
-  font-size: 0.68rem;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  padding: 0.5rem 0.9rem;
-  cursor: pointer;
-  transition: background 0.2s;
-  white-space: nowrap;
-}
-.btnClose:hover { background: rgba(220, 60, 60, 0.2); }
 
 .confirmText {
   font-size: 0.72rem;
@@ -256,9 +281,15 @@
 
 .btnCancel {
   background: #ffffff;
-  border: 1px solid rgba(109,60,27,0.14);
-  border-radius: 6px;
-  color: #a3856b;
+  /* El texto estaba en #a3856b: 3,43:1 contra el blanco, por debajo del
+     4,5 que pide un rótulo de 11 px. Con --muted queda en 6,36:1. El
+     borde sube de 0,14 a 0,28 (1,3:1 → 1,6:1) para que se vea el
+     contorno; no llega a 3:1 a propósito, porque aquí el borde no es
+     el único afordance (el rótulo ya es legible) y un borde a 3:1
+     sobre blanco pesaría más que el botón principal de al lado. */
+  border: 1px solid rgba(109,60,27,0.28);
+  border-radius: 8px;
+  color: var(--muted);
   font-family: inherit;
   font-size: 0.68rem;
   font-weight: 600;
@@ -736,23 +767,26 @@
 .sendBtn:disabled { opacity: 0.4; cursor: not-allowed; }
 
 /* ── Botón "Volver" mobile (oculto en desktop) ── */
-.btnBackMobile {
-  display: none;
+.btnBack {
+  display: none;              /* en escritorio la lista de salas está al lado */
   align-items: center;
-  gap: 6px;
-  background: none;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 38px;
+  height: 38px;
+  /* La flecha se alinea con el borde óptico del texto, no con su caja. */
+  margin-left: -9px;
   border: none;
-  color: #6d3c1b;
-  font-family: inherit;
-  font-size: 0.85rem;
-  font-weight: 600;
+  border-radius: 50%;
+  background: none;
+  color: #fdf6e3;
   cursor: pointer;
-  padding: 4px 8px;
-  margin: -4px -8px 4px;
-  border-radius: 6px;
-  transition: background 0.15s;
+  transition: background-color 160ms cubic-bezier(0.22, 1, 0.36, 1);
 }
-.btnBackMobile:hover { background: rgba(109,60,27,0.06); }
+.btnBack:hover { background: rgba(255,255,255,0.14); }
+.btnBack:active { background: rgba(255,255,255,0.22); }
+.btnBack:focus-visible { outline: 2px solid var(--gold-lt); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .btnBack { transition: none; } }
 
 /* ── Mobile ── */
 @media (max-width: 700px) {
@@ -787,8 +821,9 @@
     width: 100%;
   }
 
-  /* Mostrar el botón "Volver" solo en mobile + cuando hay chat abierto */
-  .dashboardChatOpen .btnBackMobile {
+  /* La flecha solo aparece en móvil con un chat abierto: es la única forma
+     de volver a la lista cuando esta ocupa toda la pantalla. */
+  .dashboardChatOpen .btnBack {
     display: inline-flex;
   }
 
@@ -806,28 +841,27 @@
   /* Encabezado compacto: ocupa lo mínimo para que el chat (lo importante)
      conserve el máximo alto disponible en móvil. */
   .chatHeader {
-    flex-direction: column;
-    justify-content: flex-start;   /* en columna, space-between abría un hueco vertical */
-    gap: 6px;
-    padding: 8px 12px;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
   }
-  /* En columna el `flex-basis: 220px` de la meta se volvía ALTO mínimo y abría
-     un hueco enorme sobre las acciones. Que ocupe solo su contenido. */
-  .chatMeta { flex: 0 0 auto; }
+  .chatMeta { flex: 1; min-width: 0; }
   .chatTitle { font-size: 0.8rem; margin: 0 0 2px; }
-  .chatSubtitle { font-size: 0.68rem; line-height: 1.3; }
-  .btnBackMobile {
-    font-size: 0.8rem;
-    padding: 2px 6px;
-    margin: -2px -6px 2px;
+  .chatStatus { font-size: 0.68rem; line-height: 1.3; }
+  .btnBack {
+    width: 40px;
+    height: 40px;
+    margin-left: -10px;
   }
 
   /* Acciones en una sola fila deslizable en vez de envolver a 2-3 líneas. */
   .headerActions {
     width: 100%;
+    padding: 8px 12px;
     flex-wrap: nowrap;
     overflow-x: auto;
-    justify-content: flex-start;
+    justify-content: center;
     gap: 6px;
     padding-bottom: 2px;
     scrollbar-width: none;
@@ -835,10 +869,17 @@
   }
   .headerActions::-webkit-scrollbar { display: none; }
   .headerActions > * { flex-shrink: 0; }
-  .btnVerificar,
-  .btnClose {
-    padding: 0.42rem 0.7rem;
-    font-size: 0.62rem;
+  /* Las acciones son globales (.aap-accion, en styles/global.css).
+     En el celular suben a 38 px: la fila ya scrollea, así que el alto
+     no cuesta nada y el dedo agradece el blanco. */
+  .headerActions :global(.aap-accion) {
+    min-height: 38px;
+    padding: 0 0.75rem;
+    font-size: 0.74rem;
+  }
+  .headerActions :global(.aap-chip) {
+    min-height: 30px;
+    font-size: 0.7rem;
   }
 
   .closeActions {
@@ -1201,34 +1242,16 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  min-width: 0;               /* puede encoger para que su flex-wrap interno actúe */
-  flex-wrap: wrap;            /* los botones bajan de línea en vez de desbordar/cortarse */
-  justify-content: flex-end;
-}
-.btnVerificar {
-  background: rgba(201, 168, 76, 0.12);
-  border: 1px solid rgba(201, 168, 76, 0.4);
-  border-radius: 7px;
-  color: #C9A84C;
-  font-family: inherit;
-  font-size: 0.68rem;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  padding: 0.5rem 0.9rem;
-  cursor: pointer;
-  transition: background 0.2s;
-  white-space: nowrap;
-}
-.btnVerificar:hover { background: rgba(201, 168, 76, 0.22); }
-.verificadoTag {
-  font-size: 0.68rem;
-  color: rgba(80, 220, 130, 0.9);
-  background: rgba(80, 220, 130, 0.08);
-  border: 1px solid rgba(80, 220, 130, 0.22);
-  border-radius: 6px;
-  padding: 0.4rem 0.8rem;
-  white-space: nowrap;
+  min-width: 0;
+  flex-wrap: wrap;            /* bajan de línea en vez de desbordar o cortarse */
+  /* Centradas, igual en móvil y en escritorio: la franja va a todo el ancho
+     bajo la cabecera, y pegarlas a un borde las dejaba huérfanas del título. */
+  justify-content: center;
+  /* Franja propia bajo la cabecera oscura. */
+  background: #ffffff;
+  border-bottom: 1px solid rgba(109,60,27,0.1);
+  padding: 10px 18px;
+  flex-shrink: 0;
 }
 .modalIconGold {
   composes: modalIcon;
@@ -1322,23 +1345,25 @@
     background: #fff;
   }
 
-  /* Cabecera compacta: caso arriba, acciones en su propia fila. Se usa GRID en
-     vez de flex-wrap porque con dos hijos de `flex-basis: 100%` el navegador
-     los mantenía en la misma línea y las acciones se salían de la pantalla. */
+  /* Flecha, título y estado en UNA fila, como una cabecera de conversación de
+     móvil. Las acciones ya no viven aquí dentro, así que la rejilla de una
+     columna que las empujaba abajo sobraba: lo único que lograba era poner la
+     flecha sobre el título y apretar la cabecera a tres líneas. */
   .dashboardChatOpen .chatHeader {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
+    display: flex;
+    flex-direction: row;
     align-items: center;
-    padding: 8px 12px;
-    padding-top: calc(8px + env(safe-area-inset-top));
-    gap: 6px;
+    gap: 10px;
+    padding: 10px 12px;
+    padding-top: calc(10px + env(safe-area-inset-top));
     border-radius: 0;
   }
-  .dashboardChatOpen .chatMeta { min-width: 0; }
+  .dashboardChatOpen .chatMeta { min-width: 0; flex: 1; }
   .dashboardChatOpen .chatTitle { font-size: 0.86rem; }
-  .dashboardChatOpen .chatSubtitle {
+  .dashboardChatOpen .chatStatus {
     font-size: 0.7rem;
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    flex-wrap: nowrap;
+    overflow: hidden;
   }
   /* Acciones: envuelven en dos líneas antes que quedar cortadas. Se prefiere
      esto a una fila deslizable: en el celular un botón a medias se lee como
@@ -1346,8 +1371,9 @@
   .dashboardChatOpen .headerActions {
     min-width: 0;
     flex-wrap: wrap;
-    justify-content: flex-start;
+    justify-content: center;
     gap: 6px;
+    padding: 8px 12px;
   }
   .dashboardChatOpen .headerActions > * { max-width: 100%; }
 

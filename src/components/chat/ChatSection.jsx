@@ -7,9 +7,9 @@ import styles from './ChatSection.module.css'
 import AudioPlayer from './AudioPlayer'
 import TriagePanel from './TriagePanel'
 import {
-  ChatImage, ChatLightbox, openChatFile, downloadChatFile, subirArchivoChat,
+  ChatImage, ChatLightbox, downloadChatFile, VisorArchivo, subirArchivoChat,
   parseFichas, FichasContacto,
-  validarAdjuntoChat, prepararAdjuntoChat, nombreArchivoSeguro, describirErrorSubida,
+  validarAdjuntoChat, CHAT_FILE_ACCEPT, prepararAdjuntoChat, nombreArchivoSeguro, describirErrorSubida,
   crearGrabadorAudio, extAudio, mimeAudioLimpio, describirErrorMicrofono, AUDIO_CONSTRAINTS,
   revisarContactoArchivo, crearTranscriptor, PdfVisor,
 } from '../../lib/chatFiles'
@@ -17,7 +17,7 @@ import {
 const VerificationStep = lazy(() => import('../auth/VerificationStep'))
 import {
   COP, fetchCobroCliente, clienteMarcoPago, subirComprobanteCliente, descargarReciboPDF,
-  AVISO_COBRO_CLIENTE,
+  AVISO_COBRO_CLIENTE, AVISO_COSTO_ANTES,
 } from '../../lib/cobroAsesoria'
 // Lazy: arrastra ~30 kB de datos geográficos (32 departamentos + ~1.100
 // municipios) que solo se usan en el paso del formulario, nunca en el
@@ -1161,6 +1161,23 @@ function NuevaConsultaModal({ prof, sending, error, onCancel, onConfirm }) {
 
         {error && <p style={{ margin:'10px 0 0', color:'#8f2f22', fontSize:'0.8rem' }}>{error}</p>}
 
+        {/* El cliente que repite también decide aquí: cada consulta se cobra
+            aparte, no queda cubierta por la que ya pagó. */}
+        <div className={`${styles.avisoCosto} ${styles.avisoCostoSuelto}`} style={{ marginTop: 16 }}>
+          <span className={styles.avisoCostoIcono} aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor"
+              strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="8.5" />
+              <path d="M14.4 9.3a2.8 2.8 0 0 0-2.4-1.1c-1.5 0-2.4.8-2.4 1.8 0 2.4 5 1 5 3.6 0 1.1-1 1.9-2.6 1.9a2.9 2.9 0 0 1-2.5-1.2" />
+              <path d="M12 6.6v1.6M12 15.6v1.6" />
+            </svg>
+          </span>
+          <span className={styles.avisoCostoCuerpo}>
+            <span className={styles.avisoCostoCifra}><strong>{AVISO_COSTO_ANTES.cifra}</strong> <span className={styles.avisoCostoSufijo}>{AVISO_COSTO_ANTES.sufijo}</span></span>
+            <span className={styles.avisoCostoTexto}>{AVISO_COSTO_ANTES.texto}</span>
+          </span>
+        </div>
+
         <div style={{ display:'flex', gap:8, justifyContent:'flex-end', marginTop:18 }}>
           <button type="button" disabled={sending} onClick={onCancel}
             style={{ border:'1px solid rgba(109,60,27,0.3)', background:'none', borderRadius:10, padding:'10px 14px', cursor:'pointer', fontSize:'0.8rem', fontWeight:600, color:'#6d3c1b' }}>
@@ -1190,12 +1207,16 @@ function VisorDocumento({ titulo, url, onClose }) {
     return () => { document.removeEventListener('keydown', onKey); document.body.style.overflow = '' }
   }, [onClose])
   const esPdf = /\.pdf(\?|$)/i.test((url || '').split('#')[0])
-  return (
+  // Portado a <body> como ChatLightbox y VisorArchivo: si algún día un ancestro
+  // gana un backdrop-filter o un transform, ese ancestro pasa a ser el bloque
+  // contenedor del `position: fixed` y el visor se abriría recortado dentro de
+  // la burbuja en vez de a pantalla completa.
+  return createPortal(
     <div role="dialog" aria-modal="true" aria-label={titulo}
       onClick={e => { if (e.target === e.currentTarget) onClose() }}
       onContextMenu={e => e.preventDefault()}
       // Overlay OPACO (antes 0.78 dejaba ver el navbar/logo del sitio detrás).
-      style={{ position:'fixed', inset:0, zIndex:2000, background:'rgba(18,12,6,0.94)', display:'flex', flexDirection:'column' }}>
+      style={{ position:'fixed', inset:0, zIndex:'var(--z-visor)', background:'rgba(18,12,6,0.94)', display:'flex', flexDirection:'column' }}>
 
       {/* Barra superior sólida: ícono ojo + título (1 línea) + botón X */}
       <div style={{
@@ -1236,7 +1257,8 @@ function VisorDocumento({ titulo, url, onClose }) {
             style={{ maxWidth:'100%', maxHeight:'100%', objectFit:'contain', borderRadius:12, pointerEvents:'none' }} />
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
 
@@ -1343,14 +1365,9 @@ function CobroClienteCard({ roomId, clientToken, profesionalNombre, onVerCertifi
         </span>
       </span>
       <button type="button" onClick={() => setDetalleAbierto(true)}
-        style={{
-          flexShrink: 0, borderRadius: 9, padding: '8px 16px',
-          background: informado ? '#fff' : 'linear-gradient(135deg,#f2d580,#c9a84c 55%,#9a7a2c)',
-          border: informado ? '1px solid rgba(109,60,27,0.3)' : 'none',
-          color: '#5a3d12', fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer',
-          fontFamily: 'inherit',
-        }}>
-        {informado ? 'Ver detalle' : 'Pagar'}
+        className={informado ? 'aap-accion aap-accion--neutra' : 'aap-accion aap-accion--primaria'}
+        style={{ flexShrink: 0 }}>
+        {informado ? 'Ver detalle del pago' : 'Pagar la asesoría'}
       </button>
     </div>
   )
@@ -1364,7 +1381,7 @@ function CobroClienteCard({ roomId, clientToken, profesionalNombre, onVerCertifi
       onClick={() => !busy && setDetalleAbierto(false)}
       role="dialog" aria-modal="true" aria-label="Pago de la asesoría"
       style={{
-        position: 'fixed', inset: 0, zIndex: 9000, padding: '5vh 16px',
+        position: 'fixed', inset: 0, zIndex: 'var(--z-modal)', padding: '5vh 16px',
         background: 'rgba(48,27,8,0.55)', backdropFilter: 'blur(3px)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         overflowY: 'auto',
@@ -1384,10 +1401,10 @@ function CobroClienteCard({ roomId, clientToken, profesionalNombre, onVerCertifi
           <p style={{ margin: '12px 0 6px', fontSize: '0.78rem', color: 'rgba(109,60,27,0.75)' }}>
             Consigna a la cuenta del certificado bancario del profesional:
           </p>
-          {/* Cierra este modal antes de abrir el visor del documento: si no,
-              el visor queda detrás y el cliente no puede leer la cuenta. */}
-          <button type="button" onClick={() => { setDetalleAbierto(false); onVerCertificado() }}
-            style={{ background: '#fff', border: '1px solid rgba(109,60,27,0.3)', borderRadius: 10, padding: '10px 12px', fontSize: '0.8rem', fontWeight: 700, color: '#6d3c1b', cursor: 'pointer', width: '100%' }}>
+          {/* El visor se abre ENCIMA de este modal (--z-visor), así que al
+              cerrarlo el cliente sigue en el pago y no pierde lo que llevaba. */}
+          <button type="button" onClick={onVerCertificado}
+            className="aap-accion aap-accion--neutra aap-accion--ancha">
             Ver cuenta bancaria certificada
           </button>
         </>
@@ -1403,15 +1420,20 @@ function CobroClienteCard({ roomId, clientToken, profesionalNombre, onVerCertifi
 
       {informado ? (
         <div style={{ marginTop: 10, color: '#8a6a28', fontWeight: 600, fontSize: '0.82rem' }}>
-          ✓ Pago informado con comprobante — esperando que el profesional lo confirme.
+          ✓ Pago informado con comprobante. Esperando que el profesional lo confirme.
         </div>
       ) : (
         <>
           {/* Comprobante obligatorio: transparencia para ambas partes */}
           <div style={{ marginTop: 12 }}>
             <button type="button" onClick={() => comprobanteRef.current?.click()}
-              style={{ width: '100%', background: '#fff', border: '1px dashed rgba(109,60,27,0.4)', borderRadius: 10, padding: '10px 12px', fontSize: '0.8rem', fontWeight: 600, color: '#6d3c1b', cursor: 'pointer' }}>
-              {comprobanteFile ? `✓ ${comprobanteFile.name}` : 'Adjuntar comprobante de pago (obligatorio)'}
+              className="aap-accion aap-accion--neutra aap-accion--ancha"
+              style={{ borderStyle: 'dashed', borderColor: 'rgba(109,60,27,0.4)', minHeight: 44 }}>
+              {comprobanteFile
+                ? <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    ✓ {comprobanteFile.name}
+                  </span>
+                : 'Adjuntar comprobante de pago'}
             </button>
             <input ref={comprobanteRef} type="file"
               accept="application/pdf,image/png,image/jpeg,image/webp"
@@ -1421,14 +1443,16 @@ function CobroClienteCard({ roomId, clientToken, profesionalNombre, onVerCertifi
             )}
           </div>
           <button type="button" onClick={marcar} disabled={busy || !comprobanteFile}
-            style={{ marginTop: 10, width: '100%', background: comprobanteFile ? 'linear-gradient(135deg,#f2d580,#c9a84c 55%,#9a7a2c)' : 'rgba(201,168,76,0.35)', color: '#5a3d12', border: 'none', borderRadius: 10, padding: '11px 16px', fontWeight: 700, fontSize: '0.88rem', cursor: busy || !comprobanteFile ? 'not-allowed' : 'pointer' }}>
-            {busy ? 'Registrando…' : 'Confirmar'}
+            className="aap-accion aap-accion--primaria aap-accion--ancha"
+            style={{ marginTop: 10, minHeight: 46 }}>
+            {busy ? 'Registrando…' : 'Ya pagué, informar al profesional'}
           </button>
         </>
       )}
 
         <button type="button" onClick={() => setDetalleAbierto(false)} disabled={busy}
-          style={{ marginTop: 10, width: '100%', background: 'none', border: '1px solid rgba(109,60,27,0.25)', borderRadius: 10, padding: '9px 12px', fontSize: '0.8rem', fontWeight: 600, color: '#6d3c1b', cursor: busy ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}>
+          className="aap-accion aap-accion--neutra aap-accion--ancha"
+          style={{ marginTop: 10, borderColor: 'transparent' }}>
           Cerrar
         </button>
       </div>
@@ -1485,6 +1509,9 @@ export default function ChatSection() {
   const [revisando, setRevisando]   = useState(false)  // revisión de contacto previa a la subida
   // id del mensaje cuyo archivo se está descargando (botón "Descargar").
   const [descargando, setDescargando] = useState(null)
+  // Archivo abierto DENTRO de la plataforma: imagen y PDF se ven aquí mismo,
+  // cualquier otro tipo se descarga solo. Nunca se abre una pestaña con la URL.
+  const [verArchivo, setVerArchivo] = useState(null)
   // Adjunto EN ESPERA de confirmación: seleccionar → previsualizar → enviar.
   // Evita mandar un documento por equivocación. { file, preview }
   const [pendingFile, setPendingFile] = useState(null)
@@ -1535,6 +1562,27 @@ export default function ChatSection() {
       setFormError(err.message || 'No se pudo enviar el código.')
     }
   }
+  // Corregir SOLO el correo sin volver al formulario. Es la errata que se
+  // descubre al no recibir nada: antes tocaba rehacer todo el formulario.
+  // Si el reenvío falla no se toca nada, para no dejar el paso apuntando a
+  // un correo al que nunca salió un código.
+  async function cambiarCorreoConsulta(nuevo) {
+    const limpio = (nuevo || '').trim().toLowerCase()
+    const v = validarCorreo(limpio)
+    if (v.valid !== true) throw new Error(v.msg || 'Escribe un correo válido.')
+    if (limpio === (otpEmail || '').trim().toLowerCase()) {
+      throw new Error('Ese es el mismo correo que ya tienes.')
+    }
+    await enviarOtpConsulta(limpio)
+    setOtpEmail(limpio)
+    setOtpError('')
+    setForm(f => {
+      const actualizado = { ...f, correo: limpio }
+      guardarDatosCliente(actualizado)
+      return actualizado
+    })
+  }
+
   async function verificarOtpConsulta(code) {
     if (otpBusy) return
     setOtpBusy(true); setOtpError('')
@@ -1552,7 +1600,7 @@ export default function ChatSection() {
       const continuar = otpContinuarRef.current
       otpContinuarRef.current = null
       setOtpBusy(false)
-      if (continuar) await continuar()
+      if (continuar) await continuar(otpEmail)
     } catch (err) {
       setOtpError(err.message || 'Código inválido o expirado')
       setOtpBusy(false)
@@ -1969,32 +2017,77 @@ export default function ChatSection() {
   // disciplinario + cédula. URLs firmadas de 10 min vía /api/solicitudes.
   const [docsInfo, setDocsInfo]   = useState(null)
   const [docViewer, setDocViewer] = useState(null)   // { titulo, url }
+  const [docCargando, setDocCargando] = useState('') // key del documento que se está abriendo
   const docsFetchedAt = useRef(0)
   const docsRoomRef   = useRef(null)
 
-  async function cargarDocsProfesional(force = false) {
+  const docsReintentoRef = useRef(null)
+  // Por qué no hay documentos, para poder DECIRLO en vez de no pintar nada.
+  // Antes cualquier fallo aquí era invisible: la fila de credenciales
+  // desaparecía sin más y el botón "Ver cuenta bancaria" no hacía nada al
+  // pulsarlo, sin un solo mensaje ni en pantalla ni en consola.
+  const [docsFallo, setDocsFallo] = useState('')
+
+  // Las URLs vienen firmadas a 10 minutos, así que la caché dura menos: con 8
+  // una abierta al filo llegaba al visor ya vencida y el documento salía en
+  // blanco. Con 5 siempre quedan al menos 5 minutos de margen.
+  const DOCS_CACHE_MS = 5 * 60 * 1000
+
+  async function cargarDocsProfesional(force = false, intento = 0) {
     if (!roomId) return null
     const fresco = docsInfo && docsRoomRef.current === roomId &&
-      Date.now() - docsFetchedAt.current < 8 * 60 * 1000
+      Date.now() - docsFetchedAt.current < DOCS_CACHE_MS
     if (!force && fresco) return docsInfo
     try {
+      const cedulaHash = localStorage.getItem('chat_cedula_hash')
+      if (!cedulaHash) { setDocsFallo('falta_cedula'); return null }
       const res = await fetch('/api/solicitudes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          accion: 'docs_profesional',
-          cedulaHash: localStorage.getItem('chat_cedula_hash'),
-          roomId,
-        }),
+        body: JSON.stringify({ accion: 'docs_profesional', cedulaHash, roomId }),
       })
-      const data = await res.json().catch(() => null)
+      const crudo = await res.text()
+      let data = null
+      try { data = JSON.parse(crudo) } catch { /* no es JSON: ver abajo */ }
       if (data?.ok) {
         docsFetchedAt.current = Date.now()
         docsRoomRef.current = roomId
+        setDocsFallo('')
         setDocsInfo(data)
         return data
       }
-    } catch { /* la fila simplemente no se muestra */ }
+      // Si la respuesta no es JSON casi siempre es el HTML del SPA: las
+      // funciones de api/ solo existen con `vercel dev` o en producción, y con
+      // `npm run dev`/`preview` cualquier /api/... cae en el fallback del index.
+      // Se distingue a propósito: el síntoma (no salen los documentos) es el
+      // mismo que un fallo real y antes no había forma de diferenciarlos.
+      if (!data) {
+        const esHtml = /^\s*</.test(crudo)
+        console.warn(
+          esHtml
+            ? '[chat] /api/solicitudes devolvió HTML, no JSON. Las funciones de api/ no están corriendo: usa `vercel dev` o pruébalo en producción.'
+            : `[chat] /api/solicitudes respondió algo ilegible (HTTP ${res.status}): ${crudo.slice(0, 200)}`
+        )
+        setDocsFallo(esHtml ? 'api_no_disponible' : 'respuesta_invalida')
+        return null
+      }
+      const motivo = data?.motivo || data?.error || `HTTP ${res.status}`
+      console.warn('[chat] no se pudieron cargar los documentos del profesional:', res.status, data)
+      setDocsFallo(motivo)
+      // Todavía sin profesional asignado. En una consulta publicada es el
+      // estado normal y hay que esperar a que alguien la tome; en una sala
+      // recien creada es solo desfase, así que se reintenta un rato corto.
+      if (data?.motivo === 'sin_profesional' && intento < 4) {
+        const sala = roomId
+        clearTimeout(docsReintentoRef.current)
+        docsReintentoRef.current = setTimeout(() => {
+          if (docsRoomRef.current !== sala) cargarDocsProfesional(true, intento + 1)
+        }, 700 * (intento + 1))
+      }
+    } catch (err) {
+      console.warn('[chat] documentos del profesional: la petición falló', err)
+      setDocsFallo('red')
+    }
     return null
   }
 
@@ -2010,13 +2103,43 @@ export default function ChatSection() {
   useEffect(() => {
     if (step === 'chat' && roomId) cargarDocsProfesional(true)
     else if (!roomId) setDocsInfo(null)
+    return () => clearTimeout(docsReintentoRef.current)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roomId, roomStatus, step])
 
+  // Siempre con `force`: la URL firmada dura 10 minutos y el cliente puede
+  // llevar media hora en el chat. Antes reusaba la de la caché y, si estaba
+  // vencida (o si la petición había fallado), la función terminaba en el
+  // `if (url)` sin abrir nada ni avisar: por fuera parecía un botón muerto.
   async function abrirDoc(key, titulo) {
-    const d = await cargarDocsProfesional(false)
-    const url = d?.docs?.[key]
-    if (url) setDocViewer({ titulo, url })
+    setDocCargando(key)
+    try {
+      const d = await cargarDocsProfesional(true)
+      const url = d?.docs?.[key]
+      if (url) { setDocViewer({ titulo, url }); return }
+      setSendError(
+        docsFallo === 'sin_profesional'
+          ? 'Todavía no hay un profesional asignado a esta consulta.'
+          : `No se pudo abrir ${titulo.toLowerCase()}. Intenta de nuevo en un momento.`
+      )
+    } finally {
+      setDocCargando('')
+    }
+  }
+
+  /* Soltar al profesional que venía preelegido desde su tarjeta del home.
+
+     CAUSA del comportamiento raro: "Elegir yo mismo" limpiaba el modo IA
+     (desdeIA, profesionalIA, areasBloqueadas) pero NO `profesionalDeepLink`
+     ni `picked`. Así, quien entraba por la tarjeta de un profesional, se
+     devolvía, pasaba por IA Parada y volvía a "elegir yo", seguía atado al
+     primero sin manera de quitarlo: el rótulo decía "elige tú" y la elección
+     ya estaba hecha. */
+  function soltarProfesionalElegido() {
+    setProfesionalDeepLink(null)
+    setPicked([])
+    setAreasBloqueadas(false)
+    limpiarDeepLinkHash()
   }
 
   // ── Multi-chat: lista de casos abiertos del cliente ──────────────────────
@@ -2394,7 +2517,7 @@ export default function ChatSection() {
     setRoomCodigo(codigoRef || ''); setPicked([])
     setNuevaConsulta(null)
     setStep('chat'); setSending(false)
-    cargarCasos()   // refresca la lista (habilita el botón "← Mis casos")
+    cargarCasos()   // refresca la lista (habilita la flecha de volver a los casos)
   }
 
   // Confirmación del modal de nueva consulta (multi-chat): crea la sala con el
@@ -2440,7 +2563,8 @@ export default function ChatSection() {
         setStep('form'); setFormError('Confirma tu correo para continuar.')
         return
       }
-      await pedirVerificacionCorreo(fd.correo, () => startChat({ form: fd, picked: [prof.id], profDirecto: prof }))
+      await pedirVerificacionCorreo(fd.correo, (correoOk) =>
+        startChat({ form: { ...fd, correo: correoOk || fd.correo }, picked: [prof.id], profDirecto: prof }))
       return
     }
     await startChat({ form: fd, picked: [prof.id], profDirecto: prof })
@@ -2640,6 +2764,9 @@ export default function ChatSection() {
       const revision = await revisarContactoArchivo(file, { roomId })
       setRevisando(false)
       if (revision.contiene) { setContactoWarning(true); return }
+      // Si el revisor no pudo leerlo, NO se envía. Dejarlo pasar convertía
+      // cualquier fallo del filtro en una vía libre para datos de contacto.
+      if (!revision.revisado) { setSendError('No pudimos revisar este archivo, así que no se envió. Intenta de nuevo en un momento.'); return }
       // El bucket exige el JWT del cliente: renovarlo si expiró (se reusa si sigue vigente).
       await ensureChatToken(localStorage.getItem('chat_cedula_hash'))
       path = `chats/${roomId}/${Date.now()}_${nombreArchivoSeguro(file.name)}`
@@ -2745,7 +2872,11 @@ export default function ChatSection() {
   async function uploadAudio(blob, mimeType = 'audio/webm', transcripcion = '') {
     if (!roomId) return
     const texto = String(transcripcion || '').trim()
-    if (texto && contieneContacto(texto)) { setContactoWarning(true); return }
+    // Sin transcripción no hay nada que revisar, y una nota de voz es la
+    // forma más fácil de dictar un teléfono. Antes se enviaba igual: en un
+    // navegador sin Web Speech (Firefox) NINGÚN audio se revisaba jamás.
+    if (!texto) { setSendError('No se pudo transcribir la nota de voz para revisarla, así que no se envió. Escribe el mensaje o adjunta un archivo.'); return }
+    if (contieneContacto(texto)) { setContactoWarning(true); return }
     setUploading(true); setSendError('')
     let path = null
     try {
@@ -2907,7 +3038,10 @@ export default function ChatSection() {
 
                 <div className={styles.chatHeader}>
                   <div className={styles.chatHeadRow}>
-                    {/* Volver a la lista de casos (multi-chat) sin perder nada */}
+                    {/* Volver a la lista de casos (multi-chat) sin perder nada.
+                        Solo la flecha, igual que en el panel del profesional: la
+                        pastilla dorada con rótulo competía con el título por la
+                        mirada, y el destino ya lo dice el `aria-label`. */}
                     {misCasos.length > 0 && (
                       <button
                         type="button"
@@ -2916,13 +3050,18 @@ export default function ChatSection() {
                         title="Volver a mis casos"
                         className={styles.chatBackBtn}
                       >
-                        ← Mis casos
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                          <path d="M15 18l-6-6 6-6" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
+                        </svg>
                       </button>
                     )}
                     <div style={{ minWidth: 0, flex: 1 }}>
                       {/* Título = "Consulta con <profesional>" (a quién le hablas),
                           o solo "Consulta" si aún no hay uno elegido. Una línea. */}
-                      <p className={styles.chatTitle}>
+                      {/* En mayúsculas el texto ensancha y un nombre largo recorta
+                          antes; el `title` deja leerlo entero al pasar el cursor. */}
+                      <p className={styles.chatTitle}
+                        title={profNombreHeader ? `Consulta con ${profNombreHeader}` : 'Consulta'}>
                         {profNombreHeader ? `Consulta con ${profNombreHeader}` : 'Consulta'}
                       </p>
                       {/* Estado compacto: punto + profesión + estado + área (1 línea) */}
@@ -2964,6 +3103,26 @@ export default function ChatSection() {
 
                 {/* ── Confianza: documentos del profesional (solo-ver) + cédula.
                     Desplegable para no saturar la cabecera del chat. ── */}
+                {/* Si la carga falla, la sección NO se esconde: se muestra con el
+                    motivo y un botón de reintentar. Desaparecer sin decir nada
+                    dejaba al cliente creyendo que el profesional no tiene
+                    papeles. La única ausencia legítima es que todavía no haya
+                    nadie asignado (consulta publicada). */}
+                {docsFallo && docsFallo !== 'sin_profesional' && !docsInfo?.ok && (
+                  <div className={styles.confianzaWrap} style={{ padding: '10px 12px' }}>
+                    <p style={{ margin: 0, fontSize: '0.8rem', color: '#6d3c1b' }}>
+                      {docsFallo === 'api_no_disponible'
+                        ? 'Los documentos del profesional no se pueden cargar aquí: las funciones del servidor no están activas en este entorno. '
+                        : 'No se pudieron cargar los documentos del profesional. '}
+                      <button type="button" onClick={() => cargarDocsProfesional(true)}
+                        style={{ background: 'none', border: 'none', padding: 0, color: '#6d3c1b',
+                                 fontWeight: 700, textDecoration: 'underline', cursor: 'pointer', font: 'inherit' }}>
+                        Reintentar
+                      </button>
+                    </p>
+                  </div>
+                )}
+
                 {docsInfo?.ok &&
                   (docsInfo.docs?.tarjeta || docsInfo.docs?.certBancario || docsInfo.docs?.certDisciplinario || docsInfo.cedula) && (
                   <details className={styles.confianzaWrap}>
@@ -2983,11 +3142,12 @@ export default function ChatSection() {
                         docsInfo.docs?.certDisciplinario && { key: 'certDisciplinario', label: 'Certificado disciplinario' },
                       ].filter(Boolean).map(d => (
                         <button key={d.key} type="button" className={styles.confianzaChip}
-                          onClick={() => abrirDoc(d.key, d.label)} title={`Ver ${d.label}`}>
+                          onClick={() => abrirDoc(d.key, d.label)} title={`Ver ${d.label}`}
+                          disabled={!!docCargando}>
                           <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0, color: '#8a6a28' }}>
                             <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" /><circle cx="12" cy="12" r="3" />
                           </svg>
-                          <span>{d.label}</span>
+                          <span>{docCargando === d.key ? 'Abriendo…' : d.label}</span>
                         </button>
                       ))}
                       {docsInfo.cedula && (
@@ -3124,7 +3284,7 @@ export default function ChatSection() {
                               <div className={styles.fileRow}>
                                 <button
                                   className={styles.fileBtn}
-                                  onClick={() => openChatFile(msg.file_url)}
+                                  onClick={() => setVerArchivo({ url: msg.file_url, nombre: msg.file_name || 'archivo' })}
                                   title={`Abrir ${msg.file_name || 'archivo'}`}
                                 >
                                   <IconPaperclip size={16} />
@@ -3215,7 +3375,9 @@ export default function ChatSection() {
                   <input ref={fileRef} type="file"
                     /* Con solo extensiones, el selector de Android oculta los
                        Word; se añaden los MIME para que aparezcan. */
-                    accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.gif,.webp,.txt,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,image/*,text/plain"
+                    /* Cualquier tipo: un expediente puede traer un .zip de anexos, un
+                       .csv, un audio o un plano. El límite real es el tamaño. */
+                    accept={CHAT_FILE_ACCEPT}
                     onChange={handleFile} style={{ display:'none' }} />
                   {/* Grabando: el micrófono pasa a "cancelar" y la nota se manda con Enviar */}
                   <button className={recording ? styles.recordingBtn : styles.attachBtn}
@@ -3518,9 +3680,11 @@ export default function ChatSection() {
                   type="button"
                   className={`aap-card-tipo ${styles.metodoCard}`}
                   onClick={() => {
-                    // Flujo manual: el cliente elige todo → form completo, sin modo IA.
-                    setSolicitudAbierta(false); setAreasBloqueadas(false)
+                    // Flujo manual: el cliente elige todo → form completo, sin
+                    // modo IA y SIN el profesional que trajera de una tarjeta.
+                    setSolicitudAbierta(false)
                     setDesdeIA(false); setProfesionalIA(null); setCostoIA('')
+                    soltarProfesionalElegido()
                     setStep('form')
                   }}
                 >
@@ -3551,9 +3715,11 @@ export default function ChatSection() {
             tipoProfesional={form.tipo_profesional}
             onVolver={() => setStep('metodo')}
             onManual={() => {
-              // Flujo manual: el cliente elige todo → form completo, sin modo IA.
-              setSolicitudAbierta(false); setAreasBloqueadas(false)
+              // Flujo manual: el cliente elige todo → form completo, sin modo
+              // IA y SIN el profesional que trajera de una tarjeta.
+              setSolicitudAbierta(false)
               setDesdeIA(false); setProfesionalIA(null); setCostoIA('')
+              soltarProfesionalElegido()
               setStep('form')
             }}
             onIniciarChat={({ profesionalId, area, resumen, costo, profesional }) => {
@@ -3629,6 +3795,20 @@ export default function ChatSection() {
                     <span className={styles.deepLinkArea}>{profesionalDeepLink.area_derecho}</span>
                   )}
                 </div>
+                {/* Quitarlo sin tener que volver atrás ni adivinar dónde se
+                    deshace: el cliente cambia de opinión y ya está. */}
+                <button
+                  type="button"
+                  className={styles.deepLinkQuitar}
+                  onClick={soltarProfesionalElegido}
+                  title="Elegir otro profesional"
+                  aria-label={`Quitar a ${`${profesionalDeepLink.nombre||''} ${profesionalDeepLink.apellido||''}`.trim()} y elegir otro profesional`}
+                >
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"
+                    strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M18 6 6 18M6 6l12 12" />
+                  </svg>
+                </button>
               </div>
             )}
 
@@ -3867,7 +4047,30 @@ export default function ChatSection() {
             </div>
             </>)}
             {formError && <p className={styles.formError}>{formError}</p>}
-            <button className={styles.btnGold} onClick={handleFormSubmit} disabled={submitting || sending}>
+            {/* El precio, donde todavía cambia una decisión. Dentro del chat el
+                cliente ya contó su caso y ya eligió con quién: ahí el aviso
+                informa, pero ya no le sirve para decidir si sigue.
+
+                Va PEGADO al botón, como un solo bloque, porque el formulario es
+                todo crema y una caja crema encima de crema no se ve (1,08:1 de
+                separación: invisible como forma). Unido al botón no hace falta
+                que compita por la mirada; no se puede pulsar sin haberlo visto. */}
+            <div className={styles.bloqueCosto}>
+              <div className={styles.avisoCosto}>
+                <span className={styles.avisoCostoIcono} aria-hidden="true">
+                  <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor"
+                    strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="8.5" />
+                    <path d="M14.4 9.3a2.8 2.8 0 0 0-2.4-1.1c-1.5 0-2.4.8-2.4 1.8 0 2.4 5 1 5 3.6 0 1.1-1 1.9-2.6 1.9a2.9 2.9 0 0 1-2.5-1.2" />
+                    <path d="M12 6.6v1.6M12 15.6v1.6" />
+                  </svg>
+                </span>
+                <span className={styles.avisoCostoCuerpo}>
+                  <span className={styles.avisoCostoCifra}><strong>{AVISO_COSTO_ANTES.cifra}</strong> <span className={styles.avisoCostoSufijo}>{AVISO_COSTO_ANTES.sufijo}</span></span>
+                  <span className={styles.avisoCostoTexto}>{AVISO_COSTO_ANTES.texto}</span>
+                </span>
+              </div>
+              <button className={`${styles.btnGold} ${styles.btnGoldPegado}`} onClick={handleFormSubmit} disabled={submitting || sending}>
               {solicitudAbierta
                 ? ((submitting || sending) ? 'Publicando…' : 'Publicar mi consulta')
                 : (desdeIA || profesionalDeepLink)
@@ -3875,7 +4078,8 @@ export default function ChatSection() {
                   : (submitting
                       ? (form.tipo_profesional === 'contador' ? 'Buscando contadores…' : 'Buscando abogados…')
                       : (form.tipo_profesional === 'contador' ? 'Buscar contadores disponibles' : 'Buscar abogados disponibles'))}
-            </button>
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -3891,6 +4095,7 @@ export default function ChatSection() {
                 submitting={otpBusy}
                 onSubmit={verificarOtpConsulta}
                 onResend={() => enviarOtpConsulta(otpEmail).catch(err => { setOtpError(err.message); throw err })}
+                onCambiarCorreo={cambiarCorreoConsulta}
                 onBack={() => { setOtpError(''); otpContinuarRef.current = null; setStep('form') }}
               />
             </Suspense>
@@ -4088,6 +4293,7 @@ export default function ChatSection() {
       )}
 
       <ChatLightbox src={lightbox} onClose={() => setLightbox(null)} />
+      <VisorArchivo archivo={verArchivo} onClose={() => setVerArchivo(null)} />
     </section>
   )
 }

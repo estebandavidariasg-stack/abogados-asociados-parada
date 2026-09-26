@@ -211,17 +211,37 @@ export default async function handler(req, res) {
     `&expires_at=gt.${encodeURIComponent(now)}` +
     `&select=tipo_registro`
 
+  /* `used_at` guarda CUÁNDO se validó el código. Lo usa la ventana del voto:
+     antes se medía desde `created_at`, es decir desde que se envió el correo,
+     y los minutos que tarda la persona en abrirlo y teclear el código se le
+     descontaban a ella.
+
+     Es columna nueva (docs/sql/voto-ventana-2026-09-26.sql). Mientras ese SQL
+     no esté aplicado PostgREST responde 400 por columna desconocida, y esa
+     verificación se perdería entera: por eso se reintenta sin ella. */
+  const patchear = (cuerpo) => fetch(url, {
+    method: 'PATCH',
+    headers: {
+      apikey:        SUPABASE_SERVICE_ROLE_KEY,
+      Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+      'Content-Type': 'application/json',
+      Prefer:        'return=representation',
+    },
+    body: JSON.stringify(cuerpo),
+  })
+
   try {
-    const patchRes = await fetch(url, {
-      method: 'PATCH',
-      headers: {
-        apikey:        SUPABASE_SERVICE_ROLE_KEY,
-        Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
-        'Content-Type': 'application/json',
-        Prefer:        'return=representation',
-      },
-      body: JSON.stringify({ used: true }),
-    })
+    let patchRes = await patchear({ used: true, used_at: new Date().toISOString() })
+    if (patchRes.status === 400) {
+      const detalle = await patchRes.text().catch(() => '')
+      if (/used_at|PGRST204|schema cache/i.test(detalle)) {
+        console.warn('[verify-code] la columna used_at aún no existe; se marca sin ella.')
+        patchRes = await patchear({ used: true })
+      } else {
+        console.error('[verify-code] PATCH failed:', patchRes.status, detalle)
+        return res.status(500).json({ error: 'No se pudo verificar el código.' })
+      }
+    }
 
     if (!patchRes.ok) {
       const detail = await patchRes.text().catch(() => '')

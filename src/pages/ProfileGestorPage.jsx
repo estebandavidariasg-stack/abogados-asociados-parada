@@ -541,46 +541,8 @@ function SeccionEstadisticas({ aprobado, codigo }) {
         </div>
       ) : stats ? (
         <>
-          {/* Barra de proporción éxitos vs fracasos */}
-          <div className={styles.cardGlass}>
-            <div className={styles.ratioHead}>
-              <span className={styles.ratioTitle}>Tasa de éxito</span>
-              <span className={styles.ratioPct}>{tasaExito}%</span>
-            </div>
-            <div
-              className={styles.ratioBar}
-              role="progressbar"
-              aria-valuenow={tasaExito}
-              aria-valuemin={0}
-              aria-valuemax={100}
-              aria-label="Tasa de éxito"
-            >
-              {decididos > 0 ? (
-                <>
-                  <span className={styles.ratioFillExito} style={{ width: `${tasaExito}%` }} />
-                  <span className={styles.ratioFillFracaso} style={{ width: `${100 - tasaExito}%` }} />
-                </>
-              ) : (
-                <span className={styles.ratioEmpty} />
-              )}
-            </div>
-            <div className={styles.ratioLegend}>
-              <span className={styles.legendItem}>
-                <span className={styles.legendDotExito} /> Éxitos · {stats.exitos}
-              </span>
-              <span className={styles.legendItem}>
-                <span className={styles.legendDotFracaso} /> No exitosas · {noExitosas}
-              </span>
-              <span className={styles.legendMuted}>
-                {decididos === 0
-                  ? 'Sin casos cerrados con resultado'
-                  : `Sobre ${decididos} caso${decididos === 1 ? '' : 's'} con resultado`}
-              </span>
-            </div>
-          </div>
-
-          {/* Tiles */}
-          <div className={styles.statGrid}>
+          {/* Vistazo rápido: las cinco cifras primero. */}
+          <div className={styles.statGrid} style={{ marginTop: 0 }}>
             <StatTile label="Usaron tu código" value={stats.total} tone="gold" />
             <StatTile label="En curso" value={stats.en_curso} tone="navy" />
             <StatTile label="Cerradas" value={stats.cerradas} tone="navy" />
@@ -588,59 +550,101 @@ function SeccionEstadisticas({ aprobado, codigo }) {
             <StatTile label="No exitosas" value={noExitosas} tone="bad" />
           </div>
 
-          {/* Gráfica (dona) + leyenda del reparto de consultas */}
-          {donutData.length > 0 && (
-            <div className={styles.cardGlass} style={{ marginTop: '1.25rem' }}>
-              <p className={styles.blockTitle}>Reparto de consultas</p>
-              <div className={styles.chartRow}>
-                <div className={styles.donutBox}>
-                  <ResponsiveContainer width="100%" height={190}>
-                    <PieChart>
-                      <Pie
-                        data={donutData}
-                        dataKey="value"
-                        nameKey="label"
-                        cx="50%" cy="50%"
-                        innerRadius={54}
-                        outerRadius={82}
-                        paddingAngle={2}
-                        stroke="none"
-                      >
-                        {donutData.map((d) => <Cell key={d.key} fill={d.color} />)}
-                      </Pie>
-                      <Tooltip
-                        formatter={(value, name) => [`${value} consulta${value === 1 ? '' : 's'}`, name]}
-                        contentStyle={{ borderRadius: 10, border: '1px solid rgba(109,60,27,0.1)', fontSize: 13, fontFamily: 'Poppins, sans-serif' }}
-                      />
-                    </PieChart>
-                  </ResponsiveContainer>
-                  <div className={styles.donutCenter} aria-hidden="true">
-                    <span className={styles.donutCenterNum}>{stats.total}</span>
-                    <span className={styles.donutCenterLbl}>{stats.total === 1 ? 'consulta' : 'consultas'}</span>
-                  </div>
-                </div>
-                <ul className={styles.distList}>
-                  {donutData.map((d) => {
-                    const pct = stats.total ? Math.round((d.value / stats.total) * 100) : 0
-                    return (
-                      <li key={d.key} className={styles.distRow}>
-                        <span className={styles.distHead}>
-                          <span className={styles.chartDot} style={{ background: d.color }} aria-hidden="true" />
-                          <span className={styles.distLabel}>{d.label}</span>
-                          <span className={styles.distVal}>{d.value} · {pct}%</span>
-                        </span>
-                        <span className={styles.distTrack}>
-                          <span className={styles.distFill} style={{ width: `${pct}%`, background: d.color }} />
-                        </span>
-                      </li>
-                    )
-                  })}
-                </ul>
+          {/* Dos lecturas de lo mismo, lado a lado: qué proporción sale bien y
+              cómo se reparten las consultas. */}
+          <div className={styles.statsCols}>
+            <div className={styles.cardGlass}>
+              <div className={styles.ratioHead}>
+                <span className={styles.ratioTitle}>Tasa de éxito</span>
+                <span className={styles.ratioPct}>{tasaExito}%</span>
+              </div>
+              <div
+                className={styles.ratioBar}
+                role="progressbar"
+                aria-valuenow={tasaExito}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-label="Tasa de éxito"
+              >
+                {decididos > 0 ? (
+                  <>
+                    <span className={styles.ratioFillExito} style={{ width: `${tasaExito}%` }} />
+                    <span className={styles.ratioFillFracaso} style={{ width: `${100 - tasaExito}%` }} />
+                  </>
+                ) : (
+                  <span className={styles.ratioEmpty} />
+                )}
+              </div>
+              <div className={styles.ratioLegend}>
+                <span className={styles.legendItem}>
+                  <span className={styles.legendDotExito} /> Éxitos · {stats.exitos}
+                </span>
+                <span className={styles.legendItem}>
+                  <span className={styles.legendDotFracaso} /> No exitosas · {noExitosas}
+                </span>
+                <span className={styles.legendMuted}>
+                  {decididos === 0
+                    ? 'Sin casos cerrados con resultado'
+                    : `Sobre ${decididos} caso${decididos === 1 ? '' : 's'} con resultado`}
+                </span>
               </div>
             </div>
-          )}
 
-          {/* Historial de consultas que usaron el código */}
+            {/* Gráfica (dona) + leyenda del reparto de consultas */}
+            {donutData.length > 0 && (
+              <div className={styles.cardGlass}>
+                <p className={styles.blockTitle}>Reparto de consultas</p>
+                <div className={styles.chartRow}>
+                  <div className={styles.donutBox}>
+                    <ResponsiveContainer width="100%" height={190}>
+                      <PieChart>
+                        <Pie
+                          data={donutData}
+                          dataKey="value"
+                          nameKey="label"
+                          cx="50%" cy="50%"
+                          innerRadius={54}
+                          outerRadius={82}
+                          paddingAngle={2}
+                          stroke="none"
+                        >
+                          {donutData.map((d) => <Cell key={d.key} fill={d.color} />)}
+                        </Pie>
+                        <Tooltip
+                          formatter={(value, name) => [`${value} consulta${value === 1 ? '' : 's'}`, name]}
+                          contentStyle={{ borderRadius: 10, border: '1px solid rgba(109,60,27,0.1)', fontSize: 13, fontFamily: 'Poppins, sans-serif' }}
+                        />
+                      </PieChart>
+                    </ResponsiveContainer>
+                    <div className={styles.donutCenter} aria-hidden="true">
+                      <span className={styles.donutCenterNum}>{stats.total}</span>
+                      <span className={styles.donutCenterLbl}>{stats.total === 1 ? 'consulta' : 'consultas'}</span>
+                    </div>
+                  </div>
+                  <ul className={styles.distList}>
+                    {donutData.map((d) => {
+                      const pct = stats.total ? Math.round((d.value / stats.total) * 100) : 0
+                      return (
+                        <li key={d.key} className={styles.distRow}>
+                          <span className={styles.distHead}>
+                            <span className={styles.chartDot} style={{ background: d.color }} aria-hidden="true" />
+                            <span className={styles.distLabel}>{d.label}</span>
+                            <span className={styles.distVal}>{d.value} · {pct}%</span>
+                          </span>
+                          <span className={styles.distTrack}>
+                            <span className={styles.distFill} style={{ width: `${pct}%`, background: d.color }} />
+                          </span>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* El historial va a todo lo ancho: la línea de tiempo de cada
+              consulta necesita el espacio y es lo que el gestor viene a ver. */}
           <div className={styles.cardGlass} style={{ marginTop: '1.25rem' }}>
             <div className={styles.blockHead}>
               <p className={styles.blockTitle} style={{ margin: 0 }}>Historial de consultas</p>
@@ -673,8 +677,14 @@ function SeccionEstadisticas({ aprobado, codigo }) {
             ) : (
               <ul className={styles.historialList}>
                 {historialFiltrado.map((h) => {
+                  // El desenlace manda sobre el estado del chat. En cuanto hay
+                  // `resultado` (el admin definió el cobro, o ya se pagó) la
+                  // trazabilidad del gestor terminó: su comisión quedó decidida.
+                  // Mirando solo `status` la línea se quedaba en "En curso" para
+                  // siempre, porque el profesional puede dejar la sala abierta
+                  // días después de cobrar.
                   const paso =
-                    h.status === 'closed' ? 'cerrada'
+                    h.resultado || h.status === 'closed' ? 'cerrada'
                     : h.status === 'active' ? 'en_curso'
                     : 'iniciada'
                   return (
@@ -729,10 +739,13 @@ function StatTile({ label, value, tone }) {
 const PASOS_CONSULTA = [
   { key: 'iniciada', label: 'Iniciada', tKey: 'iniciada' },
   { key: 'en_curso', label: 'En curso', tKey: 'en_curso' },
-  { key: 'cerrada',  label: 'Cerrada',  tKey: 'cerrada' },
+  { key: 'cerrada',  label: 'Finalizada', tKey: 'cerrada' },
 ]
 function ConsultaProgreso({ paso, resultado, tiempos = {} }) {
   const activo = Math.max(0, PASOS_CONSULTA.findIndex(p => p.key === paso))
+  // Llegar al final no es "estar en el último paso", es haber terminado: ese
+  // hito se pinta cumplido (verde con chulo), no como el punto donde vas.
+  const terminada = paso === 'cerrada'
   return (
     <div className={styles.histProg}>
       <div
@@ -744,13 +757,14 @@ function ConsultaProgreso({ paso, resultado, tiempos = {} }) {
         aria-label={`Progreso de la consulta: ${PASOS_CONSULTA[activo]?.label}`}
       >
         {PASOS_CONSULTA.map((p, i) => {
-          const state = i < activo ? 'done' : i === activo ? 'current' : 'todo'
+          const cumplido = i < activo || (i === activo && terminada)
+          const state = cumplido ? 'done' : i === activo ? 'current' : 'todo'
           const t = tiempos[p.tKey]
           return (
             <div key={p.key} className={styles.step} data-state={state}>
               {i > 0 && <span className={styles.stepBar} data-state={i <= activo ? 'done' : 'todo'} aria-hidden="true" />}
               <span className={styles.stepDot} aria-hidden="true">
-                {i < activo ? (
+                {cumplido ? (
                   <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
                 ) : (
                   <span className={styles.stepInner} />

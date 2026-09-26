@@ -96,18 +96,47 @@ export async function openChatFile(src) {
 ───────────────────────────────────────────────────────────────────────── */
 
 export const CHAT_FILE_MAX_MB = 20
-const CHAT_FILE_EXT = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'jpg', 'jpeg', 'png', 'gif', 'webp', 'txt']
+
+/* Tipos admitidos en el chat de consulta = EXACTAMENTE los que la revisión de
+   contacto sabe leer (ver revisarContactoArchivo más abajo):
+
+     · imagen jpg/png/webp/gif → la lee la IA
+     · pdf                     → texto con pdf.js; si está escaneado, a la IA
+     · docx / txt              → texto con mammoth / lectura directa
+
+   Un .zip, un .rar, un .xlsx o un .exe no se pueden inspeccionar, así que un
+   teléfono o un correo metidos ahí cruzarían la consulta sin que nadie los
+   viera. Por eso NO se aceptan: la lista de tipos y la lista de lo revisable
+   tienen que ser la misma, o el filtro es decorativo.
+
+   Si algún día hay que admitir otro tipo, primero hay que enseñarle a
+   revisarContactoArchivo a leerlo; si no, vuelve a abrirse el hueco. */
+export const CHAT_FILE_EXT = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'pdf', 'docx', 'txt']
+export const CHAT_FILE_ACCEPT = [
+  'image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain',
+  ...CHAT_FILE_EXT.map(e => '.' + e),
+].join(',')
+export const CHAT_FILE_EXT_PREVISUALIZABLES = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'avif', 'pdf']
+
+export function extensionArchivo(name) {
+  const n = String(name || '')
+  const i = n.lastIndexOf('.')
+  return i > 0 ? n.slice(i + 1).toLowerCase() : ''
+}
 
 /* Devuelve '' si el archivo es válido, o el mensaje de error para el usuario. */
 export function validarAdjuntoChat(file) {
   if (!file) return 'Selecciona un archivo.'
-  const ext = String(file.name || '').split('.').pop().toLowerCase()
-  if (!CHAT_FILE_EXT.includes(ext)) {
-    return `Tipo de archivo no permitido (.${ext || '?'}). Usa PDF, Word, Excel, PowerPoint, imágenes o TXT.`
-  }
   if (file.size === 0) return 'El archivo está vacío.'
   if (file.size > CHAT_FILE_MAX_MB * 1024 * 1024) {
     return `El archivo pesa ${(file.size / 1048576).toFixed(1)} MB y el máximo es ${CHAT_FILE_MAX_MB} MB.`
+  }
+  const ext = extensionArchivo(file.name)
+  if (!CHAT_FILE_EXT.includes(ext)) {
+    return ext
+      ? `No se admiten archivos .${ext} porque no se pueden revisar. Envía imagen, PDF, Word (.docx) o texto (.txt).`
+      : 'El archivo no tiene extensión y no se puede revisar. Envía imagen, PDF, Word (.docx) o texto (.txt).'
   }
   return ''
 }
@@ -196,6 +225,16 @@ export function describirErrorSubida(err, fase = 'upload') {
 export async function downloadChatFile(src, fileName) {
   const url = await resolveSignedUrl(src, 600)
   if (!url) return false
+  const ok = await descargarDesdeUrl(url, fileName)
+  return ok || openChatFile(src)
+}
+
+/* El mismo mecanismo, pero a partir de una URL ya firmada. Lo necesitan los
+   documentos de firma electrónica, que viven en otro bucket y se firman con
+   `urlFirmada`, no con `resolveSignedUrl`. Devuelve false en vez de lanzar,
+   para que cada pantalla decida su plan B. */
+export async function descargarDesdeUrl(url, fileName) {
+  if (!url) return false
   try {
     const res = await fetch(url)
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
@@ -211,7 +250,7 @@ export async function downloadChatFile(src, fileName) {
     setTimeout(() => URL.revokeObjectURL(objUrl), 60_000)
     return true
   } catch {
-    return openChatFile(src)
+    return false
   }
 }
 
@@ -530,9 +569,17 @@ export function FichasContacto({ data }) {
         (extractDocText) y pasa por contieneContacto. Gratis, sin IA.
      2. Imagen, o PDF escaneado (sin texto) → primeras páginas/imagen
         comprimida a /api/ai modo 'censura' (Haiku). Centavos por archivo.
-     3. Más de REVISION_MAX_BYTES, Excel/PowerPoint/.doc, o la IA no responde →
-        NO se revisa: sube igual y queda un aviso en consola (`revisado:false`).
-   Devuelve { contiene, motivo, revisado, aviso }. Nunca lanza. */
+     3. Si no se pudo revisar (la IA no responde, el PDF no se deja leer) →
+        `revisado:false` y el llamador NO envía el archivo. Antes subía igual
+        y solo quedaba un aviso en consola: cualquier fallo del revisor era un
+        pase libre, que es justo lo que el filtro existe para impedir.
+   Devuelve { contiene, motivo, revisado, aviso }. Nunca lanza.
+
+   El tope de tamaño se aplica a lo que SE LE MANDA a la IA, no al archivo
+   original: las imágenes se reducen a 1000 px y los PDF escaneados se
+   rasterizan, así que un documento de 15 MB llega convertido en unos cientos
+   de KB. Medirlo antes de convertirlo descartaba la revisión de casi
+   cualquier foto de celular. */
 export const REVISION_MAX_BYTES = 4 * 1024 * 1024
 const REVISION_MAX_PAGINAS = 3
 
@@ -554,11 +601,10 @@ function fileABase64(file) {
 
 export async function revisarContactoArchivo(file, { roomId, authHeader } = {}) {
   const sinRevisar = (aviso) => {
-    console.warn(`[chat] archivo "${file?.name}" enviado sin revisión de contacto (${aviso}).`)
+    console.warn(`[chat] no se pudo revisar "${file?.name}" (${aviso}); el envío queda bloqueado.`)
     return { contiene: false, motivo: '', revisado: false, aviso }
   }
   if (!file || !roomId) return { contiene: false, motivo: '', revisado: false, aviso: 'sin_sala' }
-  if (file.size > REVISION_MAX_BYTES) return sinRevisar('supera 4 MB')
 
   const nombre = String(file.name || '').toLowerCase()
   const tipo   = file.type || ''
@@ -597,6 +643,7 @@ export async function revisarContactoArchivo(file, { roomId, authHeader } = {}) 
     try {
       let chica = file
       try { chica = await compressImage(file, 1000, 0.6, 'image/jpeg') } catch { /* va la original */ }
+      if (chica.size > REVISION_MAX_BYTES) return sinRevisar('la imagen sigue siendo enorme tras reducirla')
       imagenes = [{ kind: 'image', media_type: chica.type || 'image/jpeg', data: await fileABase64(chica) }]
     } catch (err) {
       return sinRevisar(err?.message || 'no se pudo leer la imagen')
@@ -604,6 +651,11 @@ export async function revisarContactoArchivo(file, { roomId, authHeader } = {}) 
   } else {
     return sinRevisar('tipo no revisable')
   }
+
+  // El cuerpo de una función serverless de Vercel tope ~4,5 MB y base64 infla
+  // un tercio, así que se mide lo que de verdad va a viajar.
+  const pesoB64 = imagenes.reduce((n, i) => n + (i.data?.length || 0), 0)
+  if (pesoB64 > REVISION_MAX_BYTES) return sinRevisar('el archivo es demasiado grande para revisarlo')
 
   const { ok, status, data } = await pedirIA({ modo: 'censura', roomId, adjuntos: imagenes }, { authHeader })
   if (!ok) return sinRevisar(data?.mensaje || data?.error || `HTTP ${status}`)
@@ -787,6 +839,121 @@ const VISOR_CSS = `
   }
 `
 
+/* ── Adjunto del chat: una sola fila para los cinco chats ──────────────────
+   Antes cada chat pintaba su propio botón y no coincidían: unos abrían una
+   pestaña con la URL firmada a la vista, otros descargaban, y ninguno tenía
+   las dos acciones. Aquí quedan juntas y con el mismo comportamiento:
+
+     [ 📎 nombre · peso ]  [ ⬇ ]
+       └ abre el archivo DENTRO de la plataforma (VisorArchivo)
+                            └ lo baja al equipo con su nombre original
+
+   El botón del nombre usa las clases del chat que lo monta (`btnClassName`,
+   igual que ChatImage), para que conserve el color de su burbuja. El de
+   descarga trae su propio estilo y hereda `currentColor`, así encaja en
+   burbuja clara y oscura sin que cada módulo CSS repita nada.
+
+   `bloqueado` es para los paneles de abogado y contador, donde la descarga
+   depende de `puede_descargar_archivos` / pago confirmado: el botón se ve,
+   deshabilitado, y explica por qué. Ocultarlo dejaba al profesional sin
+   saber que el archivo existía. */
+const ADJ_CSS = `
+.aapAdj { display: flex; align-items: stretch; gap: 6px; width: 100%; min-width: 0; }
+.aapAdj > :first-child { flex: 1 1 auto; min-width: 0; }
+.aapAdjDl {
+  flex: 0 0 auto;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 34px; min-height: 34px;
+  border-radius: 8px;
+  border: 1px solid currentColor;
+  background: transparent;
+  color: inherit;
+  opacity: 0.72;
+  cursor: pointer;
+  transition: opacity 140ms ease-out, background-color 140ms ease-out;
+}
+.aapAdjDl:hover:not(:disabled) { opacity: 1; background: rgba(127,127,127,0.16); }
+.aapAdjDl:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; opacity: 1; }
+.aapAdjDl:disabled { opacity: 0.38; cursor: not-allowed; }
+.aapAdjDl svg { display: block; }
+@media (prefers-reduced-motion: reduce) { .aapAdjDl { transition: none; } }
+`
+
+// Un solo <style> para toda la app: el bloque va en el <head> al importar el
+// módulo, no dentro de cada burbuja (habría uno por mensaje).
+if (typeof document !== 'undefined' && !document.getElementById('aap-adj-css')) {
+  const el = document.createElement('style')
+  el.id = 'aap-adj-css'
+  el.textContent = ADJ_CSS
+  document.head.appendChild(el)
+}
+
+function IconClip({ size = 16 }) {
+  return (
+    <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor"
+      strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M21.4 11.05 12.25 20.2a5.5 5.5 0 0 1-7.78-7.78l9.19-9.19a3.67 3.67 0 1 1 5.18 5.18l-9.2 9.2a1.83 1.83 0 1 1-2.59-2.6l8.49-8.48" />
+    </svg>
+  )
+}
+
+function IconBajar({ size = 16 }) {
+  return (
+    <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor"
+      strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M12 3v12M7 11l5 5 5-5M4 21h16" />
+    </svg>
+  )
+}
+
+function IconCandado({ size = 16 }) {
+  return (
+    <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor"
+      strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="4" y="11" width="16" height="9" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" />
+    </svg>
+  )
+}
+
+export function AdjuntoChat({
+  src, nombre, tamano,
+  btnClassName, nombreClassName, tamanoClassName,
+  onVer, bloqueado = false, tituloBloqueo = 'Descarga bloqueada', onBloqueado, onError,
+}) {
+  const [bajando, setBajando] = useState(false)
+  const titulo = nombre || 'Archivo adjunto'
+
+  async function descargar() {
+    if (bloqueado) { onBloqueado?.(); return }
+    setBajando(true)
+    try {
+      const ok = await downloadChatFile(src, nombre)
+      if (!ok) onError?.('No se pudo descargar el archivo. Intenta de nuevo.')
+    } finally { setBajando(false) }
+  }
+
+  return (
+    <div className="aapAdj">
+      <button type="button" className={btnClassName}
+        onClick={() => {
+          if (bloqueado) { onBloqueado?.(); return }
+          onVer?.({ url: src, nombre: titulo })
+        }}
+        title={bloqueado ? tituloBloqueo : `Abrir ${titulo}`}>
+        {bloqueado ? <IconCandado size={16} /> : <IconClip size={16} />}
+        <span className={nombreClassName}>{titulo}</span>
+        {tamano ? <span className={tamanoClassName}>{tamano}</span> : null}
+      </button>
+      <button type="button" className="aapAdjDl"
+        onClick={descargar}
+        disabled={bajando || bloqueado}
+        aria-label={bloqueado ? tituloBloqueo : `Descargar ${titulo}`}
+        title={bloqueado ? tituloBloqueo : `Descargar ${titulo}`}>
+        {bloqueado ? <IconCandado size={15} /> : <IconBajar size={15} />}
+      </button>
+    </div>
+  )
+}
 const ES_IMAGEN = /\.(png|jpe?g|webp|gif|avif)$/i
 const ES_PDF    = /\.pdf$/i
 

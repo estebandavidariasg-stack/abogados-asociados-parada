@@ -134,3 +134,145 @@ button, input, select, textarea {
   padding: 0.85rem 2.5rem;
   letter-spacing: 0.2em;
 }
+/* ── ACCIONES DE APLICACIÓN ──────────────────────────────────
+   .btn-ghost / .btn-solid de arriba son los botones del sitio público:
+   versalitas y tracking ancho, que ahí funcionan. Dentro del producto
+   (chat, paneles, modales) estorban: el usuario está en una tarea, lee
+   rótulos cortos con tildes y necesita distinguir de un vistazo qué es
+   pulsable y qué es solo un estado.
+
+   Esta familia es esa otra mitad. Una sola forma, una sola tipografía y
+   un rol por variante; el color dice QUÉ hace el botón, no decora:
+
+     --primaria  la acción que toca hacer ahora (dorado sólido)
+     --exito     confirmar dinero recibido (verde sólido)
+     --neutra    acciones secundarias (contorno)
+     --peligro   destructivas (contorno rojo, nunca sólido)
+     --sutil     un estado que además se puede abrir ("Cobrado")
+     .aap-chip   un estado y nada más: no se pulsa, y se nota
+
+   Nace de que la fila de acciones del chat venía del header oscuro de
+   antes: sobre el blanco de hoy el dorado quedaba en 2,09:1 y el verde
+   en 1,61:1, ilegibles. Aquí todo está medido contra su propio fondo. */
+.aap-accion {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 0.9rem;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  font-family: 'Poppins', sans-serif;
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: 0;
+  white-space: nowrap;
+  cursor: pointer;
+  /* ease-out-quart: sale rápido y frena, sin rebote. */
+  transition: background-color 160ms cubic-bezier(0.22, 1, 0.36, 1),
+              border-color     160ms cubic-bezier(0.22, 1, 0.36, 1),
+              color            160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.aap-accion:focus-visible {
+  outline: 2px solid var(--gold-dk);
+  outline-offset: 2px;
+}
+.aap-accion:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.aap-accion svg { flex-shrink: 0; }
+.aap-accion--ancha { width: 100%; }
+
+.aap-accion--primaria {
+  background: var(--gold);
+  border-color: var(--gold);
+  color: #3a2408;
+}
+.aap-accion--primaria:hover:not(:disabled) { background: var(--gold-lt); border-color: var(--gold-lt); }
+
+.aap-accion--exito {
+  background: #1f7a4d;
+  border-color: #1f7a4d;
+  color: #ffffff;
+}
+.aap-accion--exito:hover:not(:disabled) { background: #196340; border-color: #196340; }
+
+.aap-accion--neutra {
+  background: #ffffff;
+  border-color: rgba(109, 60, 27, 0.28);
+  color: var(--navy);
+}
+.aap-accion--neutra:hover:not(:disabled) {
+  background: rgba(109, 60, 27, 0.06);
+  border-color: rgba(109, 60, 27, 0.45);
+}
+
+/* Contorno, nunca sólido: finalizar o borrar no debe competir por la
+   mirada con la acción que el usuario sí quiere hacer. */
+.aap-accion--peligro {
+  background: #ffffff;
+  border-color: rgba(162, 59, 59, 0.68);   /* 3,14:1 contra el blanco: aquí el borde SÍ es la señal */
+  color: #a23b3b;
+}
+.aap-accion--peligro:hover:not(:disabled) {
+  background: rgba(162, 59, 59, 0.08);
+  border-color: #a23b3b;
+}
+
+.aap-accion--sutil {
+  background: rgba(201, 168, 76, 0.14);
+  border-color: rgba(201, 168, 76, 0.5);
+  color: #7d5f22;
+}
+.aap-accion--sutil:hover:not(:disabled) { background: rgba(201, 168, 76, 0.24); }
+
+/* Estado, no acción. Más bajo que un botón y con las esquinas redondas
+   del todo, para que la diferencia se vea antes de leer el rótulo. */
+.aap-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 30px;
+  padding: 0 0.7rem;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-family: 'Poppins', sans-serif;
+  font-size: 0.72rem;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: default;
+}
+.aap-chip--ok {
+  background: #e8f5ec;
+  border-color: #b8e0c8;
+  color: #1f5e3c;
+}
+.aap-chip--espera {
+  background: rgba(201, 168, 76, 0.14);
+  border-color: rgba(201, 168, 76, 0.45);
+  color: #7d5f22;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .aap-accion { transition: none; }
+}
+
+/* ── CAPAS ───────────────────────────────────────────────────
+   El chat acumulaba 1000, 1001, 1200, 2000, 9000, 9999, 10000 y 10001,
+   cada uno elegido para ganarle al anterior. El resultado: el visor de
+   documentos (2000) quedaba DEBAJO del modal de pago (9000), y para que
+   el cliente pudiera leer la cuenta bancaria había que cerrarle el modal
+   por debajo y devolverlo al chat.
+
+   Estos son los pisos, en orden y con nombre. Valores nuevos salen de
+   aquí; los literales que quedan se irán sustituyendo al tocarlos. */
+:root {
+  --z-panel:    1000;   /* paneles laterales, popovers de adjuntar */
+  --z-sticky:   1200;   /* barras fijas por encima del navbar */
+  --z-modal:   10000;   /* modales y sus fondos */
+  --z-visor:   10500;   /* ver un documento SIEMPRE tapa al modal que lo abrió */
+  --z-toast:   11000;   /* avisos efímeros: por encima de todo lo anterior */
+}

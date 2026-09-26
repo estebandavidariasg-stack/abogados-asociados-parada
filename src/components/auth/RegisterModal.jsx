@@ -10,6 +10,7 @@ import ReCAPTCHA from 'react-google-recaptcha'
 import { IconX } from '../shared/Icons'
 import VerificationStep from './VerificationStep'
 import { AREAS_DERECHO } from '../../lib/areasDerecho'
+import { COP, COBRO_MINIMO } from '../../lib/cobroAsesoria'
 import { AREAS_CONTADURIA } from '../../lib/areasContaduria'
 import { UNIVERSIDADES } from '../../lib/universidades'
 import UbicacionSelector from '../profile/UbicacionSelector'
@@ -94,6 +95,53 @@ const ROLES = [
   { key: 'gestor',   label: 'Gestor',   Icon: IconGestor   },
 ]
 
+/* Las reglas de dinero que nadie va a leer en el contrato.
+   Van ANTES del formulario, no enterradas en unos términos: quien se registra
+   tiene que saber cómo cobra (o cómo gana) antes de invertir diez minutos en
+   llenar campos, no después. Tres por rol, sin letra pequeña.
+
+   `COBRO_MINIMO` viene de lib/cobroAsesoria, el mismo número que valida el
+   formulario de cobro: si aquí dijera una cifra y allá otra, la promesa del
+   registro sería falsa. */
+const CONDICIONES = {
+  profesional: {
+    titulo: 'Cómo se cobra en Parada Bridge',
+    entrada: 'Tres reglas que aceptas al crear tu perfil.',
+    puntos: [
+      {
+        titulo: 'Toda consulta se cobra',
+        texto: 'No hay asesorías gratuitas. Fijas el valor antes de empezar y el cliente te paga directamente a ti; la plataforma no intermedia el dinero.',
+      },
+      {
+        titulo: `El mínimo es ${COP.format(COBRO_MINIMO)}`,
+        texto: 'Ese es el piso por consulta. De ahí hacia arriba el valor lo decides tú, según el caso.',
+      },
+      {
+        titulo: 'Si tomas el caso, ese valor se descuenta',
+        texto: 'Lo que el cliente ya pagó por la consulta se resta de tus honorarios cuando el caso sigue contigo. No se cobra dos veces.',
+      },
+    ],
+  },
+  gestor: {
+    titulo: 'Cómo ganas como gestor',
+    entrada: 'Tres reglas que aceptas al crear tu perfil.',
+    puntos: [
+      {
+        titulo: 'Ganas por caso cerrado y pagado',
+        texto: 'La comisión aparece cuando una consulta que llegó con tu código termina y el profesional le paga a la plataforma. Mientras el caso siga abierto, no hay comisión.',
+      },
+      {
+        titulo: 'Es el 5% de lo que gana la plataforma',
+        texto: 'No el 5% del total de la asesoría: el 5% de la comisión que retiene Parada Bridge sobre ese caso.',
+      },
+      {
+        titulo: 'Todo entra por tu código',
+        texto: 'Solo cuentan las consultas que abrieron escaneando tu QR o escribiendo tu código. Puedes seguir cada una desde tu perfil.',
+      },
+    ],
+  },
+}
+
 const ROLE_TITLE = {
   abogado:  'Crear perfil como Abogado',
   contador: 'Crear perfil como Contador',
@@ -103,6 +151,10 @@ const ROLE_TITLE = {
 export default function RegisterModal({ onClose }) {
   // rol seleccionado en el paso inicial. null = aún elige rol.
   const [rol, setRol] = useState(null)
+
+  // Marcada la casilla de las condiciones del paso previo. Se reinicia al
+  // cambiar de rol: las reglas del gestor no son las del profesional.
+  const [aceptoCondiciones, setAceptoCondiciones] = useState(false)
 
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState(null)
@@ -307,7 +359,8 @@ export default function RegisterModal({ onClose }) {
     setAreas([]); setExperiencia(''); setTarjetaFile(null)
     setTarjetaSubidaPath(null); setTarjetaDocsFile(null); setModeloFile(null)
     setCertBancFile(null); setCertDiscFile(null); setDocsError('')
-    setVerificationStep('form'); setOtpError('')
+    setVerificationStep('condiciones'); setOtpError('')
+    setAceptoCondiciones(false)
     setCaptchaValue(null); recaptchaRef.current?.reset()
     setRespuestasExtra({})
     cargarCamposExtra(r)   // campos personalizados del admin maestro
@@ -1030,6 +1083,53 @@ export default function RegisterModal({ onClose }) {
             </button>
           </div>
         )}
+
+        {/* ══════════════ CONDICIONES — antes de pedir un solo dato ══════════════ */}
+        {rol && verificationStep === 'condiciones' && (() => {
+          const c = CONDICIONES[rol === 'gestor' ? 'gestor' : 'profesional']
+          return (
+            <div className={extra.condiciones}>
+              <p className={extra.condTitulo}>{c.titulo}</p>
+              <p className={extra.condEntrada}>{c.entrada}</p>
+
+              <ul className={extra.condLista}>
+                {c.puntos.map((p) => (
+                  <li key={p.titulo} className={extra.condPunto}>
+                    <span className={extra.condIcono} aria-hidden="true">
+                      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor"
+                        strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M20 6 9 17l-5-5" />
+                      </svg>
+                    </span>
+                    <span className={extra.condCuerpo}>
+                      <strong className={extra.condPuntoTitulo}>{p.titulo}</strong>
+                      <span className={extra.condPuntoTexto}>{p.texto}</span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+
+              <label className={extra.condCheck}>
+                <input
+                  type="checkbox"
+                  checked={aceptoCondiciones}
+                  onChange={(e) => setAceptoCondiciones(e.target.checked)}
+                />
+                <span>Leí estas condiciones y las acepto.</span>
+              </label>
+
+              <button
+                type="button"
+                className="aap-accion aap-accion--primaria aap-accion--ancha"
+                style={{ minHeight: 46, marginTop: '0.9rem' }}
+                disabled={!aceptoCondiciones}
+                onClick={() => setVerificationStep('form')}
+              >
+                Continuar al registro
+              </button>
+            </div>
+          )
+        })()}
 
         {/* ══════════════════ REGISTRO — Paso A (formulario) ══════════════════ */}
         {rol && verificationStep === 'form' && (
