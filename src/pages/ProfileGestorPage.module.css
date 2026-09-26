@@ -800,6 +800,7 @@
   background: rgba(109,60,27, 0.12);
 }
 .stepBar[data-state="done"] { background: linear-gradient(90deg, #d8b657, #c9a84c); }
+.stepBar[data-state="fail"] { background: linear-gradient(90deg, #c9a84c, #a23b3b); }
 .stepDot {
   position: relative; z-index: 1;
   width: 22px; height: 22px; border-radius: 50%;
@@ -811,6 +812,9 @@
 .step[data-state="current"] .stepDot { border-color: #c9a84c; background: rgba(201, 168, 76, 0.16); }
 .step[data-state="current"] .stepInner { background: #c9a84c; }
 .step[data-state="done"] .stepDot { background: #1f7a4d; border-color: #1f7a4d; }
+/* Cerrada sin comision: equis roja. No es un exito a medias, y un chulo
+   verde ahi le estaria diciendo al gestor que gano algo. */
+.step[data-state="fail"] .stepDot { background: #a23b3b; border-color: #a23b3b; color: #fff; }
 .stepLabel {
   font-family: 'Poppins', sans-serif;
   font-size: 0.6rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
@@ -818,6 +822,7 @@
 }
 .step[data-state="current"] .stepLabel { color: #8a6a28; }
 .step[data-state="done"] .stepLabel { color: #1f7a4d; }
+.step[data-state="fail"] .stepLabel { color: #a23b3b; }
 
 /* Fecha + hora bajo cada punto del stepper (trazabilidad). */
 .stepWhen {

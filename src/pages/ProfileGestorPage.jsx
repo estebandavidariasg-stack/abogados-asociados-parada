@@ -677,16 +677,22 @@ function SeccionEstadisticas({ aprobado, codigo }) {
             ) : (
               <ul className={styles.historialList}>
                 {historialFiltrado.map((h) => {
-                  // El desenlace manda sobre el estado del chat. En cuanto hay
-                  // `resultado` (el admin definió el cobro, o ya se pagó) la
-                  // trazabilidad del gestor terminó: su comisión quedó decidida.
-                  // Mirando solo `status` la línea se quedaba en "En curso" para
-                  // siempre, porque el profesional puede dejar la sala abierta
-                  // días después de cobrar.
-                  const paso =
-                    h.resultado || h.status === 'closed' ? 'cerrada'
-                    : h.status === 'active' ? 'en_curso'
-                    : 'iniciada'
+                  /* Cada hito se decide por EVIDENCIA, no por el estado que
+                     tenga la sala ahora mismo:
+
+                       · `status` cambia y se queda atrás. El profesional puede
+                         dejar la sala abierta días después de cobrar, o no
+                         aceptarla nunca aunque ya haya escrito.
+                       · `activo_at` (primer mensaje del profesional) y
+                         `resultado` son hechos: pasaron y no se deshacen.
+
+                     Marcar "En curso" solo cuando status='active' dejaba sin
+                     pintar un tramo por el que la consulta SÍ pasó. */
+                  const hitos = {
+                    iniciada: true,
+                    en_curso: h.status === 'active' || !!h.activo_at,
+                    cerrada:  !!h.resultado || h.status === 'closed',
+                  }
                   return (
                     <li key={h.id} className={styles.histItem}>
                       <div className={styles.histInfo}>
@@ -705,7 +711,7 @@ function SeccionEstadisticas({ aprobado, codigo }) {
                         </span>
                       </div>
                       <ConsultaProgreso
-                        paso={paso}
+                        hitos={hitos}
                         resultado={h.resultado}
                         tiempos={{ iniciada: h.created_at, en_curso: h.activo_at, cerrada: h.cerrada_at }}
                       />
@@ -741,11 +747,22 @@ const PASOS_CONSULTA = [
   { key: 'en_curso', label: 'En curso', tKey: 'en_curso' },
   { key: 'cerrada',  label: 'Finalizada', tKey: 'cerrada' },
 ]
-function ConsultaProgreso({ paso, resultado, tiempos = {} }) {
-  const activo = Math.max(0, PASOS_CONSULTA.findIndex(p => p.key === paso))
-  // Llegar al final no es "estar en el último paso", es haber terminado: ese
-  // hito se pinta cumplido (verde con chulo), no como el punto donde vas.
-  const terminada = paso === 'cerrada'
+function ConsultaProgreso({ hitos, resultado, tiempos = {} }) {
+  /* Un chulo verde dice "salió bien". Solo lo merecen los desenlaces que
+     dejan comisión al gestor. Una consulta cerrada sin cobro definido no es
+     un éxito a medias: para el gestor es una equis, y así se pinta. Si el
+     administrador define el cobro después, pasa sola a verde. */
+  const conComision = resultado === 'exito' || resultado === 'pagado'
+  const fallida     = hitos.cerrada && !conComision
+  // Dónde está ahora: el último hito alcanzado.
+  const ultimo = PASOS_CONSULTA.reduce((acc, p, i) => (hitos[p.key] ? i : acc), 0)
+
+  const estadoDe = (i, key) => {
+    if (i === PASOS_CONSULTA.length - 1 && hitos.cerrada) return fallida ? 'fail' : 'done'
+    if (!hitos[key]) return 'todo'
+    return i < ultimo ? 'done' : 'current'
+  }
+
   return (
     <div className={styles.histProg}>
       <div
@@ -753,19 +770,26 @@ function ConsultaProgreso({ paso, resultado, tiempos = {} }) {
         role="progressbar"
         aria-valuemin={1}
         aria-valuemax={PASOS_CONSULTA.length}
-        aria-valuenow={activo + 1}
-        aria-label={`Progreso de la consulta: ${PASOS_CONSULTA[activo]?.label}`}
+        aria-valuenow={ultimo + 1}
+        aria-label={`Progreso de la consulta: ${PASOS_CONSULTA[ultimo]?.label}${fallida ? ', sin cobro' : ''}`}
       >
         {PASOS_CONSULTA.map((p, i) => {
-          const cumplido = i < activo || (i === activo && terminada)
-          const state = cumplido ? 'done' : i === activo ? 'current' : 'todo'
+          const state = estadoDe(i, p.key)
           const t = tiempos[p.tKey]
           return (
             <div key={p.key} className={styles.step} data-state={state}>
-              {i > 0 && <span className={styles.stepBar} data-state={i <= activo ? 'done' : 'todo'} aria-hidden="true" />}
+              {i > 0 && (
+                <span
+                  className={styles.stepBar}
+                  data-state={hitos[p.key] ? (state === 'fail' ? 'fail' : 'done') : 'todo'}
+                  aria-hidden="true"
+                />
+              )}
               <span className={styles.stepDot} aria-hidden="true">
-                {cumplido ? (
+                {state === 'done' ? (
                   <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
+                ) : state === 'fail' ? (
+                  <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
                 ) : (
                   <span className={styles.stepInner} />
                 )}
@@ -783,18 +807,17 @@ function ConsultaProgreso({ paso, resultado, tiempos = {} }) {
           )
         })}
       </div>
-      {paso === 'cerrada' && (() => {
-        // Verde lo que deja comisión (exitosa o ya pagada), rojo los dos
-        // desenlaces que no la dejan (rechazada o no exitosa).
+      {hitos.cerrada && (() => {
+        /* Verde lo que deja comisión; rojo todo lo demás, incluida la que se
+           cerró sin cobro: el rótulo dice el motivo, que es lo que el gestor
+           necesita saber para reclamar si cree que hubo un error. */
         const ROTULO = {
           exito: 'Exitosa', pagado: 'Pagada',
           fracaso: 'No exitosa', rechazado: 'Rechazada',
         }
-        const verde = resultado === 'exito' || resultado === 'pagado'
-        const rojo  = resultado === 'fracaso' || resultado === 'rechazado'
         return (
-          <span className={verde ? styles.histBadgeOk : rojo ? styles.histBadgeBad : styles.histBadgeNeutral}>
-            {ROTULO[resultado] || 'Sin resultado'}
+          <span className={conComision ? styles.histBadgeOk : styles.histBadgeBad}>
+            {ROTULO[resultado] || 'Cerrada sin cobro'}
           </span>
         )
       })()}
