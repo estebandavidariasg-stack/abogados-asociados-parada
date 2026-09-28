@@ -168,6 +168,8 @@
 .navItem:hover { background: rgba(109,60,27, 0.06); color: #6d3c1b; }
 .navItem:focus-visible { outline: 2px solid var(--gold, #c9a84c); outline-offset: 2px; }
 .navIcon { flex: 0 0 auto; }
+/* Solo se usa en el riel móvil (ver el bloque de 480px). */
+.navLabelCorto { display: none; }
 
 .navItemActive,
 .navItemActive:hover {
@@ -372,18 +374,20 @@
 /* ══════════════════════════════════════════
    2. Estadísticas — barra de proporción + tiles
    ══════════════════════════════════════════ */
-.ratioHead {
-  display: flex; align-items: baseline; justify-content: space-between; gap: 1rem;
+/* Las dos tarjetas de estadísticas son columnas flex: el título arriba a la
+   misma altura en ambas y el contenido ocupa el resto (ver .statsCols). */
+.statCard { display: flex; flex-direction: column; }
+/* Cuerpo de "Tasa de éxito": centrado en el alto que le da la dona vecina,
+   en vez de quedarse arriba con un hueco debajo. */
+.ratioCuerpo {
   position: relative; z-index: 1;
-}
-.ratioTitle {
-  font-family: 'Poppins', sans-serif;
-  font-size: 0.62rem; font-weight: 700; letter-spacing: 0.2em; text-transform: uppercase;
-  color: #96765a;
+  flex: 1 1 auto;
+  display: flex; flex-direction: column; justify-content: center;
 }
 .ratioPct {
   font-family: 'Cormorant Garamond', serif;
-  font-size: 2rem; font-weight: 600; line-height: 1; color: #6d3c1b;
+  font-size: clamp(2.2rem, 4vw, 2.8rem); font-weight: 600; line-height: 1; color: #6d3c1b;
+  font-variant-numeric: lining-nums tabular-nums;
 }
 .ratioBar {
   position: relative; z-index: 1;
@@ -579,7 +583,11 @@
 
 .chartRow {
   position: relative; z-index: 1;
-  display: flex; align-items: center; gap: 2rem; flex-wrap: wrap;
+  flex: 1 1 auto;
+  display: flex; align-items: center; gap: 1.5rem 2rem; flex-wrap: wrap;
+  /* Cuando la tarjeta no alcanza (tablet, celular) la dona pasa ARRIBA de la
+     lista: centrada, no pegada a la izquierda con un hueco a su derecha. */
+  justify-content: center;
 }
 .donutBox { position: relative; flex: 0 0 230px; width: 230px; }
 .donutCenter {
@@ -658,6 +666,13 @@
 .blockCount {
   font-family: 'Poppins', sans-serif; font-size: 0.78rem; font-weight: 600; color: #967f6b;
   font-variant-numeric: tabular-nums;
+}
+/* Una línea que explica de dónde sale la fecha de "En curso". */
+.histAyuda {
+  position: relative; z-index: 1;
+  margin: -0.35rem 0 0.9rem;
+  font-family: 'Poppins', sans-serif; font-size: 0.78rem; line-height: 1.5;
+  color: #7a6655; max-width: 70ch; text-wrap: pretty;
 }
 
 /* ── Barra de filtro (búsqueda + rango de fechas) ── */
@@ -832,6 +847,13 @@
 .stepWhenDate { font-size: 0.64rem; font-weight: 600; color: #7a6655; white-space: nowrap; }
 .stepWhenTime { font-size: 0.62rem; color: #a59587; white-space: nowrap; }
 .stepWhenEmpty { font-size: 0.64rem; color: #d1c4b8; margin-top: 1px; }
+/* Paso saltado o pendiente ("Sin respuesta", "Esperando respuesta"): es texto
+   que se lee, no un guion decorativo, así que va con contraste de texto
+   (#85705e ≈ 4,8:1 sobre blanco), no con el gris casi invisible del "—". */
+.stepWhenNota {
+  font-family: 'Poppins', sans-serif; font-size: 0.64rem; font-weight: 600;
+  color: #85705e; margin-top: 1px; text-align: center; line-height: 1.25;
+}
 
 .cuponFoot { display: flex; align-items: center; justify-content: flex-end; }
 .solicitarBtn {
@@ -1177,18 +1199,43 @@
   .sidebar:hover { overflow-x: visible; }
   .sidebarInner,
   .sidebar:hover .sidebarInner { flex-wrap: wrap; justify-content: center; row-gap: 0.45rem; }
+  /* Mismo riel móvil que el perfil del profesional: mosaicos con el icono
+     ARRIBA y el nombre DEBAJO, 3 por fila (con solo iconos no se sabía qué
+     era cada sección). flex-wrap centrado y no grid, para que las 2 que
+     sobran de 5 queden centradas debajo y no pegadas a la izquierda. */
   .sideNav,
   .sidebar:hover .sideNav {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    justify-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: stretch;
     flex: 1 1 100%;
-    gap: 0.5rem 0.2rem;
+    gap: 0.5rem 0.3rem;
   }
   .navLabel,
   .sidebar:hover .navLabel { display: none; }
+  .navLabelCorto,
+  .sidebar:hover .navLabelCorto {
+    display: block;
+    font-size: 0.62rem;
+    font-weight: 600;
+    line-height: 1.25;
+    letter-spacing: 0.01em;
+    text-align: center;
+    /* Dos líneas reservadas: los nombres de una y de dos líneas conviven sin
+       descuadrar la altura de los mosaicos vecinos. */
+    min-height: 2.5em;
+  }
   .navItem,
-  .sidebar:hover .navItem { width: auto; flex: 0 0 auto; padding: 0.55rem 0.7rem; justify-content: center; }
+  .sidebar:hover .navItem {
+    flex: 0 0 calc(33.333% - 0.34rem);
+    width: auto;
+    flex-direction: column;
+    justify-content: flex-start;
+    gap: 0.3rem;
+    padding: 0.6rem 0.25rem 0.5rem;
+    white-space: normal;
+  }
   .sideFoot,
   .sidebar:hover .sideFoot {
     display: flex; flex: 1 1 100%; flex-direction: row;
@@ -1217,14 +1264,16 @@
 }
 
 /* Dos lecturas en paralelo (tasa de éxito y reparto) en vez de dos bloques
-   apilados a ancho completo. `align-items: start` es deliberado: sin él la
-   tarjeta más corta se estira hasta la altura de la otra y queda medio metro
-   de blanco debajo de su contenido. Por debajo de ~760 px de rejilla vuelven
-   a apilarse solas, sin breakpoint. */
+   apilados a ancho completo. Misma altura (stretch): con `start` cada tarjeta
+   medía lo suyo y lado a lado se veían desalineadas. El blanco que eso podía
+   dejar bajo la más corta no aparece porque su contenido se centra en el alto
+   (.ratioCuerpo / .chartRow). Por debajo de ~760 px de rejilla se apilan
+   solas, sin breakpoint; `min(340px, 100%)` evita que en un celular de 360 px
+   la columna mínima sea más ancha que la pantalla. */
 .statsCols {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(340px, 100%), 1fr));
   gap: 1.25rem;
   margin-top: 1.25rem;
-  align-items: start;
+  align-items: stretch;
 }

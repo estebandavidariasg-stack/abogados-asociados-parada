@@ -29,17 +29,24 @@ export function parseMiles(v) {
   return Number(String(v ?? '').replace(/\D/g, '')) || 0
 }
 
-// Piso del cobro de una asesoría. NO es una sugerencia: es el mínimo que el
-// profesional acepta al registrarse y el que valida el formulario de cobro.
-// Vive aquí, en un solo sitio, para que cambiarlo sea cambiar un número: lo
-// leen el aviso del chat, la validación del cobro y las condiciones que se
-// muestran antes del registro.
+// Piso del cobro de una asesoría DE ABOGADO. NO es una sugerencia: es el
+// mínimo que el abogado acepta al registrarse y el que valida su formulario de
+// cobro. Vive aquí, en un solo sitio, para que cambiarlo sea cambiar un
+// número: lo leen los avisos al cliente, la validación del cobro y las
+// condiciones que se muestran antes del registro.
+//
+// Solo los abogados tienen piso (decisión 2026-09-28). El contador fija su
+// valor libremente: no se le exige ni se le anuncia al cliente ninguna cifra.
+// Todo lo que hable de "desde $200.000" pasa por tienePisoCobro(tipo), con
+// tipo = 'abogado' | 'contador' (chat_rooms.tipo_profesional o profiles.rol).
 export const COBRO_MINIMO = 200000
+export const tienePisoCobro = (tipo) => tipo !== 'contador'
+export const cobroMinimoDe = (tipo) => (tienePisoCobro(tipo) ? COBRO_MINIMO : 0)
 
 /* Aviso de apertura de la consulta: toda consulta tiene cobro. Se pinta como
-   banner destacado en los tres chats (cliente, abogado y contador). No se
-   guarda como mensaje: el cliente no puede escribir mensajes de sistema
-   (RLS) y así el profesional lo ve siempre, aunque entre días después. */
+   banner destacado en el chat del cliente. No se guarda como mensaje: el
+   cliente no puede escribir mensajes de sistema (RLS) y así se ve siempre,
+   aunque entre días después. */
 export const AVISO_COBRO_CLIENTE = {
   titulo: 'Esta consulta tiene cobro',
   // El piso SÍ se dice: el cliente merece saber de qué orden de precio habla
@@ -48,6 +55,11 @@ export const AVISO_COBRO_CLIENTE = {
     `Desde ${COP.format(COBRO_MINIMO)}. El profesional te dice el valor exacto aquí mismo, ` +
     'antes de asesorarte. Le pagas a él directamente.',
 }
+// Con contador: mismo aviso, sin cifra.
+export const avisoCobroCliente = (tipo) => (tienePisoCobro(tipo) ? AVISO_COBRO_CLIENTE : {
+  titulo: AVISO_COBRO_CLIENTE.titulo,
+  texto: 'El profesional te dice el valor exacto aquí mismo, antes de asesorarte. Le pagas a él directamente.',
+})
 
 /* Una línea para los botones que CREAN la consulta (formulario y modal de
    nueva consulta). Va ahí, y no solo dentro del chat, porque es el único
@@ -61,6 +73,8 @@ export const AVISO_COBRO_CLIENTE = {
    tres actores enredados: "El profesional confirma el valor exacto antes de
    asesorarte y le pagas directamente a él". Además decía "confirma", que
    suena a que el precio ya se sabía; no se sabe, lo pone él. */
+// SOLO para consultas con abogado: con contador no se muestra (no hay piso
+// que anunciar). Quien lo pinte debe preguntar antes tienePisoCobro(tipo).
 export const AVISO_COSTO_ANTES = {
   cifra: `Desde ${COP.format(COBRO_MINIMO)}`,
   // Sin esto la cifra no dice de qué es: el lector tenía que deducirlo.
@@ -68,14 +82,21 @@ export const AVISO_COSTO_ANTES = {
   texto: 'El profesional te dice el valor exacto antes de empezar. Le pagas a él directamente.',
 }
 
-// Este aviso lo ven SOLO los profesionales (abogado y contador). Al cliente se
-// le dice el piso, no el valor: el exacto lo pone el profesional en cada caso.
+// Este aviso lo ven SOLO los profesionales. Al cliente se le dice el piso,
+// no el valor: el exacto lo pone el profesional en cada caso.
 export const AVISO_COBRO_PROFESIONAL = {
   titulo: 'Define el cobro antes de asesorar',
   texto:
     'Fija el valor con el botón Cobro antes de asesorar. ' +
     `El mínimo es ${COP.format(COBRO_MINIMO)}; de ahí hacia arriba lo decides tú. ` +
     'El cliente te paga directamente a ti.',
+}
+// Contador: sin piso, el valor es suyo.
+export const AVISO_COBRO_CONTADOR = {
+  titulo: AVISO_COBRO_PROFESIONAL.titulo,
+  texto:
+    'Fija el valor con el botón Cobro antes de asesorar. ' +
+    'El valor lo decides tú según el caso. El cliente te paga directamente a ti.',
 }
 
 // Etiquetas legibles de estado (para chips).

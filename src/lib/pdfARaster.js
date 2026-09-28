@@ -2,9 +2,17 @@
    Rasteriza un PDF a imágenes PNG (una por página) en el navegador con
    pdf.js. Se usa para armar el documento Word con la firma movible: cada
    página va como imagen y la firma como imagen flotante encima.
+
+   Build LEGACY a propósito. El build moderno de pdf.js 6 llama sin polyfill a
+   APIs que solo trae el Chrome más reciente (Uint8Array#toHex al calcular la
+   huella de CUALQUIER PDF, Map#getOrInsertComputed, Math.sumPrecise…). En
+   Samsung Internet y otros navegadores móviles que van unas versiones detrás,
+   getDocument lanzaba TypeError y el visor decía "No se pudo mostrar el
+   documento aquí" con PDFs perfectamente sanos. El legacy trae esos polyfills
+   (core-js) por unos 50 KB más, y solo se descarga al abrir un PDF.
    ───────────────────────────────────────────────────────────────────────── */
-import * as pdfjsLib from 'pdfjs-dist'
-import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
+import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs'
+import workerUrl from 'pdfjs-dist/legacy/build/pdf.worker.min.mjs?url'
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl
 

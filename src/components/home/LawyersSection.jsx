@@ -6,6 +6,7 @@ import styles from './LawyersSection.module.css'
 import { useAuth } from '../../context/AuthContext'
 import { getAuthHeaders } from '../../lib/supabase'
 import { useCarrusel } from '../../lib/useCarrusel'
+import { esDeptoBogota, etiquetaCiudad } from '../../lib/validaciones'
 
 /* Flechas de navegación centradas bajo la cinta de profesionales. Nudgean la
    cinta ~un ancho visible; el auto-desplazamiento continúa por su cuenta. */
@@ -133,6 +134,15 @@ export default function LawyersSection() {
 
   const departamentos = [...new Set(lawyers.map(l => l.departamento).filter(Boolean))].sort()
   const ciudades      = [...new Set(lawyers.map(l => l.ciudad).filter(Boolean))].sort()
+  // Opciones del tercer filtro. En Bogotá D.C. son LOCALIDADES; sin
+  // departamento elegido van en su propio grupo para que "Engativá" no se
+  // lea como una ciudad más al lado de "Medellín".
+  const ciudadesDelDepto = departamento
+    ? ciudades.filter(c => lawyers.some(l => l.departamento === departamento && l.ciudad === c))
+    : []
+  const localidadesBogota = departamento ? [] : ciudades.filter(c =>
+    lawyers.some(l => l.ciudad === c && etiquetaCiudad(l.departamento, c) === 'Localidad'))
+  const ciudadesFueraDeBogota = departamento ? [] : ciudades.filter(c => !localidadesBogota.includes(c))
 
   const filtered = lawyers.filter(l => {
     if (areaDerecho && !l.area_derecho?.split(',').map(a => a.trim()).includes(areaDerecho)) return false
@@ -214,15 +224,21 @@ export default function LawyersSection() {
           </div>
 
           <div className={styles.filterGroup}>
-            <label className={styles.filterLabel}>Ciudad</label>
+            <label className={styles.filterLabel}>{esDeptoBogota(departamento) ? 'Localidad' : 'Ciudad'}</label>
             <div className={styles.selectWrap}>
               <select className={styles.filterSelect} value={ciudad}
                 onChange={e => setCiudad(e.target.value)}>
                 <option value="">Todas</option>
-                {(departamento
-                  ? ciudades.filter(c => lawyers.some(l => l.departamento === departamento && l.ciudad === c))
-                  : ciudades
-                ).map(c => <option key={c} value={c}>{c}</option>)}
+                {departamento
+                  ? ciudadesDelDepto.map(c => <option key={c} value={c}>{c}</option>)
+                  : <>
+                      {ciudadesFueraDeBogota.map(c => <option key={c} value={c}>{c}</option>)}
+                      {localidadesBogota.length > 0 && (
+                        <optgroup label="Bogotá D.C. · localidades">
+                          {localidadesBogota.map(c => <option key={c} value={c}>{c}</option>)}
+                        </optgroup>
+                      )}
+                    </>}
               </select>
             </div>
           </div>

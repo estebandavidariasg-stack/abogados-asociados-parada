@@ -103,24 +103,39 @@ const ROLES = [
 
    `COBRO_MINIMO` viene de lib/cobroAsesoria, el mismo número que valida el
    formulario de cobro: si aquí dijera una cifra y allá otra, la promesa del
-   registro sería falsa. */
+   registro sería falsa. Ese piso es SOLO del abogado; el contador fija su
+   valor libremente (2026-09-28), por eso tiene sus propias condiciones. */
+const REGLA_TODA_CONSULTA = {
+  titulo: 'Toda consulta se cobra',
+  texto: 'No hay asesorías gratuitas. Fijas el valor antes de empezar y el cliente te paga directamente a ti; la plataforma no intermedia el dinero.',
+}
+const REGLA_DESCUENTO = {
+  titulo: 'Si tomas el caso, ese valor se descuenta',
+  texto: 'Lo que el cliente ya pagó por la consulta se resta de tus honorarios cuando el caso sigue contigo. No se cobra dos veces.',
+}
 const CONDICIONES = {
   profesional: {
     titulo: 'Cómo se cobra en Parada Bridge',
     entrada: 'Tres reglas que aceptas al crear tu perfil.',
     puntos: [
-      {
-        titulo: 'Toda consulta se cobra',
-        texto: 'No hay asesorías gratuitas. Fijas el valor antes de empezar y el cliente te paga directamente a ti; la plataforma no intermedia el dinero.',
-      },
+      REGLA_TODA_CONSULTA,
       {
         titulo: `El mínimo es ${COP.format(COBRO_MINIMO)}`,
         texto: 'Ese es el piso por consulta. De ahí hacia arriba el valor lo decides tú, según el caso.',
       },
+      REGLA_DESCUENTO,
+    ],
+  },
+  contador: {
+    titulo: 'Cómo se cobra en Parada Bridge',
+    entrada: 'Tres reglas que aceptas al crear tu perfil.',
+    puntos: [
+      REGLA_TODA_CONSULTA,
       {
-        titulo: 'Si tomas el caso, ese valor se descuenta',
-        texto: 'Lo que el cliente ya pagó por la consulta se resta de tus honorarios cuando el caso sigue contigo. No se cobra dos veces.',
+        titulo: 'El valor lo decides tú',
+        texto: 'No hay un piso fijo: pones el valor de cada consulta según el caso, antes de empezar a asesorar.',
       },
+      REGLA_DESCUENTO,
     ],
   },
   gestor: {
@@ -800,9 +815,10 @@ export default function RegisterModal({ onClose }) {
 
         {/* ══════════════════ SELECTOR DE ROL ══════════════════ */}
         {/* Solo visible mientras se elige y se llena el formulario. Una vez
-            enviado el codigo, cambiar de rol invalidaria lo ya escrito. */}
+            enviado el codigo, cambiar de rol invalidaria lo ya escrito; y con
+            la cuenta ya creada ('done') no queda nada que elegir. */}
         <div className={extra.roleSelector}
-          style={verificationStep === 'docs' || verificationStep === 'verify' ? { display: 'none' } : undefined}>
+          style={['docs', 'verify', 'done'].includes(verificationStep) ? { display: 'none' } : undefined}>
           {ROLES.map(({ key, label, Icon }) => (
             <button
               key={key}
@@ -1104,7 +1120,7 @@ export default function RegisterModal({ onClose }) {
 
         {/* ══════════════ CONDICIONES — antes de pedir un solo dato ══════════════ */}
         {rol && verificationStep === 'condiciones' && (() => {
-          const c = CONDICIONES[rol === 'gestor' ? 'gestor' : 'profesional']
+          const c = CONDICIONES[rol === 'gestor' ? 'gestor' : rol === 'contador' ? 'contador' : 'profesional']
           return (
             <div className={extra.condiciones}>
               <p className={extra.condTitulo}>{c.titulo}</p>
@@ -1170,9 +1186,8 @@ export default function RegisterModal({ onClose }) {
 
             {/* Username. Se teclea como la persona quiera y se GUARDA en
                 minúsculas: así "EstebanArias" y "estebanarias" no acaban siendo
-                dos cuentas distintas. Cuando lo escrito y lo guardado no
-                coinciden se dice, para que nadie descubra su usuario real el
-                día que intente entrar. */}
+                dos cuentas distintas. No se avisa de la conversión (pedido
+                2026-09-28): se entra con el correo, no con el usuario. */}
             <div className={styles.field}>
               <label className={styles.label}>Nombre de usuario <span className={styles.req}>*</span></label>
               <input type="text" className={cls('username')} placeholder="Ej: JuanPerez"
@@ -1183,9 +1198,6 @@ export default function RegisterModal({ onClose }) {
                 const v = validarUsername(username)
                 if (v.valid === false) {
                   return <span className={extra.docHint} style={{ color: '#9a5b3a' }}>{v.msg}</span>
-                }
-                if (v.valid === true && username !== usernameNorm) {
-                  return <span className={extra.docHint}>Se guardará como <strong>{usernameNorm}</strong></span>
                 }
                 return <span className={extra.docHint}>Letras, números, guión y guión bajo. Sin espacios ni tildes.</span>
               })()}

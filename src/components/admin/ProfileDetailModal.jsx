@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { supabase } from '../../lib/supabase'
 import SocialLinks from '../profile/SocialLinks'
 import TarjetaPreview from '../profile/TarjetaPreview'
+import { etiquetaCiudad } from '../../lib/validaciones'
 // Reusamos los estilos del modal de LawyerCard — mismo lenguaje visual.
 import styles from '../home/LawyerCard.module.css'
 
@@ -248,7 +249,7 @@ export default function ProfileDetailModal({ profile, onClose }) {
           <InfoRow icon={ICONS.briefcase}
             label={profile.rol === 'contador' ? 'Especialidades' : 'Áreas de derecho'}
             value={profile.area_derecho} />
-          <InfoRow icon={ICONS.pin}      label="Ciudad"        value={ciudadVisible} />
+          <InfoRow icon={ICONS.pin}      label={etiquetaCiudad(profile.departamento, ciudadVisible)} value={ciudadVisible} />
           {barrioVisible && <InfoRow icon={ICONS.pin} label="Barrio / Comuna" value={barrioVisible} />}
           <InfoRow icon={ICONS.building} label="Departamento"  value={profile.departamento} />
           <InfoRow icon={ICONS.home}     label="Dirección de oficina" value={profile.direccion_oficina || profile.direccion} />

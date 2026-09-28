@@ -30,11 +30,11 @@ const IconLogout   = (p) => (<svg viewBox="0 0 24 24" width="18" height="18" fil
 const IconDownload = (p) => (<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>)
 
 const SECCIONES = [
-  { id: 'perfil',   label: 'Mi perfil',    Icon: IconUser },
-  { id: 'codigo',   label: 'Mi código',    Icon: IconQr },
-  { id: 'stats',    label: 'Estadísticas', Icon: IconChart },
-  { id: 'cobros',   label: 'Cobros',       Icon: IconWallet },
-  { id: 'interno',  label: 'Chat interno', Icon: IconChatInterno },
+  { id: 'perfil',   label: 'Mi perfil',    corto: 'Perfil',       Icon: IconUser },
+  { id: 'codigo',   label: 'Mi código',    corto: 'Mi código',    Icon: IconQr },
+  { id: 'stats',    label: 'Estadísticas', corto: 'Estadísticas', Icon: IconChart },
+  { id: 'cobros',   label: 'Cobros',       corto: 'Cobros',       Icon: IconWallet },
+  { id: 'interno',  label: 'Chat interno', corto: 'Chat interno', Icon: IconChatInterno },
 ]
 
 const fmtCOP = (n) =>
@@ -212,7 +212,7 @@ export default function ProfileGestorPage() {
             </div>
 
             <nav className={styles.sideNav} aria-label="Secciones del panel">
-              {SECCIONES.map(({ id, label, Icon }) => (
+              {SECCIONES.map(({ id, label, corto, Icon }) => (
                 <button
                   key={id}
                   type="button"
@@ -223,6 +223,7 @@ export default function ProfileGestorPage() {
                 >
                   <Icon className={styles.navIcon} aria-hidden="true" />
                   <span className={styles.navLabel}>{label}</span>
+                  <span className={styles.navLabelCorto} aria-hidden="true">{corto || label}</span>
                 </button>
               ))}
             </nav>
@@ -551,48 +552,51 @@ function SeccionEstadisticas({ aprobado, codigo }) {
           </div>
 
           {/* Dos lecturas de lo mismo, lado a lado: qué proporción sale bien y
-              cómo se reparten las consultas. */}
+              cómo se reparten las consultas. Misma altura y el MISMO título
+              arriba en las dos: antes el de la izquierda compartía fila con el
+              "0 %" grande, la línea base lo bajaba y no quedaba a la altura
+              del de la derecha. */}
           <div className={styles.statsCols}>
-            <div className={styles.cardGlass}>
-              <div className={styles.ratioHead}>
-                <span className={styles.ratioTitle}>Tasa de éxito</span>
+            <div className={`${styles.cardGlass} ${styles.statCard}`}>
+              <p className={styles.blockTitle}>Tasa de éxito</p>
+              <div className={styles.ratioCuerpo}>
                 <span className={styles.ratioPct}>{tasaExito}%</span>
-              </div>
-              <div
-                className={styles.ratioBar}
-                role="progressbar"
-                aria-valuenow={tasaExito}
-                aria-valuemin={0}
-                aria-valuemax={100}
-                aria-label="Tasa de éxito"
-              >
-                {decididos > 0 ? (
-                  <>
-                    <span className={styles.ratioFillExito} style={{ width: `${tasaExito}%` }} />
-                    <span className={styles.ratioFillFracaso} style={{ width: `${100 - tasaExito}%` }} />
-                  </>
-                ) : (
-                  <span className={styles.ratioEmpty} />
-                )}
-              </div>
-              <div className={styles.ratioLegend}>
-                <span className={styles.legendItem}>
-                  <span className={styles.legendDotExito} /> Éxitos · {stats.exitos}
-                </span>
-                <span className={styles.legendItem}>
-                  <span className={styles.legendDotFracaso} /> No exitosas · {noExitosas}
-                </span>
-                <span className={styles.legendMuted}>
-                  {decididos === 0
-                    ? 'Sin casos cerrados con resultado'
-                    : `Sobre ${decididos} caso${decididos === 1 ? '' : 's'} con resultado`}
-                </span>
+                <div
+                  className={styles.ratioBar}
+                  role="progressbar"
+                  aria-valuenow={tasaExito}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-label="Tasa de éxito"
+                >
+                  {decididos > 0 ? (
+                    <>
+                      <span className={styles.ratioFillExito} style={{ width: `${tasaExito}%` }} />
+                      <span className={styles.ratioFillFracaso} style={{ width: `${100 - tasaExito}%` }} />
+                    </>
+                  ) : (
+                    <span className={styles.ratioEmpty} />
+                  )}
+                </div>
+                <div className={styles.ratioLegend}>
+                  <span className={styles.legendItem}>
+                    <span className={styles.legendDotExito} /> Éxitos · {stats.exitos}
+                  </span>
+                  <span className={styles.legendItem}>
+                    <span className={styles.legendDotFracaso} /> No exitosas · {noExitosas}
+                  </span>
+                  <span className={styles.legendMuted}>
+                    {decididos === 0
+                      ? 'Sin casos cerrados con resultado'
+                      : `Sobre ${decididos} caso${decididos === 1 ? '' : 's'} con resultado`}
+                  </span>
+                </div>
               </div>
             </div>
 
             {/* Gráfica (dona) + leyenda del reparto de consultas */}
             {donutData.length > 0 && (
-              <div className={styles.cardGlass}>
+              <div className={`${styles.cardGlass} ${styles.statCard}`}>
                 <p className={styles.blockTitle}>Reparto de consultas</p>
                 <div className={styles.chartRow}>
                   <div className={styles.donutBox}>
@@ -654,6 +658,12 @@ function SeccionEstadisticas({ aprobado, codigo }) {
                 </span>
               )}
             </div>
+
+            {historial.length > 0 && (
+              <p className={styles.histAyuda}>
+                «En curso» se marca cuando el profesional responde por primera vez; la fecha es la de esa respuesta.
+              </p>
+            )}
 
             {historial.length > 0 && (
               <GestorFilterBar
@@ -756,6 +766,13 @@ function ConsultaProgreso({ hitos, resultado, tiempos = {} }) {
   const fallida     = hitos.cerrada && !conComision
   // Dónde está ahora: el último hito alcanzado.
   const ultimo = PASOS_CONSULTA.reduce((acc, p, i) => (hitos[p.key] ? i : acc), 0)
+  /* Un paso sin fecha decía solo "—" y no se entendía. "En curso" es la
+     primera respuesta del profesional (activo_at): si la consulta se cerró
+     sin ella, no la hubo; si sigue abierta, se está esperando. */
+  const notaSinFecha = (key) => {
+    if (key !== 'en_curso' || hitos.en_curso) return null
+    return hitos.cerrada ? 'Sin respuesta' : 'Esperando respuesta'
+  }
 
   const estadoDe = (i, key) => {
     if (i === PASOS_CONSULTA.length - 1 && hitos.cerrada) return fallida ? 'fail' : 'done'
@@ -800,6 +817,8 @@ function ConsultaProgreso({ hitos, resultado, tiempos = {} }) {
                   <span className={styles.stepWhenDate}>{fmtFecha(t)}</span>
                   <span className={styles.stepWhenTime}>{fmtHora(t)}</span>
                 </span>
+              ) : notaSinFecha(p.key) ? (
+                <span className={styles.stepWhenNota}>{notaSinFecha(p.key)}</span>
               ) : (
                 <span className={styles.stepWhenEmpty}>—</span>
               )}

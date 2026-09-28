@@ -51,6 +51,18 @@ export function formatCedula(raw) {
 }
 
 // ── Correo ────────────────────────────────────────────────────────────────
+/* ── Ubicación: ciudad o localidad ───────────────────────────────────────
+   Bogotá D.C. se divide en LOCALIDADES (Engativá, Suba…); el resto del país,
+   en ciudades. Va aquí y no en data/colombia-ubicaciones.js a propósito: ese
+   archivo pesa ~30 kB y se carga lazy, y la home (tarjetas, filtro, chat) solo
+   necesita saber si el departamento es Bogotá. "Bogotá D.C." es el único
+   departamento que empieza así. */
+export const esDeptoBogota = (depto) => /^bogot[aá]/i.test(String(depto || '').trim())
+// Un perfil viejo con ciudad "Bogotá" sigue diciendo "Ciudad": llamar
+// "Localidad" a Bogotá misma sería falso.
+export const etiquetaCiudad = (depto, ciudad = '') =>
+  (esDeptoBogota(depto) && !/^bogot/i.test(String(ciudad).trim()) ? 'Localidad' : 'Ciudad')
+
 export function validarCorreo(email) {
   if (!email || email.trim() === '') return { valid: null, msg: '' }
   if (/\s/.test(email))              return { valid: false, msg: 'No se permiten espacios' }

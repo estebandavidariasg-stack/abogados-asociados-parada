@@ -18,8 +18,8 @@ import Markdown from '../shared/Markdown'
 import EnviarAFirmar from '../firma/EnviarAFirmar'
 import { firmantesPendientes } from '../../lib/firmaService'
 import {
-  COP, fetchCobroProfesional, fijarCobro, confirmarPagoAsesoria, formatMiles, parseMiles, COBRO_MINIMO,
-  AVISO_COBRO_PROFESIONAL,
+  COP, fetchCobroProfesional, fijarCobro, confirmarPagoAsesoria, formatMiles, parseMiles,
+  AVISO_COBRO_CONTADOR,
 } from '../../lib/cobroAsesoria'
 
 // Parseo seguro de los payloads JSON de los mensajes de firma.
@@ -694,12 +694,11 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
       if (prev?.preview) URL.revokeObjectURL(prev.preview)
       return { file, preview: esImg ? URL.createObjectURL(file) : null, preparando: esImg }
     })
-    // Comprimir mientras el usuario revisa: al pulsar Enviar solo queda subir.
-    if (esImg) {
-      prepararAdjuntoChat(file).then(listo => {
-        setPendingFile(prev => (prev && prev.file === file) ? { ...prev, file: listo, preparando: false } : prev)
-      })
-    }
+    // Mientras el usuario revisa: comprimir la imagen o copiar el documento a
+    // memoria (ver prepararAdjuntoChat). Al pulsar Enviar solo queda subir.
+    prepararAdjuntoChat(file).then(listo => {
+      setPendingFile(prev => (prev && prev.file === file) ? { ...prev, file: listo, preparando: false } : prev)
+    })
   }
   function descartarAdjunto() {
     setPendingFile(prev => { if (prev?.preview) URL.revokeObjectURL(prev.preview); return null })
@@ -865,8 +864,8 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
       const cleanMime = mimeAudioLimpio(mimeType)
       path = `chats/${activeRoom.id}/audio_${Date.now()}.${ext}`
 
-      const { error: upErr } = await supabase.storage.from('chat-files')
-        .upload(path, blob, { contentType: cleanMime, upsert: true })
+      // Misma subida que los adjuntos: reintenta si la señal se corta.
+      const { error: upErr } = await subirArchivoChat({ path, file: blob, contentType: cleanMime })
       if (upErr) throw Object.assign(new Error(upErr.message || 'upload'), { status: upErr.status, fase: 'upload' })
 
       // Guardamos el PATH (no signed URL). AudioPlayer firma on-demand.
@@ -955,12 +954,8 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
     // Toda consulta tiene cobro: el valor es obligatorio y mayor a 0.
     const m = parseMiles(cobroMonto)
     if (!m || m <= 0) { setCobroErr('Ingresa el valor de la consulta.'); return }
-    // El mínimo se acepta al registrarse; si solo estuviera en el texto sería
-    // una regla de adorno. Aquí es donde de verdad se cumple.
-    if (m < COBRO_MINIMO) {
-      setCobroErr(`El mínimo por consulta es ${COP.format(COBRO_MINIMO)}.`)
-      return
-    }
+    // Sin piso: el mínimo de $200.000 es solo de los abogados (2026-09-28).
+    // El valor del contador lo decide él (ver tienePisoCobro en cobroAsesoria).
     setCobroBusy(true); setCobroErr('')
     try {
       // Solo el precio: la cuenta para consignar es el certificado bancario
@@ -1478,7 +1473,7 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
                     <path d="M12 6.2v1.4M12 16.4v1.4" />
                   </svg>
                   <span>
-                    <strong>{AVISO_COBRO_PROFESIONAL.titulo}</strong> {AVISO_COBRO_PROFESIONAL.texto}
+                    <strong>{AVISO_COBRO_CONTADOR.titulo}</strong> {AVISO_COBRO_CONTADOR.texto}
                   </span>
                 </div>
               )}
@@ -1758,7 +1753,7 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
               <label className={styles.cobroLabel}>Valor de la consulta (COP)</label>
               <input type="text" inputMode="numeric" value={cobroMonto}
                 onChange={e => { setCobroMonto(formatMiles(e.target.value)); setCobroErr('') }}
-                placeholder={`Mínimo ${formatMiles(COBRO_MINIMO)}`}
+                placeholder="Escribe el valor"
                 className={`${styles.cobroInput} ${styles.cobroAmount}`} />
               <p className={styles.cobroHint}>
                 El cliente verá tu cuenta bancaria certificada (la del registro)

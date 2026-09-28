@@ -287,6 +287,8 @@ export const esBogota = (depto) => !!UBICACIONES[depto]?.esBogota
 export const nivelMunicipalLabel = (depto) => (esBogota(depto) ? 'Localidad' : 'Municipio')
 // Etiqueta plural (para selects "Todos los municipios/localidades", títulos…).
 export const nivelMunicipalPlural = (depto) => (esBogota(depto) ? 'localidades' : 'municipios')
+// (La etiqueta "Ciudad"/"Localidad" para MOSTRAR un perfil vive en
+// lib/validaciones.js: la home la necesita y este archivo se carga lazy.)
 
 // Lista ordenada de municipios (o localidades de Bogotá) de un departamento.
 export function municipiosDe(depto) {

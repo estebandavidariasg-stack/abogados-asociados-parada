@@ -1021,26 +1021,28 @@ export default function AdminPage() {
   // Distingue los dos roles del panel: el 'admin' ve todo menos roles.
   const esSuperadmin = profile?.rol === 'superadmin'
 
+  // `corto`: nombre bajo el icono en el riel móvil (≤480px), donde cada
+  // mosaico mide ~80px y "Historial chats" o "Proyectos de ley" no caben.
   const TABS = [
-    { key: 'pending',      label: 'Solicitudes',         count: pending.length,       Icon: IconInbox },
-    { key: 'approved',     label: 'Aprobados',            count: approved.length,      Icon: IconUsers },
+    { key: 'pending',      label: 'Solicitudes',     corto: 'Solicitudes',  count: pending.length,       Icon: IconInbox },
+    { key: 'approved',     label: 'Aprobados',       corto: 'Aprobados',    count: approved.length,      Icon: IconUsers },
     // Gestion de Roles: SOLO superadmin. Es la unica diferencia con 'admin'.
     ...(esSuperadmin
-      ? [{ key: 'roles', label: 'Gestión de Roles', Icon: IconShield }]
+      ? [{ key: 'roles', label: 'Gestión de Roles', corto: 'Roles', Icon: IconShield }]
       : []),
-    { key: 'gestores',     label: 'Gestores',             count: gestores.filter(g => !g.aprobado).length, Icon: IconGestor },
-    { key: 'pagos',        label: 'Pagos y cobros',                                    Icon: IconWallet },
-    { key: 'chats',        label: 'Historial chats',                                   Icon: IconChat },
-    { key: 'recuperar',    label: 'Recuperar chats',      count: chatsCerrados.length, Icon: IconRecover },
-    { key: 'alertas',      label: 'Inactividades',        count: alertasAccionables, alert: true, Icon: IconAlert },
-    { key: 'chat_interno', label: 'Chat interno',         count: internosNoLeidos,   Icon: IconChatInterno },
-    { key: 'contratos',    label: 'Contratos',                                         Icon: IconDoc },
-    { key: 'resenas',      label: 'Opiniones',                                         Icon: IconStar },
-    { key: 'pqrs',         label: 'PQRS',                                              Icon: IconPqr },
-    { key: 'proyectos',    label: 'Proyectos de ley',                                  Icon: IconLey },
+    { key: 'gestores',     label: 'Gestores',        corto: 'Gestores',     count: gestores.filter(g => !g.aprobado).length, Icon: IconGestor },
+    { key: 'pagos',        label: 'Pagos y cobros',  corto: 'Pagos',                                     Icon: IconWallet },
+    { key: 'chats',        label: 'Historial chats', corto: 'Historial',                                 Icon: IconChat },
+    { key: 'recuperar',    label: 'Recuperar chats', corto: 'Recuperar',    count: chatsCerrados.length, Icon: IconRecover },
+    { key: 'alertas',      label: 'Inactividades',   corto: 'Inactividad',  count: alertasAccionables, alert: true, Icon: IconAlert },
+    { key: 'chat_interno', label: 'Chat interno',    corto: 'Chat interno', count: internosNoLeidos,   Icon: IconChatInterno },
+    { key: 'contratos',    label: 'Contratos',       corto: 'Contratos',                                 Icon: IconDoc },
+    { key: 'resenas',      label: 'Opiniones',       corto: 'Opiniones',                                 Icon: IconStar },
+    { key: 'pqrs',         label: 'PQRS',            corto: 'PQRS',                                      Icon: IconPqr },
+    { key: 'proyectos',    label: 'Proyectos de ley', corto: 'Proyectos',                                Icon: IconLey },
     // Solo el ADMIN MAESTRO puede configurar el formulario de registro.
     ...(profile?.es_admin_maestro
-      ? [{ key: 'campos', label: 'Campos de registro', Icon: IconDoc }]
+      ? [{ key: 'campos', label: 'Campos de registro', corto: 'Campos', Icon: IconDoc }]
       : []),
   ]
 
@@ -1060,7 +1062,7 @@ export default function AdminPage() {
             </div>
 
             <nav className={styles.sideNav} aria-label="Secciones del panel">
-              {TABS.map(({ key, label, count, alert, Icon }) => (
+              {TABS.map(({ key, label, corto, count, alert, Icon }) => (
                 <button
                   key={key}
                   type="button"
@@ -1071,6 +1073,7 @@ export default function AdminPage() {
                 >
                   <Icon className={styles.navIcon} aria-hidden="true" />
                   <span className={styles.navLabel}>{label}</span>
+                  <span className={styles.navLabelCorto} aria-hidden="true">{corto || label}</span>
                   {count > 0 && (
                     <span className={`${styles.navBadge} ${alert ? styles.navBadgeAlert : ''}`}>
                       {count}

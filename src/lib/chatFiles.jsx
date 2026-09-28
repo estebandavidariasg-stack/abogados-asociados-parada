@@ -153,32 +153,111 @@ export function nombreArchivoSeguro(name) {
   return base || 'archivo'
 }
 
-/* Imágenes: reducir a 1600 px y JPEG antes de subir (una foto de celular de
-   4-8 MB baja a ~300 KB: la subida deja de ser lenta). Otros tipos pasan tal
-   cual. Si la compresión falla se sube el original. */
+/* Se llama al ELEGIR el archivo, no al enviarlo:
+   · Imágenes: reducir a 1600 px y JPEG (una foto de celular de 4-8 MB baja a
+     ~300 KB: la subida deja de ser lenta). Si falla, sigue el original.
+   · Todo lo demás (Word, PDF…): copia en memoria. En Android lo que entrega el
+     selector es una referencia a Drive/WhatsApp/Descargas, válida con
+     seguridad solo en ese instante; si el proveedor la suelta después, la
+     revisión o la subida fallan con un error de red engañoso (ver
+     subirArchivoChat). Copiado aquí, lo demás trabaja sobre la copia. */
 const yaPreparados = new WeakSet()
 export async function prepararAdjuntoChat(file) {
   if (!file || yaPreparados.has(file)) return file
-  if (!/^image\/(png|jpeg|webp)$/.test(file.type || '')) { yaPreparados.add(file); return file }
   let out = file
-  try { out = await compressImage(file, 1600, 0.82, 'image/jpeg') } catch { out = file }
+  if (/^image\/(png|jpeg|webp)$/.test(file.type || '')) {
+    try { out = await compressImage(file, 1600, 0.82, 'image/jpeg') } catch { out = file }
+  }
+  if (out === file && typeof File !== 'undefined' && file instanceof File) {
+    try {
+      out = new File([await file.arrayBuffer()], file.name, { type: file.type, lastModified: file.lastModified })
+    } catch {
+      // Ilegible: se devuelve SIN marcar, para que subirArchivoChat intente la
+      // copia otra vez y, si tampoco puede, diga que el archivo no se deja leer.
+      return file
+    }
+  }
   yaPreparados.add(out)
   return out
 }
 
-/* Subida a Storage con PROGRESO real (XHR: fetch no expone el progreso de
-   envío). Mismos headers que el REST (sesión → JWT del cliente → anon key).
-   Resuelve { error } con la misma forma que supabase.storage.upload. */
-export function subirArchivoChat({ path, file, contentType, onProgress, bucket = 'chat-files' }) {
+/* Subida a Storage. Mismos headers que el REST (sesión → JWT del cliente →
+   anon key). Resuelve { error } con la misma forma que supabase.storage.upload.
+
+   Caso real (2026-09-27, cliente con datos móviles en Samsung Internet):
+   "Sin conexión con el servidor" al mandar Word y PDF, mientras que ese mismo
+   teléfono subió la nota de voz y el comprobante minutos después. Tres
+   defensas, una por cada diferencia entre lo que falló y lo que no:
+
+   1. COPIA EN MEMORIA. En Android un archivo elegido desde Drive, WhatsApp o
+      Descargas es una referencia al proveedor, no una copia; si el proveedor
+      la cambia o la suelta, la subida muere con un error de red
+      (net::ERR_UPLOAD_FILE_CHANGED). Las imágenes nunca lo sufrían porque ya
+      se recomprimen en memoria; los documentos se subían por referencia. Si
+      ni siquiera se deja leer, se dice eso, no "sin conexión".
+   2. REINTENTOS. Un corte o un 5xx de la pasarela se repite dos veces más
+      (1,5 s y 3 s). Seguro gracias a x-upsert: la misma ruta se sobrescribe,
+      no se duplica. Un rechazo real (permiso, tamaño, tipo) no se repite.
+   3. OTRO TRANSPORTE. El primer intento va por XHR, que da el % real de
+      subida; los reintentos van por fetch, el camino por el que el
+      comprobante sí subió en ese teléfono. Mientras reintenta, la barra se
+      queda donde iba y salta a 100 al terminar. */
+const SUBIDA_INTENTOS = 3
+export const ERROR_ARCHIVO_ILEGIBLE = 'archivo_ilegible'
+
+export async function subirArchivoChat(opciones) {
+  let file = opciones.file
+  // Ya copiado por prepararAdjuntoChat al elegirlo → no se vuelve a copiar.
+  if (typeof File !== 'undefined' && file instanceof File && !yaPreparados.has(file)) {
+    try {
+      file = new Blob([await file.arrayBuffer()], { type: file.type || opciones.contentType || '' })
+    } catch (err) {
+      console.warn('[chat] el navegador no pudo leer el archivo:', err?.message)
+      return { error: { message: ERROR_ARCHIVO_ILEGIBLE, status: 0 } }
+    }
+  }
+  const op = { ...opciones, file }
+  let ultimo = null
+  for (let i = 0; i < SUBIDA_INTENTOS; i++) {
+    if (i) await new Promise(r => setTimeout(r, 1500 * i))
+    ultimo = i === 0 ? await subirPorXhr(op) : await subirPorFetch(op)
+    const e = ultimo.error
+    if (!e) return ultimo
+    const reintentable = e instanceof TypeError || Number(e.status) >= 500
+    if (!reintentable) return ultimo
+    console.warn(`[chat] subida interrumpida (intento ${i + 1}/${SUBIDA_INTENTOS}):`, e.message)
+  }
+  return ultimo
+}
+
+async function cabecerasSubida(file, contentType) {
+  let auth = {}
+  try { auth = await getAuthHeaders() } catch { /* sin headers → fallará con 401 y se informa */ }
+  const h = { 'Content-Type': contentType || file?.type || 'application/octet-stream', 'x-upsert': 'true' }
+  if (auth.apikey)        h.apikey = auth.apikey
+  if (auth.Authorization) h.Authorization = auth.Authorization
+  return h
+}
+
+async function subirPorFetch({ path, file, contentType, onProgress, bucket = 'chat-files' }) {
+  try {
+    const res = await fetch(`${SUPABASE_URL}/storage/v1/object/${bucket}/${path}`, {
+      method: 'POST', headers: await cabecerasSubida(file, contentType), body: file,
+    })
+    if (res.ok) { onProgress?.(100); return { error: null } }
+    const d = await res.json().catch(() => ({}))
+    return { error: { message: d.message || d.error || `HTTP ${res.status}`, status: res.status } }
+  } catch (err) {
+    return { error: err instanceof TypeError ? err : new TypeError(err?.message || 'Failed to fetch') }
+  }
+}
+
+function subirPorXhr({ path, file, contentType, onProgress, bucket = 'chat-files' }) {
   return new Promise(async (resolve) => {
-    let headers = {}
-    try { headers = await getAuthHeaders() } catch { /* sin headers → fallará con 401 y se informa */ }
+    const headers = await cabecerasSubida(file, contentType)
     const xhr = new XMLHttpRequest()
     xhr.open('POST', `${SUPABASE_URL}/storage/v1/object/${bucket}/${path}`)
-    if (headers.apikey)        xhr.setRequestHeader('apikey', headers.apikey)
-    if (headers.Authorization) xhr.setRequestHeader('Authorization', headers.Authorization)
-    xhr.setRequestHeader('Content-Type', contentType || file?.type || 'application/octet-stream')
-    xhr.setRequestHeader('x-upsert', 'true')
+    for (const [k, v] of Object.entries(headers)) xhr.setRequestHeader(k, v)
     xhr.upload.onprogress = (e) => {
       if (e.lengthComputable) onProgress?.(Math.min(99, Math.round((e.loaded / e.total) * 100)))
     }
@@ -203,6 +282,9 @@ export function describirErrorSubida(err, fase = 'upload') {
     const detalle = err?.detalle ? ` (${String(err.detalle).slice(0, 140)})` : ''
     return `El archivo se subió pero no se pudo registrar el mensaje; lo descartamos. Intenta de nuevo.${detalle}`
   }
+  if (msg === ERROR_ARCHIVO_ILEGIBLE) {
+    return 'Tu teléfono no dejó leer el archivo. Si está en Drive o en WhatsApp, descárgalo primero y vuelve a adjuntarlo.'
+  }
   if (status === 413 || /exceeded|maximum size|too large|payload/.test(msg)) {
     return `El archivo supera el máximo permitido (${CHAT_FILE_MAX_MB} MB).`
   }
@@ -213,7 +295,10 @@ export function describirErrorSubida(err, fase = 'upload') {
     return 'No tienes permiso para subir archivos en esta sala. Recarga la página e intenta de nuevo.'
   }
   if (err instanceof TypeError || /failed to fetch|network|load failed|abort/.test(msg)) {
-    return 'Sin conexión con el servidor. Revisa tu red e intenta de nuevo.'
+    // Llega aquí tras 3 intentos (subirArchivoChat: uno por XHR y dos por
+    // fetch): la señal de verdad no alcanzó. Decirlo así, no como una falla
+    // "del servidor", que es como lo leyó el cliente.
+    return 'La conexión se cortó y el archivo no alcanzó a subir. Busca mejor señal o wifi e intenta de nuevo.'
   }
   return 'No se pudo subir el archivo. Intenta de nuevo.'
 }

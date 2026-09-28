@@ -19,13 +19,32 @@ const CHARS_POR_PAGINA = 2500 // estimación para Word/TXT (texto denso)
 const PDFJS_VERSION = '4.7.76'
 const PDFJS_BASE = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS_VERSION}/build`
 
+/* Si el CDN no carga (datos móviles malos, red que lo bloquea) se usa la copia
+   EMPAQUETADA de pdf.js, la misma del visor (build legacy: sirve también en
+   navegadores móviles atrasados). El CDN sigue primero porque el importador de
+   proyectos de ley se afinó con el texto que da la 4.7.
+
+   Una promesa FALLIDA no se guarda: antes quedaba rechazada en caché y cada
+   intento siguiente fallaba al instante hasta recargar la página. Con datos
+   móviles, un solo corte dejaba al cliente sin poder mandar ningún PDF. */
 let _pdfjsPromise = null
 async function getPdfjs() {
   if (!_pdfjsPromise) {
-    _pdfjsPromise = import(/* @vite-ignore */ `${PDFJS_BASE}/pdf.min.mjs`).then((lib) => {
-      lib.GlobalWorkerOptions.workerSrc = `${PDFJS_BASE}/pdf.worker.min.mjs`
-      return lib
-    })
+    _pdfjsPromise = import(/* @vite-ignore */ `${PDFJS_BASE}/pdf.min.mjs`)
+      .then((lib) => {
+        lib.GlobalWorkerOptions.workerSrc = `${PDFJS_BASE}/pdf.worker.min.mjs`
+        return lib
+      })
+      .catch(async (err) => {
+        console.warn('[extractDocText] pdf.js del CDN no cargó; uso la copia local:', err?.message)
+        const [lib, { default: workerUrl }] = await Promise.all([
+          import('pdfjs-dist/legacy/build/pdf.mjs'),
+          import('pdfjs-dist/legacy/build/pdf.worker.min.mjs?url'),
+        ])
+        lib.GlobalWorkerOptions.workerSrc = workerUrl
+        return lib
+      })
+      .catch((err) => { _pdfjsPromise = null; throw err })
   }
   return _pdfjsPromise
 }
@@ -50,17 +69,25 @@ async function extractPdfText(file, { maxChars = 1_800_000, onProgress } = {}) {
 
 // ── Word .docx (mammoth) ───────────────────────────────────────────────────
 // Build de navegador (UMD): expone window.mammoth tras cargar el <script>.
+// Mismo criterio que pdf.js: un fallo no se queda en caché, y con red móvil
+// inestable se reintenta una vez sola antes de rendirse.
+const MAMMOTH_URL = 'https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js'
 let _mammothPromise = null
+function cargarMammoth() {
+  return new Promise((resolve, reject) => {
+    const s = document.createElement('script')
+    s.src = MAMMOTH_URL
+    s.onload = () => window.mammoth ? resolve(window.mammoth) : reject(new Error('El lector de Word cargó vacío.'))
+    s.onerror = () => { s.remove(); reject(new Error('No se pudo cargar el lector de Word.')) }
+    document.head.appendChild(s)
+  })
+}
 function getMammoth() {
   if (typeof window !== 'undefined' && window.mammoth) return Promise.resolve(window.mammoth)
   if (!_mammothPromise) {
-    _mammothPromise = new Promise((resolve, reject) => {
-      const s = document.createElement('script')
-      s.src = 'https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js'
-      s.onload = () => resolve(window.mammoth)
-      s.onerror = () => reject(new Error('No se pudo cargar el lector de Word.'))
-      document.head.appendChild(s)
-    })
+    _mammothPromise = cargarMammoth()
+      .catch(() => new Promise(r => setTimeout(r, 1500)).then(cargarMammoth))
+      .catch((err) => { _mammothPromise = null; throw err })
   }
   return _mammothPromise
 }

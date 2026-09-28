@@ -119,6 +119,23 @@
   position: relative;
   z-index: 1;
 }
+/* Capa ANIMADA, exactamente encima de la estática (mismo viewBox, misma
+   caja). `will-change: transform` le da su propia capa de composición: sus
+   repintados por cuadro ya no tocan el mapa de abajo, que queda pintado una
+   sola vez. */
+.svgAnim {
+  position: absolute;
+  inset: 0;
+  height: 100%;
+  z-index: 2;
+  pointer-events: none;
+  will-change: transform;
+}
+/* Fuera de pantalla (IntersectionObserver en MapSection.jsx): las
+   animaciones CSS se congelan donde iban; las SMIL se pausan por JS. */
+.pausado .line,
+.pausado .pulse,
+.pausado .ring { animation-play-state: paused; }
 
 
 /* ── Territorio mundial — croquis AZUL OSCURO (diseño original recuperado).
@@ -415,6 +432,10 @@
     grid-template-columns: 1fr 1fr;
     gap: 1.5rem;
   }
+  /* Aquí las tarjetas ya no flotan sobre el mapa: el desenfoque de fondo no
+     tenía nada que desenfocar (el blanco al 92 % tapa igual) y en celular
+     cuesta en cada scroll. Se ven idénticas sin él. */
+  .card { backdrop-filter: none; }
 }
 
 @media (max-width: 768px) {

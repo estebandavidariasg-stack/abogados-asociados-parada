@@ -717,12 +717,11 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
       if (prev?.preview) URL.revokeObjectURL(prev.preview)
       return { file, preview: esImg ? URL.createObjectURL(file) : null, preparando: esImg }
     })
-    // Comprimir mientras el usuario revisa: al pulsar Enviar solo queda subir.
-    if (esImg) {
-      prepararAdjuntoChat(file).then(listo => {
-        setPendingFile(prev => (prev && prev.file === file) ? { ...prev, file: listo, preparando: false } : prev)
-      })
-    }
+    // Mientras el usuario revisa: comprimir la imagen o copiar el documento a
+    // memoria (ver prepararAdjuntoChat). Al pulsar Enviar solo queda subir.
+    prepararAdjuntoChat(file).then(listo => {
+      setPendingFile(prev => (prev && prev.file === file) ? { ...prev, file: listo, preparando: false } : prev)
+    })
   }
   function descartarAdjunto() {
     setPendingFile(prev => { if (prev?.preview) URL.revokeObjectURL(prev.preview); return null })
@@ -891,8 +890,8 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
       path = `chats/${activeRoom.id}/audio_${Date.now()}.${ext}`
 
       // 1) Upload con JWT del usuario autenticado
-      const { error: upErr } = await supabase.storage.from('chat-files')
-        .upload(path, blob, { contentType: cleanMime, upsert: true })
+      // Misma subida que los adjuntos: reintenta si la señal se corta.
+      const { error: upErr } = await subirArchivoChat({ path, file: blob, contentType: cleanMime })
       if (upErr) throw Object.assign(new Error(upErr.message || 'upload'), { status: upErr.status, fase: 'upload' })
 
       // 2) Insertar mensaje guardando el PATH (no signed URL).

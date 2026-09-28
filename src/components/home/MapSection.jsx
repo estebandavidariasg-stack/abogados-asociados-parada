@@ -113,12 +113,34 @@ function ChartCard({ title, hint, children }) {
   )
 }
 
+/* Contador "Consultas activas" (ilustrativo) en su PROPIO componente: su
+   estado cambia cada 3,5 s (y 12 veces seguidas al entrar), y cuando vivía en
+   MapSection cada cambio volvía a renderizar el mapa entero y las cuatro
+   gráficas de Recharts. En un celular eso eran tirones justo al llegar a la
+   sección. Se ve exactamente igual. */
+function ConsultasActivas() {
+  const [activos, setActivos] = useState(0)
+  useEffect(() => {
+    const target = 24
+    let n = 0
+    const up = setInterval(() => { n += 2; setActivos(Math.min(n, target)); if (n >= target) clearInterval(up) }, 45)
+    const fluct = setInterval(() => { setActivos(t => Math.max(18, Math.min(31, t + (Math.random() > 0.5 ? 1 : -1)))) }, 3500)
+    return () => { clearInterval(up); clearInterval(fluct) }
+  }, [])
+  return (
+    <div className={styles.live}>
+      <span className={styles.liveNum}>{activos}</span>
+      <span className={styles.liveLbl}>Consultas activas</span>
+    </div>
+  )
+}
+
 export default function MapSection() {
   const sectionRef = useRef(null)
+  const mapRef     = useRef(null)   // caja del mapa (para pausar fuera de pantalla)
+  const animSvgRef = useRef(null)   // capa animada (SMIL: pause/unpauseAnimations)
   const [landPath,    setLandPath]    = useState(null)   // todo el territorio (merge de países)
   const [bordersPath, setBordersPath] = useState(null)   // fronteras internas tenues
-  const [graticulePath, setGraticulePath] = useState(null) // retícula (meridianos/paralelos)
-  const [spherePath,  setSpherePath]  = useState(null)   // contorno del planeta (océano)
   const [projected,   setProjected]   = useState([])
   const [paths,       setPaths]       = useState([])
   const [clientPts,   setClientPts]   = useState([])   // puntos de clientes (azul)
@@ -131,7 +153,6 @@ export default function MapSection() {
   const [deptData,    setDeptData]    = useState(PH_DEPTOS)
   const [totalProf,   setTotalProf]   = useState(12)
   const [totalDeptos, setTotalDeptos] = useState(8)
-  const [activos,     setActivos]     = useState(0)
 
   // Cargar mapa mundial (world-atlas) y proyectar hubs
   useEffect(() => {
@@ -142,20 +163,25 @@ export default function MapSection() {
           'https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json'
         ).then(r => r.json())
         if (cancel) return
+        // Unir ~180 países tarda 100-300 ms en un celular modesto: se hace en
+        // un momento libre, no en medio del scroll que trajo la sección.
+        await new Promise(r => (window.requestIdleCallback
+          ? window.requestIdleCallback(r, { timeout: 800 })
+          : setTimeout(r, 0)))
+        if (cancel) return
 
         const land    = topojson.merge(world, world.objects.countries.geometries)
         const borders = topojson.mesh(world, world.objects.countries, (a, b) => a !== b)
 
         const projection = d3.geoNaturalEarth1()
         projection.fitExtent([[12, 12], [W - 12, H - 12]], { type: 'Sphere' })
-        const pathGen = d3.geoPath().projection(projection)
+        // 1 decimal: en un lienzo de 960 unidades, más precisión es invisible
+        // y solo engorda el trazo que el navegador tiene que leer y pintar.
+        const pathGen = d3.geoPath().projection(projection).digits(1)
 
         setLandPath(pathGen(land))
         setBordersPath(pathGen(borders))
-        // Retícula cartográfica (meridianos/paralelos cada 20°) + esfera del
-        // planeta — dan el acabado de carta náutica sobre el océano oscuro.
-        setGraticulePath(pathGen(d3.geoGraticule().step([20, 20])()))
-        setSpherePath(pathGen({ type: 'Sphere' }))
+        // (La retícula y la esfera se calculaban y nunca se dibujaban.)
 
         const pts = CITIES.map(c => {
           const [x, y] = projection(c.coords) || [0, 0]
@@ -231,13 +257,23 @@ export default function MapSection() {
     return () => { cancel = true }
   }, [])
 
-  // Contador en vivo (ilustrativo)
+  // Fuera de pantalla las animaciones se PAUSAN (CSS y SMIL) y al volver
+  // siguen donde iban: nadie las ve, pero seguían gastando CPU mientras el
+  // usuario estaba en el chat o en otra sección, y en un celular eso se nota
+  // en toda la página.
   useEffect(() => {
-    const target = 24
-    let n = 0
-    const up = setInterval(() => { n += 2; setActivos(Math.min(n, target)); if (n >= target) clearInterval(up) }, 45)
-    const fluct = setInterval(() => { setActivos(t => Math.max(18, Math.min(31, t + (Math.random() > 0.5 ? 1 : -1)))) }, 3500)
-    return () => { clearInterval(up); clearInterval(fluct) }
+    const caja = mapRef.current
+    if (!caja || !('IntersectionObserver' in window)) return
+    const io = new IntersectionObserver(([e]) => {
+      const visible = e.isIntersecting
+      caja.classList.toggle(styles.pausado, !visible)
+      try {
+        if (visible) animSvgRef.current?.unpauseAnimations?.()
+        else animSvgRef.current?.pauseAnimations?.()
+      } catch { /* navegador sin SMIL: nada que pausar */ }
+    }, { rootMargin: '120px' })
+    io.observe(caja)
+    return () => io.disconnect()
   }, [])
 
   // Respeta prefers-reduced-motion para las partículas SMIL (<animateMotion>),
@@ -272,7 +308,19 @@ export default function MapSection() {
       <div className={styles.dashboard}>
 
         {/* ── Mapa mundial (banda principal) ── */}
-        <div className={styles.mapHero}>
+        {/* Rendimiento (celular): el mapa va en DOS capas.
+              1. Estática: el mundo (relleno, fronteras, litoral con pluma) y
+                 las rutas base. Es el trazo más pesado y no cambia nunca: se
+                 pinta una vez.
+              2. Animada, encima y en su propia capa de composición: arcos,
+                 partículas y puntos. Solo esta se repinta en cada cuadro.
+            Antes todo iba en un SVG: como hay movimiento por todo el mapa, el
+            teléfono volvía a pintar el mundo entero (dibujado 4 veces) en cada
+            cuadro. Además el brillo de partículas y puntos era un filtro de
+            desenfoque (feGaussianBlur) que se recalculaba en cada cuadro; ahora
+            es un halo con degradado radial que se ve igual y no cuesta nada.
+            Las animaciones (recorridos, duraciones, retrasos) son las mismas. */}
+        <div className={styles.mapHero} ref={mapRef}>
           <div className={styles.glowCenter} />
           <svg
             viewBox={`0 0 ${W} ${H}`}
@@ -282,6 +330,56 @@ export default function MapSection() {
             aria-label="Mapa mundial con los hubs donde la firma tiene presencia"
           >
             <title>Cobertura global de la firma</title>
+            <defs>
+              {/* Continentes en azul acero medio (elegido de la lámina de
+                  variantes): presencia sin oscurecer, misma familia del borde
+                  navy, y las rutas doradas contrastan limpio encima. */}
+              <linearGradient id="landGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%"   stopColor="#9db4cf" />
+                <stop offset="100%" stopColor="#7f9cbe" />
+              </linearGradient>
+              {/* El litoral se dibuja 4 veces (relleno + 3 trazos de pluma):
+                  un solo trazo reutilizado con <use> en vez de 4 copias. */}
+              {landPath && <path id="mapaTierra" d={landPath} />}
+            </defs>
+
+            {/* Fill base del territorio mundial */}
+            {!loading && landPath && (
+              <use href="#mapaTierra" className={styles.land} />
+            )}
+
+            {/* Fronteras internas entre países */}
+            {!loading && bordersPath && (
+              <path d={bordersPath} className={styles.countryBorder} />
+            )}
+
+            {/* Contorno costero con pluma: dos halos anchos y tenues debajo
+                del trazo principal — borde suave, nada rígido. */}
+            {!loading && landPath && (
+              <>
+                <use href="#mapaTierra" className={styles.coastFeatherWide} />
+                <use href="#mapaTierra" className={styles.coastFeather} />
+                <use href="#mapaTierra" className={styles.worldOutline} />
+              </>
+            )}
+
+            {/* Líneas base estáticas (profesionales y clientes) */}
+            {!loading && paths.map(c => (
+              <path key={`base-${c.i}`} d={c.path} fill="none" stroke="rgba(201,168,76,0.12)" strokeWidth="0.8" />
+            ))}
+            {!loading && clientPaths.map(c => (
+              <path key={`cbase-${c.i}`} d={c.path} fill="none" stroke="rgba(61,143,212,0.14)" strokeWidth="0.8" />
+            ))}
+          </svg>
+
+          <svg
+            ref={animSvgRef}
+            viewBox={`0 0 ${W} ${H}`}
+            className={`${styles.svg} ${styles.svgAnim}`}
+            xmlns="http://www.w3.org/2000/svg"
+            aria-hidden="true"
+            focusable="false"
+          >
             <defs>
               <linearGradient id="lineGrad" x1="0%" y1="0%" x2="100%" y2="0%">
                 <stop offset="0%"   stopColor="#C9A84C" stopOpacity="0"   />
@@ -304,51 +402,31 @@ export default function MapSection() {
                 <stop offset="0%"   stopColor="#4a9fe0" stopOpacity="0.5" />
                 <stop offset="100%" stopColor="#4a9fe0" stopOpacity="0"   />
               </radialGradient>
-              <filter id="softGlow" x="-50%" y="-50%" width="200%" height="200%">
-                <feGaussianBlur stdDeviation="2" result="blur" />
-                <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
-              </filter>
-              <filter id="strongGlow" x="-100%" y="-100%" width="300%" height="300%">
-                <feGaussianBlur stdDeviation="5" result="blur" />
-                <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
-              </filter>
-              <filter id="mapGlow" x="-4%" y="-4%" width="108%" height="108%">
-                <feGaussianBlur stdDeviation="1.2" result="blur" />
-                <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
-              </filter>
-              {/* Continentes en azul acero medio (elegido de la lámina de
-                  variantes): presencia sin oscurecer, misma familia del borde
-                  navy, y las rutas doradas contrastan limpio encima. */}
-              <linearGradient id="landGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-                <stop offset="0%"   stopColor="#9db4cf" />
-                <stop offset="100%" stopColor="#7f9cbe" />
-              </linearGradient>
+              {/* Halos que reemplazan a los filtros de desenfoque. Imitan el
+                  "punto + copia desenfocada debajo" de antes: el núcleo sólido
+                  va encima y el halo se desvanece hacia afuera. Radios:
+                  suave = núcleo + ~4 (stdDeviation 2), fuerte = núcleo + ~10
+                  (stdDeviation 5, el punto de Bogotá). */}
+              <radialGradient id="haloOro">
+                <stop offset="0%"   stopColor="#e8c96a" stopOpacity="0.6"  />
+                <stop offset="40%"  stopColor="#e8c96a" stopOpacity="0.42" />
+                <stop offset="70%"  stopColor="#e8c96a" stopOpacity="0.14" />
+                <stop offset="100%" stopColor="#e8c96a" stopOpacity="0"    />
+              </radialGradient>
+              <radialGradient id="haloOroFuerte">
+                <stop offset="0%"   stopColor="#e8c96a" stopOpacity="0.62" />
+                <stop offset="33%"  stopColor="#e8c96a" stopOpacity="0.45" />
+                <stop offset="55%"  stopColor="#e8c96a" stopOpacity="0.22" />
+                <stop offset="80%"  stopColor="#e8c96a" stopOpacity="0.06" />
+                <stop offset="100%" stopColor="#e8c96a" stopOpacity="0"    />
+              </radialGradient>
+              <radialGradient id="haloAzul">
+                <stop offset="0%"   stopColor="#6aaee4" stopOpacity="0.6"  />
+                <stop offset="40%"  stopColor="#6aaee4" stopOpacity="0.42" />
+                <stop offset="70%"  stopColor="#6aaee4" stopOpacity="0.14" />
+                <stop offset="100%" stopColor="#6aaee4" stopOpacity="0"    />
+              </radialGradient>
             </defs>
-
-            {/* Fill base del territorio mundial */}
-            {!loading && landPath && (
-              <path d={landPath} className={styles.land} />
-            )}
-
-            {/* Fronteras internas entre países */}
-            {!loading && bordersPath && (
-              <path d={bordersPath} className={styles.countryBorder} />
-            )}
-
-            {/* Contorno costero con pluma: dos halos anchos y tenues debajo
-                del trazo principal — borde suave, nada rígido. */}
-            {!loading && landPath && (
-              <>
-                <path d={landPath} className={styles.coastFeatherWide} />
-                <path d={landPath} className={styles.coastFeather} />
-                <path d={landPath} className={styles.worldOutline} />
-              </>
-            )}
-
-            {/* Líneas base estáticas */}
-            {!loading && paths.map(c => (
-              <path key={`base-${c.i}`} d={c.path} fill="none" stroke="rgba(201,168,76,0.12)" strokeWidth="0.8" />
-            ))}
 
             {/* Arcos animados + partícula (profesionales, dorado) */}
             {!loading && paths.map(c => (
@@ -359,9 +437,12 @@ export default function MapSection() {
                 />
                 {!reduceMotion && (
                   <>
-                    <circle r="2.5" fill="#e8c96a" opacity="0.92" filter="url(#softGlow)">
+                    {/* Halo + núcleo viajan juntos (un solo animateMotion). */}
+                    <g>
+                      <circle r="6.5" fill="url(#haloOro)" />
+                      <circle r="2.5" fill="#e8c96a" opacity="0.92" />
                       <animateMotion dur="4.5s" repeatCount="indefinite" begin={`${c.delay}s`} path={c.path} />
-                    </circle>
+                    </g>
                     <circle r="1.1" fill="#ffffff" opacity="0.65">
                       <animateMotion dur="4.5s" repeatCount="indefinite" begin={`${c.delay + 0.05}s`} path={c.path} />
                     </circle>
@@ -372,16 +453,15 @@ export default function MapSection() {
 
             {/* Conexiones cliente → profesional (azul), misma mecánica */}
             {!loading && clientPaths.map(c => (
-              <path key={`cbase-${c.i}`} d={c.path} fill="none" stroke="rgba(61,143,212,0.14)" strokeWidth="0.8" />
-            ))}
-            {!loading && clientPaths.map(c => (
               <g key={`canim-${c.i}`}>
                 <path d={c.path} fill="none" stroke="url(#lineGradBlue)" strokeWidth="1.3"
                   className={styles.line} style={{ animationDelay: `${c.delay}s` }} />
                 {!reduceMotion && (
-                  <circle r="2.2" fill="#7fbce8" opacity="0.9" filter="url(#softGlow)">
+                  <g>
+                    <circle r="6.2" fill="url(#haloAzul)" />
+                    <circle r="2.2" fill="#7fbce8" opacity="0.9" />
                     <animateMotion dur="4.5s" repeatCount="indefinite" begin={`${c.delay}s`} path={c.path} />
-                  </circle>
+                  </g>
                 )}
               </g>
             ))}
@@ -398,9 +478,10 @@ export default function MapSection() {
                     <circle cx={p.x} cy={p.y} r="8" fill="none" stroke="rgba(201,168,76,0.18)" strokeWidth="0.5" />
                   </>
                 )}
+                <circle cx={p.x} cy={p.y} r={p.main ? 15 : 7}
+                  fill={p.main ? 'url(#haloOroFuerte)' : 'url(#haloOro)'} />
                 <circle cx={p.x} cy={p.y} r={p.main ? 5 : 3}
-                  fill={p.main ? '#e8c96a' : '#C9A84C'}
-                  filter={p.main ? 'url(#strongGlow)' : 'url(#softGlow)'} />
+                  fill={p.main ? '#e8c96a' : '#C9A84C'} />
                 <circle cx={p.x} cy={p.y} r={p.main ? 2 : 1.1} fill="#ffffff" opacity={p.main ? 1 : 0.7} />
               </g>
             ))}
@@ -411,7 +492,8 @@ export default function MapSection() {
                 <circle cx={c.x} cy={c.y} r="8"
                   fill="url(#dotGlowBlue)" className={styles.pulse}
                   style={{ animationDelay: `${c.id * 0.3 + 0.15}s` }} />
-                <circle cx={c.x} cy={c.y} r="2.4" fill="#4a9fe0" filter="url(#softGlow)" />
+                <circle cx={c.x} cy={c.y} r="6.4" fill="url(#haloAzul)" />
+                <circle cx={c.x} cy={c.y} r="2.4" fill="#4a9fe0" />
                 <circle cx={c.x} cy={c.y} r="1" fill="#dbeeff" opacity="0.9" />
               </g>
             ))}
@@ -555,10 +637,7 @@ export default function MapSection() {
           <span className={styles.lbl}>Casos atendidos</span>
         </div>
         <div className={styles.divider} />
-        <div className={styles.live}>
-          <span className={styles.liveNum}>{activos}</span>
-          <span className={styles.liveLbl}>Consultas activas</span>
-        </div>
+        <ConsultasActivas />
       </div>
 
     </section>

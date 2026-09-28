@@ -216,6 +216,8 @@
 .navItem:hover { background: rgba(109,60,27, 0.06); color: #6d3c1b; }
 .navItem:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
 .navIcon { flex: 0 0 auto; }
+/* Solo se usa en el riel móvil (ver el último bloque de 480px). */
+.navLabelCorto { display: none; }
 
 .navItemActive,
 .navItemActive:hover {
@@ -1227,12 +1229,32 @@
     flex: 1 1 100%;
     gap: 0.5rem 0.4rem;
   }
+  /* Icono ARRIBA y nombre corto DEBAJO, como en el riel del profesional: con
+     solo iconos no se distinguía una pestaña de otra. Sin reservar dos
+     renglones (son 14 pestañas en 4 filas y el riel es fijo): los nombres
+     caben en uno, y si alguno se parte, align-items: stretch empareja la
+     fila entera. */
   .navItem,
   .sidebar:hover .navItem {
     flex: 0 0 calc(25% - 0.3rem);
-    padding: 0.6rem 0;
-    justify-content: center;
+    flex-direction: column;
+    justify-content: flex-start;
+    gap: 0.28rem;
+    padding: 0.55rem 0.15rem 0.45rem;
+    white-space: normal;
   }
+  .navLabelCorto,
+  .sidebar:hover .navLabelCorto {
+    display: block;
+    font-size: 0.62rem;
+    font-weight: 600;
+    line-height: 1.2;
+    letter-spacing: 0.01em;
+    text-align: center;
+  }
+  /* El contador se ancla al icono, no a la esquina del mosaico. */
+  .navBadge,
+  .sidebar:hover .navBadge { top: 1px; right: calc(50% - 24px); }
   .sideFoot,
   .sidebar:hover .sideFoot {
     display: flex;

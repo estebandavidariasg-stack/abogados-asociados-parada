@@ -2216,7 +2216,7 @@
 .otpWrap :global(.aap-verify-back) { color: #6b5a4c; }
 .otpWrap :global(.aap-verify-resend) { color: #8a6a28; }
 
-/* ── Aviso de costo, pegado al botón que crea la consulta ─────────────────
+/* ── Aviso de costo, pegado al botón que crea la consulta (solo abogado) ──
    El intento anterior era una caja con tinte dorado al 10 %. Sobre el crema
    del formulario (--ivory) eso da 1,08:1 de separación: como forma, no
    existía. Blanco puro tampoco servía (1,01:1). El crema no admite otro
