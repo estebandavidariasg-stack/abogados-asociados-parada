@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { sondear } from '../../utils/sondeo'
 import { getAuthHeaders, timeoutSignal } from '../../lib/supabase'
 import {
   downloadChatFile, AdjuntoChat, VisorArchivo, ChatImage, ChatLightbox,
@@ -260,7 +261,7 @@ export default function AdminInternalChat({ miId, initialSelectedId, onOpenRoom 
 
   useEffect(() => {
     fetchAbogados()
-    return () => clearInterval(pollRef.current)
+    return () => pollRef.current?.()
   }, [])
 
   // Deep-link desde la campanita: abrir directo la conversación indicada
@@ -272,18 +273,19 @@ export default function AdminInternalChat({ miId, initialSelectedId, onOpenRoom 
   }, [initialSelectedId, abogados])
 
   useEffect(() => {
-    clearInterval(pollRef.current)
+    pollRef.current?.()
     // Ref de la conversación vigente: descarta respuestas tardías de la
     // conversación anterior (evita pintar mensajes de A bajo el header de B).
     selectedIdRef.current = selected?.id || null
     if (selected) {
       fetchMessages()
-      pollRef.current = setInterval(() => { if (!document.hidden) fetchMessages() }, 2000)
+      // Igual que en LawyerInternalChat: 6 s y al dia al volver.
+      pollRef.current = sondear(fetchMessages, 6000)
     }
     const onVisible = () => { if (!document.hidden && selected) fetchMessages() }
     document.addEventListener('visibilitychange', onVisible)
     return () => {
-      clearInterval(pollRef.current)
+      pollRef.current?.()
       document.removeEventListener('visibilitychange', onVisible)
     }
   }, [selected, adminIds])
@@ -295,8 +297,8 @@ export default function AdminInternalChat({ miId, initialSelectedId, onOpenRoom 
   useEffect(() => {
     if (!miId) return
     fetchNoLeidos()
-    const t = setInterval(() => { if (!document.hidden) fetchNoLeidos() }, 2000)
-    return () => clearInterval(t)
+    const parar = sondear(fetchNoLeidos, 6000)
+    return () => parar()
   }, [miId, adminIds])
 
   // Al desmontar con una grabación activa: libera el micrófono y el timer

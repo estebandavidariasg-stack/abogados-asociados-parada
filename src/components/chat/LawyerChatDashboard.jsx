@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react'
+import { sondear } from '../../utils/sondeo'
 import { supabase, getAuthHeaders } from '../../lib/supabase'
 
 // Modal de ubicar firma → PDF (lazy: pdf.js solo baja al usarlo).
@@ -531,11 +532,11 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
     // Sidebar por poll (lento, pausado con la pestaña oculta) + refresco al
     // volver. La sala ABIERTA se actualiza al instante por Realtime; las demás
     // (preview/badge) refrescan cada 20s — basta para chats que no miras.
-    pollRooms.current = setInterval(() => { if (!document.hidden) fetchRooms() }, 20000)
+    pollRooms.current = sondear(fetchRooms, 20000)
     const onVisible = () => { if (!document.hidden) fetchRooms() }
     document.addEventListener('visibilitychange', onVisible)
     return () => {
-      clearInterval(pollRooms.current)
+      pollRooms.current?.()
       document.removeEventListener('visibilitychange', onVisible)
     }
   }, [fetchRooms])
@@ -1010,8 +1011,9 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
       .then(c => { if (!cancel) setCobro(c) })
       .catch(() => {})
     load()
-    const t = setInterval(load, 10000)
-    return () => { cancel = true; clearInterval(t) }
+    // Con la pestana oculta no se consulta, y al volver se refresca solo.
+    const parar = sondear(load, 10000)
+    return () => { cancel = true; parar() }
   }, [activeRoom?.id])
 
   async function abrirCobro() {

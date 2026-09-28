@@ -41,6 +41,7 @@ function parseFirmaOk(content) {
 }
 import { IconPaperclip, IconMic, IconFirma, IconDownload } from '../shared/Icons'
 import { validarCelular, validarCorreo, normalizarCelular, contieneContacto, contieneContactoEstricto, formatCedula } from '../../lib/validaciones'
+import { sondear } from '../../utils/sondeo'
 import { AREAS_DERECHO } from '../../lib/areasDerecho'
 import { AREAS_CONTADURIA } from '../../lib/areasContaduria'
 
@@ -1280,8 +1281,8 @@ function CobroClienteCard({ roomId, clientToken, profesionalNombre, onVerCertifi
     let cancel = false
     const load = () => fetchCobroCliente(roomId, clientToken).then(c => { if (!cancel) setCobro(c) })
     load()
-    const t = setInterval(load, 8000)
-    return () => { cancel = true; clearInterval(t) }
+    const parar = sondear(load, 8000)
+    return () => { cancel = true; parar() }
   }, [roomId, clientToken])
 
   if (!cobro) return null
@@ -1561,12 +1562,21 @@ export default function ChatSection() {
   async function pedirVerificacionCorreo(correo, continuar) {
     otpContinuarRef.current = continuar
     setOtpEmail(correo.trim()); setOtpError('')
+    /* La pantalla cambia YA, sin esperar al correo.
+
+       Enviarlo tarda entre uno y tres segundos, y no es culpa de la base: es
+       el saludo TLS contra el SMTP de Gmail, que se abre entero en cada
+       envío. Antes se esperaba a que terminara para cambiar de paso, así que
+       la persona se quedaba mirando el formulario sin saber si había pasado
+       algo. Ahora entra al paso del código de inmediato y el envío termina
+       por detrás; si falla, el error sale ahí mismo con el botón de reenviar
+       al lado, que es justo lo que haría falta. */
+    setFormError('')
+    setStep('verificar')
     try {
       await enviarOtpConsulta(correo)
-      setFormError('')
-      setStep('verificar')
     } catch (err) {
-      setFormError(err.message || 'No se pudo enviar el código.')
+      setOtpError(err.message || 'No se pudo enviar el código. Pulsa «Reenviar» para intentarlo de nuevo.')
     }
   }
   // Corregir SOLO el correo sin volver al formulario. Es la errata que se
@@ -2022,8 +2032,11 @@ export default function ChatSection() {
       })
     }
     tick()  // primer sondeo inmediato (no esperar 3 s)
-    const id = setInterval(tick, 3000)
-    return () => { stop = true; clearInterval(id) }
+    /* Sigue a 3 s, que es el pulso de una conversacion en vivo, pero se
+       detiene con la pestana oculta: ahi nadie esta leyendo y esas veinte
+       peticiones por minuto solo hacian cola delante de las que si importan. */
+    const parar = sondear(tick, 3000)
+    return () => { stop = true; parar() }
   }, [roomId, roomStatus])
 
   // ── Documentos de confianza del profesional (solo-ver) ───────────────────

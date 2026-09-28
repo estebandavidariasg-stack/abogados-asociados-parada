@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { sondear } from '../../utils/sondeo'
 import { getAuthHeaders, timeoutSignal } from '../../lib/supabase'
 import {
   downloadChatFile, AdjuntoChat, VisorArchivo, ChatImage, ChatLightbox,
@@ -122,7 +123,7 @@ export default function LawyerInternalChat({ miId }) {
         .catch(() => { if (!cancelled) retryT = setTimeout(intentar, 5000) })
     }
     intentar()
-    return () => { cancelled = true; clearTimeout(retryT); clearInterval(pollRef.current) }
+    return () => { cancelled = true; clearTimeout(retryT); pollRef.current?.() }
   }, [miId])
 
   /* ── Arrancar polling cuando ya tenemos adminId ── */
@@ -130,11 +131,15 @@ export default function LawyerInternalChat({ miId }) {
     if (!adminId || !miId) return
     fetchMessages()
     // Polling cada 2 s, pausado con la pestaña oculta + refresco al volver.
-    pollRef.current = setInterval(() => { if (!document.hidden) fetchMessages() }, 2000)
+    /* Seis segundos, no dos. Es la mensajeria con el administrador, no un
+       chat en vivo: a dos segundos eran treinta peticiones por minuto a
+       Oregon solo por tener el panel abierto. `sondear` ademas para con la
+       pestana oculta y se pone al dia al volver, asi que no se nota. */
+    pollRef.current = sondear(fetchMessages, 6000)
     const onVisible = () => { if (!document.hidden) fetchMessages() }
     document.addEventListener('visibilitychange', onVisible)
     return () => {
-      clearInterval(pollRef.current)
+      pollRef.current?.()
       document.removeEventListener('visibilitychange', onVisible)
     }
   }, [adminIds, miId])
