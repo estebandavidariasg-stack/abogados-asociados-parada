@@ -269,6 +269,18 @@
   margin: 0;
 }
 
+/* Aviso bajo la descripcion del caso: sale mientras se escribe, asi que es
+   mas discreto que .formError (que corona el formulario al enviarlo). Sin
+   fondo rojo para no alarmar por una frase que aun se esta corrigiendo. */
+.descAviso {
+  display: block;
+  margin-top: 6px;
+  font-size: 0.74rem;
+  line-height: 1.5;
+  color: #a03a26;
+  text-wrap: pretty;
+}
+
 /* ── Botones ── */
 .btnGold {
   background: var(--navy);

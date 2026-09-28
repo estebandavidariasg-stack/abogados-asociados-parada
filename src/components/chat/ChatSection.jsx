@@ -40,7 +40,7 @@ function parseFirmaOk(content) {
   try { const o = JSON.parse(content); return o?.t === 'firma_ok' ? o : null } catch { return null }
 }
 import { IconPaperclip, IconMic, IconFirma, IconDownload } from '../shared/Icons'
-import { validarCelular, validarCorreo, normalizarCelular, contieneContacto, formatCedula } from '../../lib/validaciones'
+import { validarCelular, validarCorreo, normalizarCelular, contieneContacto, contieneContactoEstricto, formatCedula } from '../../lib/validaciones'
 import { AREAS_DERECHO } from '../../lib/areasDerecho'
 import { AREAS_CONTADURIA } from '../../lib/areasContaduria'
 
@@ -1489,6 +1489,13 @@ export default function ChatSection() {
     tipo_profesional: 'abogado',
     genero: '',
   })
+  /* Telefono, correo, cuenta o llave de pago dentro de la descripcion del
+     caso. Se calcula en cada render (es una regex sobre dos frases, no cuesta
+     nada) en vez de guardarse en estado, que habria que mantener en sincronia
+     con el texto. */
+  const descripcionConContacto =
+    form.descripcion.trim().length > 0 && contieneContactoEstricto(form.descripcion)
+
   const [correoTouched,  setCorreoTouched]  = useState(false)
   const [celularTouched, setCelularTouched] = useState(false)
   const [formError, setFormError]   = useState('')
@@ -1805,7 +1812,10 @@ export default function ChatSection() {
   const primerRenderRef = useRef(true)
   useEffect(() => {
     if (primerRenderRef.current) { primerRenderRef.current = false; return }
-    if (!['metodo', 'form', 'casos'].includes(step)) return
+    // 'verificar' entra aquí: el formulario es largo y el panel del código es
+    // corto, así que al cambiar de paso la página se quedaba donde estaba el
+    // pie del formulario y el campo del código aparecía fuera de la pantalla.
+    if (!['metodo', 'form', 'casos', 'verificar'].includes(step)) return
     const posicionar = (behavior) => {
       const target = document.getElementById('consulta-form')
       if (!target) return
@@ -2329,6 +2339,13 @@ export default function ChatSection() {
     if (!desdeIA) {
       if (areas.length < 1)      { setFormError('Selecciona al menos un área.'); return }
       if (!descripcion.trim())   { setFormError('Describe brevemente tu caso.'); return }
+      /* La descripción la leen profesionales que aún no han sido contratados.
+         Un teléfono, un correo, una cuenta o una llave de pago ahí dentro es
+         un canal por fuera de la plataforma, así que no sale del navegador. */
+      if (contieneContactoEstricto(descripcion)) {
+        setFormError('Quita de la descripción los teléfonos, correos, cuentas o llaves de pago. Los datos de contacto se comparten dentro del chat cuando corresponda.')
+        return
+      }
     }
     setSubmitting(true); setFormError('')
     localStorage.setItem('chat_nombre', `${nombre.trim()} ${apellido.trim()}`)
@@ -4057,9 +4074,25 @@ export default function ChatSection() {
             </div>
             <div className={styles.field}>
               <label className={styles.label}>Descripción del caso <span className={styles.required}>*</span></label>
-              <textarea className={styles.textarea} value={form.descripcion}
+              {/* El aviso sale mientras se escribe, no al enviar: corregir una
+                  frase recién tecleada cuesta menos que buscarla después de que
+                  el formulario entero rebotó. */}
+              <textarea
+                className={styles.textarea}
+                value={form.descripcion}
                 onChange={e => setForm(f => ({ ...f, descripcion: e.target.value }))}
-                placeholder="Describe la situación. No incluyas datos personales sensibles aún." rows={4} />
+                placeholder="Cuéntanos qué pasó y qué necesitas. Sin teléfonos, correos ni cuentas."
+                rows={4}
+                aria-invalid={descripcionConContacto || undefined}
+                aria-describedby={descripcionConContacto ? 'desc-aviso' : undefined}
+                style={descripcionConContacto ? { borderColor: 'rgba(220,80,80,0.55)' } : undefined}
+              />
+              {descripcionConContacto && (
+                <span id="desc-aviso" role="alert" className={styles.descAviso}>
+                  Quita los teléfonos, correos, cuentas o llaves de pago. Los datos
+                  de contacto se comparten dentro del chat cuando corresponda.
+                </span>
+              )}
             </div>
             </>)}
             {formError && <p className={styles.formError}>{formError}</p>}

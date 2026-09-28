@@ -17,6 +17,7 @@ import UbicacionSelector from '../profile/UbicacionSelector'
 import {
   PASSWORD_RULES, getPasswordStrength, isPasswordValid,
   validarCelular, validarCorreo, normalizarCelular,
+  limpiarUsername, normalizarUsername, validarUsername,
 } from '../../lib/validaciones'
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
@@ -163,6 +164,8 @@ export default function RegisterModal({ onClose }) {
   const [nombre, setNombre]           = useState('')
   const [apellido, setApellido]       = useState('')
   const [username, setUsername]       = useState('')
+  // Lo que de verdad viaja a la base: siempre en minúsculas.
+  const usernameNorm                  = normalizarUsername(username)
   const [telefono, setTelefono]       = useState('')
   const [regEmail, setRegEmail]       = useState('')
   const [regPassword, setRegPassword] = useState('')
@@ -294,7 +297,8 @@ export default function RegisterModal({ onClose }) {
     const e = {}
     if (!nombre.trim())   e.nombre = 'Escribe tu nombre'
     if (!apellido.trim()) e.apellido = 'Escribe tu apellido'
-    if (!username.trim()) e.username = 'Elige un nombre de usuario'
+    if (!usernameNorm) e.username = 'Elige un nombre de usuario'
+    else if (validarUsername(username).valid === false) e.username = validarUsername(username).msg
     if (telVal.valid !== true)    e.telefono = 'Celular de 10 dígitos que empiece por 3'
     if (cedulaVal.valid !== true) e.cedula = 'Cédula de 6 a 12 dígitos'
     if (!emailVal.valid)  e.email = 'Correo no válido'
@@ -389,9 +393,11 @@ export default function RegisterModal({ onClose }) {
     setError(null); setEmailErrorInline(''); setLoading(true)
     try {
       // Username único — chequeo previo al envío del código.
-      if (username) {
+      if (usernameNorm) {
+        // Se compara con el normalizado: si no, "Esteban" pasaría el filtro
+        // aunque "esteban" ya exista, y el choque saldría al final del registro.
         const res = await fetch(
-          `${SUPABASE_URL}/rest/v1/profiles?username=eq.${encodeURIComponent(username)}&select=id`,
+          `${SUPABASE_URL}/rest/v1/profiles?username=eq.${encodeURIComponent(usernameNorm)}&select=id`,
           { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } }
         )
         const data = await res.json()
@@ -497,7 +503,7 @@ export default function RegisterModal({ onClose }) {
     const emailNorm = regEmail.trim().toLowerCase()
     // 1. signUp — crea auth.users. El trigger crea la fila en profiles con
     //    rol='abogado' por defecto; la corregimos en el UPSERT (paso 4).
-    const metaData = { nombre, apellido, username, telefono }
+    const metaData = { nombre, apellido, username: usernameNorm, telefono }
     const { error: signUpError } = await supabase.auth.signUp({
       email: emailNorm,
       password: regPassword,
@@ -575,7 +581,8 @@ export default function RegisterModal({ onClose }) {
     }
     const payload = {
       id: userId,
-      username,
+      // En minúsculas, igual que en metaData y que en el chequeo de unicidad.
+      username: usernameNorm,
       email: emailNorm,
       rol,
       aprobado: false,
@@ -678,7 +685,7 @@ export default function RegisterModal({ onClose }) {
     if (!certBancFile)     return 'Adjunta la cuenta bancaria certificada (obligatoria).'
     if (!certDiscFile)     return 'Adjunta el certificado disciplinario (obligatorio).'
     if (descripcionPublica.trim().length < DESCRIPCION_MIN) {
-      return `Escribe tu presentación: al menos ${DESCRIPCION_MIN} caracteres (es lo que los clientes leen en tu tarjeta).`
+      return `Cuenta tu experiencia laboral: al menos ${DESCRIPCION_MIN} caracteres (es lo que los clientes leen en tu tarjeta).`
     }
     return ''
   }
@@ -982,20 +989,31 @@ export default function RegisterModal({ onClose }) {
               </span>
             </div>
 
-            {/* Presentación pública (obligatoria) — es el "Sobre mí" que el
+            {/* Experiencia laboral (obligatoria) — es el "Sobre mí" que el
                 cliente lee al abrir su tarjeta en el home. Se pide aquí y no
                 en el paso anterior porque es lo único del formulario que el
-                aspirante tiene que redactar, y venía quedando en blanco. */}
+                aspirante tiene que redactar, y venía quedando en blanco.
+
+                Se llama "Experiencia laboral" y no "Tu presentación" porque el
+                rótulo vago se contestaba con una línea vacía ("Tengo una
+                experiencia profesional en Contaduría Pública, con"). Preguntar
+                por dónde ha trabajado y qué procesos ha llevado se contesta con
+                hechos, que es lo que el cliente necesita para decidir. */}
             <div className={styles.field}>
               <label className={styles.label}>
-                Tu presentación
+                Experiencia laboral
                 <span className={`${extra.tag} ${extra.tagReq}`}>Obligatorio</span>
               </label>
+              <span className={extra.docHint} style={{ marginTop: 0, marginBottom: 6 }}>
+                Dónde has trabajado, en qué eres bueno y qué tipo de procesos has llevado.
+              </span>
               <textarea
                 className={styles.input}
                 rows={4}
                 maxLength={DESCRIPCION_MAX}
-                placeholder="Cuéntale a tus futuros clientes quién eres. Ej: Soy abogado especializado en derecho laboral, con 6 años acompañando a trabajadores en procesos de despido injustificado y liquidaciones. He llevado casos ante el Ministerio de Trabajo y tribunales de Bogotá."
+                placeholder={rol === 'contador'
+                  ? "Ej: Contadora pública con 12 años en revisoría fiscal y auditoría externa. He trabajado en el sector solidario y en empresas comerciales, llevando cierres contables, declaraciones de renta e implementación de NIIF."
+                  : "Ej: Abogado especializado en derecho laboral, con 6 años acompañando a trabajadores en procesos de despido injustificado y liquidaciones. He llevado casos ante el Ministerio de Trabajo y tribunales de Bogotá."}
                 value={descripcionPublica}
                 onChange={(e) => setDescripcionPublica(e.target.value.slice(0, DESCRIPCION_MAX))}
                 style={{ resize: 'vertical', minHeight: 96, fontFamily: 'inherit', lineHeight: 1.6 }}
@@ -1150,12 +1168,27 @@ export default function RegisterModal({ onClose }) {
               </div>
             </div>
 
-            {/* Username */}
+            {/* Username. Se teclea como la persona quiera y se GUARDA en
+                minúsculas: así "EstebanArias" y "estebanarias" no acaban siendo
+                dos cuentas distintas. Cuando lo escrito y lo guardado no
+                coinciden se dice, para que nadie descubra su usuario real el
+                día que intente entrar. */}
             <div className={styles.field}>
               <label className={styles.label}>Nombre de usuario <span className={styles.req}>*</span></label>
-              <input type="text" className={cls('username')} placeholder="Ej: juanperez"
+              <input type="text" className={cls('username')} placeholder="Ej: JuanPerez"
                 value={username}
-                onChange={(e) => setUsername(e.target.value.replace(/\s/g, '').toLowerCase())} required />
+                autoCapitalize="none" autoCorrect="off" spellCheck={false} inputMode="text"
+                onChange={(e) => setUsername(limpiarUsername(e.target.value))} required />
+              {(() => {
+                const v = validarUsername(username)
+                if (v.valid === false) {
+                  return <span className={extra.docHint} style={{ color: '#9a5b3a' }}>{v.msg}</span>
+                }
+                if (v.valid === true && username !== usernameNorm) {
+                  return <span className={extra.docHint}>Se guardará como <strong>{usernameNorm}</strong></span>
+                }
+                return <span className={extra.docHint}>Letras, números, guión y guión bajo. Sin espacios ni tildes.</span>
+              })()}
             </div>
 
             {/* Cédula (obligatoria para los 3 roles) */}

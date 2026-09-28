@@ -66,6 +66,39 @@ export function validarCorreo(email) {
   return { valid: true, msg: 'Correo válido ✓' }
 }
 
+/* ── Nombre de usuario ──────────────────────────────────────────
+   Se ESCRIBE como la persona quiera (Esteban, ESTEBAN) y se GUARDA siempre en
+   minúsculas. Si se guardara tal cual, "EstebanArias", "ESTEBANARIAS" y
+   "estebanarias" serían tres cuentas distintas y nadie sabría cuál es cuál:
+   el índice único no ve mayúsculas y minúsculas como lo mismo.
+
+   Lo que no entra, y por qué:
+     · espacios      → un usuario no se cita con espacios (@juan perez no existe)
+     · tildes y ñ    → se transliteran (josé → jose): teclear una tilde de más o
+                        de menos no puede llevarte a otra cuenta
+     · puntos, signos → solo quedan guión y guión bajo */
+const USERNAME_MIN = 3
+const USERNAME_MAX = 20
+
+// Lo que se deja TECLEAR: conserva las mayúsculas, quita el resto.
+export function limpiarUsername(raw) {
+  return String(raw || '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')   // josé → jose
+    .replace(/[^A-Za-z0-9_-]/g, '')
+    .slice(0, USERNAME_MAX)
+}
+
+// Lo que se GUARDA y con lo que se compara. Siempre en minúsculas.
+export const normalizarUsername = (raw) => limpiarUsername(raw).toLowerCase()
+
+export function validarUsername(raw) {
+  const u = normalizarUsername(raw)
+  if (!u)                      return { valid: null, msg: '' }
+  if (u.length < USERNAME_MIN) return { valid: false, msg: `Muy corto: mínimo ${USERNAME_MIN} caracteres` }
+  if (!/^[a-z0-9]/.test(u))    return { valid: false, msg: 'Debe empezar por una letra o un número' }
+  return { valid: true, msg: '' }
+}
+
 // ── Datos de contacto en texto libre (anti-evasión) ────────────────────────
 // Usada por los chats (cliente, abogado, contador) para impedir que se
 // compartan teléfonos o correos. Tolerante a:
@@ -106,4 +139,23 @@ export function contieneContacto(texto) {
   if (new RegExp(`\\d(?:${SEP}\\d){9,}`).test(t)) return true
 
   return false
+}
+
+/* ── Versión estricta, para el formulario de la consulta ──────────────────
+   La descripción del caso la leen profesionales que todavía no han sido
+   contratados, así que ahí no puede viajar ningún dato con el que contactar
+   por fuera. `contieneContacto` ya cubre teléfonos, correos y las tiras de
+   diez o más dígitos (una cuenta bancaria colombiana las tiene).
+
+   Falta una que no es ni teléfono ni correo: la LLAVE de pago, que es un
+   arroba suelto (@juanperez en Bre-B, Nequi o Daviplata). El correo necesita
+   dominio y punto, así que la regla de arriba no la ve.
+
+   No se toca `contieneContacto` a propósito: en el chat, un arroba suelto
+   puede ser la mención de una persona y bloquear el mensaje sería peor que el
+   riesgo. Aquí, en un formulario de dos frases, no hay ese uso legítimo. */
+export function contieneContactoEstricto(texto) {
+  if (contieneContacto(texto)) return true
+  // Arroba al principio o tras un espacio o signo, con 3+ caracteres detrás.
+  return /(?:^|[\s(,;:¡!¿?"'])@[a-z0-9._-]{3,}/i.test(String(texto || ''))
 }
