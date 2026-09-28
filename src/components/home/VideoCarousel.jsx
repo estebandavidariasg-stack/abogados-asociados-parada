@@ -250,8 +250,8 @@ function VideoControls({ videoEl, onEnded }) {
    COMPONENTE PRINCIPAL
 ═══════════════════════════════════════════════ */
 export default function VideoCarousel() {
-  const { profile } = useAuth()
-  const isSuperAdmin = profile?.rol === 'superadmin'
+  // Superadmin o admin (el admin hace todo menos gestionar roles).
+  const { isPanelAdmin: puedeEditar } = useAuth()
 
   const [videos,      setVideos]      = useState([])
   const [current,     setCurrent]     = useState(0)
@@ -577,8 +577,8 @@ export default function VideoCarousel() {
         </motion.p>
       </motion.div>
 
-      {/* FAB superadmin */}
-      {isSuperAdmin && !editing && (
+      {/* FAB de edición (superadmin o admin) */}
+      {puedeEditar && !editing && (
         <button className={styles.fab} onClick={enterEdit}>
           ✎ Editar videos
         </button>
@@ -726,7 +726,7 @@ export default function VideoCarousel() {
         </>
       ) : (
         <div className={styles.emptyState}>
-          {isSuperAdmin
+          {puedeEditar
             ? <p>No hay videos aún. Haz clic en <strong>"✎ Editar videos"</strong> para agregar el primero.</p>
             : <p>Próximamente contenido multimedia.</p>
           }

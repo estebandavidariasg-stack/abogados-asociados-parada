@@ -71,8 +71,8 @@ function deriveImgSources(url) {
 }
 
 export default function Hero() {
-  const { profile } = useAuth()
-  const isSuperAdmin = profile?.rol === 'superadmin'
+  // Superadmin o admin (el admin hace todo menos gestionar roles).
+  const { isPanelAdmin: puedeEditar } = useAuth()
 
   const [slides, setSlides]       = useState(DEFAULT_SLIDES)
   const [current, setCurrent]     = useState(0)
@@ -266,8 +266,8 @@ export default function Hero() {
       <div className={styles.heroBg} />
 
 
-      {/* FAB superadmin */}
-      {isSuperAdmin && !editing && (
+      {/* FAB de edición (superadmin o admin) */}
+      {puedeEditar && !editing && (
         <button className={styles.fab} onClick={enterEdit} style={{ display:'inline-flex', alignItems:'center', gap:'7px' }}>
           <IconPencil /> Editar imágenes
         </button>

@@ -69,12 +69,16 @@ export function AuthProvider({ children }) {
   }
 
   const isSuperAdmin = profile?.rol === 'superadmin'
+  // Superadmin o admin: el admin hace todo menos gestionar roles. Úsalo para
+  // lo que ambos pueden (editar la home: imágenes, videos, noticias, modelos);
+  // isSuperAdmin queda para lo exclusivo del superadmin.
+  const isPanelAdmin = isSuperAdmin || profile?.rol === 'admin'
   const isApproved   = profile?.aprobado === true
 
   return (
     <AuthContext.Provider value={{
       user, profile, loading,
-      isSuperAdmin, isApproved,
+      isSuperAdmin, isPanelAdmin, isApproved,
       signUp, signIn, signOut,
       // Releer el perfil desde la base. Las páginas de perfil guardaban con un
       // PATCH pero este `profile` se quedaba con los valores viejos, y como los

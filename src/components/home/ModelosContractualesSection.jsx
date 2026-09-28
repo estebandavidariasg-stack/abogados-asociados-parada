@@ -89,7 +89,8 @@ function EmptyDocIcon() {
 }
 
 export default function ModelosContractualesSection() {
-  const { isSuperAdmin } = useAuth()
+  // Superadmin o admin (el admin hace todo menos gestionar roles).
+  const { isPanelAdmin: puedeEditar } = useAuth()
   const [modelos, setModelos]         = useState([])
   const [loading, setLoading]         = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
@@ -378,7 +379,7 @@ export default function ModelosContractualesSection() {
       {/* ── Filtros (chips horizontales, scroll en móvil) ── */}
       <div className={styles.filtersWrap}>
         {/* Botón admin alineado al nivel de las chips */}
-        {isSuperAdmin && (
+        {puedeEditar && (
           <button
             type="button"
             className={styles.adminBtn}
@@ -469,7 +470,7 @@ export default function ModelosContractualesSection() {
                   >
                     ⬇ Descargar {FORMAT_LABEL[m.formato] || m.formato.toUpperCase()}
                   </button>
-                  {isSuperAdmin && (
+                  {puedeEditar && (
                     <button
                       type="button"
                       className={styles.rowDeleteBtn}
