@@ -126,6 +126,29 @@ const IconChevR = () => (
   </svg>
 )
 
+/* ── Lotes para la limpieza con IA ──────────────────────────────────────
+   Por TAMAÑO y no solo por cantidad. De a cinco fijos, cinco artículos
+   largos pasaban de los 60 s que Vercel le da a la función, el lote se
+   cortaba y esos artículos se quedaban con la basura del escaneo. ~6.000
+   letras salen en unos 20 s: margen de sobra. Un artículo más largo que el
+   tope va solo, no se parte. */
+const LOTE_MAX_ARTS  = 5        // el servidor no acepta más (MAX_ARTS_LOTE)
+const LOTE_MAX_CHARS = 6000
+
+function armarLotes(arts) {
+  const lotes = []
+  let actual = [], chars = 0
+  for (const a of arts) {
+    const largo = (a.titulo || '').length + (a.contenido || '').length
+    if (actual.length && (actual.length >= LOTE_MAX_ARTS || chars + largo > LOTE_MAX_CHARS)) {
+      lotes.push(actual); actual = []; chars = 0
+    }
+    actual.push(a); chars += largo
+  }
+  if (actual.length) lotes.push(actual)
+  return lotes
+}
+
 function Pager({ pagina, porPagina, total, onPagina, onPorPagina }) {
   const pags = Math.max(1, Math.ceil(total / porPagina))
   const actual = Math.min(pagina, pags)
@@ -327,12 +350,12 @@ export default function ProyectosLeyAdmin() {
         cita. Lo que no sabe es limpiar.
      2. La IA lee la CABECERA (número, título, fecha, autores, descripción).
         Ahí la regex se equivocaba de ley y arrastraba la basura del OCR.
-     3. La IA limpia los artículos POR LOTES de cinco.
+     3. La IA limpia los artículos POR LOTES (ver `armarLotes`).
 
      Por qué por lotes y no de una: una función de Vercel en Hobby muere a los
      60 segundos, y transcribir 19 artículos son dos o tres minutos de salida.
      La llamada única se cortaba y todo caía al respaldo: era exactamente lo
-     que se veía en pantalla. En lotes, cada llamada cabe de sobra. */
+     que se veía en pantalla. */
   async function leerDocumento(file, onPaso = () => {}) {
     if (file.size > 25 * 1024 * 1024) throw new Error('El archivo supera los 25 MB.')
     const { extractDocText } = await import('../../utils/extractDocText')
@@ -353,19 +376,14 @@ export default function ProyectosLeyAdmin() {
     let arts = base.articulos.map(a => ({ numero: a.numero, seccion: a.seccion || '', titulo: a.titulo, contenido: a.contenido }))
     let limpiados = 0
     if (meta && arts.length > 0) {
-      const LOTE = 5
       const salida = []
-      for (let i = 0; i < arts.length; i += LOTE) {
-        const trozo = arts.slice(i, i + LOTE)
-        onPaso(0.3 + 0.65 * (i / arts.length), `Limpiando artículos ${i + 1}-${Math.min(i + LOTE, arts.length)} de ${arts.length}…`)
-        const r = await pedirEtapa({ etapa: 'articulos', articulos: trozo })
-        if (r?.articulos?.length) {
-          // Lo que la IA marca como basura (firmas, sellos) no entra.
-          salida.push(...r.articulos.filter(a => !a.descartar && a.contenido))
-          limpiados += trozo.length
-        } else {
-          salida.push(...trozo)   // ese lote se queda como vino
-        }
+      let hechos = 0
+      for (const trozo of armarLotes(arts)) {
+        onPaso(0.3 + 0.65 * (hechos / arts.length), `Limpiando artículos ${hechos + 1}-${hechos + trozo.length} de ${arts.length}…`)
+        const r = await limpiarLote(trozo)
+        salida.push(...r.articulos)
+        limpiados += r.limpiados
+        hechos += trozo.length
       }
       if (salida.length > 0) arts = salida
     }
@@ -479,6 +497,24 @@ export default function ProyectosLeyAdmin() {
       console.warn('[proyectos] etapa', cuerpo.etapa, 'falló:', e)
       return null
     }
+  }
+
+  /* Limpia un lote y, si falla, lo reintenta UNA vez partido en dos. Un lote
+     se cae por tiempo (el corte de 60 s) o por un tropiezo pasajero de la
+     API, y la mitad cabe donde el entero no cupo. Un solo nivel: si la mitad
+     también falla se queda como vino, en vez de seguir gastando llamadas. */
+  async function limpiarLote(trozo, reintentar = true) {
+    const r = await pedirEtapa({ etapa: 'articulos', articulos: trozo })
+    if (r?.articulos?.length) {
+      // Lo que la IA marca como basura (firmas, sellos) no entra.
+      return { articulos: r.articulos.filter(a => !a.descartar && a.contenido), limpiados: trozo.length }
+    }
+    if (!reintentar) return { articulos: trozo, limpiados: 0 }
+    if (trozo.length === 1) return limpiarLote(trozo, false)
+    const mitad = Math.ceil(trozo.length / 2)
+    const a = await limpiarLote(trozo.slice(0, mitad), false)
+    const b = await limpiarLote(trozo.slice(mitad), false)
+    return { articulos: [...a.articulos, ...b.articulos], limpiados: a.limpiados + b.limpiados }
   }
 
   // <input type=file> (toque/clic → funciona en celular, donde no hay arrastre).

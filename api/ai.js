@@ -642,8 +642,8 @@ const MAX_CHARS_PROYECTO = 180000;
      meta      -> solo los datos de cabecera. Salida corta, unos segundos.
      articulos -> limpia un LOTE de articulos ya separados por el parser.
 
-   El navegador orquesta: pide la meta y luego los lotes, y cada llamada cabe
-   de sobra en los 60 segundos. */
+   El navegador orquesta: pide la meta y luego los lotes. Los arma por TAMAÑO
+   (letras), no por cantidad: cinco articulos largos no cabian en 60 s. */
 
 async function handleProyecto(req, res) {
   const { etapa, texto, articulos } = req.body || {};
@@ -691,12 +691,13 @@ function extraerJSON(raw) {
   return JSON.parse(t.slice(a, b + 1));
 }
 
-async function pedirJSON({ systemText, userText, maxTokens }) {
+async function pedirJSON({ systemText, userText, maxTokens, thinking }) {
   const raw = await completar({
     model: MODELOS.proyecto,
     systemText,
     messages: [{ role: 'user', content: userText }],
     maxTokens,
+    thinking,
   });
   return extraerJSON(raw);
 }
@@ -785,12 +786,18 @@ async function proyectoArticulos(req, res, articulos) {
     titulo: limpio(a?.titulo),
     contenido: limpio(a?.contenido).slice(0, 12000),
   }));
+  /* Sin razonamiento: esta etapa TRANSCRIBE, no decide nada. Con el que Sonnet
+     5 trae por defecto, un lote de ~9.900 letras tardaba 63,7 s (Vercel corta
+     a los 60 y el lote se quedaba sucio sin avisar) y dos tercios de la salida
+     eran razonamiento que nadie ve. Apagado, el mismo texto sale en ~60 % del
+     tiempo y a mitad de coste. */
   let d = null;
   try {
     d = await pedirJSON({
       systemText: SYSTEM_ARTICULOS,
       userText: 'Articulos a limpiar:\n\n' + JSON.stringify(lote),
       maxTokens: 16000,
+      thinking: { type: 'disabled' },
     });
   } catch (e) {
     console.error('[api/ai] proyecto articulos:', e?.status, e?.message);

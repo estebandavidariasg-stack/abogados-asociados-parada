@@ -30,14 +30,18 @@ function getClient() {
 //   Ej. prefill='{' obliga a que la respuesta sea JSON aunque el historial
 //   tenga turnos en prosa (clave para modelos pequeños como Haiku). El texto
 //   devuelto incluye el prefill al inicio.
+// thinking: si se pasa, se envía tal cual. Sonnet 5 RAZONA por defecto cuando
+//   se omite, y esos tokens cuentan en max_tokens y en el tiempo de respuesta:
+//   quien solo transcribe lo apaga con { type: 'disabled' }.
 // Devuelve el texto plano de la respuesta del modelo.
-export async function completar({ modo, model, systemText, systemExtra, messages, maxTokens = 1024, prefill = null }) {
+export async function completar({ modo, model, systemText, systemExtra, messages, maxTokens = 1024, prefill = null, thinking = null }) {
   const msgs = prefill != null
     ? [...messages, { role: 'assistant', content: prefill }]
     : messages;
   const resp = await getClient().messages.create({
     model: model || MODELOS[modo] || MODELOS.cliente,
     max_tokens: maxTokens,
+    ...(thinking ? { thinking } : {}),
     // El system base se cachea (cache_control); `systemExtra` (p. ej. la memoria
     // del profesional, que varía) va aparte para no romper el prompt-cache.
     system: [
