@@ -56,7 +56,6 @@
   margin: 0 auto 2.5rem;
   padding: 0 2rem;        /* coincide con section padding-x */
   box-sizing: border-box;
-  position: relative;     /* anclaje del botón Agregar Modelo */
 }
 
 .filters {
@@ -422,40 +421,47 @@
 }
 
 /* ══════════════════════════════════════════
-   ADMIN — botón "+ Agregar Modelo"
-   Anclado a la derecha de la fila de chips de filtros.
+   ADMIN — botón "+ Agregar modelo"
+   Mismo FAB que "Editar noticias" / "Editar videos": flotante arriba a la
+   derecha en escritorio, centrado en flujo bajo el encabezado en móvil.
    ══════════════════════════════════════════ */
-.adminBtn {
+.fab {
   position: absolute;
-  top: 0;
-  right: 2rem;            /* alineado con el borde derecho de la sección */
-  background: var(--gold);
-  color: var(--navy);
+  top: 6rem;
+  right: 2rem;
+  z-index: 50;
+  background: var(--navy);
+  color: #ffffff;
   border: none;
-  border-radius: 4px;
-  padding: 10px 18px;
-  font-family: 'Poppins', sans-serif;
+  border-radius: 30px;
+  padding: 10px 22px;
+  font-family: inherit;
   font-weight: 700;
-  font-size: 13px;
-  letter-spacing: 0.04em;
+  font-size: 0.82rem;
+  letter-spacing: 0.5px;
   cursor: pointer;
-  transition: background 0.2s, transform 0.15s;
-  min-height: 40px;
-  z-index: 2;
-  box-shadow: 0 2px 10px rgba(201, 168, 76, 0.3);
+  box-shadow: 0 4px 20px rgba(109,60,27,0.25);
+  transition: transform 0.2s, box-shadow 0.2s;
 }
-.adminBtn:hover  { background: var(--gold-lt); transform: translateY(-1px); }
-.adminBtn:active { transform: translateY(0); }
-
-@media (max-width: 860px) {
-  /* En tablet bajamos a static — chips ya son varias filas y absolute molesta */
-  .adminBtn {
+.fab:hover {
+  transform: scale(1.05);
+  box-shadow: 0 6px 28px rgba(109,60,27,0.4);
+}
+.fab:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 3px;
+}
+@media (max-width: 768px) {
+  .fab {
     position: static;
     display: block;
-    width: 100%;
-    max-width: 320px;
-    margin: 0 auto 1.25rem;
+    margin: -1.5rem auto 2rem;   /* pegado al encabezado, antes de los filtros */
+    width: fit-content;
   }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fab { transition: none; }
+  .fab:hover { transform: none; }
 }
 
 /* ══════════════════════════════════════════
@@ -558,38 +564,135 @@
   cursor: not-allowed;
 }
 
-/* File picker custom */
-.modalFileLabel  { cursor: pointer; }
-.modalFileBtn {
+/* ── Campos de archivo (documento + PDF de vista previa) ── */
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Vacío: zona para elegir o soltar. */
+.dropzone {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 14px 12px;
-  border: 1px dashed rgba(109,60,27, 0.3);
-  border-radius: 6px;
-  text-align: center;
-  font-size: 0.85rem;
+  gap: 10px;
+  width: 100%;
+  min-height: 64px;
+  padding: 14px 16px;
+  border: 1px dashed rgba(109,60,27, 0.32);
+  border-radius: 8px;
+  background: #fff;
   color: var(--navy-md);
-  font-family: inherit;
-  transition: border-color 0.2s, background 0.2s, color 0.2s;
-  min-height: 44px;
-  word-break: break-all;
-  user-select: none;
+  font: inherit;
+  font-size: 0.85rem;
+  line-height: 1.35;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.18s ease-out, background-color 0.18s ease-out, color 0.18s ease-out;
 }
-.modalFileLabel:hover .modalFileBtn {
+.dropzone svg { flex-shrink: 0; color: var(--gold); }
+.dropzone strong { color: var(--navy); font-weight: 600; }
+.dropzone:hover:not(:disabled) {
   border-color: var(--gold);
-  background: rgba(201, 168, 76, 0.05);
+  background: rgba(201, 168, 76, 0.06);
   color: var(--navy);
 }
+.dropzone:focus-visible {
+  outline: none;
+  border-color: var(--gold);
+  box-shadow: 0 0 0 3px rgba(201, 168, 76, 0.25);
+}
+.dropzone:disabled { cursor: not-allowed; opacity: 0.6; }
+/* Arrastrando un archivo sobre el modal. */
+.dropzoneActiva {
+  border-style: solid;
+  border-color: var(--gold);
+  background: rgba(201, 168, 76, 0.12);
+  color: var(--navy);
+}
+.dropzoneError {
+  border-color: rgba(179, 38, 52, 0.55);
+  background: rgba(220, 53, 69, 0.04);
+}
 
-/* Estado dragOver — el usuario está arrastrando un archivo encima */
-.modalFileBtnActive {
-  border-color: var(--gold) !important;
-  border-style: solid !important;
-  background: rgba(201, 168, 76, 0.12) !important;
-  color: var(--navy) !important;
+/* Lleno: el archivo elegido, con su peso y la opción de quitarlo. */
+.archivo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 64px;
+  padding: 10px 10px 10px 14px;
+  border: 1px solid rgba(109,60,27, 0.16);
+  border-radius: 8px;
+  background: var(--ivory);
+  box-sizing: border-box;
+}
+.archivo > svg { flex-shrink: 0; }
+.archivoInfo {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.archivoNombre {
+  display: flex;
+  min-width: 0;
+  font-size: 0.86rem;
   font-weight: 600;
-  transform: scale(1.01);
+  color: var(--navy);
+  white-space: nowrap;
+}
+.archivoBase {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.archivoPeso { font-size: 0.74rem; color: var(--muted); }
+.archivoQuitar {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  min-height: 40px;
+  padding: 0 12px;
+  border: 1px solid rgba(109,60,27, 0.2);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--navy);
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.18s ease-out, background-color 0.18s ease-out, color 0.18s ease-out;
+}
+.archivoQuitar:hover:not(:disabled) {
+  border-color: rgba(179, 38, 52, 0.45);
+  background: rgba(220, 53, 69, 0.05);
+  color: #b32634;
+}
+.archivoQuitar:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(201, 168, 76, 0.3);
+}
+.archivoQuitar:disabled { cursor: not-allowed; opacity: 0.6; }
+
+.campoError {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  color: #b32634;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dropzone,
+  .archivoQuitar { transition: none; }
 }
 
 .modalError {
@@ -801,29 +904,11 @@
 }
 .previewLoading .spinner { width: 22px; height: 22px; border-width: 3px; }
 
-/* Contenedor del render de Word (docx-preview). La librería inyecta su propio
-   wrapper con fondo gris y "páginas" blancas centradas; aquí solo damos scroll. */
-.previewDocx {
+/* Contenedor del PdfVisor (páginas como imágenes, con su propio scroll). */
+.previewPdf {
   flex: 1;
-  width: 100%;
-  overflow: auto;
+  min-width: 0;
   background: #f1ede9;
-}
-
-.previewErrorBox {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 16px;
-  background: #f5f5f5;
-  padding: 24px;
-  text-align: center;
-  color: var(--navy);
-  font-family: 'Poppins', sans-serif;
-  font-size: 0.9rem;
 }
 
 .previewFooter {

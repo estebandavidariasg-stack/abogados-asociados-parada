@@ -4,7 +4,7 @@ import { headerStagger, eyebrowReveal, fadeUp, VIEWPORT } from '../../lib/motion
 import { useAuth } from '../../context/AuthContext'
 import { supabase } from '../../lib/supabase'
 import styles from './ModelosContractualesSection.module.css'
-import { downloadChatFile } from '../../lib/chatFiles'
+import { descargarDesdeUrl, PdfVisor } from '../../lib/chatFiles'
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
@@ -30,6 +30,102 @@ function detectFormato(file) {
   const ext = file.name.split('.').pop()?.toLowerCase()
   if (ext === 'pdf' || ext === 'docx' || ext === 'xlsx') return ext
   return null
+}
+
+/* El PDF de vista previa de un Word/Excel vive junto al archivo, con el mismo
+   nombre: no necesita columna en la BD. Solo sirve para MOSTRAR el modelo; lo
+   que se descarga sigue siendo el Word/Excel editable. */
+const rutaVistaPrevia = (storagePath) => storagePath.replace(/\.[^.]+$/, '') + '.vista.pdf'
+
+const PESO_MAX = 25 * 1024 * 1024   // tope del bucket contract-templates
+const SIN_ERRORES = { doc: '', pdf: '' }
+const PASO_SUBIDA = { doc: 'Subiendo documento…', pdf: 'Subiendo PDF…', fila: 'Guardando…' }
+
+function fmtPeso(bytes) {
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1).replace('.', ',')} MB`
+}
+
+function UploadIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M12 15V4" /><path d="m7 9 5-5 5 5" /><path d="M20 15v3a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-3" />
+    </svg>
+  )
+}
+
+/* Campo de archivo: vacío es una zona para elegir o soltar; lleno muestra el
+   archivo con su peso y la opción de quitarlo. El input real va oculto y lo
+   abre un <button>, que sí recibe foco con el teclado (antes era un <label>
+   con el input en display:none: sin teclado no había forma de elegir). */
+function CampoArchivo({ id, etiqueta, tipos, accept, archivo, error, arrastrando, disabled, onElegir, onQuitar }) {
+  const inputRef = useRef(null)
+  const idEtiqueta = `${id}-etiqueta`
+  const idError = `${id}-error`
+  return (
+    <div className={styles.modalField}>
+      <span id={idEtiqueta} className={styles.modalLabel}>{etiqueta} *</span>
+      <input
+        ref={inputRef}
+        type="file"
+        accept={accept}
+        className={styles.srOnly}
+        tabIndex={-1}
+        aria-hidden="true"
+        disabled={disabled}
+        onChange={e => {
+          const f = e.target.files?.[0]
+          e.target.value = ''   // permite volver a elegir el mismo archivo tras quitarlo
+          if (f) onElegir(f)
+        }}
+      />
+      {archivo ? (
+        <div className={styles.archivo} aria-labelledby={idEtiqueta} role="group">
+          <FormatIcon formato={detectFormato(archivo)} />
+          <div className={styles.archivoInfo}>
+            {/* Se recorta el nombre, nunca la extensión: en el celular
+                "Poder especial penal…" no decía si era el .docx o el .pdf. */}
+            <span className={styles.archivoNombre} title={archivo.name}>
+              <span className={styles.archivoBase}>{archivo.name.replace(/\.[^.]+$/, '')}</span>
+              {archivo.name.match(/\.[^.]+$/)?.[0]}
+            </span>
+            <span className={styles.archivoPeso}>{fmtPeso(archivo.size)}</span>
+          </div>
+          <button
+            type="button"
+            className={styles.archivoQuitar}
+            onClick={onQuitar}
+            disabled={disabled}
+            aria-label={`Quitar ${archivo.name}`}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+              <path d="M18 6 6 18M6 6l12 12" />
+            </svg>
+            Quitar
+          </button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          className={`${styles.dropzone} ${arrastrando ? styles.dropzoneActiva : ''} ${error ? styles.dropzoneError : ''}`}
+          onClick={() => inputRef.current?.click()}
+          disabled={disabled}
+          aria-labelledby={idEtiqueta}
+          aria-describedby={error ? idError : undefined}
+        >
+          <UploadIcon />
+          <span>
+            {arrastrando
+              ? 'Suelta el archivo aquí'
+              : <>Selecciona o arrastra el <strong>{tipos}</strong></>}
+          </span>
+        </button>
+      )}
+      {error && <p id={idError} className={styles.campoError} role="alert">{error}</p>}
+    </div>
+  )
 }
 
 // ── Íconos inline por formato (W azul, X verde, PDF rojo) ─────────────────
@@ -101,19 +197,19 @@ export default function ModelosContractualesSection() {
 
   // ── Admin ────────────────────────────────────────────────────────────
   const [modalOpen, setModalOpen]         = useState(false)
-  const [form, setForm]                   = useState({ nombre: '', descripcion: '', categoria: '', file: null })
+  const [form, setForm]                   = useState({ nombre: '', descripcion: '', categoria: '', file: null, pdfVista: null })
   const [uploading, setUploading]         = useState(false)
   const [uploadError, setUploadError]     = useState('')
   const [confirmDelete, setConfirmDelete] = useState(null)  // modelo objeto a eliminar
   const [deleting, setDeleting]           = useState(false)
   const [dragOver, setDragOver]           = useState(false)
-  const fileInputRef                      = useRef(null)
+  const [erroresArchivo, setErroresArchivo] = useState(SIN_ERRORES)
+  const [pasoSubida, setPasoSubida]       = useState('')   // 'doc' | 'pdf' | 'fila'
 
   // ── Preview ──────────────────────────────────────────────────────────
   const [previewModelo, setPreviewModelo]   = useState(null)
   const [previewLoading, setPreviewLoading] = useState(true)
-  const [previewError, setPreviewError]     = useState('')
-  const previewDocxRef                      = useRef(null)
+  const [vista, setVista]                   = useState(null)   // { tipo: 'pdf'|'office', url }
 
   // Fetch paginado vía REST (offset/limit) — 12 en 12
   const fetchPage = useCallback(async (cat, pageIdx, append) => {
@@ -170,23 +266,20 @@ export default function ModelosContractualesSection() {
     fetchPage(categoria, next, true)
   }
 
-  function handleDownload(modelo) {
-    // Bucket público — URL directa, sin signed URL
-    const { data } = supabase.storage.from('contract-templates').getPublicUrl(modelo.storage_path)
-    // Descarga real (blob), no una pestaña con la URL del bucket.
-    if (data?.publicUrl) downloadChatFile(data.publicUrl, modelo.nombre || 'modelo.pdf')
+  /* Bucket público: URL directa, sin firmar. NO pasa por downloadChatFile:
+     esa firma solo archivos del bucket `chat-files` (candado anti
+     open-redirect) y con cualquier otro devolvía null, así que el botón no
+     hacía nada. Descarga real (blob) con la extensión en el nombre: sin ella
+     el archivo bajaba como "PODER ESPECIAL…" y Windows no sabía abrirlo. */
+  async function handleDownload(modelo) {
+    const url = getRawUrl(modelo)
+    if (!url) return
+    const base = (modelo.nombre || 'modelo').replace(/[\\/:*?"<>|]+/g, ' ').trim()
+    const ok = await descargarDesdeUrl(url, modelo.formato ? `${base}.${modelo.formato}` : base)
+    if (!ok) window.open(url, '_blank', 'noopener')
   }
 
   // ── Preview ──────────────────────────────────────────────────────────
-  // PDF se renderiza nativamente en el iframe; .docx/.xlsx vía Office Online.
-  function getPreviewUrl(modelo) {
-    if (!modelo) return ''
-    const { data } = supabase.storage.from('contract-templates').getPublicUrl(modelo.storage_path)
-    const publicUrl = data?.publicUrl
-    if (!publicUrl) return ''
-    if (modelo.formato === 'pdf') return publicUrl
-    return `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(publicUrl)}`
-  }
   // URL pública directa del archivo (sin el visor de Office).
   function getRawUrl(modelo) {
     if (!modelo) return ''
@@ -194,51 +287,66 @@ export default function ModelosContractualesSection() {
     return data?.publicUrl || ''
   }
 
-  function openPreview(modelo)  { setPreviewLoading(true); setPreviewError(''); setPreviewModelo(modelo) }
+  function openPreview(modelo)  { setPreviewLoading(true); setPreviewModelo(modelo) }
   function closePreview()       { setPreviewModelo(null) }
 
-  // Vista previa de Word (.docx) renderizada en el navegador con docx-preview:
-  // no depende de Office Online (que era lento y quedaba en blanco con archivos
-  // recién subidos). Se descarga el archivo del bucket público y se pinta el
-  // documento en un contenedor propio. La librería se carga bajo demanda.
+  /* Qué se muestra:
+     · Un PDF (el modelo mismo o el PDF de vista previa de un Word/Excel) →
+       PdfVisor: exacto, instantáneo y visible en el celular (un PDF dentro
+       de un <iframe> no se ve en Android).
+     · Word/Excel sin PDF → visor de Office Online. Tarda de 5 a 20 s, pero es
+       el único gratis que dibuja las formas de Word. docx-preview era
+       instantáneo y NO las dibuja: la portada, el logo y la marca de agua de
+       las plantillas de la firma son formas, y salían en blanco. */
   useEffect(() => {
-    if (!previewModelo || previewModelo.formato !== 'docx') return
-    let cancelled = false
-    const cont = previewDocxRef.current
-    if (!cont) return
-    setPreviewLoading(true)
-    setPreviewError('')
+    if (!previewModelo) return
+    let vivo = true
+    const raw = getRawUrl(previewModelo)
+    setVista(null)
+    if (previewModelo.formato === 'pdf') { setVista({ tipo: 'pdf', url: raw }); return }
+    const { data } = supabase.storage.from('contract-templates').getPublicUrl(rutaVistaPrevia(previewModelo.storage_path))
     ;(async () => {
-      try {
-        const resp = await fetch(getRawUrl(previewModelo))
-        if (!resp.ok) throw new Error('descarga')
-        const blob = await resp.blob()
-        const { renderAsync } = await import('docx-preview')
-        if (cancelled) return
-        cont.innerHTML = ''
-        await renderAsync(blob, cont, undefined, {
-          className: 'docxrender',
-          inWrapper: true,
-          ignoreWidth: false,
-          ignoreHeight: false,
-          breakPages: true,
-        })
-        if (!cancelled) setPreviewLoading(false)
-      } catch {
-        if (!cancelled) {
-          setPreviewError('No se pudo mostrar la vista previa. Puedes descargar el documento.')
-          setPreviewLoading(false)
-        }
-      }
+      let hayPdf = false
+      try { hayPdf = (await fetch(data.publicUrl, { method: 'HEAD' })).ok } catch { /* sin PDF: Office */ }
+      if (!vivo) return
+      setVista(hayPdf
+        ? { tipo: 'pdf', url: data.publicUrl }
+        : { tipo: 'office', url: `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(raw)}` })
     })()
-    return () => { cancelled = true }
+    return () => { vivo = false }
   }, [previewModelo])
 
   // ─────────────────────── ADMIN: alta de modelo ─────────────────────────
   function openAddModal() {
-    setForm({ nombre: '', descripcion: '', categoria: '', file: null })
+    setForm({ nombre: '', descripcion: '', categoria: '', file: null, pdfVista: null })
     setUploadError('')
+    setErroresArchivo(SIN_ERRORES)
     setModalOpen(true)
+  }
+
+  /* El TIPO decide el campo, no dónde se soltó ni qué botón se pulsó: un PDF
+     siempre es la vista previa y un Word/Excel el documento. Así se pueden
+     arrastrar los dos a la vez sin apuntar. Devuelve el error, o '' si entró. */
+  function asignarArchivo(file) {
+    const formato = detectFormato(file)
+    if (!formato) return `«${file.name}» no es Word, Excel ni PDF.`
+    if (file.size > PESO_MAX) return `«${file.name}» pesa más de 25 MB.`
+    const campo = formato === 'pdf' ? 'pdf' : 'doc'
+    setForm(f => ({ ...f, [campo === 'pdf' ? 'pdfVista' : 'file']: file }))
+    setErroresArchivo(e => ({ ...e, [campo]: '' }))
+    return ''
+  }
+
+  // Elegido con el selector de un campo: el error se muestra en ese campo.
+  function elegirArchivo(campo, file) {
+    const error = asignarArchivo(file)
+    if (error) setErroresArchivo(e => ({ ...e, [campo]: error }))
+    else setUploadError('')
+  }
+
+  function quitarArchivo(campo) {
+    setForm(f => ({ ...f, [campo === 'pdf' ? 'pdfVista' : 'file']: null }))
+    setErroresArchivo(e => ({ ...e, [campo]: '' }))
   }
 
   function closeAddModal() {
@@ -269,33 +377,34 @@ export default function ModelosContractualesSection() {
     e.stopPropagation()
     setDragOver(false)
     if (uploading) return
-    const dropped = e.dataTransfer?.files?.[0]
-    if (!dropped) return
-    if (!detectFormato(dropped)) {
-      setUploadError('Formato no permitido. Solo .docx, .xlsx o .pdf.')
-      return
-    }
-    setForm(f => ({ ...f, file: dropped }))
-    setUploadError('')
+    const errores = [...(e.dataTransfer?.files || [])].map(asignarArchivo).filter(Boolean)
+    setUploadError(errores.join(' '))
   }
 
   async function handleSubmitUpload(e) {
     e.preventDefault()
-    if (!form.nombre.trim() || !form.categoria || !form.file) {
-      setUploadError('Completa nombre, categoría y archivo.')
+    // Los dos son obligatorios: el Word/Excel es lo que se descarga y el PDF
+    // lo que se muestra. Sin PDF la vista previa dependería de Office Online,
+    // que tarda de 5 a 20 s.
+    const faltan = {
+      doc: form.file ? '' : 'Falta el documento que se va a descargar.',
+      pdf: form.pdfVista ? '' : 'Falta el PDF de la vista previa.',
+    }
+    if (faltan.doc || faltan.pdf) { setErroresArchivo(faltan); return }
+    if (!form.nombre.trim() || !form.categoria) {
+      setUploadError('Completa el nombre y la categoría.')
       return
     }
     const formato = detectFormato(form.file)
-    if (!formato) {
-      setUploadError('Formato no permitido. Usa .docx, .xlsx o .pdf.')
-      return
-    }
+    const pdfVista = form.pdfVista
     setUploading(true)
     setUploadError('')
+    setPasoSubida('doc')
 
     // Nombre seguro: timestamp + nombre saneado (sin chars problemáticos)
     const safeName = form.file.name.replace(/[^\w.\-]/g, '_')
     const filename = `${Date.now()}_${safeName}`
+    const subidos = [filename]
 
     const { error: uploadErr } = await supabase.storage.from('contract-templates')
       .upload(filename, form.file, { contentType: form.file.type })
@@ -306,6 +415,21 @@ export default function ModelosContractualesSection() {
       return
     }
 
+    // Antes de la fila: si el PDF falla, no queda un modelo a medias.
+    setPasoSubida('pdf')
+    const rutaPdf = rutaVistaPrevia(filename)
+    const { error: pdfErr } = await supabase.storage.from('contract-templates')
+      .upload(rutaPdf, pdfVista, { contentType: 'application/pdf' })
+    if (pdfErr) {
+      await supabase.storage.from('contract-templates').remove([filename])
+      console.error('[modelos] Error subiendo el PDF de vista previa:', pdfErr)
+      setUploadError(`No se pudo subir el PDF de vista previa: ${pdfErr.message || 'error desconocido'}`)
+      setUploading(false)
+      return
+    }
+    subidos.push(rutaPdf)
+
+    setPasoSubida('fila')
     const { data: inserted, error: insertErr } = await supabase
       .from('modelos_contractuales')
       .insert({
@@ -318,8 +442,8 @@ export default function ModelosContractualesSection() {
       .select().single()
 
     if (insertErr || !inserted) {
-      // Rollback storage para no dejar archivo huérfano
-      await supabase.storage.from('contract-templates').remove([filename])
+      // Rollback storage para no dejar archivos huérfanos
+      await supabase.storage.from('contract-templates').remove(subidos)
       console.error('[modelos] Error insertando fila:', insertErr)
       setUploadError(`No se pudo guardar el modelo: ${insertErr?.message || 'error desconocido'}`)
       setUploading(false)
@@ -346,8 +470,9 @@ export default function ModelosContractualesSection() {
       setDeleting(false)
       return
     }
-    // Best-effort: si falla aquí, la fila ya está fuera; el archivo quedará huérfano
-    await supabase.storage.from('contract-templates').remove([storage_path])
+    // Best-effort: si falla aquí, la fila ya está fuera; el archivo quedará
+    // huérfano. El PDF de vista previa puede no existir: su fallo no importa.
+    await supabase.storage.from('contract-templates').remove([storage_path, rutaVistaPrevia(storage_path)])
 
     setModelos(prev => prev.filter(m => m.id !== id))
     setDeleting(false)
@@ -376,19 +501,17 @@ export default function ModelosContractualesSection() {
         </motion.p>
       </motion.div>
 
+      {/* Control de edición (superadmin o admin): el mismo botón flotante que
+          "Editar noticias" y "Editar videos". Antes iba anclado a la fila de
+          categorías y tapaba el último chip ("Otro"). */}
+      {puedeEditar && (
+        <button type="button" className={styles.fab} onClick={openAddModal} aria-haspopup="dialog">
+          ＋ Agregar modelo
+        </button>
+      )}
+
       {/* ── Filtros (chips horizontales, scroll en móvil) ── */}
       <div className={styles.filtersWrap}>
-        {/* Botón admin alineado al nivel de las chips */}
-        {puedeEditar && (
-          <button
-            type="button"
-            className={styles.adminBtn}
-            onClick={openAddModal}
-            title="Agregar modelo contractual"
-          >
-            ＋ Agregar Modelo
-          </button>
-        )}
         <div className={styles.filters}>
           {CATEGORIAS.map(cat => (
             <button
@@ -563,28 +686,31 @@ export default function ModelosContractualesSection() {
                 </select>
               </div>
 
-              <div className={styles.modalField}>
-                <label className={styles.modalLabel}>Archivo * (.docx, .xlsx, .pdf)</label>
-                <label className={styles.modalFileLabel}>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept=".docx,.xlsx,.pdf,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                    onChange={e => setForm(f => ({ ...f, file: e.target.files?.[0] || null }))}
-                    disabled={uploading}
-                    style={{ display: 'none' }}
-                  />
-                  <span
-                    className={`${styles.modalFileBtn} ${dragOver ? styles.modalFileBtnActive : ''}`}
-                  >
-                    {form.file
-                      ? form.file.name
-                      : dragOver
-                        ? 'Suelta el archivo aquí'
-                        : '＋ Seleccionar o arrastrar archivo'}
-                  </span>
-                </label>
-              </div>
+              <CampoArchivo
+                id="modelo-doc"
+                etiqueta="Documento para descargar"
+                tipos="Word o Excel"
+                accept=".docx,.xlsx,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                archivo={form.file}
+                error={erroresArchivo.doc}
+                arrastrando={dragOver}
+                disabled={uploading}
+                onElegir={f => elegirArchivo('doc', f)}
+                onQuitar={() => quitarArchivo('doc')}
+              />
+
+              <CampoArchivo
+                id="modelo-pdf"
+                etiqueta="PDF para la vista previa"
+                tipos="PDF"
+                accept=".pdf,application/pdf"
+                archivo={form.pdfVista}
+                error={erroresArchivo.pdf}
+                arrastrando={dragOver}
+                disabled={uploading}
+                onElegir={f => elegirArchivo('pdf', f)}
+                onQuitar={() => quitarArchivo('pdf')}
+              />
 
               {uploadError && <p className={styles.modalError}>⚠ {uploadError}</p>}
 
@@ -602,7 +728,7 @@ export default function ModelosContractualesSection() {
                   className={styles.modalSubmit}
                   disabled={uploading}
                 >
-                  {uploading ? <><span className={styles.spinner} /> Subiendo…</> : 'Subir modelo'}
+                  {uploading ? <><span className={styles.spinner} /> {PASO_SUBIDA[pasoSubida] || 'Subiendo…'}</> : 'Subir modelo'}
                 </button>
               </div>
             </form>
@@ -639,45 +765,36 @@ export default function ModelosContractualesSection() {
             </div>
 
             <div className={styles.previewFrameWrap}>
-              {previewModelo.formato === 'docx' ? (
-                <div ref={previewDocxRef} className={styles.previewDocx} />
-              ) : (
+              {vista?.tipo === 'pdf' && (
+                <div className={styles.previewPdf}>
+                  <PdfVisor url={vista.url} titulo={previewModelo.nombre} fondo="#f1ede9" />
+                </div>
+              )}
+              {vista?.tipo === 'office' && (
                 <iframe
                   key={previewModelo.id}
-                  src={getPreviewUrl(previewModelo)}
+                  src={vista.url}
                   title={previewModelo.nombre}
                   className={styles.previewIframe}
                   sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
                   onLoad={() => setPreviewLoading(false)}
                 />
               )}
-              {previewLoading && !previewError && (
+              {(!vista || (vista.tipo === 'office' && previewLoading)) && (
                 <div className={styles.previewLoading} aria-hidden="true">
                   <span className={styles.spinner} />
                   <span>Cargando vista previa…</span>
-                </div>
-              )}
-              {previewError && (
-                <div className={styles.previewErrorBox}>
-                  <p>{previewError}</p>
-                  <button
-                    type="button"
-                    className={styles.previewDownload}
-                    onClick={() => handleDownload(previewModelo)}
-                  >
-                    ⬇ Descargar {FORMAT_LABEL[previewModelo.formato] || previewModelo.formato.toUpperCase()}
-                  </button>
                 </div>
               )}
             </div>
 
             <div className={styles.previewFooter}>
               <p className={styles.previewNote}>
-                {previewModelo.formato === 'pdf'
-                  ? 'Vista previa nativa del navegador.'
-                  : previewModelo.formato === 'docx'
-                    ? 'Vista previa del documento de Word.'
-                    : 'La vista previa la genera Office Online y puede tardar. Si no se ve, usa “Descargar”.'}
+                {vista?.tipo === 'office'
+                  ? 'La vista previa la genera Microsoft y puede tardar unos segundos. Si no se ve, usa “Descargar”.'
+                  : previewModelo.formato === 'pdf'
+                    ? 'Vista previa del documento.'
+                    : `Vista previa. Se descarga en ${previewModelo.formato === 'xlsx' ? 'Excel' : 'Word'}, listo para editar.`}
               </p>
               <button
                 type="button"
