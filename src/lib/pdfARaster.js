@@ -20,15 +20,19 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl
    Trabaja sobre una COPIA: pdf.js desacopla (detach) el buffer que recibe, y si
    fuera el original el llamador se quedaría sin bytes (p.ej. para estamparFirma).
    `maxPaginas` / `tipo` / `calidad`: la revisión de contacto del chat solo
-   necesita las primeras páginas en JPEG liviano. */
-export async function rasterizarPdf(pdfBytes, scale = 2, { maxPaginas = Infinity, tipo = 'image/png', calidad } = {}) {
+   necesita las primeras páginas en JPEG liviano.
+   `anchoPx`: si se pasa, manda sobre `scale` y cada página sale con ese ancho
+   en píxeles (lo que necesita un visor para verse nítido en esa pantalla). */
+export async function rasterizarPdf(pdfBytes, scale = 2, { maxPaginas = Infinity, tipo = 'image/png', calidad, anchoPx } = {}) {
   const bytes = pdfBytes instanceof Uint8Array ? pdfBytes.slice() : new Uint8Array(pdfBytes)
   const pdf = await pdfjsLib.getDocument({ data: bytes }).promise
   const paginas = []
   const total = Math.min(pdf.numPages, maxPaginas)
   for (let i = 1; i <= total; i++) {
     const page = await pdf.getPage(i)
-    const viewport = page.getViewport({ scale })
+    // Tope de 4x: una página diminuta no debe disparar un lienzo gigante.
+    const s = anchoPx ? Math.min(4, anchoPx / page.getViewport({ scale: 1 }).width) : scale
+    const viewport = page.getViewport({ scale: s })
     const canvas = document.createElement('canvas')
     canvas.width = Math.ceil(viewport.width)
     canvas.height = Math.ceil(viewport.height)

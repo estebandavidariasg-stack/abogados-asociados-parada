@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { supabase, getAuthHeaders } from './supabase'
 import { compressImage } from '../utils/compressMedia'
@@ -836,6 +836,7 @@ const PDF_MAX_PAGINAS = 12
 export function PdfVisor({ url, titulo = 'Documento', fondo = '#fff' }) {
   const [paginas, setPaginas] = useState(null)   // null = cargando
   const [error, setError] = useState('')
+  const cajaRef = useRef(null)
 
   useEffect(() => {
     let vivo = true
@@ -846,9 +847,15 @@ export function PdfVisor({ url, titulo = 'Documento', fondo = '#fff' }) {
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
         const bytes = new Uint8Array(await res.arrayBuffer())
         const { rasterizarPdf } = await import('./pdfARaster')
-        // 1.5x es nítido en pantallas densas sin disparar la memoria del móvil.
+        /* Nitidez: la página se pinta al ancho REAL en píxeles de la pantalla
+           (ancho del visor × escalado del dispositivo). Con una escala fija de
+           1.5 salía de ~918 px y el visor de modelos la estiraba a ~1250 en una
+           pantalla al 125 %: texto borroso y con manchas. Tope de 2400 px por
+           la memoria del celular (ahí el visor mide ~360 px: ~1080 px). */
+        const ancho = cajaRef.current?.clientWidth || 800
+        const anchoPx = Math.min(2400, Math.round(ancho * Math.min(window.devicePixelRatio || 1, 3)))
         const pags = await rasterizarPdf(bytes, 1.5, {
-          maxPaginas: PDF_MAX_PAGINAS, tipo: 'image/jpeg', calidad: 0.82,
+          maxPaginas: PDF_MAX_PAGINAS, tipo: 'image/jpeg', calidad: 0.92, anchoPx,
         })
         if (vivo) setPaginas(pags)
       } catch (err) {
@@ -864,16 +871,17 @@ export function PdfVisor({ url, titulo = 'Documento', fondo = '#fff' }) {
     borderRadius: 12, background: fondo, WebkitOverflowScrolling: 'touch',
   }
 
+  // El ref va en la caja de cada estado: la de "Cargando" es la que se mide.
   if (paginas === null) {
     return (
-      <div style={{ ...caja, display: 'grid', placeItems: 'center', color: '#8a6a28', fontSize: '0.85rem' }}>
+      <div ref={cajaRef} style={{ ...caja, display: 'grid', placeItems: 'center', color: '#8a6a28', fontSize: '0.85rem' }}>
         Cargando documento…
       </div>
     )
   }
   if (error) {
     return (
-      <div style={{ ...caja, display: 'grid', placeItems: 'center', gap: 10, padding: 20, textAlign: 'center' }}>
+      <div ref={cajaRef} style={{ ...caja, display: 'grid', placeItems: 'center', gap: 10, padding: 20, textAlign: 'center' }}>
         <p style={{ margin: 0, color: '#6d3c1b', fontSize: '0.88rem' }}>{error}</p>
         <a href={url} target="_blank" rel="noopener noreferrer"
           style={{ fontSize: '0.82rem', fontWeight: 700, color: '#8a6a28' }}>
@@ -883,7 +891,7 @@ export function PdfVisor({ url, titulo = 'Documento', fondo = '#fff' }) {
     )
   }
   return (
-    <div style={caja} onContextMenu={e => e.preventDefault()}>
+    <div ref={cajaRef} style={caja} onContextMenu={e => e.preventDefault()}>
       {paginas.map((p, i) => (
         <img key={i} src={p.dataUrl} alt={`${titulo}, página ${i + 1}`} draggable={false}
           style={{ display: 'block', width: '100%', height: 'auto', userSelect: 'none' }} />
