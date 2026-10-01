@@ -51,6 +51,14 @@ export async function rasterizarPdf(pdfBytes, scale = 2, { maxPaginas = Infinity
   return paginas
 }
 
+/* El documento de pdf.js, para quien necesita el texto CON su posición
+   (lib/firmaCampos busca dónde va la firma). Trabaja sobre una copia de los
+   bytes, igual que el resto. Quien lo abre lo libera con `destroy()`. */
+export async function abrirPdf(pdfBytes) {
+  const bytes = pdfBytes instanceof Uint8Array ? pdfBytes.slice() : new Uint8Array(pdfBytes)
+  return pdfjsLib.getDocument({ data: bytes }).promise
+}
+
 /* Texto de un PDF, en orden de lectura, con un salto por línea. Lo usa la
    validación del contrato de servicios (lib/contratoServicios). Un PDF
    escaneado (solo imagen) devuelve cadena vacía. */

@@ -26,6 +26,8 @@ import styles from './DocumentosLegales.module.css'
      · Footer     → DOCS_FOOTER (los generales, en Title Case).
      · Registro   → contratoDeRol(rol): el Contrato del Profesional para
                     abogado/contador, el de Corretaje Comercial para el gestor.
+     · IA         → `ia`: los términos de la herramienta de inteligencia
+                    artificial, en el aviso de primer uso del asistente.
      · /terminos, /privacidad… → LegalPage monta el mismo PdfVisor a página
                     completa (enlaces que llegan por correo o por fuera).
    ───────────────────────────────────────────────────────────────────────── */
@@ -98,6 +100,16 @@ export const DOCS_LEGALES = {
     pdf: '/legal/contrato-corretaje-comercial.pdf',
     archivo: 'Parada Bridge - Contrato de Corretaje Comercial.pdf',
     ruta: '/contrato-gestor',
+  },
+  // Lo acepta el abogado o contador la primera vez que abre "IA Parada
+  // Precise" (aviso de primer uso en chat/AsistenteIA).
+  ia: {
+    titulo: 'Términos de Uso de la Herramienta de Inteligencia Artificial',
+    sub: 'Condiciones de uso de la IA de apoyo · abogados y contadores',
+    resumen: 'Condiciones de uso de la IA de apoyo',
+    pdf: '/legal/terminos-ia-profesionales.pdf',
+    archivo: 'Parada Bridge - Terminos de Uso de la Herramienta de IA.pdf',
+    ruta: '/terminos-ia',
   },
 }
 

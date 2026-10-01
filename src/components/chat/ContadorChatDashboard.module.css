@@ -356,12 +356,13 @@
   display: inline-flex; align-items: center; gap: 6px; margin-top: 2px;
   padding: 6px 12px; border-radius: 8px; cursor: pointer;
   font-family: inherit; font-size: 0.76rem; font-weight: 700;
-  color: #6d3c1b; background: #e8c96a; border: none;
+  color: #6d3c1b; background: #e8c96a; border: 1px solid transparent;   /* mismo alto que el botón alterno, que sí lleva borde */
 }
 .firmaDlBtn:hover { background: #dbb84e; }
 .firmaDlRow { display: flex; flex-wrap: wrap; gap: 8px; }
 .firmaDlBtnAlt {
-  display: inline-block; padding: 6px 12px; border-radius: 8px; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 6px; margin-top: 2px;
+  padding: 6px 12px; border-radius: 8px; cursor: pointer;
   font-family: inherit; font-size: 0.76rem; font-weight: 700;
   color: #6d3c1b; background: rgba(109,60,27,0.08); border: 1px solid rgba(109,60,27,0.25);
 }

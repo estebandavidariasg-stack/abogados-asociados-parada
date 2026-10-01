@@ -23,7 +23,17 @@ const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
    Buckets y rutas sin cambios:
      · certificado bancario      → tarjetas-profesionales/<uid>/certificados/certificado.<ext>
      · certificado disciplinario → tarjetas-profesionales/<uid>/certificado-disciplinario.<ext>
-     · modelo contractual (PDF)  → contratos/<uid>/modelo-contractual.pdf
+     · modelo contractual (PDF)  → contratos/<uid>/modelo-contractual-<fecha>.pdf
+
+   El modelo NO se sobrescribe: el bucket `contratos` deja insertar archivos
+   nuevos en la carpeta propia pero rechaza reemplazar uno existente (no tiene
+   política de UPDATE; el upsert respondía "new row violates row-level
+   security policy"). Por eso la primera subida funcionaba y "Cambiar archivo"
+   fallaba siempre. Cada cambio se sube con nombre nuevo y el perfil pasa a
+   apuntar a ese. La versión anterior queda en el bucket: el profesional
+   tampoco puede borrar ahí (solo el administrador), igual que con sus
+   contratos. Los otros dos documentos sí se reemplazan en su misma ruta (su
+   bucket lo admite).
 ───────────────────────────────────────────────────────────────────────── */
 
 const ALLOWED = ['application/pdf', 'image/png', 'image/jpeg', 'image/webp']
@@ -57,7 +67,9 @@ const DOCS = [
     columna: 'modelo_contrato_path',
     accept: '.pdf,application/pdf',
     pdfOnly: true,
-    path: (uid) => `${uid}/modelo-contractual.pdf`,
+    // Nombre nuevo en cada subida (ver nota de arriba).
+    sinReemplazo: true,
+    path: (uid) => `${uid}/modelo-contractual-${Date.now()}.pdf`,
   },
 ]
 
@@ -124,11 +136,19 @@ export default function DocumentosConfianza({ userId }) {
         `${SUPABASE_URL}/storage/v1/object/${doc.bucket}/${path}`,
         {
           method: 'POST',
-          headers: { ...headers, 'Content-Type': doc.pdfOnly ? 'application/pdf' : file.type, 'x-upsert': 'true' },
+          headers: {
+            ...headers,
+            'Content-Type': doc.pdfOnly ? 'application/pdf' : file.type,
+            ...(doc.sinReemplazo ? {} : { 'x-upsert': 'true' }),
+          },
           body: file,
         }
       )
-      if (!up.ok) throw new Error('upload')
+      if (!up.ok) {
+        const detalle = await up.json().catch(() => ({}))
+        console.error('[DocumentosConfianza] subida rechazada:', up.status, detalle?.message || detalle)
+        throw new Error('upload')
+      }
       const patch = await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${userId}`, {
         method: 'PATCH',
         headers: { ...headers, Prefer: 'return=minimal' },
@@ -148,46 +168,52 @@ export default function DocumentosConfianza({ userId }) {
     }
   }
 
+  /* El aviso va FUERA de la cuadrícula. Dentro, al ocupar todo el ancho
+     (grid-column: 1 / -1) obligaba a `auto-fit` a conservar las columnas
+     vacías que normalmente colapsa: las tres tarjetas se encogían hacia la
+     izquierda cada vez que aparecía un mensaje. */
   return (
-    <div className={styles.grid}>
-      {DOCS.map(doc => {
-        const path = paths[doc.key]
-        const url  = urls[doc.key]
-        const ocupado = subiendo === doc.key
-        return (
-          <div key={doc.key} className={styles.doc}>
-            <label className={styles.label}>
-              {doc.nombre}
-              <span className={styles.optional}>({doc.nota})</span>
-            </label>
+    <div>
+      <div className={styles.grid}>
+        {DOCS.map(doc => {
+          const path = paths[doc.key]
+          const url  = urls[doc.key]
+          const ocupado = subiendo === doc.key
+          return (
+            <div key={doc.key} className={styles.doc}>
+              <label className={styles.label}>
+                {doc.nombre}
+                <span className={styles.optional}>({doc.nota})</span>
+              </label>
 
-            {cargando ? (
-              <div className={styles.signing}>Cargando…</div>
-            ) : path ? (
-              url
-                ? <TarjetaPreview key={path} displayUrl={url} storagePath={path} label={doc.nombre} />
-                : <div className={styles.signing}>Generando enlace seguro…</div>
-            ) : (
-              <button type="button" className={styles.empty} disabled={ocupado}
+              {cargando ? (
+                <div className={styles.signing}>Cargando…</div>
+              ) : path ? (
+                url
+                  ? <TarjetaPreview key={path} displayUrl={url} storagePath={path} label={doc.nombre} />
+                  : <div className={styles.signing}>Generando enlace seguro…</div>
+              ) : (
+                <button type="button" className={styles.empty} disabled={ocupado}
+                  onClick={() => inputRefs[doc.key].current?.click()}>
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"
+                    strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M12 16V4" /><path d="m6 10 6-6 6 6" /><path d="M4 20h16" />
+                  </svg>
+                  {ocupado ? 'Subiendo…' : 'Sin archivo'}
+                </button>
+              )}
+
+              <button type="button" className="btn-ghost" disabled={ocupado || cargando}
                 onClick={() => inputRefs[doc.key].current?.click()}>
-                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"
-                  strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M12 16V4" /><path d="m6 10 6-6 6 6" /><path d="M4 20h16" />
-                </svg>
-                {ocupado ? 'Subiendo…' : 'Sin archivo'}
+                {ocupado ? 'Subiendo…' : path ? 'Cambiar archivo' : doc.pdfOnly ? 'Subir PDF' : 'Subir archivo'}
               </button>
-            )}
+              <input ref={inputRefs[doc.key]} type="file" accept={doc.accept}
+                style={{ display: 'none' }} onChange={e => subir(e, doc)} />
+            </div>
+          )
+        })}
 
-            <button type="button" className="btn-ghost" disabled={ocupado || cargando}
-              onClick={() => inputRefs[doc.key].current?.click()}>
-              {ocupado ? 'Subiendo…' : path ? 'Cambiar archivo' : doc.pdfOnly ? 'Subir PDF' : 'Subir archivo'}
-            </button>
-            <input ref={inputRefs[doc.key]} type="file" accept={doc.accept}
-              style={{ display: 'none' }} onChange={e => subir(e, doc)} />
-          </div>
-        )
-      })}
-
+      </div>
       {err && <p className={styles.msgError} role="alert">{err}</p>}
       {msg && <p className={styles.msgOk} role="status">{msg}</p>}
     </div>

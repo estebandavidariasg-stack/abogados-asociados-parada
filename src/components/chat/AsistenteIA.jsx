@@ -9,6 +9,13 @@ import Markdown from '../shared/Markdown';
 import { EnlaceLegal } from '../shared/DocumentosLegales';
 import styles from './AsistenteIA.module.css';
 
+// Versión de los Términos de Uso de la Herramienta de IA que se aceptan en el
+// aviso de primer uso (la del PDF: "Versión: 1.0"). La aceptación guarda ESTA
+// marca: quien había aceptado antes de que existiera el documento (se guardaba
+// un '1') lo vuelve a ver una vez, ahora con el contrato real enlazado. Si el
+// PDF cambia de versión, se cambia aquí y todos lo aceptan de nuevo.
+const VERSION_TERMINOS_IA = 'v1.0';
+
 const SUGERENCIAS = [
   { label: 'Redactar derecho de petición', texto: 'Redacta un derecho de petición dirigido a [entidad]. Hechos: [describe los hechos]. Pretensión: [lo que se solicita].' },
   { label: 'Analizar estrategia del caso', texto: 'Analiza la estrategia para este caso. Área: [área]. Hechos: [hechos]. Objetivo del cliente: [objetivo].' },
@@ -191,13 +198,13 @@ export default function AsistenteIA() {
   useEffect(() => {
     if (!uid) return;
     let ok = true;
-    try { ok = localStorage.getItem(`ia_terms_${uid}`) === '1'; } catch { ok = true; }
+    try { ok = localStorage.getItem(`ia_terms_${uid}`) === VERSION_TERMINOS_IA; } catch { ok = true; }
     setAceptoIA(ok);
   }, [uid]);
 
   function aceptarTerminosIA() {
     if (!aceptaCheck) return;
-    try { localStorage.setItem(`ia_terms_${uid}`, '1'); } catch { /* noop */ }
+    try { localStorage.setItem(`ia_terms_${uid}`, VERSION_TERMINOS_IA); } catch { /* noop */ }
     setAceptoIA(true);
   }
 
@@ -796,10 +803,9 @@ export default function AsistenteIA() {
                 />
                 <span>
                   He leído y acepto los{' '}
-                  <EnlaceLegal doc="terminos" style={{ color: '#6d3c1b', fontWeight: 700 }}>términos de uso</EnlaceLegal>
+                  <EnlaceLegal doc="ia" style={{ color: '#6d3c1b', fontWeight: 700 }}>términos de uso de la herramienta de inteligencia artificial</EnlaceLegal>
                   {' '}y la{' '}
-                  <EnlaceLegal doc="datos" style={{ color: '#6d3c1b', fontWeight: 700 }}>política de tratamiento de datos</EnlaceLegal>
-                  {' '}del uso de esta herramienta.
+                  <EnlaceLegal doc="datos" style={{ color: '#6d3c1b', fontWeight: 700 }}>política de tratamiento de datos</EnlaceLegal>.
                 </span>
               </label>
 

@@ -21,7 +21,7 @@ import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
 import Markdown from '../shared/Markdown'
 import EnviarAFirmar from '../firma/EnviarAFirmar'
 import { DOC_CONTRATO_SERVICIOS } from '../../lib/contratoServicios'
-import { firmantesPendientes } from '../../lib/firmaService'
+import { firmantesPendientes, bytesDeDoc } from '../../lib/firmaService'
 import {
   COP, fetchCobroProfesional, fijarCobro, confirmarPagoAsesoria, formatMiles, parseMiles,
   AVISO_COBRO_CONTADOR,
@@ -357,6 +357,22 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
       document.body.appendChild(a); a.click(); a.remove()
       setTimeout(() => URL.revokeObjectURL(url), 4000)
     } catch { setToast('No se pudo generar el certificado.') }
+  }
+
+  // El documento tal como quedó firmado: la firma ya va en el espacio que
+  // trae el documento (junto a "EL CLIENTE", con su nombre y su número), así
+  // que se descarga tal cual. "Ubicar firma a mano" queda para los documentos
+  // sin ese espacio o firmados antes de este cambio.
+  async function descargarFirmado(solicitudId) {
+    try {
+      const headers = await getAuthHeaders()
+      const bytes = await bytesDeDoc(`${solicitudId}/firmado.pdf`, headers)
+      const url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }))
+      const a = document.createElement('a')
+      a.href = url; a.download = 'documento-firmado.pdf'
+      document.body.appendChild(a); a.click(); a.remove()
+      setTimeout(() => URL.revokeObjectURL(url), 4000)
+    } catch { setToast('No se pudo descargar el documento firmado.') }
   }
 
   // Publica en el hilo el mensaje de firma para que el cliente lo firme.
@@ -1677,9 +1693,15 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
                               {!firmado && <span className={styles.firmaSub}>El cliente lo firmará desde el chat.</span>}
                               {firmado && !conAviso && (
                                 <span className={styles.firmaDlRow}>
-                                  <button className={styles.firmaDlBtn}
+                                  <button className={styles.firmaDlBtn} onClick={() => descargarFirmado(f.solicitudId)}>
+                                    <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                      <path d="M12 3v12M7 11l5 5 5-5M4 21h16" />
+                                    </svg>
+                                    Documento firmado (PDF)
+                                  </button>
+                                  <button className={styles.firmaDlBtnAlt}
                                     onClick={() => setUbicarFirma({ origPath: f.docPath, firmaPath: `${f.solicitudId}/firma.png` })}>
-                                    <IconFirma size={13} /> Ubicar firma y descargar PDF
+                                    <IconFirma size={13} /> Ubicar firma a mano
                                   </button>
                                   <button className={styles.firmaDlBtnAlt} onClick={() => descargarCertificado(f.solicitudId)}>
                                     <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -1698,11 +1720,14 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
                           <span className={`${styles.msgText} ${styles.firmaBody}`}>
                             <strong>El cliente firmó el documento</strong>
                             <span className={styles.firmaDlRow}>
-                              <button className={styles.firmaDlBtn} onClick={() => setUbicarFirma(parseFirmaOk(m.content))}>
-                                <IconFirma size={13} /> Ubicar firma y descargar PDF
+                              <button className={styles.firmaDlBtn} onClick={() => descargarFirmado(parseFirmaOk(m.content)?.solicitudId)}>
+                                Documento firmado (PDF)
+                              </button>
+                              <button className={styles.firmaDlBtnAlt} onClick={() => setUbicarFirma(parseFirmaOk(m.content))}>
+                                Ubicar firma a mano
                               </button>
                               <button className={styles.firmaDlBtnAlt} onClick={() => descargarCertificado(parseFirmaOk(m.content)?.solicitudId)}>
-                                ⬇ Certificado (PDF)
+                                Certificado (PDF)
                               </button>
                             </span>
                           </span>

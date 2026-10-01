@@ -128,6 +128,7 @@ export default function App() {
         <Route path="/autorizacion-datos"   element={<LegalPage doc="autorizacion" />} />
         <Route path="/contrato-profesional" element={<LegalPage doc="profesional" />} />
         <Route path="/contrato-gestor"      element={<LegalPage doc="corretaje" />} />
+        <Route path="/terminos-ia"          element={<LegalPage doc="ia" />} />
       </Routes>
     </Suspense>
     </LimiteDeError>

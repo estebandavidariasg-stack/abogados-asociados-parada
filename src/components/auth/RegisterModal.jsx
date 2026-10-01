@@ -278,7 +278,7 @@ export default function RegisterModal({ onClose }) {
   // subida falló, exigir un nuevo archivo (obligatoria).
   const [tarjetaSubidaPath, setTarjetaSubidaPath] = useState(null)
   const [tarjetaDocsFile, setTarjetaDocsFile]     = useState(null)
-  // Modelo contractual (OPCIONAL): un PDF → contratos/<uid>/modelo-contractual.pdf
+  // Modelo contractual (OPCIONAL): un PDF → contratos/<uid>/modelo-contractual-<fecha>.pdf
   // (misma ruta que DocumentosConfianza en el perfil).
   const [modeloFile, setModeloFile]       = useState(null)
   const fotoInputRef     = useRef(null)
@@ -760,13 +760,15 @@ export default function RegisterModal({ onClose }) {
         cambios.certificado_disciplinario_url = await subirDoc(certDiscFile, 'certificado-disciplinario', 'el certificado disciplinario')
       }
 
-      // 2b. Modelo contractual (opcional) → contratos/<uid>/modelo-contractual.pdf
-      //     (misma ruta y columna que DocumentosConfianza en el perfil).
+      // 2b. Modelo contractual (opcional) → contratos/<uid>/modelo-contractual-<fecha>.pdf
+      //     (misma columna que DocumentosConfianza en el perfil). Nombre nuevo
+      //     y sin upsert: el bucket no deja reemplazar un archivo existente, y
+      //     reintentar este paso tras un fallo a medias chocaba con el anterior.
       if (modeloFile) {
-        const modeloPath = `${newUserId}/modelo-contractual.pdf`
+        const modeloPath = `${newUserId}/modelo-contractual-${Date.now()}.pdf`
         const mRes = await fetch(
           `${SUPABASE_URL}/storage/v1/object/contratos/${modeloPath}`,
-          { method: 'POST', headers: { ...headers, 'Content-Type': 'application/pdf', 'x-upsert': 'true' }, body: modeloFile }
+          { method: 'POST', headers: { ...headers, 'Content-Type': 'application/pdf' }, body: modeloFile }
         )
         if (!mRes.ok) throw new Error('No se pudo subir el modelo contractual. Puedes quitarlo y subirlo luego desde tu perfil.')
         cambios.modelo_contrato_path = modeloPath

@@ -9,8 +9,11 @@ import styles from './FirmaSigner.module.css'
    FirmaSigner — experiencia de firma electrónica (modal, 4 pasos):
      1) Revisar el documento
      2) Verificar identidad (OTP de 6 dígitos al correo)
-     3) Dibujar la firma + completar el pie de firma
-     4) Confirmar → estampa el PDF y entrega los bytes firmados al padre
+     3) Dibujar la firma + completar los datos del firmante
+     4) Confirmar → estampa el PDF y entrega los bytes firmados al padre.
+        La firma se ubica sola en el espacio de firma que trae el documento
+        (el nombre y el número reemplazan sus marcadores); si no lo trae, va el
+        bloque de firma debajo del texto. Ver lib/firmaPdf y lib/firmaCampos.
 
    Es puro (UI + motor). NO persiste: el padre recibe onComplete(signedBytes, pie)
    y decide dónde guardar (Contratos o chat). Reutilizable en ambos flujos.
@@ -445,7 +448,7 @@ function PasoListo({ onCancel }) {
       <div className={styles.doneMark} aria-hidden="true">✓</div>
       <h3 className={styles.doneTitle}>Documento firmado</h3>
       <p className={styles.lead}>
-        Tu firma quedó estampada con el pie de firma y un certificado de auditoría. El documento firmado ya está guardado.
+        Tu firma quedó en el documento, con su certificado de auditoría. El documento firmado ya está guardado.
       </p>
       <div className={styles.actions}>
         <button className={styles.btnSolid} onClick={onCancel}>Cerrar</button>

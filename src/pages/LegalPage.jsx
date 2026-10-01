@@ -6,7 +6,7 @@ import styles from './LegalPage.module.css'
 
 /* ─────────────────────────────────────────────────────────────────────────
    /terminos, /privacidad, /cookies, /eula, /devoluciones,
-   /autorizacion-datos, /contrato-profesional, /contrato-gestor
+   /autorizacion-datos, /contrato-profesional, /contrato-gestor, /terminos-ia
 
    Páginas legales públicas a página completa: el documento OFICIAL (el PDF
    de public/legal, el mismo del footer y del registro), no un texto aparte.
@@ -19,7 +19,7 @@ import styles from './LegalPage.module.css'
    ───────────────────────────────────────────────────────────────────────── */
 
 // Orden del índice al pie: los generales del footer y, al final, los contratos.
-const INDICE = [...DOCS_FOOTER, 'profesional', 'corretaje']
+const INDICE = [...DOCS_FOOTER, 'profesional', 'corretaje', 'ia']
 
 export default function LegalPage({ doc = 'terminos' }) {
   const clave = DOCS_LEGALES[doc] ? doc : 'terminos'
