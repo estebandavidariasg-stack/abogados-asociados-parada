@@ -5,6 +5,7 @@ import {
   downloadChatFile, AdjuntoChat, VisorArchivo, ChatImage, ChatLightbox,
   crearGrabadorAudio, AUDIO_CONSTRAINTS, describirErrorMicrofono,
 } from '../../lib/chatFiles'
+import { Visto, nuevoIdMensaje } from '../../lib/chatFiles'
 import styles from './LawyerInternalChat.module.css'
 import AudioPlayer from './AudioPlayer'
 import { IconMic, IconPaperclip } from '../shared/Icons'
@@ -198,7 +199,12 @@ export default function LawyerInternalChat({ miId }) {
       // visible — antes se borraba y mostraba "No hay mensajes aún".
       if (!Array.isArray(data)) return
       const asc = data.reverse()
-      setMessages(asc)
+      // Un mensaje propio que aún se está enviando no viene en la respuesta:
+      // se conserva al final para que no parpadee entre sondeo y sondeo.
+      setMessages(prev => {
+        const pend = prev.filter(m => m._enviando && !asc.some(a => a.id === m.id))
+        return pend.length ? [...asc, ...pend] : asc
+      })
 
       /* Marcar como leídos los mensajes del admin hacia el abogado */
       const sinLeer = asc.filter(m => m.to_id === miId && !m.leido)
@@ -225,25 +231,39 @@ export default function LawyerInternalChat({ miId }) {
     }
   }, [adminIds, miId])
 
+  /* Envío optimista, igual que el chat de consulta: la burbuja sale YA con
+     ✓ (enviando); al confirmar el servidor pasa a ✓✓ gris (entregado) y, cuando
+     el administrador abre la conversación, a ✓✓ dorado (leído). El id viaja en
+     el insert para que el sondeo traiga la MISMA fila y no se duplique. */
   async function enviar() {
-    if (!texto.trim() || !adminId || sending) return
-    setSending(true)
-    try {
+    const cuerpo = texto.trim()
+    if (!cuerpo || !adminId) return
+    const id = nuevoIdMensaje()
+    setTexto('')
+    setMessages(prev => [...prev, {
+      id, from_id: miId, to_id: adminId, mensaje: cuerpo,
+      created_at: new Date().toISOString(), leido: false, _enviando: true,
+    }])
+    const postear = async (body) => {
       const headers = await getAuthHeaders()
-      const res = await fetch(`${SUPABASE_URL}/rest/v1/mensajes_internos`, {
+      return fetch(`${SUPABASE_URL}/rest/v1/mensajes_internos`, {
         method: 'POST',
         headers: { ...headers, 'Content-Type': 'application/json', Prefer: 'return=representation' },
-        body: JSON.stringify({ from_id: miId, to_id: adminId, mensaje: texto.trim() }),
+        body: JSON.stringify(body),
       })
+    }
+    try {
+      const base = { from_id: miId, to_id: adminId, mensaje: cuerpo }
+      let res = await postear({ id, ...base })
+      // Por si la tabla no deja fijar el id: mismo insert sin él.
+      if (!res.ok && (res.status === 400 || res.status === 403)) res = await postear(base)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      // Solo limpiar tras confirmar el insert — si falló, el texto se conserva.
-      setTexto('')
+      setMessages(prev => prev.map(m => (m.id === id ? { ...m, _enviando: false } : m)))
       await fetchMessages()
     } catch (_) {
-      // El texto queda en el campo para reintentar.
-    } finally {
-      // Sin esto, un fallo de red dejaba el botón ➤ bloqueado para siempre.
-      setSending(false)
+      // Se quita la burbuja y el texto vuelve al campo para reintentar.
+      setMessages(prev => prev.filter(m => m.id !== id))
+      setTexto(prev => prev || cuerpo)
     }
   }
 
@@ -550,7 +570,10 @@ export default function LawyerInternalChat({ miId }) {
               ) : (
                 <p className={styles.burbujaTexto}>{m.mensaje}</p>
               )}
-              <span className={styles.burbujaHora}>{fmtFechaHora(m.created_at)}</span>
+              <span className={styles.burbujaHora}>
+                {fmtFechaHora(m.created_at)}
+                {mine && <Visto leidoEn={!!m.leido} enviando={m._enviando} />}
+              </span>
             </div>
           )
         })}

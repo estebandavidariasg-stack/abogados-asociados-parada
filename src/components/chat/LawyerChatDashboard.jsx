@@ -14,7 +14,7 @@ import {
   // Visto (✓/✓✓) y presencia del cliente (Conectado / Ausente).
   Visto, Presencia, usePresencia, hayNoLeidosDeOtro, marcarLeidos, aplicarLeidoLocal,
   // Envío optimista + fusión de mensajes, y filtro por estado de la sala.
-  nuevoIdMensaje, fusionarMensajes, FiltroEstadoSalas, ESTADOS_SALA, contarEstados,
+  nuevoIdMensaje, fusionarMensajes, FiltroEstadoSalas, ESTADOS_SALA, contarEstados, useFirmasEstado,
 } from '../../lib/chatFiles'
 import { IconPaperclip, IconMic, IconFirma, IconCheck } from '../shared/Icons'
 import { pedirIA } from '../../lib/aiClient'
@@ -1155,16 +1155,22 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
 
   // Contrato de prestación de servicios en ESTA sala: ¿ya se envió?, ¿ya lo
   // firmó el cliente? Se lee del propio hilo (mensajes `firma` / `firma_ok`).
+  // "Firmado" sale de la base (useFirmasEstado), no de que haya llegado un
+  // mensaje: así no depende de que el aviso del cliente entre al hilo.
+  const firmasEstado = useFirmasEstado(messages)
+  const solicitudesConAviso = new Set()
   let contratoSolicitud = null
-  let contratoFirmado = false
   for (const m of messages) {
     if (m.message_type === 'firma') {
       const p = parseFirma(m.content)
-      if (p?.doc === DOC_CONTRATO_SERVICIOS) { contratoSolicitud = p.solicitudId; contratoFirmado = false }
-    } else if (m.message_type === 'firma_ok' && contratoSolicitud) {
-      if (parseFirmaOk(m.content)?.solicitudId === contratoSolicitud) contratoFirmado = true
+      if (p?.doc === DOC_CONTRATO_SERVICIOS) contratoSolicitud = p.solicitudId
+    } else if (m.message_type === 'firma_ok') {
+      const id = parseFirmaOk(m.content)?.solicitudId
+      if (id) solicitudesConAviso.add(id)
     }
   }
+  const contratoFirmado = !!contratoSolicitud &&
+    (firmasEstado[contratoSolicitud] === 'firmado' || solicitudesConAviso.has(contratoSolicitud))
   const puedeDescargarSala = canDownload || pagoConfirmado
 
   // ── Visto: marcar como leídos los mensajes del cliente ─────────────────
@@ -1699,15 +1705,38 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
                             onError={setToast}
                           />
                         )
-                      ) : m.message_type === 'firma' ? (
-                        <span className={styles.firmaMsg}>
-                          <span className={styles.firmaIcon}><IconFirma size={16} /></span>
-                          <span className={`${styles.msgText} ${styles.firmaBody}`}>
-                            <strong>{parseFirma(m.content)?.titulo ? `${parseFirma(m.content).titulo} enviado para firma` : 'Documento enviado para firma'}</strong>
-                            <span className={styles.firmaSub}>El cliente lo firmará desde el chat.</span>
+                      ) : m.message_type === 'firma' ? (() => {
+                        // El estado sale de la base (useFirmasEstado): si el cliente ya
+                        // firmó, aquí mismo quedan "ubicar firma" y el certificado, haya
+                        // llegado o no el aviso `firma_ok` al hilo.
+                        const f = parseFirma(m.content)
+                        const nombre = f?.titulo || 'Documento'
+                        const firmado = !!f && firmasEstado[f.solicitudId] === 'firmado'
+                        const conAviso = firmado && solicitudesConAviso.has(f.solicitudId)
+                        return (
+                          <span className={styles.firmaMsg}>
+                            <span className={styles.firmaIcon}>{firmado ? <IconCheck size={15} /> : <IconFirma size={16} />}</span>
+                            <span className={`${styles.msgText} ${styles.firmaBody}`}>
+                              <strong>{firmado ? `${nombre} firmado por el cliente` : `${nombre} enviado para firma`}</strong>
+                              {!firmado && <span className={styles.firmaSub}>El cliente lo firmará desde el chat.</span>}
+                              {firmado && !conAviso && (
+                                <span className={styles.firmaDlRow}>
+                                  <button className={styles.firmaDlBtn}
+                                    onClick={() => setUbicarFirma({ origPath: f.docPath, firmaPath: `${f.solicitudId}/firma.png` })}>
+                                    <IconFirma size={13} /> Ubicar firma y descargar PDF
+                                  </button>
+                                  <button className={styles.firmaDlBtnAlt} onClick={() => descargarCertificado(f.solicitudId)}>
+                                    <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                      <path d="M12 3v12M7 11l5 5 5-5M4 21h16" />
+                                    </svg>
+                                    Certificado (PDF)
+                                  </button>
+                                </span>
+                              )}
+                            </span>
                           </span>
-                        </span>
-                      ) : m.message_type === 'firma_ok' ? (
+                        )
+                      })() : m.message_type === 'firma_ok' ? (
                         <span className={styles.firmaMsg}>
                           <span className={styles.firmaIcon}><IconFirma size={16} /></span>
                           <span className={`${styles.msgText} ${styles.firmaBody}`}>
@@ -1727,7 +1756,7 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
                       )}
                       <p className={esMio ? styles.msgMetaMine : styles.msgMetaOther}>
                         {esMio ? 'Tú' : 'Cliente'} · {fmtHora(m.created_at)}
-                        {esMio && m.message_type !== 'system' && <Visto leidoEn={m.leido_en} enviando={m._enviando} tono="oscuro" />}
+                        {esMio && m.message_type !== 'system' && <Visto leidoEn={m.leido_en} enviando={m._enviando} tono={isAudio ? 'claro' : 'oscuro'} />}
                       </p>
                     </div>
                   </div>

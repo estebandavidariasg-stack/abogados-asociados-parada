@@ -184,6 +184,13 @@
 }
 .plantilla:hover .plantillaBajar { transform: translateY(2px); }
 
+/* La misma fila como botón ("Usar mi modelo contractual"): carga el modelo
+   del perfil en vez de descargar. La flecha se desliza a la derecha. */
+.plantillaBtn { width: 100%; font: inherit; text-align: left; cursor: pointer; }
+.plantillaBtn:disabled { opacity: 0.6; cursor: progress; }
+.plantillaBtn:hover .plantillaBajar { transform: translateX(3px); }
+@media (prefers-reduced-motion: reduce) { .plantillaBtn:hover .plantillaBajar { transform: none; } }
+
 /* ── Veredicto de la comparación con la plantilla ── */
 .veredicto {
   display: flex; align-items: flex-start; gap: 0.75rem;

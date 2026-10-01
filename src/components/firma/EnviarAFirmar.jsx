@@ -273,6 +273,12 @@ export default function EnviarAFirmar({ contrato, abogadoId, onClose, onDone, mo
       const data = await signRes.json()
       if (!data?.signedURL) throw new Error('No se pudo cargar el modelo.')
       const buf = await (await fetch(`${SUPABASE_URL}/storage/v1${data.signedURL}`)).arrayBuffer()
+      // Un contrato real pesa decenas de KB. Por debajo de 2 KB es una hoja
+      // en blanco de relleno: mostrarla "en blanco" parecía un fallo del visor.
+      if (buf.byteLength < 2048) {
+        setError('Tu modelo contractual está vacío: el archivo guardado es una hoja en blanco. Súbelo de nuevo desde tu perfil y vuelve a intentarlo.')
+        return
+      }
       setPdfBytes(new Uint8Array(buf))
     } catch (e) {
       setError('No se pudo cargar tu modelo contractual. ' + (e?.message || ''))
@@ -402,7 +408,18 @@ export default function EnviarAFirmar({ contrato, abogadoId, onClose, onDone, mo
     if (esChat) {
       // Publicar en el hilo el documento YA firmado por el profesional para
       // que el cliente firme encima.
-      afterCreate?.(solicitud, misFilas, r?.docFirmadoPath || solicitud.doc_original_path, metaDoc)
+      //
+      // Se guarda una copia aparte con SOLO la firma del profesional. El
+      // cliente, al firmar, reescribe `<solicitud>/firmado.pdf`; si esa fuera
+      // la base de "ubicar firma", el profesional la colocaría sobre un
+      // documento que ya trae la firma del cliente estampada (saldría doble).
+      let base = r?.docFirmadoPath || solicitud.doc_original_path
+      try {
+        const copia = `${solicitud.id}/profesional.pdf`
+        await subirDoc(copia, signedBytes, headers)
+        base = copia
+      } catch { /* sin copia: se usa el documento en curso, como antes */ }
+      afterCreate?.(solicitud, misFilas, base, metaDoc)
       onClose?.()
       return
     }
@@ -497,15 +514,29 @@ export default function EnviarAFirmar({ contrato, abogadoId, onClose, onDone, mo
                       Sube el documento <strong>ya listo</strong> para firmar. Si el cliente debía editarlo,
                       primero intercambien el Word por el chat y luego exporta la versión final a PDF.
                     </p>
+                    {/* Misma fila que la plantilla oficial: icono + nombre + flecha.
+                        Antes era un enlace subrayado con un emoji delante. */}
                     {esChat && modeloPath && (
                       <button
                         type="button"
-                        className={styles.addBtn}
-                        style={{ marginBottom: 10 }}
+                        className={`${styles.plantilla} ${styles.plantillaBtn}`}
                         onClick={usarModelo}
                         disabled={convirtiendo}
                       >
-                        📄 Usar mi modelo contractual
+                        <span className={styles.plantillaIcono} aria-hidden="true">
+                          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" /><path d="M14 3v5h5M9 13h6M9 17h4" />
+                          </svg>
+                        </span>
+                        <span className={styles.plantillaInfo}>
+                          <strong>Usar mi modelo contractual</strong>
+                          <small>El contrato base que tienes guardado en tu perfil</small>
+                        </span>
+                        <span className={styles.plantillaBajar} aria-hidden="true">
+                          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="m9 6 6 6-6 6" />
+                          </svg>
+                        </span>
                       </button>
                     )}
                   </>

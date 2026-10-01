@@ -431,6 +431,7 @@
   font-size: 0.72rem;
   color: rgba(0, 0, 0, 0.75);
   line-height: 1.5;
+  text-wrap: pretty;   /* sin palabra huérfana en la última línea */
 }
 
 .terminosLink {

@@ -1,9 +1,10 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { supabase, getAuthHeaders } from './supabase'
 import { compressImage } from '../utils/compressMedia'
 import { contieneContacto } from './validaciones'
 import { pedirIA } from './aiClient'
+import { sondear } from '../utils/sondeo'
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || ''
 
@@ -1413,9 +1414,12 @@ if (typeof document !== 'undefined') {
 export function Visto({ leidoEn, enviando = false, tono = 'claro' }) {
   // `leidoEn` undefined (columna sin crear) cuenta como entregado: el
   // mensaje está guardado, solo no se sabe si lo leyeron.
+  // `leidoEn` puede ser la fecha de lectura (chat de consulta) o solo `true`
+  // (chat interno: mensajes_internos.leido es un sí/no, sin hora).
   const leido = !enviando && !!leidoEn
-  const hora = leido ? new Date(leidoEn).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }) : ''
-  const etiqueta = enviando ? 'Enviando' : leido ? `Leído a las ${hora}` : 'Entregado'
+  const hora = leido && leidoEn !== true
+    ? new Date(leidoEn).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }) : ''
+  const etiqueta = enviando ? 'Enviando' : leido ? (hora ? `Leído a las ${hora}` : 'Leído') : 'Entregado'
   const clases = [
     'aapVisto',
     enviando ? 'aapVistoEnviando' : 'aapVistoDoble',
@@ -1427,7 +1431,7 @@ export function Visto({ leidoEn, enviando = false, tono = 'claro' }) {
       className={clases}
       role="img"
       aria-label={etiqueta}
-      title={leido ? `Leído · ${hora}` : etiqueta}
+      title={hora ? `Leído · ${hora}` : etiqueta}
     >
       <svg viewBox="0 0 24 14" width="18" height="11" fill="none" stroke="currentColor"
         strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -1436,6 +1440,64 @@ export function Visto({ leidoEn, enviando = false, tono = 'claro' }) {
       </svg>
     </span>
   )
+}
+
+/* ── Estado de las firmas de una sala ───────────────────────────────────
+   La verdad de si un documento ya se firmó está en la BASE
+   (firmas_solicitudes.estado), no en el hilo. Antes dependía de un mensaje
+   `firma_ok` que el cliente insertaba al terminar; la política de inserción
+   del chat pasó a rechazar ese insert directo y el aviso se perdía en
+   silencio: el cliente firmaba, quedaba firmado en la base, y al profesional
+   no le aparecía nada (ni "ubicar firma" ni el certificado).
+
+   Devuelve { [solicitudId]: 'pendiente' | 'firmado' } para los mensajes
+   `firma` del hilo. Consulta al abrir y, mientras haya alguna pendiente
+   enviada en los últimos 3 días, cada 8 s con la pestaña visible (una
+   petición mínima: solo id y estado). `anonimo` = cliente sin sesión. */
+const parseJSON = (t) => { try { return JSON.parse(t) } catch { return null } }
+const TRES_DIAS = 3 * 24 * 60 * 60 * 1000
+
+export function useFirmasEstado(mensajes, { anonimo = false } = {}) {
+  const [estados, setEstados] = useState({})
+  const { clave, hayRecientes } = useMemo(() => {
+    const ids = []
+    let recientes = false
+    for (const m of mensajes || []) {
+      if (m.message_type !== 'firma') continue
+      const id = parseJSON(m.content)?.solicitudId
+      if (!id || estados[id] === 'firmado' || ids.includes(id)) continue
+      ids.push(id)
+      if (Date.now() - new Date(m.created_at).getTime() < TRES_DIAS) recientes = true
+    }
+    return { clave: ids.join(','), hayRecientes: recientes }
+  }, [mensajes, estados])
+
+  useEffect(() => {
+    if (!clave) return
+    let vivo = true
+    const consultar = async () => {
+      try {
+        const headers = anonimo
+          ? { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` }
+          : await getAuthHeaders()
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/firmas_solicitudes?id=in.(${clave})&select=id,estado`, { headers })
+        if (!res.ok) return
+        const filas = await res.json()
+        if (!vivo || !Array.isArray(filas)) return
+        setEstados(prev => {
+          let cambio = false
+          const sig = { ...prev }
+          for (const f of filas) if (sig[f.id] !== f.estado) { sig[f.id] = f.estado; cambio = true }
+          return cambio ? sig : prev
+        })
+      } catch { /* red: el siguiente pulso reintenta */ }
+    }
+    consultar()
+    const parar = hayRecientes ? sondear(consultar, 8000) : null
+    return () => { vivo = false; parar?.() }
+  }, [clave, hayRecientes, anonimo])
+
+  return estados
 }
 
 /* ── Filtro por estado de las consultas ─────────────────────────────────

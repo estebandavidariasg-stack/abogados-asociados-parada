@@ -141,19 +141,13 @@
 .download:focus-visible { outline: 2px solid var(--gold-dk, #8a6a28); outline-offset: 2px; }
 
 /* ── Enlace dentro de una frase ──
-   Con :where() la especificidad es cero: solo quita la pinta de botón, y el
-   color, peso y subrayado los manda la clase de enlace de cada formulario
-   (terminosLink dorado del registro, café del chat…), gane quien gane en el
-   orden de carga de las hojas. */
+   Es un <a>: fluye como texto y se parte entre líneas donde haga falta.
+   Con :where() la especificidad es cero: el color, peso y subrayado los
+   manda la clase de enlace de cada formulario (terminosLink dorado del
+   registro, café del chat…), gane quien gane en el orden de carga. */
 :where(.enlace) {
-  display: inline;
-  padding: 0;
-  margin: 0;
-  border: 0;
-  background: none;
   font: inherit;
   color: inherit;
-  text-align: inherit;
   text-decoration: underline;
   text-underline-offset: 2px;
   cursor: pointer;

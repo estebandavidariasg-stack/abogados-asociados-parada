@@ -211,14 +211,22 @@ export function EnlaceLegal({ doc, children, className = '', style }) {
   if (!d) return children ?? null
   return (
     <>
-      <button
-        type="button"
+      {/* <a>, no <button>: un botón es una caja que no se parte entre líneas,
+          así que "política de tratamiento de datos" saltaba entero a la línea
+          siguiente y dejaba media fila vacía. El enlace fluye como texto. El
+          clic abre el visor aquí mismo; con clic central o "abrir en pestaña
+          nueva" lleva a la página completa del documento (d.ruta). */}
+      <a
+        href={d.ruta}
         className={`${styles.enlace} ${className}`.trim()}
         style={style}
-        onClick={(e) => { e.preventDefault(); e.stopPropagation(); setAbierto(true) }}
+        onClick={(e) => {
+          if (e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1) return   // pestaña nueva: se deja pasar
+          e.preventDefault(); e.stopPropagation(); setAbierto(true)
+        }}
       >
         {children ?? d.titulo}
-      </button>
+      </a>
       {abierto && <VisorLegal doc={d} onClose={() => setAbierto(false)} />}
     </>
   )

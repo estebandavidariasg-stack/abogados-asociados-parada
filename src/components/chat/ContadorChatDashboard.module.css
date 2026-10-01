@@ -366,6 +366,13 @@
   color: #6d3c1b; background: rgba(109,60,27,0.08); border: 1px solid rgba(109,60,27,0.25);
 }
 .firmaDlBtnAlt:hover { background: rgba(109,60,27,0.15); }
+/* En la burbuja café del profesional (documento ya firmado) el botón café
+   sobre café no se veía: ahí va en claro. */
+.bubbleMine .firmaDlBtnAlt {
+  display: inline-flex; align-items: center; gap: 6px;
+  color: #fff4e0; background: rgba(255, 255, 255, 0.1); border-color: rgba(255, 255, 255, 0.34);
+}
+.bubbleMine .firmaDlBtnAlt:hover { background: rgba(255, 255, 255, 0.2); }
 
 /* ── Overlay de arrastrar-soltar ── */
 .dropOverlay {
@@ -591,6 +598,10 @@
 
 .msgMetaMine  { composes: msgMeta; text-align: right; color: rgba(255,255,255,0.55); }
 .msgMetaOther { composes: msgMeta; text-align: left; color: #b59e8a; }
+/* Bajo una nota de voz la burbuja es transparente: el texto blanco pensado
+   para la burbuja café (hora y visto) quedaba invisible sobre el fondo claro. */
+.bubbleAudio .msgMetaMine,
+.bubbleAudio .msgMetaOther { color: #7d6c5d; padding: 0 6px; }
 
 /* ── Chip de archivo adjunto ─────────────────────────────────────
    Default (burbuja blanca .bubbleOther = archivos del cliente):

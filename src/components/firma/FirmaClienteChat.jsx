@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { anonHeaders, bytesDeDoc, persistirFirma, subirDoc, cerrarSolicitud } from '../../lib/firmaService'
+import { supabase } from '../../lib/supabase'
 import FirmaSigner from './FirmaSigner'
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -54,25 +55,48 @@ export default function FirmaClienteChat({ firma, roomId, onClose, onDone }) {
       } catch (e) { console.error('[firma png]', e?.message || e) }
     }
 
-    // Avisar en el hilo: el profesional podrá ubicar la firma y descargar el PDF.
+    /* Avisar en el hilo que ya se firmó.
+
+       El profesional NO depende de este aviso: su panel lee el estado de la
+       firma de la base (useFirmasEstado) y ahí mismo le salen "ubicar firma" y
+       el certificado. El aviso sirve para que le llegue al instante (Realtime,
+       contador de no leídos).
+
+       El insert directo del cliente en chat_messages lo rechaza hoy la
+       política "Enviar mensajes", y como fetch no lanza con un 4xx, ese
+       rechazo pasaba desapercibido: el cliente firmaba y al profesional no le
+       aparecía nada. Ahora se comprueba el resultado y, si no entra, se
+       manda un mensaje de texto por el RPC del cliente (el mismo respaldo que
+       usan los mensajes normales). */
     if (roomId) {
+      let entro = false
       try {
-        await fetch(`${SUPABASE_URL}/rest/v1/chat_messages`, {
-          method: 'POST',
-          headers: anonHeaders(),
-          body: JSON.stringify({
-            room_id: roomId,
-            sender_type: 'client',
-            content: JSON.stringify({
-              t: 'firma_ok', solicitudId: firma.solicitudId,
-              origPath: firma.docPath, firmaPath, pie,
-            }),
-            message_type: 'firma_ok',
+        const { error } = await supabase.from('chat_messages').insert({
+          room_id: roomId,
+          sender_type: 'client',
+          content: JSON.stringify({
+            t: 'firma_ok', solicitudId: firma.solicitudId,
+            origPath: firma.docPath, firmaPath, pie,
           }),
+          message_type: 'firma_ok',
         })
-      } catch { /* best-effort */ }
+        entro = !error
+      } catch { /* cae al respaldo */ }
+      if (!entro) {
+        try {
+          await fetch(`${SUPABASE_URL}/rest/v1/rpc/enviar_mensaje_cliente`, {
+            method: 'POST',
+            headers: anonHeaders(),
+            body: JSON.stringify({
+              p_client_token: localStorage.getItem('chat_cedula_hash'),
+              p_room_id: roomId,
+              p_content: firma.titulo ? `Firmé el ${firma.titulo.toLowerCase()}.` : 'Firmé el documento.',
+            }),
+          })
+        } catch { /* el panel del profesional igual lo verá firmado */ }
+      }
     }
-    onDone?.()
+    onDone?.(firma.solicitudId)
   }
 
   if (error) {

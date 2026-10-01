@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { estamparFirma, ROL_LABEL } from '../../lib/firmaPdf'
+import { PdfVisor } from '../../lib/chatFiles'
+import { validarCorreo } from '../../lib/validaciones'
 import styles from './FirmaSigner.module.css'
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -53,10 +55,10 @@ export default function FirmaSigner({ pdfBytes, firmante = {}, onComplete, onCan
   // lateral tiene backdrop-filter + z-index propio y, sin portal, quedaba encima).
   return createPortal(
     <div className={styles.overlay} role="dialog" aria-modal="true" aria-label="Firmar documento" onMouseDown={onCancel}>
-      <div className={`${styles.modal} ${(paso === 1 || paso === 3) ? styles.modalNarrow : ''}`} onMouseDown={(e) => e.stopPropagation()}>
+      <div className={`${styles.modal} ${(paso === 1 || paso === 3) ? styles.modalNarrow : ''} ${paso === 0 ? styles.modalRevisar : ''}`} onMouseDown={(e) => e.stopPropagation()}>
         <header className={styles.head}>
           <div>
-            <h2 className={styles.title}>Firma electrónica</h2>
+            <h2 className={styles.title}>Firma Electrónica</h2>
             <p className={styles.sub}>Ley 527 de 1999 · sin costo</p>
           </div>
           <button className={styles.close} onClick={onCancel} aria-label="Cerrar">✕</button>
@@ -115,13 +117,19 @@ function Stepper({ paso }) {
 }
 
 /* ── Paso 1 · Revisar ─────────────────────────────────────────────────────── */
+/* El documento es lo ÚNICO que se desplaza en este paso: el texto de arriba
+   y los botones quedan fijos y el visor ocupa el alto que sobra. Antes era un
+   <iframe> con el visor de PDF del navegador dentro de un cuerpo que también
+   se desplazaba: en el celular el gesto movía el modal y no el documento (o
+   el marco salía en blanco), así que no se podía leer lo que se iba a firmar.
+   PdfVisor pinta las páginas como imágenes en una sola zona de scroll. */
 function PasoRevisar({ pdfUrl, onNext, onCancel }) {
   return (
-    <div className={styles.body}>
+    <div className={`${styles.body} ${styles.bodyRevisar}`}>
       <p className={styles.lead}>Revisa el documento antes de firmar. Al continuar, aceptas firmarlo electrónicamente.</p>
       <div className={styles.viewer}>
         {pdfUrl
-          ? <iframe title="Documento a firmar" src={`${pdfUrl}#zoom=page-width`} className={styles.frame} />
+          ? <div className={styles.viewerFill}><PdfVisor url={pdfUrl} titulo="Documento a firmar" fondo="#f1ede9" maxPaginas={60} /></div>
           : <div className={styles.viewerLoad}><span className={styles.spinner} /> Cargando documento…</div>}
       </div>
       <div className={styles.actions}>
@@ -234,21 +242,54 @@ function OtpInput({ value, onChange, disabled }) {
   )
 }
 
+/* Reglas del pie de firma. Son los datos que quedan estampados en el
+   documento y en el certificado: una cédula con letras o un correo sin
+   dominio no deben poder firmarse. Devuelve { campo: motivo }. */
+function validarPie(pie) {
+  const e = {}
+  if (pie.cedula && !/^\d{6,12}$/.test(pie.cedula)) e.cedula = 'Entre 6 y 12 dígitos, sin puntos ni letras'
+  if (pie.telefono && !/^\+?\d{7,15}$/.test(pie.telefono)) e.telefono = 'Solo números, de 7 a 15 dígitos'
+  if (pie.correo) {
+    const v = validarCorreo(pie.correo.trim())
+    if (v.valid === false) e.correo = v.msg
+  }
+  return e
+}
+// Lo que se deja escribir en cada campo: la cédula solo dígitos; el teléfono
+// dígitos y un "+" inicial (indicativo de otro país).
+const LIMPIAR = {
+  cedula: (v) => v.replace(/\D/g, '').slice(0, 12),
+  telefono: (v) => (v.trim().startsWith('+') ? '+' : '') + v.replace(/\D/g, '').slice(0, 15),
+  correo: (v) => v.replace(/\s/g, ''),
+}
+
 /* ── Paso 3 · Firmar (lienzo + pie de firma) ──────────────────────────────── */
 function PasoFirmar({ firmante, pdfBytes, posicion, onDone, onBack, onError, firmaGuardada }) {
   const [pie, setPie] = useState({
-    nombre: firmante.nombre || '', cedula: firmante.cedula || '',
-    telefono: firmante.telefono || '', correo: firmante.correo || '',
+    // Lo que viene del perfil se limpia igual que lo que se escribe ("1.020.345"
+    // → "1020345"): si no, el dato precargado bloquearía la firma sin motivo.
+    nombre: firmante.nombre || '', cedula: LIMPIAR.cedula(String(firmante.cedula || '')),
+    telefono: LIMPIAR.telefono(String(firmante.telefono || '')), correo: firmante.correo || '',
     ciudad: firmante.ciudad || '', rol: firmante.rol || 'cliente',
   })
   const [firmaPng, setFirmaPng] = useState(null)
   const [firmando, setFirmando] = useState(false)
   const rolFijo = !!firmante.rol
 
-  const upd = (k) => (e) => setPie((p) => ({ ...p, [k]: e.target.value }))
-  const completo = pie.nombre && pie.cedula && pie.telefono && pie.correo && pie.ciudad && firmaPng
+  const upd = (k) => (e) => setPie((p) => ({ ...p, [k]: LIMPIAR[k] ? LIMPIAR[k](e.target.value) : e.target.value }))
+  // El motivo aparece al salir del campo (no mientras se escribe el primer dígito).
+  // Un dato precargado que no pasa la regla se señala de una vez.
+  const [tocado, setTocado] = useState(() => ({
+    cedula: !!firmante.cedula, telefono: !!firmante.telefono, correo: !!firmante.correo,
+  }))
+  const tocar = (k) => () => setTocado((t) => ({ ...t, [k]: true }))
+  const errores = validarPie(pie)
+  const errorDe = (k) => (tocado[k] ? errores[k] : '')
+  const hayErrores = Object.keys(errores).length > 0
+  const completo = pie.nombre && pie.cedula && pie.telefono && pie.correo && pie.ciudad && firmaPng && !hayErrores
 
   async function firmar() {
+    if (hayErrores) { setTocado({ cedula: true, telefono: true, correo: true }); onError('Revisa la cédula, el teléfono y el correo.'); return }
     if (!completo) { onError('Completa todos los campos y dibuja tu firma.'); return }
     setFirmando(true); onError('')
     try {
@@ -275,10 +316,13 @@ function PasoFirmar({ firmante, pdfBytes, posicion, onDone, onBack, onError, fir
           <label className={styles.fieldLabel}>Datos del pie de firma</label>
           <Field label="Nombre completo" value={pie.nombre} onChange={upd('nombre')} />
           <div className={styles.row2}>
-            <Field label="Cédula" value={pie.cedula} onChange={upd('cedula')} inputMode="numeric" />
-            <Field label="Teléfono" value={pie.telefono} onChange={upd('telefono')} inputMode="tel" />
+            <Field label="Cédula" value={pie.cedula} onChange={upd('cedula')} onBlur={tocar('cedula')}
+              error={errorDe('cedula')} inputMode="numeric" autoComplete="off" />
+            <Field label="Teléfono" value={pie.telefono} onChange={upd('telefono')} onBlur={tocar('telefono')}
+              error={errorDe('telefono')} inputMode="tel" autoComplete="tel" />
           </div>
-          <Field label="Correo" value={pie.correo} onChange={upd('correo')} type="email" />
+          <Field label="Correo" value={pie.correo} onChange={upd('correo')} onBlur={tocar('correo')}
+            error={errorDe('correo')} type="email" autoComplete="email" />
           <div className={styles.row2}>
             <Field label="Ciudad" value={pie.ciudad} onChange={upd('ciudad')} placeholder="Ej: Bogotá D.C." />
             <div className={styles.field}>
@@ -302,11 +346,12 @@ function PasoFirmar({ firmante, pdfBytes, posicion, onDone, onBack, onError, fir
   )
 }
 
-function Field({ label, ...rest }) {
+function Field({ label, error, ...rest }) {
   return (
     <div className={styles.field}>
       <label className={styles.fieldLabel}>{label}</label>
-      <input className={styles.input} {...rest} />
+      <input className={`${styles.input} ${error ? styles.inputError : ''}`} aria-invalid={error ? true : undefined} {...rest} />
+      {error && <span className={styles.fieldError} role="alert">{error}</span>}
     </div>
   )
 }

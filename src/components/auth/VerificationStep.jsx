@@ -8,7 +8,12 @@ import { useState, useEffect, useRef } from 'react'
    Props:
      · email       — para mostrar enmascarado en el subtítulo
      · error       — string mostrado bajo los inputs (lo gestiona el padre)
-     · submitting  — deshabilita el botón "Verificar"
+     · submitting  — hay una verificación en curso: las casillas laten una
+                     tras otra y el botón muestra un indicador de carga
+     · verificado  — el código ya fue aceptado y el padre sigue trabajando
+                     (crear la consulta, la cuenta…): casillas en verde,
+                     "Código correcto" y el botón con `textoVerificado`.
+                     Opcional: sin él, el paso se comporta como siempre.
      · onSubmit    — (code: string) => void  — invocado al pulsar Verificar
      · onResend    — () => Promise<void>     — el padre re-llama al endpoint
      · onBack      — () => void              — vuelve al formulario
@@ -111,6 +116,52 @@ const VERIFY_STYLES = `
     opacity: 0.45;
     cursor: not-allowed;
   }
+  /* ── Carga ──────────────────────────────────────────────────────────
+     Entre pulsar Verificar y la pantalla siguiente pasan uno o varios
+     segundos (comprobar el código y luego crear la consulta o la cuenta).
+     Sin señal, la persona vuelve a pulsar o cree que se colgó. */
+  .aap-otp-row--cargando .aap-otp-input:disabled { opacity: 1; cursor: progress; }
+  .aap-otp-row--verificando .aap-otp-input {
+    animation: aapOtpLatido 1.1s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+    animation-delay: calc(var(--i) * 90ms);
+  }
+  @keyframes aapOtpLatido {
+    0%, 55%, 100% { border-color: rgba(201, 168, 76, 0.4); box-shadow: none; transform: none; }
+    25% { border-color: #c9a84c; box-shadow: 0 0 12px rgba(201, 168, 76, 0.55); transform: translateY(-2px); }
+  }
+  .aap-otp-row--ok .aap-otp-input {
+    border-color: #3fa866;
+    box-shadow: 0 0 0 3px rgba(63, 168, 102, 0.18);
+    transition: border-color 260ms ease-out, box-shadow 260ms ease-out;
+  }
+  .aap-verify-ok {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    width: 100%; color: #2c8a52; font-weight: 700;
+    animation: aapOtpOk 320ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  @keyframes aapOtpOk { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+  /* Cargando: una sola línea, con el indicador pegado al texto. Las frases
+     de carga son más largas que "Verificar": letra un punto más chica y
+     menos espaciada para que quepan en el celular sin partirse. */
+  .aap-verify-submit[data-cargando="true"] {
+    opacity: 1; cursor: progress;
+    display: inline-flex; align-items: center; justify-content: center; gap: 10px;
+    white-space: nowrap;
+    font-size: clamp(0.74rem, 3.5vw, 0.86rem);
+    letter-spacing: 0.04em;
+  }
+  .aap-verify-spinner {
+    width: 16px; height: 16px; flex-shrink: 0; border-radius: 50%;
+    border: 2px solid rgba(42, 27, 13, 0.25); border-top-color: #2a1b0d;
+    animation: aapOtpGiro 0.7s linear infinite;
+  }
+  @keyframes aapOtpGiro { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) {
+    .aap-otp-row--verificando .aap-otp-input, .aap-verify-ok { animation: none; }
+    .aap-otp-row--verificando .aap-otp-input { border-color: #c9a84c; }
+    .aap-verify-spinner { animation-duration: 1.6s; }
+  }
+
   .aap-verify-footer {
     display: flex;
     justify-content: space-between;
@@ -231,6 +282,8 @@ export default function VerificationStep({
   email,
   error,
   submitting = false,
+  verificado = false,
+  textoVerificado = 'Un momento…',
   onSubmit,
   onResend,
   onBack,
@@ -269,7 +322,8 @@ export default function VerificationStep({
   }, [error])
 
   const code      = digits.join('')
-  const canSubmit = code.length === 6 && !submitting
+  const cargando  = submitting || verificado
+  const canSubmit = code.length === 6 && !cargando
 
   function setDigit(idx, value) {
     setDigits(prev => {
@@ -404,7 +458,10 @@ export default function VerificationStep({
           </div>
         )}
 
-        <div className="aap-otp-row" onPaste={handlePaste}>
+        <div
+          className={`aap-otp-row${cargando ? ' aap-otp-row--cargando' : ''}${verificado ? ' aap-otp-row--ok' : submitting ? ' aap-otp-row--verificando' : ''}`}
+          onPaste={handlePaste}
+        >
           {digits.map((d, i) => (
             <input
               key={i}
@@ -414,8 +471,9 @@ export default function VerificationStep({
               autoComplete="one-time-code"
               maxLength={1}
               value={d}
-              disabled={submitting}
+              disabled={cargando}
               className="aap-otp-input"
+              style={{ '--i': i }}
               onChange={e => handleChange(i, e.target.value)}
               onKeyDown={e => handleKeyDown(i, e)}
               onFocus={e => e.target.select()}
@@ -424,15 +482,29 @@ export default function VerificationStep({
           ))}
         </div>
 
-        <p className="aap-verify-error">{error || ' '}</p>
+        {/* Una sola línea para el resultado: error o "Código correcto". */}
+        <p className="aap-verify-error" role="status" aria-live="polite">
+          {verificado ? (
+            <span className="aap-verify-ok">
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor"
+                strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M20 6 9 17l-5-5" />
+              </svg>
+              Código correcto
+            </span>
+          ) : (error || ' ')}
+        </p>
 
         <button
           type="button"
           className="aap-verify-submit"
           disabled={!canSubmit}
+          data-cargando={cargando ? 'true' : undefined}
+          aria-busy={cargando || undefined}
           onClick={() => onSubmit?.(code)}
         >
-          {submitting ? 'Verificando…' : 'Verificar'}
+          {cargando && <span className="aap-verify-spinner" aria-hidden="true" />}
+          {verificado ? textoVerificado : submitting ? 'Verificando código…' : 'Verificar'}
         </button>
 
         <div className="aap-verify-footer">
@@ -440,7 +512,7 @@ export default function VerificationStep({
             type="button"
             className="aap-verify-link aap-verify-back"
             onClick={onBack}
-            disabled={submitting}
+            disabled={cargando}
           >
             ← Volver
           </button>
@@ -448,7 +520,7 @@ export default function VerificationStep({
             type="button"
             className="aap-verify-link aap-verify-resend"
             onClick={handleResend}
-            disabled={resendIn > 0 || resending || submitting}
+            disabled={resendIn > 0 || resending || cargando}
           >
             {resending
               ? 'Enviando…'

@@ -4,6 +4,7 @@ import { getAuthHeaders, timeoutSignal } from '../../lib/supabase'
 import {
   downloadChatFile, AdjuntoChat, VisorArchivo, ChatImage, ChatLightbox,
   crearGrabadorAudio, AUDIO_CONSTRAINTS, describirErrorMicrofono,
+  Visto, nuevoIdMensaje,
 } from '../../lib/chatFiles'
 import styles from './AdminInternalChat.module.css'
 import AudioPlayer from './AudioPlayer'
@@ -412,7 +413,12 @@ export default function AdminInternalChat({ miId, initialSelectedId, onOpenRoom 
       if (!Array.isArray(data)) return
       if (selectedIdRef.current !== convId) return
       const asc = data.reverse()
-      setMessages(asc)
+      // Un mensaje propio de ESTA conversación que aún se está enviando no
+      // viene en la respuesta: se conserva al final para que no parpadee.
+      setMessages(prev => {
+        const pend = prev.filter(m => m._enviando && m.to_id === convId && !asc.some(a => a.id === m.id))
+        return pend.length ? [...asc, ...pend] : asc
+      })
 
       // Marcar como leídos los mensajes hacia mí
       const sinLeer = asc.filter(m => adminIdsRef.current.includes(m.to_id) && !m.leido)
@@ -443,17 +449,35 @@ export default function AdminInternalChat({ miId, initialSelectedId, onOpenRoom 
       .catch(() => { /* el mensaje ya quedó en la plataforma */ })
   }
 
+  /* Envío optimista, igual que el chat de consulta: la burbuja sale YA con
+     ✓ (enviando); al confirmar el servidor pasa a ✓✓ gris (entregado) y, cuando
+     el profesional abre el canal interno, a ✓✓ dorado (leído). El id viaja en
+     el insert para que el sondeo traiga la MISMA fila y no se duplique. */
   async function enviar() {
-    if (!texto.trim() || !selected || sending) return
+    const cuerpo = texto.trim()
+    if (!cuerpo || !selected) return
     if (!miId) { setSendError('Sesión no lista. Recarga la página e intenta de nuevo.'); return }
-    setSending(true); setSendError('')
-    try {
+    const destino = selected.id
+    const id = nuevoIdMensaje()
+    setSendError('')
+    setTexto('')
+    setMessages(prev => [...prev, {
+      id, from_id: miId, to_id: destino, mensaje: cuerpo,
+      created_at: new Date().toISOString(), leido: false, _enviando: true,
+    }])
+    const postear = async (body) => {
       const headers = await getAuthHeaders()
-      const res = await fetch(`${SUPABASE_URL}/rest/v1/mensajes_internos`, {
+      return fetch(`${SUPABASE_URL}/rest/v1/mensajes_internos`, {
         method: 'POST',
         headers: { ...headers, Prefer: 'return=representation' },
-        body: JSON.stringify({ from_id: miId, to_id: selected.id, mensaje: texto.trim() }),
+        body: JSON.stringify(body),
       })
+    }
+    try {
+      const base = { from_id: miId, to_id: destino, mensaje: cuerpo }
+      let res = await postear({ id, ...base })
+      // Por si la tabla no deja fijar el id: mismo insert sin él.
+      if (!res.ok && (res.status === 400 || res.status === 403)) res = await postear(base)
       if (!res.ok) {
         const detail = await res.text().catch(() => '')
         console.error('Error enviando mensaje interno:', res.status, detail)
@@ -461,17 +485,15 @@ export default function AdminInternalChat({ miId, initialSelectedId, onOpenRoom 
           ? 'Sin permiso para enviar (revisa las políticas de mensajes_internos).'
           : `No se pudo enviar (HTTP ${res.status}). Intenta de nuevo.`)
       }
-      // Solo limpiar tras confirmar el insert — si falló, el texto se conserva.
-      setTexto('')
-      notificarPorCorreo(selected.id)
+      setMessages(prev => prev.map(m => (m.id === id ? { ...m, _enviando: false } : m)))
+      notificarPorCorreo(destino)
       await fetchMessages()
       fetchNoLeidos()
     } catch (err) {
-      // El texto queda en el campo para reintentar, con el motivo visible.
+      // Se quita la burbuja y el texto vuelve al campo, con el motivo visible.
+      setMessages(prev => prev.filter(m => m.id !== id))
+      setTexto(prev => prev || cuerpo)
       setSendError(err.message || 'No se pudo enviar. Revisa tu conexión.')
-    } finally {
-      // Sin esto, un fallo de red dejaba el botón ➤ bloqueado para siempre.
-      setSending(false)
     }
   }
 
@@ -995,7 +1017,10 @@ export default function AdminInternalChat({ miId, initialSelectedId, onOpenRoom 
                     ) : (
                       <p className={styles.burbujaTexto}>{m.mensaje}</p>
                     )}
-                    <span className={styles.burbujaHora}>{fmtHora(m.created_at)}</span>
+                    <span className={styles.burbujaHora}>
+                      {fmtHora(m.created_at)}
+                      {mine && <Visto leidoEn={!!m.leido} enviando={m._enviando} />}
+                    </span>
                   </div>
                 )
               })}

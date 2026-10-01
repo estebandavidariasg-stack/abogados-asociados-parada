@@ -14,7 +14,7 @@ import {
   revisarContactoArchivo, crearTranscriptor, PdfVisor,
   // Visto (✓/✓✓) y presencia del profesional (Conectado / Ausente).
   Visto, Presencia, usePresencia, hayNoLeidosDeOtro, marcarLeidos, aplicarLeidoLocal,
-  nuevoIdMensaje, fusionarMensajes,
+  nuevoIdMensaje, fusionarMensajes, useFirmasEstado,
 } from '../../lib/chatFiles'
 // Términos de uso y política de datos, leídos en el visor sin salir del flujo.
 import { EnlaceLegal } from '../shared/DocumentosLegales'
@@ -650,6 +650,12 @@ async function crearSalaRobusta(hash, baseRoom, codigoRef, lawyerId, mensaje) {
 const MAX_CASOS_ABIERTOS = 5
 const esSalaAbierta = s => s === 'waiting' || s === 'active' || s === 'open'
 
+// El insert directo del cliente en chat_messages lo rechaza la política
+// "Enviar mensajes" (ver docs/sql/registro-2026-09-17.sql). Tras el primer
+// rechazo de la visita se va directo al RPC: cada mensaje se ahorra un viaje
+// de ida y vuelta que ya se sabe que falla.
+let insertDirectoRechazado = false
+
 async function rpcCliente(fn, body) {
   try {
     const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${fn}`, {
@@ -1095,7 +1101,8 @@ function StepCedula({ onNew, onCasos }) {
           onChange={e => { setAcepta(e.target.checked); setError('') }}
           style={{ width:17, height:17, marginTop:1, accentColor:'#c9a84c', flexShrink:0, cursor:'pointer' }}
         />
-        <span>
+        {/* pretty: no deja una palabra sola ("datos.") en la última línea */}
+        <span style={{ textWrap: 'pretty' }}>
           Acepto los{' '}
           <EnlaceLegal doc="terminos" style={{ color:'#6d3c1b', fontWeight:700 }}>términos de uso</EnlaceLegal>
           {' '}y la{' '}
@@ -1548,6 +1555,9 @@ export default function ChatSection() {
   const [otpEmail, setOtpEmail] = useState('')
   const [otpError, setOtpError] = useState('')
   const [otpBusy,  setOtpBusy]  = useState(false)
+  // Código ya aceptado y la consulta creándose: el paso lo dice ("Código
+  // correcto · Preparando tu consulta…") en vez de quedarse como si nada.
+  const [otpListo, setOtpListo] = useState(false)
   const otpContinuarRef = useRef(null)   // qué hacer al verificar (crear sala / buscar profesionales)
   const OTP_SESSION_KEY = 'chat_correo_verificado'
   const correoVerificadoEnSesion = (correo) => {
@@ -1625,8 +1635,23 @@ export default function ChatSection() {
       marcarCorreoVerificado(otpEmail)
       const continuar = otpContinuarRef.current
       otpContinuarRef.current = null
-      setOtpBusy(false)
-      if (continuar) await continuar(otpEmail)
+      // El código ya pasó. Lo que sigue (crear la sala o buscar profesionales)
+      // tarda uno o varios segundos: el paso se queda en "Código correcto ·
+      // Preparando tu consulta…" hasta que la pantalla cambie. Antes se
+      // apagaba la carga aquí y la persona veía el formulario del código
+      // quieto, como si no hubiera pasado nada.
+      setOtpListo(true)
+      try {
+        if (continuar) await continuar(otpEmail)
+      } catch {
+        setFormError('No se pudo iniciar la consulta. Revisa tu conexión e intenta de nuevo.')
+      } finally {
+        setOtpBusy(false); setOtpListo(false)
+        // Si lo que seguía falló, el motivo se muestra en el formulario: no
+        // se deja a la persona frente a un código que ya se usó. El correo
+        // queda verificado, así que al reintentar no se pide otro código.
+        setStep(s => (s === 'verificar' ? 'form' : s))
+      }
     } catch (err) {
       setOtpError(err.message || 'Código inválido o expirado')
       setOtpBusy(false)
@@ -2137,6 +2162,13 @@ export default function ChatSection() {
     document.addEventListener('visibilitychange', marcar)
     return () => { vivo = false; document.removeEventListener('visibilitychange', marcar) }
   }, [roomId, step, messages])
+
+  // ── Documentos enviados a firma: ¿ya los firmé? ────────────────────────
+  // El estado sale de la base (no de un mensaje del hilo). `firmadasLocal`
+  // lo adelanta en esta pantalla en cuanto termina la firma, sin esperar a
+  // la siguiente consulta.
+  const firmasEstado = useFirmasEstado(messages, { anonimo: true })
+  const [firmadasLocal, setFirmadasLocal] = useState(() => new Set())
 
   // ── Presencia del profesional (Conectado / Ausente) en el encabezado ───
   const presenciaPro = usePresencia(roomId, {
@@ -2797,13 +2829,11 @@ export default function ChatSection() {
     actividadRef.current = Date.now()
     const confirmar = (fila) => setMessages(prev => fusionarMensajes(prev, [fila]))
 
-    let { error } = await supabase.from('chat_messages').insert({ id, room_id: rid, sender_type:'client', lawyer_id: null, content })
-    if (error) {
-      // Por si la tabla no deja fijar el id: mismo insert sin él.
-      ;({ error } = await supabase.from('chat_messages').insert({ room_id: rid, sender_type:'client', lawyer_id: null, content }))
-      if (!error) { setMessages(prev => prev.filter(m => m.id !== id)); sondeoYaRef.current?.(); return }
+    if (!insertDirectoRechazado) {
+      const { error } = await supabase.from('chat_messages').insert({ id, room_id: rid, sender_type:'client', lawyer_id: null, content })
+      if (!error) { confirmar({ ...local, _enviando: false }); setTimeout(() => sondeoYaRef.current?.(), 900); return }
+      insertDirectoRechazado = true
     }
-    if (!error) { confirmar({ ...local, _enviando: false }); setTimeout(() => sondeoYaRef.current?.(), 900); return }
 
     // Respaldo por RPC (SECURITY DEFINER): cubre el caso sin JWT de cliente.
     // La RPC genera su propio id: se cambia el local por la fila devuelta.
@@ -2815,7 +2845,9 @@ export default function ChatSection() {
     if (ok) {
       setMessages(prev => {
         const sin = prev.filter(m => m.id !== id)
-        return fila?.id ? fusionarMensajes(sin, [{ ...fila, _nuevo: true }], { nuevos: false }) : sin
+        // `_key` conserva la identidad de la burbuja: el RPC devuelve la fila
+        // con SU id, y sin esto React la desmontaría y volvería a animarla.
+        return fila?.id ? fusionarMensajes(sin, [{ ...fila, _key: id }], { nuevos: false }) : sin
       })
       if (!fila?.id) sondeoYaRef.current?.()
       return
@@ -3430,32 +3462,51 @@ export default function ChatSection() {
                         </div>
                       )
                     }
-                    // Documento para firmar (enviado por el profesional).
+                    // Documento para firmar (enviado por el profesional). No es una
+                    // burbuja más: es una tarjeta con UNA acción. Con `titulo` es el
+                    // contrato de prestación de servicios (ya verificado contra la
+                    // plantilla). Si ya se firmó, lo dice y retira el botón.
                     const firma = msg.message_type === 'firma' ? parseFirma(msg.content) : null
                     if (firma) {
+                      const firmado = firmasEstado[firma.solicitudId] === 'firmado' || firmadasLocal.has(firma.solicitudId)
+                      const esContrato = !!firma.titulo
                       return (
-                        <div key={msg.id} className={styles.msgRowOther}>
-                          <div className={styles.msgBubbleOther}>
-                            <p className={styles.msgText} style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-                              <span style={{ flexShrink: 0, width: 30, height: 30, display: 'grid', placeItems: 'center', borderRadius: 9, background: 'rgba(201,168,76,0.18)', color: '#8a6a28', marginTop: 1 }}>
-                                <IconFirma size={16} />
+                        <div key={msg.id} className={`${styles.msgRowOther}${msg._nuevo ? ' aapMsgIn' : ''}`}>
+                          <div className={`${styles.firmaCard} ${firmado ? styles.firmaCardOk : ''}`}>
+                            <div className={styles.firmaCardHead}>
+                              <span className={styles.firmaCardIcono} aria-hidden="true">
+                                {firmado ? (
+                                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M20 6 9 17l-5-5" />
+                                  </svg>
+                                ) : <IconFirma size={18} />}
                               </span>
-                              <span style={{ display: 'flex', flexDirection: 'column', gap: 4, lineHeight: 1.35 }}>
-                                {/* Con `titulo` es el contrato de prestación de servicios
-                                    (ya verificado contra la plantilla oficial). */}
-                                <strong>{firma.titulo ? `${firma.titulo} para firmar` : 'Tienes un documento para firmar'}</strong>
-                                <span style={{ opacity: 0.9 }}>
-                                  {firma.titulo
-                                    ? 'Léelo y fírmalo aquí mismo antes de iniciar el servicio. No tiene costo.'
-                                    : 'Es rápido y sin costo. Fírmalo aquí mismo.'}
+                              <div className={styles.firmaCardTexto}>
+                                <strong>
+                                  {firmado
+                                    ? (esContrato ? 'Contrato firmado' : 'Documento firmado')
+                                    : (esContrato ? firma.titulo : 'Documento para firmar')}
+                                </strong>
+                                <span>
+                                  {firmado
+                                    ? 'Tu firma quedó registrada. Tu profesional ya puede verlo.'
+                                    : esContrato
+                                      ? 'Léelo y fírmalo aquí mismo antes de iniciar el servicio.'
+                                      : 'Tu profesional te pide firmarlo. Léelo y fírmalo aquí mismo.'}
                                 </span>
-                              </span>
-                            </p>
-                            <button className={styles.fileBtn} onClick={() => setFirmaCliente(firma)}>
-                              {firma.titulo ? 'Leer y firmar el contrato' : 'Firmar documento'}
-                            </button>
-                            <p className={styles.msgMetaOther}>
-                              Abogado · {new Date(msg.created_at).toLocaleTimeString('es-CO', { hour:'2-digit', minute:'2-digit' })}
+                              </div>
+                            </div>
+                            {!firmado && (
+                              <>
+                                <button type="button" className={styles.firmaCardBtn} onClick={() => setFirmaCliente(firma)}>
+                                  <IconFirma size={15} />
+                                  {esContrato ? 'Leer y firmar el contrato' : 'Leer y firmar'}
+                                </button>
+                                <p className={styles.firmaCardNota}>Sin costo · Firma electrónica, Ley 527 de 1999</p>
+                              </>
+                            )}
+                            <p className={styles.firmaCardMeta}>
+                              {profProfesionHeader} · {new Date(msg.created_at).toLocaleTimeString('es-CO', { hour:'2-digit', minute:'2-digit' })}
                             </p>
                           </div>
                         </div>
@@ -3478,7 +3529,7 @@ export default function ChatSection() {
                     const isAudio = msg.message_type === 'audio' && msg.file_url
                     const isImageMsg = !isAudio && !!msg.file_url && isImage(msg.file_name)
                     return (
-                      <div key={msg.id} className={`${mine ? styles.msgRowMine : styles.msgRowOther}${msg._nuevo ? ' aapMsgIn' : ''}`}>
+                      <div key={msg._key || msg.id} className={`${mine ? styles.msgRowMine : styles.msgRowOther}${msg._nuevo ? ' aapMsgIn' : ''}`}>
                         <div className={`${mine ? styles.msgBubbleMine : styles.msgBubbleOther} ${isAudio ? styles.msgBubbleAudio : ''} ${isImageMsg ? styles.msgBubbleImg : ''}`}>
                           {isAudio ? (
                             // Color por rol: cliente (mine) → player dorado (theme dark);
@@ -3544,7 +3595,11 @@ export default function ChatSection() {
                       firma={firmaCliente}
                       roomId={roomId}
                       onClose={() => setFirmaCliente(null)}
-                      onDone={() => setFirmaCliente(null)}
+                      onDone={(solicitudId) => {
+                        setFirmaCliente(null)
+                        if (solicitudId) setFirmadasLocal(prev => new Set(prev).add(solicitudId))
+                        sondeoYaRef.current?.()
+                      }}
                     />
                   </Suspense>
                 )}
@@ -4343,6 +4398,8 @@ export default function ChatSection() {
                 email={otpEmail}
                 error={otpError}
                 submitting={otpBusy}
+                verificado={otpListo}
+                textoVerificado="Preparando tu consulta…"
                 onSubmit={verificarOtpConsulta}
                 onResend={() => enviarOtpConsulta(otpEmail).catch(err => { setOtpError(err.message); throw err })}
                 onCambiarCorreo={cambiarCorreoConsulta}
