@@ -6,6 +6,7 @@ import { useAuth } from '../../context/AuthContext';
 import { pedirIA } from '../../lib/aiClient';
 import { getAuthHeaders } from '../../lib/supabase';
 import Markdown from '../shared/Markdown';
+import { EnlaceLegal } from '../shared/DocumentosLegales';
 import styles from './AsistenteIA.module.css';
 
 const SUGERENCIAS = [
@@ -795,9 +796,9 @@ export default function AsistenteIA() {
                 />
                 <span>
                   He leído y acepto los{' '}
-                  <a href="/terminos" target="_blank" rel="noopener noreferrer" style={{ color: '#6d3c1b', fontWeight: 700 }}>términos y condiciones</a>
+                  <EnlaceLegal doc="terminos" style={{ color: '#6d3c1b', fontWeight: 700 }}>términos de uso</EnlaceLegal>
                   {' '}y la{' '}
-                  <a href="/privacidad" target="_blank" rel="noopener noreferrer" style={{ color: '#6d3c1b', fontWeight: 700 }}>política de privacidad</a>
+                  <EnlaceLegal doc="datos" style={{ color: '#6d3c1b', fontWeight: 700 }}>política de tratamiento de datos</EnlaceLegal>
                   {' '}del uso de esta herramienta.
                 </span>
               </label>

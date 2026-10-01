@@ -35,7 +35,9 @@ const norm = (s) => (s || '').toString().toLowerCase().normalize('NFD').replace(
      · correo → responde el correo "opina sobre la página" en /opinar
    El origen viene en `resenas.origen` (docs/sql/resenas-origen-2026-09-19.sql);
    mientras esa columna no esté aplicada, la etiqueta simplemente no aparece. */
-export default function ResenasAdmin() {
+// `onCambio`: avisa al panel al aprobar/quitar/eliminar, para que el badge
+// de Opiniones del riel se recuente al instante y no al siguiente poll.
+export default function ResenasAdmin({ onCambio } = {}) {
   const [rows, setRows] = useState([])
   const [profs, setProfs] = useState({}) // id → { nombre, apellido, rol, cedula }
   const [loading, setLoading] = useState(true)
@@ -91,6 +93,7 @@ export default function ResenasAdmin() {
         body: JSON.stringify({ aprobado, estado: aprobado ? 'aprobada' : 'recibida' }),
       })
       setRows((rs) => rs.map((x) => (x.id === r.id ? { ...x, aprobado, estado: aprobado ? 'aprobada' : 'recibida' } : x)))
+      onCambio?.()
     } finally { setBusy(null) }
   }
 
@@ -100,6 +103,7 @@ export default function ResenasAdmin() {
       const headers = await getAuthHeaders()
       await fetch(`${SUPABASE_URL}/rest/v1/resenas?id=eq.${r.id}`, { method: 'DELETE', headers })
       setRows((rs) => rs.filter((x) => x.id !== r.id))
+      onCambio?.()
     } finally { setBusy(null) }
   }
 

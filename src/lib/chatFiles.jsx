@@ -830,17 +830,28 @@ export function crearTranscriptor(lang = 'es-CO') {
    rasteriza con pdf.js (que el proyecto ya usa para la firma) y se muestran las
    páginas como imágenes: se ve igual en escritorio y en móvil, y sigue siendo
    solo lectura (no hay descarga ni menú contextual).
-   Si algo falla, se ofrece el enlace directo como último recurso. */
+   Si algo falla, se ofrece el enlace directo como último recurso.
+
+   Las páginas aparecen UNA A UNA según se rasterizan: la primera se lee en
+   menos de un segundo aunque el documento tenga 14 (los contratos legales),
+   en vez de esperar todo en blanco. `maxPaginas` recorta el trabajo en los
+   adjuntos del chat (12); los documentos legales lo suben para verse
+   completos. `onInfo({ total })` avisa cuántas páginas tiene el PDF real,
+   por si quien lo monta quiere mostrarlo. */
 const PDF_MAX_PAGINAS = 12
 
-export function PdfVisor({ url, titulo = 'Documento', fondo = '#fff' }) {
-  const [paginas, setPaginas] = useState(null)   // null = cargando
+export function PdfVisor({ url, titulo = 'Documento', fondo = '#fff', maxPaginas = PDF_MAX_PAGINAS, onInfo }) {
+  const [paginas, setPaginas] = useState(null)   // null = ni la primera está lista
+  const [total, setTotal] = useState(0)           // páginas reales del PDF
+  const [listo, setListo] = useState(false)       // terminó de rasterizar
   const [error, setError] = useState('')
   const cajaRef = useRef(null)
+  const onInfoRef = useRef(onInfo)
+  onInfoRef.current = onInfo
 
   useEffect(() => {
     let vivo = true
-    setPaginas(null); setError('')
+    setPaginas(null); setTotal(0); setListo(false); setError('')
     ;(async () => {
       try {
         const res = await fetch(url)
@@ -854,17 +865,22 @@ export function PdfVisor({ url, titulo = 'Documento', fondo = '#fff' }) {
            la memoria del celular (ahí el visor mide ~360 px: ~1080 px). */
         const ancho = cajaRef.current?.clientWidth || 800
         const anchoPx = Math.min(2400, Math.round(ancho * Math.min(window.devicePixelRatio || 1, 3)))
-        const pags = await rasterizarPdf(bytes, 1.5, {
-          maxPaginas: PDF_MAX_PAGINAS, tipo: 'image/jpeg', calidad: 0.92, anchoPx,
+        await rasterizarPdf(bytes, 1.5, {
+          maxPaginas, tipo: 'image/jpeg', calidad: 0.92, anchoPx,
+          onPagina: (pagina, i, numPaginas) => {
+            if (!vivo) return
+            if (i === 0) { setTotal(numPaginas); onInfoRef.current?.({ total: numPaginas }) }
+            setPaginas(prev => [...(prev || []), pagina])
+          },
         })
-        if (vivo) setPaginas(pags)
+        if (vivo) { setPaginas(prev => prev || []); setListo(true) }
       } catch (err) {
         console.error('[PdfVisor] no se pudo rasterizar:', err)
-        if (vivo) { setError('No se pudo mostrar el documento aquí.'); setPaginas([]) }
+        if (vivo) { setError('No se pudo mostrar el documento aquí.'); setPaginas([]); setListo(true) }
       }
     })()
     return () => { vivo = false }
-  }, [url])
+  }, [url, maxPaginas])
 
   const caja = {
     width: '100%', height: '100%', overflowY: 'auto', overflowX: 'hidden',
@@ -890,15 +906,18 @@ export function PdfVisor({ url, titulo = 'Documento', fondo = '#fff' }) {
       </div>
     )
   }
+  const recortado = listo && total > paginas.length
   return (
     <div ref={cajaRef} style={caja} onContextMenu={e => e.preventDefault()}>
       {paginas.map((p, i) => (
         <img key={i} src={p.dataUrl} alt={`${titulo}, página ${i + 1}`} draggable={false}
           style={{ display: 'block', width: '100%', height: 'auto', userSelect: 'none' }} />
       ))}
-      {paginas.length >= PDF_MAX_PAGINAS && (
-        <p style={{ margin: 0, padding: '10px 14px', fontSize: '0.75rem', color: '#8a6a28', textAlign: 'center' }}>
-          Se muestran las primeras {PDF_MAX_PAGINAS} páginas.
+      {(!listo || recortado) && (
+        <p aria-live="polite" style={{ margin: 0, padding: '10px 14px', fontSize: '0.75rem', color: '#8a6a28', textAlign: 'center' }}>
+          {!listo
+            ? `Cargando página ${Math.min(paginas.length + 1, total || paginas.length + 1)}${total ? ` de ${total}` : ''}…`
+            : `Se muestran las primeras ${paginas.length} páginas de ${total}.`}
         </p>
       )}
     </div>
@@ -1165,5 +1184,311 @@ export function VisorArchivo({ archivo, onClose }) {
       </div>
     </>,
     document.body
+  )
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   Visto (✓ / ✓✓) y presencia (Conectado / Ausente)
+   SQL: docs/sql/visto-presencia-2026-09-29.sql
+
+   Dos RPC SECURITY DEFINER, una por cosa:
+     · chat_marcar_leidos(sala)  → pone leido_en=now() en los mensajes de LA
+                                   OTRA PARTE que aún no lo tenían.
+     · chat_latido(sala)         → "estoy aquí" cada 30 s con la pestaña
+                                   visible; devuelve el último latido del otro.
+   El profesional se identifica con su sesión (auth.uid() asignado a la
+   sala); el cliente con el hash de su cédula (p_client_token), igual que
+   mis_mensajes. Si el SQL no está aplicado, la RPC responde 404: todo aquí
+   degrada a "no disponible" y las pantallas siguen como antes (un solo ✓ y
+   el rótulo de estado de la sala).
+   ═══════════════════════════════════════════════════════════════════════ */
+const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || ''
+
+// `clientToken` presente → llamada de cliente (anon key + hash);
+// ausente → llamada del profesional (sesión real).
+async function rpcChat(fn, roomId, clientToken) {
+  try {
+    const headers = clientToken
+      ? { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json' }
+      : { ...(await getAuthHeaders()), 'Content-Type': 'application/json' }
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${fn}`, {
+      method: 'POST', headers,
+      body: JSON.stringify({ p_room_id: roomId, p_client_token: clientToken || null }),
+    })
+    if (!res.ok) return { ok: false, status: res.status, data: null }
+    return { ok: true, status: res.status, data: await res.json().catch(() => null) }
+  } catch { return { ok: false, status: 0, data: null } }
+}
+
+// ¿Hay mensajes de la otra parte sin leído? `propio` = sender_type mío.
+// `leido_en === null` (no undefined): si la columna no existe, nunca hay
+// nada que marcar y no se llama a la RPC.
+export function hayNoLeidosDeOtro(mensajes, propio) {
+  return Array.isArray(mensajes) && mensajes.some(m => m.sender_type !== propio && m.leido_en === null)
+}
+
+/* Marca como leídos los mensajes de la otra parte. Solo con la pestaña
+   visible: leer con la pestaña oculta sería mentirle al que escribió. */
+export async function marcarLeidos(roomId, { clientToken } = {}) {
+  if (!roomId || document.hidden) return false
+  const { ok } = await rpcChat('chat_marcar_leidos', roomId, clientToken)
+  return ok
+}
+
+/* Deja leido_en puesto en local tras marcar, para no volver a pedirlo en
+   cada render aunque el UPDATE de Realtime tarde o no llegue. */
+export const aplicarLeidoLocal = (mensajes, propio, cuando = new Date().toISOString()) =>
+  mensajes.map(m => (m.sender_type !== propio && m.leido_en === null) ? { ...m, leido_en: cuando } : m)
+
+/* ── Envío optimista ────────────────────────────────────────────────────
+   El id del mensaje se genera AQUÍ, en el navegador, y viaja en el insert.
+   Así el mensaje se pinta al instante (✓ "enviando") y, cuando el servidor
+   lo confirma, o llega por Realtime o por el sondeo, es la MISMA fila: no
+   hay que buscar cuál reemplazar ni se duplica. */
+export function nuevoIdMensaje() {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID()
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0
+    return (c === 'x' ? r : ((r & 0x3) | 0x8)).toString(16)
+  })
+}
+
+/* Mezcla filas del servidor con lo que ya se ve, sin rehacer la lista:
+     · fila conocida  → se actualiza (leido_en, y deja de estar "enviando")
+     · fila nueva     → se agrega marcada `_nuevo` (entra con animación)
+   Devuelve la MISMA referencia si nada cambió, para no re-renderizar el
+   hilo en cada sondeo. */
+export function fusionarMensajes(prev, filas, { nuevos = true } = {}) {
+  if (!Array.isArray(filas) || !filas.length) return prev
+  const porId = new Map(filas.filter(f => f && f.id).map(f => [f.id, f]))
+  let cambio = false
+  const alDia = prev.map(m => {
+    const f = porId.get(m.id)
+    if (!f) return m
+    porId.delete(m.id)
+    if (m._enviando || f.leido_en !== m.leido_en) { cambio = true; return { ...m, ...f, _enviando: false } }
+    return m
+  })
+  if (!porId.size && !cambio) return prev
+  const agregados = [...porId.values()].map(f => (nuevos ? { ...f, _nuevo: true } : f))
+  if (!agregados.length) return alDia
+  return [...alDia, ...agregados].sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+}
+
+/* Estado legible a partir del último latido del otro. 75 s = dos latidos y
+   medio de margen sobre los 30 s del intervalo. */
+export const PRESENCIA_VENTANA_MS = 75_000
+export function describirPresencia(vistoEn, ahora = Date.now()) {
+  if (!vistoEn) return { conectado: false, texto: 'Ausente', detalle: '' }
+  const t = new Date(vistoEn).getTime()
+  if (!Number.isFinite(t)) return { conectado: false, texto: 'Ausente', detalle: '' }
+  const diff = ahora - t
+  if (diff < PRESENCIA_VENTANA_MS) return { conectado: true, texto: 'Conectado', detalle: '' }
+  const min = Math.floor(diff / 60_000)
+  const detalle =
+    min < 1    ? 'hace un momento' :
+    min < 60   ? `hace ${min} min` :
+    min < 1440 ? `hace ${Math.floor(min / 60)} h` :
+    min < 2880 ? 'ayer' :
+    new Date(t).toLocaleDateString('es-CO', { day: 'numeric', month: 'short' })
+  return { conectado: false, texto: 'Ausente', detalle }
+}
+
+/* Hook: late cada 30 s mientras `activo` y la pestaña esté visible, y
+   devuelve { disponible, conectado, texto, detalle } sobre la otra parte.
+   Un tic local de 10 s re-evalúa la ventana sin llamar al servidor (así
+   "Conectado" cae a "Ausente" aunque el siguiente latido tarde). */
+export function usePresencia(roomId, { activo = true, clientToken = null } = {}) {
+  const [otro, setOtro] = useState(null)          // ISO del último latido ajeno
+  const [disponible, setDisponible] = useState(true)
+  const [, setTic] = useState(0)
+
+  useEffect(() => {
+    if (!roomId || !activo) { setOtro(null); return }
+    let vivo = true
+    async function latir() {
+      if (document.hidden) return
+      const { ok, status, data } = await rpcChat('chat_latido', roomId, clientToken)
+      if (!vivo) return
+      if (ok) { setDisponible(true); setOtro(data || null) }
+      else if (status === 404) setDisponible(false)
+    }
+    latir()
+    const idLatido = setInterval(latir, 30_000)
+    const idTic = setInterval(() => { if (!document.hidden) setTic(t => t + 1) }, 10_000)
+    const onVisible = () => { if (!document.hidden) latir() }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      vivo = false
+      clearInterval(idLatido); clearInterval(idTic)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
+  }, [roomId, activo, clientToken])
+
+  return { disponible, ...describirPresencia(otro) }
+}
+
+/* Estados del mensaje propio, como WhatsApp:
+     ✓   gris   → enviando (aún no confirma el servidor)
+     ✓✓  gris   → entregado (guardado; la otra parte lo recibe)
+     ✓✓  dorado → leído (la otra parte lo tuvo a la vista)
+   El segundo chulo entra con un pequeño deslizamiento y el dorado con un
+   fundido, una sola vez, sin bucles. `tono` = fondo de la burbuja: en la
+   oscura el "leído" es dorado claro; en la blanca, dorado oscuro. */
+const VISTO_CSS = `
+/* Gris NEUTRO para enviado/entregado y dorado vivo para leído: la diferencia
+   tiene que ser de tono (como el gris/azul de WhatsApp), no de intensidad;
+   con dos marrones parecidos no se distinguía de un vistazo. */
+.aapVisto { display: inline-flex; align-items: center; vertical-align: -1px; margin-left: 4px; color: var(--visto-base, #9a9088); transition: color 240ms ease-out, opacity 240ms ease-out; }
+.aapVisto svg { display: block; }
+.aapVisto .aapVisto2 { opacity: 0; transform: translateX(-4px); transition: opacity 220ms cubic-bezier(0.22, 1, 0.36, 1), transform 260ms cubic-bezier(0.22, 1, 0.36, 1); }
+.aapVistoDoble .aapVisto2 { opacity: 1; transform: none; }
+.aapVistoEnviando { opacity: 0.7; }
+.aapVistoLeido { color: var(--visto-leido, #b9860f); }
+.aapVistoOscuro { --visto-base: rgba(255, 255, 255, 0.55); --visto-leido: #f0cd6a; }
+@media (prefers-reduced-motion: reduce) { .aapVisto, .aapVisto .aapVisto2 { transition: none; } }
+
+/* Mensaje que llega o se envía con el chat abierto: sube y aparece. Solo
+   los nuevos (clase puesta al agregarlos), nunca el historial al abrir. */
+.aapMsgIn { animation: aapMsgIn 280ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+@keyframes aapMsgIn { from { opacity: 0; transform: translateY(8px) scale(0.985); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .aapMsgIn { animation: none; } }
+
+/* Filtro por estado de las consultas (panel de abogado y contador).
+   Cuatro segmentos iguales; la pastilla oscura se DESLIZA al elegido (solo
+   transform, sin reflujo). El número va arriba en cifras tabulares: sirve
+   de resumen de un vistazo además de filtro. */
+.aapEstados {
+  position: relative; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
+  padding: 3px; border-radius: 12px; background: #fff;
+  border: 1px solid rgba(109, 60, 27, 0.14);
+}
+.aapEstadosPastilla {
+  position: absolute; top: 3px; bottom: 3px; left: 3px;
+  width: calc((100% - 6px) / 4); border-radius: 9px;
+  background: #472f29; box-shadow: 0 3px 8px -3px rgba(71, 47, 41, 0.55);
+  transform: translateX(calc(var(--i, 0) * 100%));
+  transition: transform 340ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.aapEstado {
+  position: relative; z-index: 1; min-width: 0;
+  display: flex; flex-direction: column; align-items: center; gap: 1px;
+  padding: 6px 2px 5px; border: 0; border-radius: 9px; background: none;
+  font-family: 'Poppins', sans-serif; color: #6f5c48; cursor: pointer;
+  transition: color 200ms ease-out;
+}
+.aapEstadoNum {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 0.95rem; font-weight: 700; line-height: 1.15; color: #472f29;
+  font-variant-numeric: tabular-nums; transition: color 200ms ease-out;
+}
+/* El punto de color va junto al NÚMERO, no junto al rótulo: en el sidebar
+   de 280 px cada segmento mide ~62 px y "En espera" + punto no cabía. */
+.aapEstadoNum i { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+.aapEstadoTxt { max-width: 100%; overflow: hidden; text-overflow: ellipsis; font-size: 0.62rem; font-weight: 600; white-space: nowrap; }
+.aapEstado:not(.aapEstadoOn):hover { color: #472f29; }
+.aapEstadoOn, .aapEstadoOn .aapEstadoNum { color: #fffef1; }
+.aapEstado:focus-visible { outline: 2px solid #8a6a28; outline-offset: 1px; }
+@media (prefers-reduced-motion: reduce) { .aapEstadosPastilla, .aapEstado, .aapEstadoNum { transition: none; } }
+
+.aapPresencia { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.aapPresenciaPunto { position: relative; width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; background: rgba(253,246,227,0.4); }
+.aapPresenciaOn .aapPresenciaPunto { background: #43c465; }
+.aapPresenciaOn .aapPresenciaPunto::after {
+  content: ''; position: absolute; inset: -3px; border-radius: 50%;
+  border: 1.5px solid #43c465; opacity: 0;
+  animation: aapPresenciaPulso 2.4s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+}
+@keyframes aapPresenciaPulso { 0% { transform: scale(0.6); opacity: 0.8 } 70% { transform: scale(1.5); opacity: 0 } 100% { transform: scale(1.5); opacity: 0 } }
+.aapPresenciaDetalle { opacity: 0.75; }
+@media (prefers-reduced-motion: reduce) { .aapPresenciaOn .aapPresenciaPunto::after { animation: none; display: none; } }
+`
+if (typeof document !== 'undefined') {
+  // Si ya existe (recarga en caliente en desarrollo) se reescribe el texto.
+  let el = document.getElementById('aap-visto-css')
+  if (!el) { el = document.createElement('style'); el.id = 'aap-visto-css'; document.head.appendChild(el) }
+  el.textContent = VISTO_CSS
+}
+
+export function Visto({ leidoEn, enviando = false, tono = 'claro' }) {
+  // `leidoEn` undefined (columna sin crear) cuenta como entregado: el
+  // mensaje está guardado, solo no se sabe si lo leyeron.
+  const leido = !enviando && !!leidoEn
+  const hora = leido ? new Date(leidoEn).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }) : ''
+  const etiqueta = enviando ? 'Enviando' : leido ? `Leído a las ${hora}` : 'Entregado'
+  const clases = [
+    'aapVisto',
+    enviando ? 'aapVistoEnviando' : 'aapVistoDoble',
+    leido ? 'aapVistoLeido' : '',
+    tono === 'oscuro' ? 'aapVistoOscuro' : '',
+  ].filter(Boolean).join(' ')
+  return (
+    <span
+      className={clases}
+      role="img"
+      aria-label={etiqueta}
+      title={leido ? `Leído · ${hora}` : etiqueta}
+    >
+      <svg viewBox="0 0 24 14" width="18" height="11" fill="none" stroke="currentColor"
+        strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M1.5 7.5l4 4L13 3" />
+        <path className="aapVisto2" d="M9 7.5l4 4L21.5 3" />
+      </svg>
+    </span>
+  )
+}
+
+/* ── Filtro por estado de las consultas ─────────────────────────────────
+   Usado por LawyerChatDashboard y ContadorChatDashboard. `conteos` =
+   { todas, active, waiting, closed } sobre las salas que ya pasan los demás
+   filtros (búsqueda, fechas), para que el número diga lo que se va a ver. */
+export const ESTADOS_SALA = [
+  { key: 'todas',   label: 'Todas' },
+  { key: 'active',  label: 'Activas',   color: '#43a35a' },
+  { key: 'waiting', label: 'En espera', color: '#e0a526' },
+  { key: 'closed',  label: 'Cerradas',  color: '#9a8878' },
+]
+export const contarEstados = (salas) => salas.reduce((acc, s) => {
+  acc.todas += 1
+  if (acc[s.status] !== undefined) acc[s.status] += 1
+  return acc
+}, { todas: 0, active: 0, waiting: 0, closed: 0 })
+
+export function FiltroEstadoSalas({ valor = 'todas', onChange, conteos = {} }) {
+  const i = Math.max(0, ESTADOS_SALA.findIndex(e => e.key === valor))
+  return (
+    <div className="aapEstados" role="group" aria-label="Filtrar consultas por estado" style={{ '--i': i }}>
+      <span className="aapEstadosPastilla" aria-hidden="true" />
+      {ESTADOS_SALA.map(e => {
+        const on = valor === e.key
+        return (
+          <button
+            key={e.key}
+            type="button"
+            className={`aapEstado ${on ? 'aapEstadoOn' : ''}`}
+            aria-pressed={on}
+            onClick={() => onChange?.(e.key)}
+          >
+            <span className="aapEstadoNum">
+              {e.color && <i style={{ background: e.color }} aria-hidden="true" />}
+              {conteos[e.key] ?? 0}
+            </span>
+            <span className="aapEstadoTxt">{e.label}</span>
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+/* Punto + "Conectado" / "Ausente · hace 5 min", para la línea de estado del
+   encabezado. Hereda color y tamaño del texto que lo rodea. */
+export function Presencia({ conectado, texto, detalle }) {
+  return (
+    <span className={`aapPresencia ${conectado ? 'aapPresenciaOn' : ''}`}>
+      <span className="aapPresenciaPunto" aria-hidden="true" />
+      <span>{texto}</span>
+      {detalle && <span className="aapPresenciaDetalle"> · {detalle}</span>}
+    </span>
   )
 }

@@ -250,7 +250,16 @@
   top: 4px;
   right: 5px;
   box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.92), 0 1px 3px rgba(109,60,27, 0.3);
+  /* El número se remonta (key=count) cuando cambia: un pop corto avisa que
+     llegó algo nuevo sin tener que mirar fijo el riel. */
+  animation: badgePop 360ms cubic-bezier(0.22, 1, 0.36, 1);
 }
+@keyframes badgePop {
+  0%   { transform: scale(0.6); opacity: 0; }
+  60%  { transform: scale(1.12); opacity: 1; }
+  100% { transform: scale(1); }
+}
+@media (prefers-reduced-motion: reduce) { .navBadge { animation: none; } }
 .navBadgeAlert {
   background: #d94444;
   color: #fff;

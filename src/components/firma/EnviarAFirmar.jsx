@@ -4,11 +4,140 @@ import { useAuth } from '../../context/AuthContext'
 import { getAuthHeaders } from '../../lib/supabase'
 import { crearSolicitud, subirDoc, persistirFirma, bytesDeDoc } from '../../lib/firmaService'
 import { ROL_LABEL } from '../../lib/firmaPdf'
-import { IconFirma } from '../shared/Icons'
+import { IconFirma, IconCheck } from '../shared/Icons'
+import { PdfVisor } from '../../lib/chatFiles'
+import { plantillaDe, validarContrato, DOC_CONTRATO_SERVICIOS } from '../../lib/contratoServicios'
 import FirmaSigner from './FirmaSigner'
 import styles from './EnviarAFirmar.module.css'
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
+
+/* Resultado de comparar el archivo subido con la plantilla oficial. Dice
+   QUÉ hay que corregir y DÓNDE (cláusula + lo que debe decir + lo que dice),
+   para que el profesional lo arregle en Word sin adivinar. */
+function Veredicto({ v, plantilla }) {
+  if (v.estado === 'validando') {
+    return (
+      <div className={`${styles.veredicto} ${styles.veredictoNeutro}`} role="status">
+        <span className={styles.spinner} />
+        <div><strong>Comparando con la plantilla oficial…</strong><p>{v.nombre}</p></div>
+      </div>
+    )
+  }
+  if (v.sinTexto) {
+    return (
+      <div className={`${styles.veredicto} ${styles.veredictoMal}`} role="alert">
+        <IconAviso />
+        <div>
+          <strong>No se pudo leer el texto de este PDF</strong>
+          <p>Parece un escaneo o una foto. Guárdalo directamente desde Word (Archivo → Guardar como → PDF) y súbelo de nuevo.</p>
+        </div>
+      </div>
+    )
+  }
+  if (!v.reconocido) {
+    return (
+      <div className={`${styles.veredicto} ${styles.veredictoMal}`} role="alert">
+        <IconAviso />
+        <div>
+          <strong>Este archivo no es el {plantilla.titulo.toLowerCase()}</strong>
+          <p>Descarga la plantilla de arriba, llénala y sube ese archivo. Para otra clase de documento usa «Otro documento».</p>
+        </div>
+      </div>
+    )
+  }
+  if (v.ok) {
+    return v.tipoArchivo === 'pdf' ? (
+      <div className={`${styles.veredicto} ${styles.veredictoOk}`} role="status">
+        <span className={styles.veredictoCheck}><IconCheck size={13} /></span>
+        <div>
+          <strong>Estructura verificada</strong>
+          <p>Coincide con la plantilla oficial y no quedan espacios sin llenar. Ya puedes enviarlo a firma.</p>
+        </div>
+      </div>
+    ) : (
+      <div className={`${styles.veredicto} ${styles.veredictoAviso}`} role="status">
+        <span className={styles.veredictoCheck}><IconCheck size={13} /></span>
+        <div>
+          <strong>La estructura está bien. Falta guardarlo como PDF</strong>
+          <p>En Word: Archivo → Guardar como → PDF. Sube ese PDF aquí y queda listo para enviar a firma.</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Con observaciones: los espacios sin llenar se agrupan por cláusula.
+  const porClausula = {}
+  for (const s of v.sinLlenar) (porClausula[s.clausula] ||= []).push(s.etiqueta)
+  const n = v.cambios.length + v.agregados.length + v.sinLlenar.length
+  return (
+    <div className={`${styles.veredicto} ${styles.veredictoMal}`} role="alert">
+      <IconAviso />
+      <div>
+        <strong>{n === 1 ? 'Hay 1 punto por corregir' : `Hay ${n} puntos por corregir`} antes de enviarlo</strong>
+
+        {v.cambios.length > 0 && (
+          <>
+            <p className={styles.veredictoGrupo}>Texto de la plantilla que cambió</p>
+            <ul className={styles.veredictoLista}>
+              {v.cambios.map((c, i) => (
+                <li key={i}>
+                  <span className={styles.veredictoClausula}>{c.clausula}</span>
+                  <span className={styles.cita}><em>Debe decir</em>{c.debeDecir}</span>
+                  <span className={styles.cita}>
+                    <em>En tu archivo</em>{c.dice || 'Ese texto no aparece: se borró o se reescribió.'}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+
+        {v.agregados.length > 0 && (
+          <>
+            <p className={styles.veredictoGrupo}>Texto agregado</p>
+            <ul className={styles.veredictoLista}>
+              {v.agregados.map((a, i) => (
+                <li key={i}>
+                  <span className={styles.veredictoClausula}>{a.clausula}</span>
+                  <span className={styles.cita}>
+                    <em>{a.motivo === 'clausula' ? 'Cláusula nueva en un espacio' : 'Demasiado texto en un espacio'}</em>{a.texto}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+
+        {v.sinLlenar.length > 0 && (
+          <>
+            <p className={styles.veredictoGrupo}>Espacios sin llenar</p>
+            <ul className={styles.veredictoLista}>
+              {Object.entries(porClausula).map(([clausula, etiquetas]) => (
+                <li key={clausula}>
+                  <span className={styles.veredictoClausula}>{clausula}</span>
+                  <span className={styles.espacios}>
+                    {etiquetas.map((e, i) => <span key={i} className={styles.espacio}>{e.length > 46 ? `${e.slice(0, 44)}…` : e}</span>)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+
+        <p className={styles.veredictoPie}>Corrígelo en Word, guárdalo y vuelve a subirlo.</p>
+      </div>
+    </div>
+  )
+}
+
+const IconAviso = () => (
+  <svg className={styles.veredictoIcono} viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor"
+    strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+    <path d="M12 9v4M12 17h.01" />
+  </svg>
+)
 
 /* ─────────────────────────────────────────────────────────────────────────
    EnviarAFirmar — inicia una solicitud de firma. El documento debe llegar YA
@@ -24,12 +153,30 @@ const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
      abogadoId   dueño del contrato (para rutas de storage y creador_id lógico).
      onClose()   cerrar
      onDone()    refrescar la lista de evidencia del padre
+
+   Chat — dos clases de documento (`tipoDoc`):
+     · 'contrato'  Contrato de prestación de servicios (abogacía / contables):
+                   el profesional descarga la plantilla oficial en Word, la
+                   llena, la guarda en PDF y la sube. Antes de dejarla pasar
+                   se COMPARA con la plantilla (lib/contratoServicios): las
+                   cláusulas no pueden haber cambiado y no puede quedar ningún
+                   espacio sin llenar. Solo un PDF verificado se envía a firma.
+     · 'otro'      Cualquier PDF ya final (poderes, autorizaciones…), sin
+                   verificación. Es el flujo que ya existía.
+     tipoProfesional  'abogado' | 'contador' → qué plantilla aplica.
+     inicio           con cuál de las dos abre el modal.
    ───────────────────────────────────────────────────────────────────────── */
-export default function EnviarAFirmar({ contrato, abogadoId, onClose, onDone, modo = 'contrato', roomId, cliente, afterCreate, modeloPath }) {
+export default function EnviarAFirmar({ contrato, abogadoId, onClose, onDone, modo = 'contrato', roomId, cliente, afterCreate, modeloPath, tipoProfesional, inicio = 'contrato' }) {
   const esChat = modo === 'chat'
   const { user, profile } = useAuth()
   const [paso, setPaso] = useState('doc')
   const [pdfBytes, setPdfBytes] = useState(null)
+  // Clase de documento (solo chat) y veredicto de la comparación con la plantilla.
+  const [tipoDoc, setTipoDoc] = useState(esChat ? inicio : 'otro')
+  const esContratoServicios = esChat && tipoDoc === 'contrato'
+  const plantilla = plantillaDe(tipoProfesional || profile?.rol)
+  const [validacion, setValidacion] = useState(null)   // null | { estado: 'validando' | 'listo', nombre, ...veredicto }
+  const metaDoc = esContratoServicios ? { doc: DOC_CONTRATO_SERVICIOS, titulo: plantilla.titulo } : undefined
   const [pdfUrl, setPdfUrl] = useState('')
   const [convirtiendo, setConvirtiendo] = useState(false)
   const [stage, setStage] = useState('')
@@ -162,9 +309,30 @@ export default function EnviarAFirmar({ contrato, abogadoId, onClose, onDone, mo
     if (e.target) e.target.value = ''
   }
 
+  function cambiarTipoDoc(t) {
+    if (t === tipoDoc) return
+    setTipoDoc(t); setPdfBytes(null); setValidacion(null); setError('')
+  }
+
+  // Contrato de servicios: leer el archivo y compararlo con la plantilla
+  // oficial. Solo un PDF que pasa la comparación queda cargado para firmar.
+  async function procesarContrato(file) {
+    setPdfBytes(null); setError('')
+    setValidacion({ estado: 'validando', nombre: file.name })
+    try {
+      const v = await validarContrato(file, tipoProfesional || profile?.rol)
+      setValidacion({ estado: 'listo', nombre: file.name, ...v })
+      if (v.ok && v.tipoArchivo === 'pdf') setPdfBytes(v.bytes)
+    } catch (err) {
+      setValidacion(null)
+      setError(err?.message || 'No se pudo revisar el archivo.')
+    }
+  }
+
   // Solo PDF: no convertimos nada (así el documento queda idéntico al original).
   async function procesarArchivo(file) {
     if (!file) return
+    if (esContratoServicios) return procesarContrato(file)
     const esPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name || '')
     if (!esPdf) {
       setError('Solo se admite PDF. Si tienes un Word, ábrelo y expórtalo a PDF (Archivo → Guardar como → PDF) y sube ese archivo.')
@@ -213,7 +381,7 @@ export default function EnviarAFirmar({ contrato, abogadoId, onClose, onDone, mo
       if (esChat && !firmarYo) {
         // El profesional no firma aquí: notifica al padre para publicar el
         // mensaje de firma en el hilo, y cierra.
-        afterCreate?.(sol, filas, origPath)
+        afterCreate?.(sol, filas, origPath, metaDoc)
         onClose?.()
       } else {
         setPaso('firmar')
@@ -234,7 +402,7 @@ export default function EnviarAFirmar({ contrato, abogadoId, onClose, onDone, mo
     if (esChat) {
       // Publicar en el hilo el documento YA firmado por el profesional para
       // que el cliente firme encima.
-      afterCreate?.(solicitud, misFilas, r?.docFirmadoPath || solicitud.doc_original_path)
+      afterCreate?.(solicitud, misFilas, r?.docFirmadoPath || solicitud.doc_original_path, metaDoc)
       onClose?.()
       return
     }
@@ -272,30 +440,88 @@ export default function EnviarAFirmar({ contrato, abogadoId, onClose, onDone, mo
         <div className={styles.body}>
           {/* ── Documento ── */}
           <section className={styles.block}>
-            <h3 className={styles.blockTitle}>1 · Documento final (PDF)</h3>
+            <h3 className={styles.blockTitle}>1 · {esChat ? 'Documento' : 'Documento final (PDF)'}</h3>
+
+            {/* Chat: qué se va a firmar. El contrato de servicios pasa por la
+                verificación contra la plantilla; "otro documento" no. */}
+            {esChat && !contrato && (
+              <div className={styles.tipoDoc} role="radiogroup" aria-label="Clase de documento">
+                {[
+                  ['contrato', 'Contrato de prestación de servicios', 'Plantilla oficial · se verifica antes de enviar'],
+                  ['otro', 'Otro documento', 'Cualquier PDF ya listo para firmar'],
+                ].map(([k, titulo, sub]) => (
+                  <button
+                    key={k} type="button" role="radio" aria-checked={tipoDoc === k}
+                    className={`${styles.tipoOpcion} ${tipoDoc === k ? styles.tipoOpcionOn : ''}`}
+                    onClick={() => cambiarTipoDoc(k)}
+                  >
+                    <span className={styles.tipoRadio} aria-hidden="true" />
+                    <span className={styles.tipoTexto}>
+                      <strong>{titulo}</strong>
+                      <small>{sub}</small>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+
             {!contrato && (
               <>
-                <p className={styles.hint} style={{ marginTop: 0 }}>
-                  Sube el documento <strong>ya listo</strong> para firmar. Si el cliente debía editarlo,
-                  primero intercambien el Word por el chat y luego exporta la versión final a PDF.
-                </p>
-                {esChat && modeloPath && (
-                  <button
-                    type="button"
-                    className={styles.addBtn}
-                    style={{ marginBottom: 10 }}
-                    onClick={usarModelo}
-                    disabled={convirtiendo}
-                  >
-                    📄 Usar mi modelo contractual
-                  </button>
+                {esContratoServicios ? (
+                  <>
+                    {/* La plantilla: la fila entera descarga el Word. */}
+                    <a className={styles.plantilla} href={plantilla.docx} download={plantilla.archivo}>
+                      <span className={styles.plantillaIcono} aria-hidden="true">
+                        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" /><path d="M14 3v5h5M9 13h6M9 17h4" />
+                        </svg>
+                      </span>
+                      <span className={styles.plantillaInfo}>
+                        <strong>{plantilla.titulo}</strong>
+                        <small>Plantilla oficial en Word · descárgala y llena los espacios entre paréntesis</small>
+                      </span>
+                      <span className={styles.plantillaBajar} aria-hidden="true">
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M12 3v12M7 11l5 5 5-5M4 21h16" />
+                        </svg>
+                      </span>
+                    </a>
+                    <p className={styles.hint} style={{ marginTop: 0 }}>
+                      Llena solo los espacios en MAYÚSCULAS, como <strong>(NOMBRE DEL CLIENTE)</strong>; el resto del
+                      texto no se cambia. Al terminar, guárdala como PDF (en Word: Archivo → Guardar como → PDF) y súbela aquí.
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p className={styles.hint} style={{ marginTop: 0 }}>
+                      Sube el documento <strong>ya listo</strong> para firmar. Si el cliente debía editarlo,
+                      primero intercambien el Word por el chat y luego exporta la versión final a PDF.
+                    </p>
+                    {esChat && modeloPath && (
+                      <button
+                        type="button"
+                        className={styles.addBtn}
+                        style={{ marginBottom: 10 }}
+                        onClick={usarModelo}
+                        disabled={convirtiendo}
+                      >
+                        📄 Usar mi modelo contractual
+                      </button>
+                    )}
+                  </>
                 )}
-                <input ref={fileRef} type="file" accept=".pdf,application/pdf" hidden onChange={onPickFile} />
+
+                <input
+                  ref={fileRef} type="file" hidden onChange={onPickFile}
+                  accept={esContratoServicios
+                    ? '.pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+                    : '.pdf,application/pdf'}
+                />
                 <button
                   type="button"
                   className={`${styles.dropzone} ${dragOver ? styles.dropzoneOver : ''}`}
                   onClick={() => fileRef.current?.click()}
-                  disabled={convirtiendo}
+                  disabled={convirtiendo || validacion?.estado === 'validando'}
                   onDragOver={(e) => { e.preventDefault(); if (!dragOver) setDragOver(true) }}
                   onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setDragOver(false) }}
                   onDrop={(e) => {
@@ -306,10 +532,22 @@ export default function EnviarAFirmar({ contrato, abogadoId, onClose, onDone, mo
                 >
                   <IconFirma size={22} />
                   <span className={styles.dropzoneMain}>
-                    {dragOver ? 'Suelta el archivo aquí' : pdfBytes ? 'Cambiar documento' : 'Selecciona o arrastra el documento'}
+                    {dragOver ? 'Suelta el archivo aquí'
+                      : esContratoServicios
+                        ? (validacion ? 'Subir otra versión' : 'Sube el contrato diligenciado')
+                        : pdfBytes ? 'Cambiar documento' : 'Selecciona o arrastra el documento'}
                   </span>
-                  <span className={styles.dropzoneSub}>Solo PDF (si tienes Word, expórtalo a PDF)</span>
+                  <span className={styles.dropzoneSub}>
+                    {esContratoServicios
+                      ? 'PDF para enviarlo a firma · o el Word, para revisar la estructura antes de exportarlo'
+                      : 'Solo PDF (si tienes Word, expórtalo a PDF)'}
+                  </span>
                 </button>
+
+                {/* Veredicto de la comparación con la plantilla oficial */}
+                {esContratoServicios && validacion && (
+                  <Veredicto v={validacion} plantilla={plantilla} />
+                )}
               </>
             )}
             {convirtiendo && (
@@ -317,7 +555,10 @@ export default function EnviarAFirmar({ contrato, abogadoId, onClose, onDone, mo
             )}
             {pdfUrl && (
               <>
-                <div className={styles.preview}><iframe title="Vista previa" src={`${pdfUrl}#zoom=page-width`} className={styles.frame} /></div>
+                {/* Páginas rasterizadas: un <iframe> con PDF queda en blanco en Android. */}
+                <div className={styles.preview}>
+                  <PdfVisor url={pdfUrl} titulo="Vista previa del documento" fondo="#f1ede9" maxPaginas={40} />
+                </div>
                 <p className={styles.hint}>Revisa el documento antes de enviarlo al cliente.</p>
               </>
             )}

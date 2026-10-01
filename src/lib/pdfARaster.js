@@ -22,8 +22,12 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl
    `maxPaginas` / `tipo` / `calidad`: la revisión de contacto del chat solo
    necesita las primeras páginas en JPEG liviano.
    `anchoPx`: si se pasa, manda sobre `scale` y cada página sale con ese ancho
-   en píxeles (lo que necesita un visor para verse nítido en esa pantalla). */
-export async function rasterizarPdf(pdfBytes, scale = 2, { maxPaginas = Infinity, tipo = 'image/png', calidad, anchoPx } = {}) {
+   en píxeles (lo que necesita un visor para verse nítido en esa pantalla).
+   `onPagina(pagina, indice, numPaginas)`: se llama con cada página apenas
+   está lista, para que un visor la pinte sin esperar a las demás (un contrato
+   de 14 páginas tardaba varios segundos en blanco). `numPaginas` es el total
+   REAL del PDF, aunque `maxPaginas` recorte cuántas se rasterizan. */
+export async function rasterizarPdf(pdfBytes, scale = 2, { maxPaginas = Infinity, tipo = 'image/png', calidad, anchoPx, onPagina } = {}) {
   const bytes = pdfBytes instanceof Uint8Array ? pdfBytes.slice() : new Uint8Array(pdfBytes)
   const pdf = await pdfjsLib.getDocument({ data: bytes }).promise
   const paginas = []
@@ -40,9 +44,35 @@ export async function rasterizarPdf(pdfBytes, scale = 2, { maxPaginas = Infinity
     ctx.fillStyle = '#ffffff'
     ctx.fillRect(0, 0, canvas.width, canvas.height)
     await page.render({ canvasContext: ctx, viewport }).promise
-    paginas.push({ dataUrl: canvas.toDataURL(tipo, calidad), width: canvas.width, height: canvas.height })
+    const pagina = { dataUrl: canvas.toDataURL(tipo, calidad), width: canvas.width, height: canvas.height }
+    paginas.push(pagina)
+    onPagina?.(pagina, i - 1, pdf.numPages)
   }
   return paginas
+}
+
+/* Texto de un PDF, en orden de lectura, con un salto por línea. Lo usa la
+   validación del contrato de servicios (lib/contratoServicios). Un PDF
+   escaneado (solo imagen) devuelve cadena vacía. */
+export async function textoDePdf(pdfBytes) {
+  const bytes = pdfBytes instanceof Uint8Array ? pdfBytes.slice() : new Uint8Array(pdfBytes)
+  const pdf = await pdfjsLib.getDocument({ data: bytes }).promise
+  let out = ''
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i)
+    const { items } = await page.getTextContent()
+    let y = null
+    for (const it of items) {
+      if (typeof it.str !== 'string') continue
+      const yy = Math.round(it.transform[5])
+      if (y !== null && Math.abs(yy - y) > 2) out += '\n'
+      out += it.str
+      if (it.hasEOL) out += '\n'
+      y = yy
+    }
+    out += '\n'
+  }
+  return out
 }
 
 /* dataURL PNG → Uint8Array (docx necesita los bytes). */

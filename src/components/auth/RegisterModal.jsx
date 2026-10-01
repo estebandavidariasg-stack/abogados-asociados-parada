@@ -10,10 +10,13 @@ import ReCAPTCHA from 'react-google-recaptcha'
 import { IconX } from '../shared/Icons'
 import VerificationStep from './VerificationStep'
 import { AREAS_DERECHO } from '../../lib/areasDerecho'
-import { COP, COBRO_MINIMO } from '../../lib/cobroAsesoria'
+import { COP, COBRO_MINIMO, COBRO_MAXIMO } from '../../lib/cobroAsesoria'
 import { AREAS_CONTADURIA } from '../../lib/areasContaduria'
 import { UNIVERSIDADES } from '../../lib/universidades'
 import UbicacionSelector from '../profile/UbicacionSelector'
+// El contrato que firma cada rol (profesional / corretaje) y los documentos
+// generales, leídos en un visor sobre el propio formulario, sin pestaña nueva.
+import { DOCS_LEGALES, contratoDeRol, VisorLegal, EnlaceLegal } from '../shared/DocumentosLegales'
 import {
   PASSWORD_RULES, getPasswordStrength, isPasswordValid,
   validarCelular, validarCorreo, normalizarCelular,
@@ -90,6 +93,12 @@ const IconGestor = () => (
   </svg>
 )
 
+const IconContrato = () => (
+  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/>
+  </svg>
+)
+
 const ROLES = [
   { key: 'abogado',  label: 'Abogado',  Icon: IconAbogado  },
   { key: 'contador', label: 'Contador', Icon: IconContador },
@@ -101,10 +110,11 @@ const ROLES = [
    tiene que saber cómo cobra (o cómo gana) antes de invertir diez minutos en
    llenar campos, no después. Tres por rol, sin letra pequeña.
 
-   `COBRO_MINIMO` viene de lib/cobroAsesoria, el mismo número que valida el
-   formulario de cobro: si aquí dijera una cifra y allá otra, la promesa del
-   registro sería falsa. Ese piso es SOLO del abogado; el contador fija su
-   valor libremente (2026-09-28), por eso tiene sus propias condiciones. */
+   `COBRO_MINIMO` / `COBRO_MAXIMO` vienen de lib/cobroAsesoria, los mismos
+   números que valida el formulario de cobro: si aquí dijera una cifra y allá
+   otra, la promesa del registro sería falsa. Ese rango es SOLO del abogado; el
+   contador fija su valor libremente (2026-09-28), por eso tiene sus propias
+   condiciones. */
 const REGLA_TODA_CONSULTA = {
   titulo: 'Toda consulta se cobra',
   texto: 'No hay asesorías gratuitas. Fijas el valor antes de empezar y el cliente te paga directamente a ti; la plataforma no intermedia el dinero.',
@@ -120,8 +130,8 @@ const CONDICIONES = {
     puntos: [
       REGLA_TODA_CONSULTA,
       {
-        titulo: `El mínimo es ${COP.format(COBRO_MINIMO)}`,
-        texto: 'Ese es el piso por consulta. De ahí hacia arriba el valor lo decides tú, según el caso.',
+        titulo: `La consulta va de ${COP.format(COBRO_MINIMO)} a ${COP.format(COBRO_MAXIMO)}`,
+        texto: 'Es el rango establecido en nuestras políticas internas. El profesional define el valor de la consulta dentro de este rango.',
       },
       REGLA_DESCUENTO,
     ],
@@ -143,8 +153,8 @@ const CONDICIONES = {
     entrada: 'Tres reglas que aceptas al crear tu perfil.',
     puntos: [
       {
-        titulo: 'Ganas por caso cerrado y pagado',
-        texto: 'La comisión aparece cuando una consulta que llegó con tu código termina y el profesional le paga a la plataforma. Mientras el caso siga abierto, no hay comisión.',
+        titulo: 'Cuándo se paga tu comisión',
+        texto: 'La comisión se genera solo si el caso es exitoso. El cliente le paga al profesional y, cuando el profesional consigna a la plataforma, tu comisión queda disponible. Desde ese momento, el pago se realiza dentro de los 5 días hábiles siguientes.',
       },
       {
         titulo: 'Es el 5% de lo que gana la plataforma',
@@ -171,6 +181,9 @@ export default function RegisterModal({ onClose }) {
   // Marcada la casilla de las condiciones del paso previo. Se reinicia al
   // cambiar de rol: las reglas del gestor no son las del profesional.
   const [aceptoCondiciones, setAceptoCondiciones] = useState(false)
+  // Documento legal abierto en el visor desde el paso de condiciones
+  // (clave de DOCS_LEGALES | null).
+  const [docLegal, setDocLegal] = useState(null)
 
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState(null)
@@ -330,7 +343,7 @@ export default function RegisterModal({ onClose }) {
         e[`extra_${c.id}`] = `Completa "${c.etiqueta}"`
       }
     }
-    if (!aceptaTerminos) e.terminos = 'Debes aceptar los términos y condiciones'
+    if (!aceptaTerminos) e.terminos = 'Debes aceptar los términos, la política de datos y el contrato'
     if (!captchaValue)   e.captcha = 'Completa el captcha'
     return e
   }
@@ -1121,6 +1134,8 @@ export default function RegisterModal({ onClose }) {
         {/* ══════════════ CONDICIONES — antes de pedir un solo dato ══════════════ */}
         {rol && verificationStep === 'condiciones' && (() => {
           const c = CONDICIONES[rol === 'gestor' ? 'gestor' : rol === 'contador' ? 'contador' : 'profesional']
+          const claveContrato = contratoDeRol(rol)
+          const contrato = DOCS_LEGALES[claveContrato]
           return (
             <div className={extra.condiciones}>
               <p className={extra.condTitulo}>{c.titulo}</p>
@@ -1143,13 +1158,35 @@ export default function RegisterModal({ onClose }) {
                 ))}
               </ul>
 
+              {/* El contrato completo. Las reglas de arriba son el resumen;
+                  esto es lo que de verdad se acepta, y se lee aquí mismo
+                  (el visor se abre sobre el formulario, sin perderlo). La
+                  fila entera es el botón: se toca el archivo y se abre. */}
+              <button
+                type="button"
+                className={extra.contrato}
+                onClick={() => setDocLegal(claveContrato)}
+                aria-label={`Abrir ${contrato.titulo}`}
+              >
+                <span className={extra.contratoIcono} aria-hidden="true"><IconContrato /></span>
+                <span className={extra.contratoInfo}>
+                  <strong className={extra.contratoTitulo}>{contrato.titulo}</strong>
+                  <span className={extra.contratoSub}>{contrato.resumen || contrato.sub} · PDF</span>
+                </span>
+                <span className={extra.contratoAbrir} aria-hidden="true">
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="m9 6 6 6-6 6" />
+                  </svg>
+                </span>
+              </button>
+
               <label className={extra.condCheck}>
                 <input
                   type="checkbox"
                   checked={aceptoCondiciones}
                   onChange={(e) => setAceptoCondiciones(e.target.checked)}
                 />
-                <span>Leí estas condiciones y las acepto.</span>
+                <span>Leí el {contrato.titulo} y acepto estas condiciones.</span>
               </label>
 
               <button
@@ -1576,7 +1613,8 @@ export default function RegisterModal({ onClose }) {
               </div>
             ))}
 
-            {/* Términos y condiciones */}
+            {/* Términos, datos y el contrato del rol: cada uno se abre en el
+                visor sobre el formulario, sin pestaña nueva. */}
             <label className={styles.terminosRow}>
               <input
                 type="checkbox"
@@ -1586,13 +1624,13 @@ export default function RegisterModal({ onClose }) {
               />
               <span className={styles.terminosTxt}>
                 Acepto los{' '}
-                <a href="/terminos" target="_blank" rel="noopener noreferrer" className={styles.terminosLink}>
-                  términos y condiciones
-                </a>{' '}
-                y la{' '}
-                <a href="/privacidad" target="_blank" rel="noopener noreferrer" className={styles.terminosLink}>
-                  política de privacidad
-                </a>
+                <EnlaceLegal doc="terminos" className={styles.terminosLink}>términos de uso</EnlaceLegal>,{' '}
+                la{' '}
+                <EnlaceLegal doc="datos" className={styles.terminosLink}>política de tratamiento de datos</EnlaceLegal>{' '}
+                y el{' '}
+                <EnlaceLegal doc={contratoDeRol(rol)} className={styles.terminosLink}>
+                  {DOCS_LEGALES[contratoDeRol(rol)].titulo.toLowerCase()}
+                </EnlaceLegal>
               </span>
             </label>
 
@@ -1685,6 +1723,9 @@ export default function RegisterModal({ onClose }) {
           </div>
         </div>
       )}
+
+      {/* Contrato del rol abierto desde el paso de condiciones */}
+      <VisorLegal doc={docLegal} onClose={() => setDocLegal(null)} />
     </div>
   )
 }

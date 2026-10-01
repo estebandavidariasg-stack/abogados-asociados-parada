@@ -118,8 +118,16 @@ export default function App() {
         <Route path="/nueva-contrasena" element={<ResetPasswordPage />} />
         <Route path="/opinar"           element={<OpinarPage />} />
         <Route path="/proyectos-ley"    element={<ProyectosLeyPage />} />
-        <Route path="/terminos"         element={<LegalPage doc="terminos" />} />
-        <Route path="/privacidad"       element={<LegalPage doc="privacidad" />} />
+        {/* Documentos legales oficiales (catálogo en shared/DocumentosLegales) */}
+        <Route path="/terminos"             element={<LegalPage doc="terminos" />} />
+        <Route path="/privacidad"           element={<LegalPage doc="privacidad" />} />
+        <Route path="/tratamiento-datos"    element={<LegalPage doc="datos" />} />
+        <Route path="/cookies"              element={<LegalPage doc="cookies" />} />
+        <Route path="/eula"                 element={<LegalPage doc="eula" />} />
+        <Route path="/devoluciones"         element={<LegalPage doc="devoluciones" />} />
+        <Route path="/autorizacion-datos"   element={<LegalPage doc="autorizacion" />} />
+        <Route path="/contrato-profesional" element={<LegalPage doc="profesional" />} />
+        <Route path="/contrato-gestor"      element={<LegalPage doc="corretaje" />} />
       </Routes>
     </Suspense>
     </LimiteDeError>

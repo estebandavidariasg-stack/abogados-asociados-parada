@@ -5,6 +5,7 @@ import styles from './AuthModal.module.css'
 import ReCAPTCHA from "react-google-recaptcha"
 import { IconX } from '../shared/Icons'
 import VerificationStep from './VerificationStep'
+import { EnlaceLegal } from '../shared/DocumentosLegales'
 import {
   PASSWORD_RULES, getPasswordStrength, isPasswordValid,
   validarCelular, validarCorreo, normalizarCelular,
@@ -691,13 +692,9 @@ export default function AuthModal({ initialTab = 'login', onClose, onRegister })
               />
               <span className={styles.terminosTxt}>
                 Acepto los{' '}
-                <a href="/terminos" target="_blank" rel="noopener noreferrer" className={styles.terminosLink}>
-                  términos y condiciones
-                </a>{' '}
+                <EnlaceLegal doc="terminos" className={styles.terminosLink}>términos de uso</EnlaceLegal>{' '}
                 y la{' '}
-                <a href="/privacidad" target="_blank" rel="noopener noreferrer" className={styles.terminosLink}>
-                  política de privacidad
-                </a>
+                <EnlaceLegal doc="datos" className={styles.terminosLink}>política de tratamiento de datos</EnlaceLegal>
               </span>
             </label>
 

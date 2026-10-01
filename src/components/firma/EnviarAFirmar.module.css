@@ -134,3 +134,117 @@
   .btnSolid:hover:not(:disabled) { transform: none; }
   .spinner { animation-duration: 1.4s; }
 }
+
+/* ── Chat: clase de documento (contrato de servicios / otro) ──────────────
+   Dos opciones excluyentes, a lo ancho. La elegida se marca con el punto
+   del radio y un borde dorado; nada de tarjetas dentro de tarjetas. */
+.tipoDoc { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; }
+.tipoOpcion {
+  display: flex; align-items: flex-start; gap: 0.65rem;
+  padding: 0.75rem 0.9rem; text-align: left; cursor: pointer;
+  font-family: inherit; color: var(--navy, #472f29); background: #fff;
+  border: 1.5px solid var(--border, rgba(109,60,27, 0.18)); border-radius: 12px;
+  transition: border-color 180ms cubic-bezier(0.22, 1, 0.36, 1), background-color 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.tipoOpcion:hover { border-color: rgba(201, 168, 76, 0.7); }
+.tipoOpcion:focus-visible { outline: 2px solid var(--gold-dk, #8a6a28); outline-offset: 2px; }
+.tipoOpcionOn { border-color: var(--gold, #c9a84c); background: #fffbef; }
+.tipoRadio {
+  flex-shrink: 0; width: 16px; height: 16px; margin-top: 2px; border-radius: 50%;
+  border: 1.5px solid rgba(109,60,27, 0.4); background: #fff;
+  box-shadow: inset 0 0 0 3px #fff;
+  transition: background-color 180ms ease-out, border-color 180ms ease-out;
+}
+.tipoOpcionOn .tipoRadio { border-color: var(--gold-dk, #8a6a28); background: var(--gold-dk, #8a6a28); }
+.tipoTexto { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.tipoTexto strong { font-size: 0.86rem; font-weight: 700; line-height: 1.3; }
+.tipoTexto small { font-size: 0.72rem; color: var(--muted, #6f5c48); line-height: 1.4; }
+@media (max-width: 620px) { .tipoDoc { grid-template-columns: 1fr; } }
+
+/* ── La plantilla oficial: la fila entera descarga el Word ── */
+.plantilla {
+  display: flex; align-items: center; gap: 0.8rem;
+  padding: 0.75rem 0.9rem; border-radius: 12px; text-decoration: none;
+  color: var(--navy, #472f29); background: rgba(201, 168, 76, 0.1);
+  border: 1px solid rgba(201, 168, 76, 0.45);
+  transition: background-color 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.plantilla:hover { background: rgba(201, 168, 76, 0.18); }
+.plantilla:focus-visible { outline: 2px solid var(--gold-dk, #8a6a28); outline-offset: 2px; }
+.plantillaIcono {
+  flex-shrink: 0; display: grid; place-items: center; width: 40px; height: 40px;
+  border-radius: 10px; background: #fff; color: var(--gold-dk, #8a6a28);
+}
+.plantillaInfo { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.plantillaInfo strong { font-size: 0.88rem; font-weight: 700; line-height: 1.3; }
+.plantillaInfo small { font-size: 0.74rem; color: var(--muted, #6f5c48); line-height: 1.4; text-wrap: pretty; }
+.plantillaBajar {
+  flex-shrink: 0; display: grid; place-items: center; color: var(--gold-dk, #8a6a28);
+  transition: transform 200ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.plantilla:hover .plantillaBajar { transform: translateY(2px); }
+
+/* ── Veredicto de la comparación con la plantilla ── */
+.veredicto {
+  display: flex; align-items: flex-start; gap: 0.75rem;
+  padding: 0.85rem 1rem; border-radius: 12px; border: 1px solid transparent;
+  font-size: 0.84rem; line-height: 1.5; color: #38281a;
+  animation: veredictoIn 260ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.veredicto > div { flex: 1; min-width: 0; }
+.veredicto strong { display: block; font-size: 0.88rem; }
+.veredicto p { margin: 2px 0 0; color: #5b4a3c; text-wrap: pretty; }
+.veredictoNeutro { background: #fff; border-color: var(--border, rgba(109,60,27, 0.16)); align-items: center; }
+.veredictoNeutro p { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.veredictoOk { background: #edf7f0; border-color: #b8e0c8; }
+.veredictoOk strong { color: #1f5e3c; }
+.veredictoAviso { background: #fbf4dd; border-color: rgba(201, 168, 76, 0.6); }
+.veredictoAviso strong { color: #6b4f12; }
+.veredictoMal { background: #fdf1ef; border-color: #f0c2bb; }
+.veredictoMal > div > strong { color: #8f2f2f; }
+.veredictoCheck {
+  flex-shrink: 0; display: grid; place-items: center; width: 22px; height: 22px; margin-top: 1px;
+  border-radius: 50%; background: #1f7a4d; color: #fff;
+}
+.veredictoAviso .veredictoCheck { background: var(--gold-dk, #8a6a28); }
+.veredictoIcono { flex-shrink: 0; margin-top: 1px; color: #a23b3b; }
+
+.veredictoGrupo {
+  margin: 0.8rem 0 0.35rem !important;
+  font-size: 0.72rem; font-weight: 700; letter-spacing: 0.04em; color: #8f2f2f !important;
+}
+.veredictoLista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.6rem; }
+.veredictoLista li { display: flex; flex-direction: column; gap: 0.3rem; }
+.veredictoClausula { font-size: 0.8rem; font-weight: 700; color: var(--navy, #472f29); }
+/* "Debe decir" / "En tu archivo": la etiqueta arriba, el texto citado abajo. */
+.cita {
+  display: block; padding: 0.4rem 0.6rem; border-radius: 8px;
+  background: rgba(255, 255, 255, 0.75); font-size: 0.8rem; color: #38281a;
+  overflow-wrap: anywhere;
+}
+.cita em {
+  display: block; font-style: normal; font-size: 0.68rem; font-weight: 700;
+  color: var(--muted, #6f5c48); margin-bottom: 1px;
+}
+.espacios { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+.espacio {
+  padding: 0.18rem 0.5rem; border-radius: 6px; background: rgba(255, 255, 255, 0.8);
+  border: 1px solid #f0c2bb; font-size: 0.72rem; font-weight: 600; color: #7a2b2b;
+}
+.veredictoPie { margin-top: 0.8rem !important; font-weight: 600; color: #5b4a3c !important; }
+
+@keyframes veredictoIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .veredicto { animation: none; }
+  .tipoOpcion, .tipoRadio, .plantilla, .plantillaBajar { transition: none; }
+  .plantilla:hover .plantillaBajar { transform: none; }
+}
+
+/* El firmante en móvil: el correo largo empujaba la etiqueta fuera del modal
+   y aparecía una barra horizontal. El texto se recorta y la etiqueta baja. */
+.clienteRO > div { flex: 1; min-width: 0; }
+.clienteNombre, .clienteCorreo { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 520px) {
+  .clienteRO { flex-wrap: wrap; }
+  .clienteRO .tag { margin-left: calc(40px + 0.8rem); }
+}

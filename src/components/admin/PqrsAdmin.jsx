@@ -23,7 +23,9 @@ const norm = (s) => (s || '').toString().toLowerCase().normalize('NFD').replace(
 // Día local en formato YYYY-MM-DD, el mismo que devuelven los <input type="date">.
 const soloFecha = (ts) => (ts ? new Date(ts).toLocaleDateString('sv') : '')
 
-export default function PqrsAdmin() {
+// `onCambio`: avisa al panel cuando cambia el estado de una PQRS, para que
+// el badge del riel se recuente al instante y no al siguiente poll.
+export default function PqrsAdmin({ onCambio } = {}) {
   const [rows, setRows]       = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError]     = useState('')
@@ -72,6 +74,7 @@ export default function PqrsAdmin() {
       })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       setRows(rs => rs.map(x => (x.id === r.id ? { ...x, leido: atendida } : x)))
+      onCambio?.()
     } catch {
       setError('No se pudo actualizar el estado de la PQRS.')
     } finally { setBusy(null) }

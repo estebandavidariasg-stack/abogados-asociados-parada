@@ -1114,12 +1114,14 @@ function SeccionCobros({ aprobado, userId, tieneCert, onIrAPerfil }) {
           <div className={styles.cardGlass} style={{ marginTop: '1.1rem', padding: '16px 18px' }}>
             <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 14, justifyContent: 'space-between' }}>
               <div style={{ minWidth: 220, flex: 1 }}>
-                <p style={{ margin: 0, fontWeight: 700, fontSize: '0.95rem' }}>Solicitud de pago semanal</p>
+                {/* Texto aprobado por la firma (2026-09-30); el mismo va en las
+                    condiciones del registro del gestor (RegisterModal). */}
+                <p style={{ margin: 0, fontWeight: 700, fontSize: '0.95rem' }}>Cuándo se paga tu comisión</p>
                 <p style={{ margin: '4px 0 0', fontSize: '0.78rem', opacity: 0.75, lineHeight: 1.5 }}>
-                  La solicitud ya no es por caso: se envía el <strong>acumulado</strong> de tus
-                  comisiones disponibles ({fmtCOP(totalDisponible)}). Puedes solicitarla
-                  <strong> una vez por semana</strong> y el pago se realiza dentro de
-                  <strong> 5 días hábiles</strong>.
+                  La comisión se genera solo si el caso es exitoso. El cliente le paga al
+                  profesional y, cuando el profesional consigna a la plataforma, tu comisión
+                  queda disponible. Desde ese momento, el pago se realiza dentro de
+                  los <strong>5 días hábiles</strong> siguientes.
                 </p>
                 {proximaSolicitud && (
                   <p style={{ margin: '6px 0 0', fontSize: '0.74rem', opacity: 0.65 }}>

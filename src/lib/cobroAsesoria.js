@@ -35,12 +35,18 @@ export function parseMiles(v) {
 // número: lo leen los avisos al cliente, la validación del cobro y las
 // condiciones que se muestran antes del registro.
 //
-// Solo los abogados tienen piso (decisión 2026-09-28). El contador fija su
+// Solo los abogados tienen rango (decisión 2026-09-28). El contador fija su
 // valor libremente: no se le exige ni se le anuncia al cliente ninguna cifra.
-// Todo lo que hable de "desde $200.000" pasa por tienePisoCobro(tipo), con
+// Todo lo que hable del rango pasa por tienePisoCobro(tipo), con
 // tipo = 'abogado' | 'contador' (chat_rooms.tipo_profesional o profiles.rol).
-export const COBRO_MINIMO = 200000
+//
+// Desde 2026-09-30 es un RANGO, no un piso: de $50.000 a $150.000 por
+// consulta (antes "desde $200.000"). El techo también se valida: por
+// políticas internas no se puede cobrar más.
+export const COBRO_MINIMO = 50000
+export const COBRO_MAXIMO = 150000
 export const tienePisoCobro = (tipo) => tipo !== 'contador'
+const RANGO_COBRO = `entre ${COP.format(COBRO_MINIMO)} y ${COP.format(COBRO_MAXIMO)}`
 export const cobroMinimoDe = (tipo) => (tienePisoCobro(tipo) ? COBRO_MINIMO : 0)
 
 /* Aviso de apertura de la consulta: toda consulta tiene cobro. Se pinta como
@@ -49,11 +55,13 @@ export const cobroMinimoDe = (tipo) => (tienePisoCobro(tipo) ? COBRO_MINIMO : 0)
    aunque entre días después. */
 export const AVISO_COBRO_CLIENTE = {
   titulo: 'Esta consulta tiene cobro',
-  // El piso SÍ se dice: el cliente merece saber de qué orden de precio habla
+  // El rango SÍ se dice: el cliente merece saber de qué orden de precio habla
   // antes de contar su caso. El valor exacto sigue siendo del profesional.
+  // Mismo texto que AVISO_COSTO_ANTES (aprobado por la firma 2026-09-30).
   texto:
-    `Desde ${COP.format(COBRO_MINIMO)}. El profesional te dice el valor exacto aquí mismo, ` +
-    'antes de asesorarte. Le pagas a él directamente.',
+    `Entre ${COP.format(COBRO_MINIMO)} y ${COP.format(COBRO_MAXIMO)} por la consulta. ` +
+    'El profesional informa el valor exacto antes de empezar. ' +
+    'El pago se realiza directamente al profesional.',
 }
 // Con contador: mismo aviso, sin cifra.
 export const avisoCobroCliente = (tipo) => (tienePisoCobro(tipo) ? AVISO_COBRO_CLIENTE : {
@@ -76,20 +84,19 @@ export const avisoCobroCliente = (tipo) => (tienePisoCobro(tipo) ? AVISO_COBRO_C
 // SOLO para consultas con abogado: con contador no se muestra (no hay piso
 // que anunciar). Quien lo pinte debe preguntar antes tienePisoCobro(tipo).
 export const AVISO_COSTO_ANTES = {
-  cifra: `Desde ${COP.format(COBRO_MINIMO)}`,
+  cifra: `Entre ${COP.format(COBRO_MINIMO)} y ${COP.format(COBRO_MAXIMO)}`,
   // Sin esto la cifra no dice de qué es: el lector tenía que deducirlo.
   sufijo: 'por la consulta',
-  texto: 'El profesional te dice el valor exacto antes de empezar. Le pagas a él directamente.',
+  texto: 'El profesional informa el valor exacto antes de empezar. El pago se realiza directamente al profesional.',
 }
 
-// Este aviso lo ven SOLO los profesionales. Al cliente se le dice el piso,
+// Este aviso lo ven SOLO los profesionales. Al cliente se le dice el rango,
 // no el valor: el exacto lo pone el profesional en cada caso.
 export const AVISO_COBRO_PROFESIONAL = {
-  titulo: 'Define el cobro antes de asesorar',
+  titulo: 'Define el cobro antes de asesorar.',
   texto:
-    'Fija el valor con el botón Cobro antes de asesorar. ' +
-    `El mínimo es ${COP.format(COBRO_MINIMO)}; de ahí hacia arriba lo decides tú. ` +
-    'El cliente te paga directamente a ti.',
+    `Según nuestras políticas internas, la consulta se encuentra ${RANGO_COBRO}. ` +
+    'El cliente realiza el pago directamente al profesional.',
 }
 // Contador: sin piso, el valor es suyo.
 export const AVISO_COBRO_CONTADOR = {

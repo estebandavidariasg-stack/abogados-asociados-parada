@@ -11,15 +11,20 @@ import {
   ChatImage, AdjuntoChat, VisorArchivo, subirArchivoChat, parseFichas, FichasContacto,
   validarAdjuntoChat, CHAT_FILE_ACCEPT, prepararAdjuntoChat, nombreArchivoSeguro, describirErrorSubida, revisarContactoArchivo, crearTranscriptor,
   crearGrabadorAudio, extAudio, mimeAudioLimpio, describirErrorMicrofono, AUDIO_CONSTRAINTS, audioSinRevisar, AvisoAudioSinRevisar,
+  // Visto (✓/✓✓) y presencia del cliente (Conectado / Ausente).
+  Visto, Presencia, usePresencia, hayNoLeidosDeOtro, marcarLeidos, aplicarLeidoLocal,
+  // Envío optimista + fusión de mensajes, y filtro por estado de la sala.
+  nuevoIdMensaje, fusionarMensajes, FiltroEstadoSalas, ESTADOS_SALA, contarEstados,
 } from '../../lib/chatFiles'
 import { IconPaperclip, IconMic, IconFirma, IconCheck } from '../shared/Icons'
 import { pedirIA } from '../../lib/aiClient'
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
 import Markdown from '../shared/Markdown'
 import EnviarAFirmar from '../firma/EnviarAFirmar'
+import { DOC_CONTRATO_SERVICIOS } from '../../lib/contratoServicios'
 import { firmantesPendientes } from '../../lib/firmaService'
 import {
-  COP, fetchCobroProfesional, fijarCobro, confirmarPagoAsesoria, formatMiles, parseMiles, COBRO_MINIMO,
+  COP, fetchCobroProfesional, fijarCobro, confirmarPagoAsesoria, formatMiles, parseMiles, COBRO_MINIMO, COBRO_MAXIMO,
   AVISO_COBRO_PROFESIONAL,
 } from '../../lib/cobroAsesoria'
 
@@ -244,6 +249,16 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
   const [fechaHasta,  setFechaHasta]  = useState('')
   // Filtro "Verificadas": salas cuya revisión ya fue ATENDIDA por el admin.
   const [soloVerificadas, setSoloVerificadas] = useState(false)
+  // Filtro por estado (Todas / Activas / En espera / Cerradas). Se recuerda
+  // por navegador: quien trabaja solo con las activas no tiene que elegirlo
+  // cada vez que entra.
+  const claveFiltroEstado = `chat_filtro_estado_${lawyerId}`
+  const [estadoFiltro, setEstadoFiltro] = useState(() => {
+    try { return localStorage.getItem(claveFiltroEstado) || 'todas' } catch { return 'todas' }
+  })
+  useEffect(() => {
+    try { localStorage.setItem(claveFiltroEstado, estadoFiltro) } catch { /* modo privado */ }
+  }, [claveFiltroEstado, estadoFiltro])
   const [salasVerificadas, setSalasVerificadas] = useState(() => new Set())
   useEffect(() => {
     if (!lawyerId) return
@@ -361,11 +376,14 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
   }
 
   // Publica en el hilo el mensaje de firma para que el cliente lo firme.
-  async function publicarFirma(sol, filas, docPath) {
+  // `meta` = { doc, titulo } cuando es el contrato de prestación de servicios
+  // (ya verificado contra la plantilla): el mensaje lo rotula como tal.
+  async function publicarFirma(sol, filas, docPath, meta) {
     const cliente = filas.find(f => f.rol_firma === 'cliente') || filas[0]
     const payload = JSON.stringify({
       t: 'firma', solicitudId: sol.id, docPath,
       firmanteId: cliente?.id, correo: cliente?.correo,
+      ...(meta?.doc ? { doc: meta.doc, titulo: meta.titulo } : {}),
     })
     try {
       const headers = await getAuthHeaders()
@@ -379,7 +397,7 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
           message_type: 'firma',
         }),
       })
-      setToast('Documento enviado al cliente para firmar.')
+      setToast(meta?.doc ? 'Contrato enviado al cliente para firmar.' : 'Documento enviado al cliente para firmar.')
     } catch {
       setToast('No se pudo enviar el documento a firma.')
     }
@@ -577,12 +595,16 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
     const ch = supabase.channel(`lcd:${rid}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages', filter: `room_id=eq.${rid}` },
         p => {
-          setMessages(prev => prev.find(m => m.id === p.new.id) ? prev : [...prev, p.new])
+          // Fusiona: si es mi mensaje optimista, solo deja de estar "enviando".
+          setMessages(prev => fusionarMensajes(prev, [p.new]))
           // Aviso flotante: el cliente terminó de firmar el documento.
           if (p.new.message_type === 'firma_ok' && p.new.sender_type === 'client') {
             setToast('✅ El cliente firmó el documento')
           }
         })
+      // El cliente leyó mis mensajes (leido_en): ✓ pasa a ✓✓ al instante.
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'chat_messages', filter: `room_id=eq.${rid}` },
+        p => setMessages(prev => prev.map(m => (m.id === p.new.id && m.leido_en !== p.new.leido_en) ? { ...m, leido_en: p.new.leido_en } : m)))
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'chat_rooms', filter: `id=eq.${rid}` },
         p => setActiveRoom(prev => (prev && prev.id === p.new.id) ? { ...prev, ...p.new } : prev))
       .subscribe(st => {
@@ -596,9 +618,28 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
     // Red de seguridad ante hipos del WS: re-sincroniza al volver a la pestaña.
     const onVisible = () => { if (!document.hidden) fetchMessages() }
     document.addEventListener('visibilitychange', onVisible)
+    // Y mientras el chat está a la vista, cada 5 s se piden los últimos 40 y
+    // se FUSIONAN (no se rehace la lista). Si el WebSocket se cae sin avisar
+    // —pasa con datos móviles y redes corporativas—, el mensaje del cliente
+    // llega igual en segundos en vez de quedarse esperando a un cambio de
+    // pestaña. Con el WS sano no cambia nada: fusionar lo ya visto no pinta.
+    const sincronizar = async () => {
+      try {
+        const headers = await getAuthHeaders()
+        const res = await fetch(
+          `${SUPABASE_URL}/rest/v1/chat_messages?room_id=eq.${rid}&order=created_at.desc&limit=40&select=*`,
+          { headers }
+        )
+        const data = await res.json()
+        if (activeRoomIdRef.current !== rid || !Array.isArray(data)) return
+        setMessages(prev => fusionarMensajes(prev, data.reverse()))
+      } catch (_) { /* red caída: el siguiente pulso reintenta */ }
+    }
+    const pararSync = sondear(sincronizar, 5000)
     return () => {
       supabase.removeChannel(ch)
       document.removeEventListener('visibilitychange', onVisible)
+      pararSync()
     }
   }, [activeRoom?.id, fetchMessages])
 
@@ -672,33 +713,50 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
   }
 
   /* ── Enviar mensaje ── */
+  /* Envío optimista: la burbuja aparece YA con ✓ (enviando) y el id viaja
+     en el insert, así la respuesta, el Realtime y la red de seguridad traen
+     la MISMA fila. Antes se esperaba el POST y además una recarga completa
+     del hilo (dos viajes a Oregón) antes de ver lo propio. Se puede seguir
+     escribiendo y enviando sin esperar a la confirmación del anterior. */
   async function enviar() {
-    if (!input.trim() || sending || !activeRoom) return
+    const texto = input.trim()
+    if (!texto || !activeRoom) return
     // ── Bloqueo de datos de contacto (teléfono / correo) ──
-    if (contieneContacto(input.trim())) { setContactoBlocked(true); return }
-    setSending(true)
-    try {
+    if (contieneContacto(texto)) { setContactoBlocked(true); return }
+    const rid = activeRoom.id
+    const id = nuevoIdMensaje()
+    const local = {
+      id, room_id: rid, sender_type: 'lawyer', content: texto, message_type: 'text',
+      created_at: new Date().toISOString(), leido_en: null, _enviando: true, _nuevo: true,
+    }
+    setInput('')
+    setMessages(prev => [...prev, local])
+    const postear = async (cuerpo) => {
       const headers = await getAuthHeaders()
-      const res = await fetch(`${SUPABASE_URL}/rest/v1/chat_messages`, {
+      return fetch(`${SUPABASE_URL}/rest/v1/chat_messages`, {
         method: 'POST',
         headers: { ...headers, 'Content-Type': 'application/json', Prefer: 'return=representation' },
-        body: JSON.stringify({
-          room_id:     activeRoom.id,
-          sender_type: 'lawyer',
-          content:     input.trim(),
-          message_type: 'text',
-        }),
+        body: JSON.stringify(cuerpo),
       })
+    }
+    try {
+      const base = { room_id: rid, sender_type: 'lawyer', content: texto, message_type: 'text' }
+      let res = await postear({ id, ...base })
+      let conOtroId = false
+      // Por si la tabla no deja fijar el id: mismo insert sin él.
+      if (!res.ok && res.status >= 400 && res.status < 500) { res = await postear(base); conOtroId = true }
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      // Solo limpiar tras confirmar el insert — si falló, el texto se conserva
-      // para reintentar (antes se perdía en silencio).
-      setInput('')
-      fetchMessages()
+      const [fila] = await res.json().catch(() => [])
+      if (activeRoomIdRef.current !== rid) return
+      setMessages(prev => {
+        const base2 = conOtroId ? prev.filter(m => m.id !== id) : prev
+        return fusionarMensajes(base2, [fila?.id ? { ...fila, _nuevo: true } : { ...local, _enviando: false }], { nuevos: false })
+      })
     } catch (_) {
+      // Se quita la burbuja y el texto vuelve al campo (si no escribió otro).
+      setMessages(prev => prev.filter(m => m.id !== id))
+      setInput(prev => prev || texto)
       setToast('No se pudo enviar el mensaje. Revisa tu conexión e intenta de nuevo.')
-    } finally {
-      // Sin esto, un fallo de red dejaba el botón Enviar bloqueado para siempre.
-      setSending(false)
     }
   }
 
@@ -1027,10 +1085,14 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
     // Toda consulta tiene cobro: el valor es obligatorio y mayor a 0.
     const m = parseMiles(cobroMonto)
     if (!m || m <= 0) { setCobroErr('Ingresa el valor de la consulta.'); return }
-    // El mínimo se acepta al registrarse; si solo estuviera en el texto sería
-    // una regla de adorno. Aquí es donde de verdad se cumple.
+    // El rango se acepta al registrarse; si solo estuviera en el texto sería
+    // una regla de adorno. Aquí es donde de verdad se cumple (piso y techo).
     if (m < COBRO_MINIMO) {
-      setCobroErr(`El mínimo por consulta es ${COP.format(COBRO_MINIMO)}.`)
+      setCobroErr(`El valor mínimo por consulta es ${COP.format(COBRO_MINIMO)}.`)
+      return
+    }
+    if (m > COBRO_MAXIMO) {
+      setCobroErr(`El valor máximo por consulta es ${COP.format(COBRO_MAXIMO)}.`)
       return
     }
     setCobroBusy(true); setCobroErr('')
@@ -1090,7 +1152,43 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
   // Luz verde: el pago de la consulta habilita descargas y datos de contacto,
   // además del permiso global por políticas (profiles.puede_descargar_archivos).
   const pagoConfirmado = !!activeRoom?.pago_confirmado
+
+  // Contrato de prestación de servicios en ESTA sala: ¿ya se envió?, ¿ya lo
+  // firmó el cliente? Se lee del propio hilo (mensajes `firma` / `firma_ok`).
+  let contratoSolicitud = null
+  let contratoFirmado = false
+  for (const m of messages) {
+    if (m.message_type === 'firma') {
+      const p = parseFirma(m.content)
+      if (p?.doc === DOC_CONTRATO_SERVICIOS) { contratoSolicitud = p.solicitudId; contratoFirmado = false }
+    } else if (m.message_type === 'firma_ok' && contratoSolicitud) {
+      if (parseFirmaOk(m.content)?.solicitudId === contratoSolicitud) contratoFirmado = true
+    }
+  }
   const puedeDescargarSala = canDownload || pagoConfirmado
+
+  // ── Visto: marcar como leídos los mensajes del cliente ─────────────────
+  // Tener la sala abierta y la pestaña a la vista es "leer". Se marca una
+  // vez por tanda y se deja puesto en local; el cliente lo ve como ✓✓ en su
+  // siguiente sondeo. Con la pestaña oculta no se marca; al volver, sí.
+  useEffect(() => {
+    const rid = activeRoom?.id
+    if (!rid || !hayNoLeidosDeOtro(messages, 'lawyer')) return
+    let vivo = true
+    async function marcar() {
+      if (document.hidden) return
+      const ok = await marcarLeidos(rid)
+      if (ok && vivo && activeRoomIdRef.current === rid) setMessages(prev => aplicarLeidoLocal(prev, 'lawyer'))
+    }
+    marcar()
+    document.addEventListener('visibilitychange', marcar)
+    return () => { vivo = false; document.removeEventListener('visibilitychange', marcar) }
+  }, [activeRoom?.id, messages])
+
+  // ── Presencia del cliente (Conectado / Ausente) en el encabezado ───────
+  const presenciaCliente = usePresencia(activeRoom?.id, {
+    activo: !!activeRoom && activeRoom.status !== 'closed',
+  })
 
   // ── Filtrado en cliente sobre las salas ya cargadas ──────────────────────
   // Nombre (sin tildes/case-insensitive) + rango de fechas por última actividad
@@ -1098,8 +1196,10 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
   const buscarNorm = normaliza(buscar)
   const desdeTs = fechaDesde ? new Date(`${fechaDesde}T00:00:00`).getTime() : null
   const hastaTs = fechaHasta ? new Date(`${fechaHasta}T23:59:59.999`).getTime() : null
-  const filtroActivo = !!(buscar.trim() || fechaDesde || fechaHasta || soloVerificadas)
-  const filteredRooms = rooms.filter(room => {
+  const filtroActivo = !!(buscar.trim() || fechaDesde || fechaHasta || soloVerificadas || estadoFiltro !== 'todas')
+  // Primero los filtros de texto/fecha; sobre eso se cuentan los estados (el
+  // número del filtro dice cuántas se van a ver) y al final se filtra por estado.
+  const salasBase = rooms.filter(room => {
     if (soloVerificadas && !salasVerificadas.has(room.id)) return false
     if (buscarNorm && !normaliza(room.client_nombre).includes(buscarNorm)) return false
     if (desdeTs || hastaTs) {
@@ -1109,6 +1209,9 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
     }
     return true
   })
+  const conteoEstados = contarEstados(salasBase)
+  const filteredRooms = estadoFiltro === 'todas' ? salasBase : salasBase.filter(r => r.status === estadoFiltro)
+  const etiquetaEstado = ESTADOS_SALA.find(e => e.key === estadoFiltro)?.label.toLowerCase() || ''
 
   return (
     <div ref={dashRef} className={`${styles.dashboard} ${activeRoom ? styles.dashboardChatOpen : ''}`}>
@@ -1116,12 +1219,13 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
       {/* ── Sidebar de salas ── */}
       <div className={styles.sidebar}>
         <div className={styles.sidebarHeader}>
-          <p className={styles.sidebarTitle}>Consultas activas</p>
+          <p className={styles.sidebarTitle}>Consultas</p>
           <p className={styles.sidebarSub}>Ordenadas por actividad reciente</p>
         </div>
 
-        {/* ── Barra de filtros: buscar por cliente + rango de fechas ── */}
+        {/* ── Barra de filtros: estado + buscar por cliente + rango de fechas ── */}
         <div className={styles.filterBar}>
+          <FiltroEstadoSalas valor={estadoFiltro} onChange={setEstadoFiltro} conteos={conteoEstados} />
           <div className={styles.searchBox}>
             <span className={styles.searchIcon}><IconLupa /></span>
             <input
@@ -1166,7 +1270,7 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
               <button
                 type="button"
                 className={styles.clearAll}
-                onClick={() => { setBuscar(''); setFechaDesde(''); setFechaHasta(''); setSoloVerificadas(false) }}
+                onClick={() => { setBuscar(''); setFechaDesde(''); setFechaHasta(''); setSoloVerificadas(false); setEstadoFiltro('todas') }}
               >Limpiar</button>
             )}
           </div>
@@ -1198,7 +1302,11 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
             <p className={styles.sinSalas}>No tienes consultas asignadas aún.</p>
           )}
           {!loadingRooms && rooms.length > 0 && filteredRooms.length === 0 && (
-            <p className={styles.sinSalas}>Ninguna consulta coincide con el filtro.</p>
+            <p className={styles.sinSalas}>
+              {estadoFiltro !== 'todas' && salasBase.length > 0
+                ? `No tienes consultas ${etiquetaEstado}.`
+                : 'Ninguna consulta coincide con el filtro.'}
+            </p>
           )}
 
           {filteredRooms.map(room => {
@@ -1309,6 +1417,18 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
                       : activeRoom.status === 'active' ? 'En curso'
                       : 'Esperando'}
                   </span>
+                  {/* Presencia real del cliente: late cada 30 s mientras tiene
+                      el chat a la vista. Solo con la sala abierta. */}
+                  {activeRoom.status !== 'closed' && presenciaCliente.disponible && (
+                    <span className={styles.chatStatusEstado}>
+                      {' · '}
+                      <Presencia
+                        conectado={presenciaCliente.conectado}
+                        texto={presenciaCliente.conectado ? 'Cliente conectado' : 'Cliente ausente'}
+                        detalle={presenciaCliente.detalle}
+                      />
+                    </span>
+                  )}
                   {activeRoom.area_derecho && (
                     <span className={styles.chatStatusArea}> · {activeRoom.area_derecho}</span>
                   )}
@@ -1324,6 +1444,21 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
                 título competían con él y con el estado por la misma banda. */}
             {activeRoom.status !== 'closed' && (
                 <div className={styles.headerActions}>
+                  {/* Contrato de prestación de servicios: se envía a firma ANTES de
+                      asesorar. La plantilla oficial se descarga en el propio modal
+                      y lo subido se compara con ella antes de dejarlo pasar. */}
+                  {contratoFirmado
+                    ? <span className="aap-chip aap-chip--ok"><IconCheck size={12} /> Contrato firmado</span>
+                    : <button
+                        type="button"
+                        className={contratoSolicitud ? 'aap-accion aap-accion--sutil' : 'aap-accion aap-accion--neutra'}
+                        onClick={() => setFirmaOpen('contrato')}
+                        title={contratoSolicitud
+                          ? 'El contrato está pendiente de la firma del cliente. Puedes enviar una versión corregida.'
+                          : 'Enviar el contrato de prestación de servicios para que el cliente lo firme antes de asesorar'}
+                      >
+                        <IconFirma size={14} /> {contratoSolicitud ? 'Contrato enviado' : 'Contrato de servicios'}
+                      </button>}
                   {/* Con el pago confirmado, cobrar y pedir revisión ya no son
                       acciones posibles: el dinero entró y el caso quedó cerrado
                       en lo económico. Dejarlos ahí era ofrecer callejones sin
@@ -1526,7 +1661,7 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
                 return (
                   <div
                     key={m.id}
-                    className={esMio ? styles.msgRowMine : styles.msgRowOther}
+                    className={`${esMio ? styles.msgRowMine : styles.msgRowOther}${m._nuevo ? ' aapMsgIn' : ''}`}
                   >
                     <div className={`${esMio ? styles.bubbleMine : styles.bubbleOther} ${isAudio ? styles.bubbleAudio : ''} ${isFirstClientMsg ? styles.bubbleFirst : ''} ${isImageMsg ? styles.bubbleImg : ''}`}>
                       {isAudio ? (
@@ -1568,7 +1703,7 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
                         <span className={styles.firmaMsg}>
                           <span className={styles.firmaIcon}><IconFirma size={16} /></span>
                           <span className={`${styles.msgText} ${styles.firmaBody}`}>
-                            <strong>Documento enviado para firma</strong>
+                            <strong>{parseFirma(m.content)?.titulo ? `${parseFirma(m.content).titulo} enviado para firma` : 'Documento enviado para firma'}</strong>
                             <span className={styles.firmaSub}>El cliente lo firmará desde el chat.</span>
                           </span>
                         </span>
@@ -1592,6 +1727,7 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
                       )}
                       <p className={esMio ? styles.msgMetaMine : styles.msgMetaOther}>
                         {esMio ? 'Tú' : 'Cliente'} · {fmtHora(m.created_at)}
+                        {esMio && m.message_type !== 'system' && <Visto leidoEn={m.leido_en} enviando={m._enviando} tono="oscuro" />}
                       </p>
                     </div>
                   </div>
@@ -1729,6 +1865,8 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
           roomId={activeRoom.id}
           abogadoId={activeRoom.id}
           modeloPath={modeloPath}
+          tipoProfesional="abogado"
+          inicio={firmaOpen === 'otro' ? 'otro' : 'contrato'}
           cliente={{
             nombre: activeRoom.client_nombre,
             correo: activeRoom.client_email,
@@ -1832,7 +1970,7 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
               <label className={styles.cobroLabel}>Valor de la consulta (COP)</label>
               <input type="text" inputMode="numeric" value={cobroMonto}
                 onChange={e => { setCobroMonto(formatMiles(e.target.value)); setCobroErr('') }}
-                placeholder={`Mínimo ${formatMiles(COBRO_MINIMO)}`}
+                placeholder={`Entre ${formatMiles(COBRO_MINIMO)} y ${formatMiles(COBRO_MAXIMO)}`}
                 className={`${styles.cobroInput} ${styles.cobroAmount}`} />
               <p className={styles.cobroHint}>
                 El cliente verá tu cuenta bancaria certificada (la del registro)

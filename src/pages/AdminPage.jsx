@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
@@ -122,6 +122,12 @@ export default function AdminPage() {
   // Chat interno: mensajes sin leer (badge del riel + campana) y deep-link.
   const [internosNoLeidos, setInternosNoLeidos] = useState(0)
   const [internoToOpen, setInternoToOpen]     = useState(null)
+  // Badges de Opiniones (reseñas recibidas sin moderar) y PQRS (sin atender).
+  // Mismo pulso de 30 s que el chat interno; los paneles avisan (onCambio)
+  // al moderar o marcar atendida para que el número baje al instante.
+  const [pendientesRiel, setPendientesRiel]   = useState({ resenas: 0, pqrs: 0 })
+  const [pulsoRiel, setPulsoRiel]             = useState(0)
+  const recontarRiel = useCallback(() => setPulsoRiel(p => p + 1), [])
   // Vista detalle del perfil (modal)
   const [previewProfile, setPreviewProfile]   = useState(null)
   // Sala a abrir en el visor (deep-link desde la campanita / correo)
@@ -207,6 +213,33 @@ export default function AdminPage() {
     const id = setInterval(() => { if (!document.hidden) tick() }, 30_000)
     return () => { alive = false; clearInterval(id) }
   }, [user?.id, profile?.rol, loading, activeTab, adminIds])
+
+  // Opiniones sin moderar + PQRS sin atender → badges del riel (poll 30s,
+  // pausado en oculto). Solo cabeceras con count=exact: no baja filas.
+  useEffect(() => {
+    if (loading || !user?.id) return
+    let alive = true
+    async function tick() {
+      try {
+        const headers = await getAuthHeaders()
+        const contar = async (path) => {
+          const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+            headers: { ...headers, Prefer: 'count=exact', Range: '0-0' },
+          })
+          const total = parseInt((res.headers.get('content-range') || '').split('/')[1], 10)
+          return Number.isFinite(total) ? total : 0
+        }
+        const [resenas, pqrs] = await Promise.all([
+          contar('resenas?select=id&texto=not.is.null&aprobado=eq.false'),
+          contar('pqr?select=id&leido=eq.false'),
+        ])
+        if (alive) setPendientesRiel({ resenas, pqrs })
+      } catch { /* poll siguiente */ }
+    }
+    tick()
+    const id = setInterval(() => { if (!document.hidden) tick() }, 30_000)
+    return () => { alive = false; clearInterval(id) }
+  }, [user?.id, loading, pulsoRiel])
 
   async function fetchAll() {
     setLoadingData(true)
@@ -1037,8 +1070,8 @@ export default function AdminPage() {
     { key: 'alertas',      label: 'Inactividades',   corto: 'Inactividad',  count: alertasAccionables, alert: true, Icon: IconAlert },
     { key: 'chat_interno', label: 'Chat interno',    corto: 'Chat interno', count: internosNoLeidos,   Icon: IconChatInterno },
     { key: 'contratos',    label: 'Contratos',       corto: 'Contratos',                                 Icon: IconDoc },
-    { key: 'resenas',      label: 'Opiniones',       corto: 'Opiniones',                                 Icon: IconStar },
-    { key: 'pqrs',         label: 'PQRS',            corto: 'PQRS',                                      Icon: IconPqr },
+    { key: 'resenas',      label: 'Opiniones',       corto: 'Opiniones',    count: pendientesRiel.resenas, Icon: IconStar },
+    { key: 'pqrs',         label: 'PQRS',            corto: 'PQRS',         count: pendientesRiel.pqrs,    Icon: IconPqr },
     { key: 'proyectos',    label: 'Proyectos de ley', corto: 'Proyectos',                                Icon: IconLey },
     // Solo el ADMIN MAESTRO puede configurar el formulario de registro.
     ...(profile?.es_admin_maestro
@@ -1075,7 +1108,7 @@ export default function AdminPage() {
                   <span className={styles.navLabel}>{label}</span>
                   <span className={styles.navLabelCorto} aria-hidden="true">{corto || label}</span>
                   {count > 0 && (
-                    <span className={`${styles.navBadge} ${alert ? styles.navBadgeAlert : ''}`}>
+                    <span key={count} className={`${styles.navBadge} ${alert ? styles.navBadgeAlert : ''}`}>
                       {count}
                     </span>
                   )}
@@ -1721,7 +1754,7 @@ export default function AdminPage() {
           {/* ── Reseñas ── */}
           {activeTab === 'resenas' && (
             <div className={styles.section}>
-              <ResenasAdmin />
+              <ResenasAdmin onCambio={recontarRiel} />
             </div>
           )}
 
@@ -1743,7 +1776,7 @@ export default function AdminPage() {
           {/* ── PQRS (peticiones, quejas y reclamos de los clientes) ── */}
           {activeTab === 'pqrs' && (
             <div className={styles.section}>
-              <PqrsAdmin />
+              <PqrsAdmin onCambio={recontarRiel} />
             </div>
           )}
 

@@ -12,7 +12,12 @@ import {
   validarAdjuntoChat, CHAT_FILE_ACCEPT, prepararAdjuntoChat, nombreArchivoSeguro, describirErrorSubida,
   crearGrabadorAudio, extAudio, mimeAudioLimpio, describirErrorMicrofono, AUDIO_CONSTRAINTS,
   revisarContactoArchivo, crearTranscriptor, PdfVisor,
+  // Visto (✓/✓✓) y presencia del profesional (Conectado / Ausente).
+  Visto, Presencia, usePresencia, hayNoLeidosDeOtro, marcarLeidos, aplicarLeidoLocal,
+  nuevoIdMensaje, fusionarMensajes,
 } from '../../lib/chatFiles'
+// Términos de uso y política de datos, leídos en el visor sin salir del flujo.
+import { EnlaceLegal } from '../shared/DocumentosLegales'
 // Código OTP al correo antes de crear la sala (mismo paso que el registro).
 const VerificationStep = lazy(() => import('../auth/VerificationStep'))
 import {
@@ -1092,9 +1097,9 @@ function StepCedula({ onNew, onCasos }) {
         />
         <span>
           Acepto los{' '}
-          <a href="/terminos" target="_blank" rel="noopener noreferrer" style={{ color:'#6d3c1b', fontWeight:700 }}>términos y condiciones</a>
+          <EnlaceLegal doc="terminos" style={{ color:'#6d3c1b', fontWeight:700 }}>términos de uso</EnlaceLegal>
           {' '}y la{' '}
-          <a href="/privacidad" target="_blank" rel="noopener noreferrer" style={{ color:'#6d3c1b', fontWeight:700 }}>política de privacidad</a>.
+          <EnlaceLegal doc="datos" style={{ color:'#6d3c1b', fontWeight:700 }}>política de tratamiento de datos</EnlaceLegal>.
         </span>
       </label>
 
@@ -1838,15 +1843,42 @@ export default function ChatSection() {
     // corto, así que al cambiar de paso la página se quedaba donde estaba el
     // pie del formulario y el campo del código aparecía fuera de la pantalla.
     if (!['metodo', 'form', 'casos', 'verificar'].includes(step)) return
+    // El panel del código es corto: pegado al navbar quedaba solo, sin el
+    // título de la sección y con media pantalla vacía debajo, y la persona
+    // sentía que la página la había soltado "muy abajo". Ahí se ancla el
+    // ENCABEZADO de la sección ("Consulta Privada") si título + panel caben
+    // enteros en la pantalla; si no caben (pantallas muy bajas), el panel.
+    const destino = (target) => {
+      const navH = 80
+      const cardTop = target.getBoundingClientRect().top + window.scrollY
+      if (step !== 'verificar') return cardTop - navH
+      const head = document.querySelector('#chat > div')   // el bloque del título
+      if (!head) return cardTop - navH
+      const headTop = head.getBoundingClientRect().top + window.scrollY
+      const cardBottom = cardTop + target.getBoundingClientRect().height
+      const cabe = cardBottom - headTop <= window.innerHeight - navH - 24
+      return (cabe ? headTop : cardTop) - navH - (cabe ? 8 : 0)
+    }
+    // Si la persona toca la pantalla mientras se acomoda, no se le pelea.
+    let tocado = false
+    const soltar = () => { tocado = true }
+    const eventos = ['wheel', 'touchstart', 'keydown', 'mousedown']
+    eventos.forEach(ev => window.addEventListener(ev, soltar, { passive: true, once: true }))
     const posicionar = (behavior) => {
+      if (tocado) return
       const target = document.getElementById('consulta-form')
       if (!target) return
-      const top = target.getBoundingClientRect().top + window.scrollY - 80
-      window.scrollTo({ top: Math.max(0, top), behavior })
+      window.scrollTo({ top: Math.max(0, destino(target)), behavior })
     }
     const t1 = setTimeout(() => posicionar('smooth'), 60)
     const t2 = setTimeout(() => posicionar('auto'), 760)
-    return () => { clearTimeout(t1); clearTimeout(t2) }
+    // El panel del código llega en un trozo aparte (lazy): con datos móviles
+    // puede tardar más de 760 ms y cambiar el alto. Una corrección más.
+    const t3 = step === 'verificar' ? setTimeout(() => posicionar('auto'), 1600) : null
+    return () => {
+      clearTimeout(t1); clearTimeout(t2); if (t3) clearTimeout(t3)
+      eventos.forEach(ev => window.removeEventListener(ev, soltar))
+    }
   }, [step])
 
   // Al entrar a post_chat, verificar si ya hay un PQR para esta sala —
@@ -2021,35 +2053,96 @@ export default function ChatSection() {
   // cierre. Se pausa con la pestaña oculta para no gastar recursos. Los
   // profesionales sí conservan su Realtime propio (autenticado) para ver al
   // instante lo que envía el cliente.
+  /* Pulso ADAPTATIVO (2026-09-30). A 3 s fijos, un mensaje del profesional
+     tardaba hasta 3 s en verse, más el viaje a Oregón, y las dos consultas
+     (estado y mensajes) iban una detrás de otra. Ahora:
+       · conversación viva (hubo un mensaje en los últimos 30 s) → 1,2 s
+       · chat abierto pero callado                               → 3 s
+       · más de 2 minutos sin nada                               → 5 s
+       · pestaña oculta                                          → nada
+     y estado + mensajes salen EN PARALELO. Solo se acelera mientras de
+     verdad se conversa, así que el costo en reposo es menor que antes.
+     `sondeoYaRef` permite pedir un pulso inmediato (tras enviar). */
+  const actividadRef = useRef(Date.now())
+  const sondeoYaRef = useRef(null)
   useEffect(() => {
     if (!roomId || roomStatus === 'closed') return
     const hash = localStorage.getItem('chat_cedula_hash')
     let stop = false
+    let timer = null
+    let enCurso = false
     async function tick() {
-      if (document.hidden) return
-      const status = await fetchEstadoSala(hash, roomId)
+      const [status, data] = await Promise.all([
+        fetchEstadoSala(hash, roomId),
+        fetchMensajesCliente(hash, roomId, 50),
+      ])
       if (stop) return
       if (status) {
         setRoomStatus(status)
         if (status === 'active') setStep(s => s === 'esperando' ? 'chat' : s)
         if (status === 'closed') { await handleRoomClosed(roomId); return }
       }
-      const data = await fetchMensajesCliente(hash, roomId, 50)
-      if (stop || !Array.isArray(data) || !data.length) return
-      const recientes = [...data].reverse()
+      if (!Array.isArray(data) || !data.length) return
+      // Trae los mensajes nuevos Y el `leido_en` que el profesional va
+      // poniendo en los míos (✓✓ gris → dorado). Misma referencia si nada
+      // cambió: el hilo no se re-renderiza en cada pulso.
       setMessages(prev => {
-        const ids = new Set(prev.map(m => m.id))
-        const nuevos = recientes.filter(m => !ids.has(m.id))
-        return nuevos.length ? [...prev, ...nuevos] : prev
+        const sig = fusionarMensajes(prev, [...data].reverse())
+        if (sig !== prev && sig.length > prev.length) actividadRef.current = Date.now()
+        return sig
       })
     }
-    tick()  // primer sondeo inmediato (no esperar 3 s)
-    /* Sigue a 3 s, que es el pulso de una conversacion en vivo, pero se
-       detiene con la pestana oculta: ahi nadie esta leyendo y esas veinte
-       peticiones por minuto solo hacian cola delante de las que si importan. */
-    const parar = sondear(tick, 3000)
-    return () => { stop = true; parar() }
+    const programar = () => {
+      clearTimeout(timer)
+      if (stop) return
+      const quieto = Date.now() - actividadRef.current
+      const ms = document.hidden ? 4000 : quieto < 30_000 ? 1200 : quieto < 120_000 ? 3000 : 5000
+      timer = setTimeout(correr, ms)
+    }
+    async function correr() {
+      if (stop) return
+      if (!document.hidden && !enCurso) {
+        enCurso = true
+        try { await tick() } catch { /* red: el siguiente pulso reintenta */ } finally { enCurso = false }
+      }
+      programar()
+    }
+    sondeoYaRef.current = () => { clearTimeout(timer); correr() }
+    const alVolver = () => { if (!document.hidden) { actividadRef.current = Date.now(); clearTimeout(timer); correr() } }
+    document.addEventListener('visibilitychange', alVolver)
+    correr()  // primer pulso inmediato
+    return () => {
+      stop = true
+      clearTimeout(timer)
+      sondeoYaRef.current = null
+      document.removeEventListener('visibilitychange', alVolver)
+    }
   }, [roomId, roomStatus])
+
+  // ── Visto: marcar como leídos los mensajes del profesional ─────────────
+  // Cuando hay mensajes suyos sin `leido_en` y el chat está a la vista, se
+  // avisa una sola vez por tanda (la RPC solo toca los pendientes) y se deja
+  // puesto en local para no repetir. Con la pestaña oculta no se marca nada:
+  // al volver (visibilitychange) se reintenta.
+  useEffect(() => {
+    if (!roomId || step !== 'chat' || !hayNoLeidosDeOtro(messages, 'client')) return
+    let vivo = true
+    const hash = localStorage.getItem('chat_cedula_hash')
+    async function marcar() {
+      if (document.hidden) return
+      const ok = await marcarLeidos(roomId, { clientToken: hash })
+      if (ok && vivo) setMessages(prev => aplicarLeidoLocal(prev, 'client'))
+    }
+    marcar()
+    document.addEventListener('visibilitychange', marcar)
+    return () => { vivo = false; document.removeEventListener('visibilitychange', marcar) }
+  }, [roomId, step, messages])
+
+  // ── Presencia del profesional (Conectado / Ausente) en el encabezado ───
+  const presenciaPro = usePresencia(roomId, {
+    activo: step === 'chat' && roomStatus === 'active',
+    clientToken: localStorage.getItem('chat_cedula_hash'),
+  })
 
   // ── Documentos de confianza del profesional (solo-ver) ───────────────────
   // Tarjeta profesional, cuenta bancaria certificada y certificado
@@ -2689,20 +2782,50 @@ export default function ChatSection() {
       return
     }
     setInput('')
-    const { error } = await supabase.from('chat_messages').insert({ room_id: roomId, sender_type:'client', lawyer_id: null, content })
-    if (error) {
-      // Respaldo por RPC (SECURITY DEFINER): cubre el caso sin JWT de cliente.
-      const hash = localStorage.getItem('chat_cedula_hash')
-      const { ok } = await rpcCliente('enviar_mensaje_cliente', {
-        p_client_token: hash, p_room_id: roomId, p_content: content,
-      })
-      if (!ok) {
-        // Antes el texto desaparecía en silencio si el insert fallaba (red móvil,
-        // sala recién cerrada). Se restaura (si no escribió otra cosa) y se avisa.
-        setInput(prev => prev ? prev : content)
-        setSendError('No se pudo enviar el mensaje. Revisa tu conexión e intenta de nuevo.')
-      }
+    // Envío optimista: el mensaje aparece YA con ✓ (enviando) y el id viaja
+    // en el insert, así la confirmación y el sondeo traen la MISMA fila.
+    // Antes no se pintaba hasta el siguiente sondeo: hasta 3 s de silencio
+    // después de pulsar Enviar.
+    const rid = roomId
+    const id = nuevoIdMensaje()
+    const local = {
+      id, room_id: rid, sender_type: 'client', lawyer_id: null, content,
+      message_type: 'text', created_at: new Date().toISOString(),
+      leido_en: null, _enviando: true, _nuevo: true,
     }
+    setMessages(prev => [...prev, local])
+    actividadRef.current = Date.now()
+    const confirmar = (fila) => setMessages(prev => fusionarMensajes(prev, [fila]))
+
+    let { error } = await supabase.from('chat_messages').insert({ id, room_id: rid, sender_type:'client', lawyer_id: null, content })
+    if (error) {
+      // Por si la tabla no deja fijar el id: mismo insert sin él.
+      ;({ error } = await supabase.from('chat_messages').insert({ room_id: rid, sender_type:'client', lawyer_id: null, content }))
+      if (!error) { setMessages(prev => prev.filter(m => m.id !== id)); sondeoYaRef.current?.(); return }
+    }
+    if (!error) { confirmar({ ...local, _enviando: false }); setTimeout(() => sondeoYaRef.current?.(), 900); return }
+
+    // Respaldo por RPC (SECURITY DEFINER): cubre el caso sin JWT de cliente.
+    // La RPC genera su propio id: se cambia el local por la fila devuelta.
+    const hash = localStorage.getItem('chat_cedula_hash')
+    const { ok, data } = await rpcCliente('enviar_mensaje_cliente', {
+      p_client_token: hash, p_room_id: rid, p_content: content,
+    })
+    const fila = Array.isArray(data) ? data[0] : data
+    if (ok) {
+      setMessages(prev => {
+        const sin = prev.filter(m => m.id !== id)
+        return fila?.id ? fusionarMensajes(sin, [{ ...fila, _nuevo: true }], { nuevos: false }) : sin
+      })
+      if (!fila?.id) sondeoYaRef.current?.()
+      return
+    }
+    // Antes el texto desaparecía en silencio si el insert fallaba (red móvil,
+    // sala recién cerrada). Se quita la burbuja, se restaura el texto (si no
+    // escribió otra cosa) y se avisa.
+    setMessages(prev => prev.filter(m => m.id !== id))
+    setInput(prev => prev ? prev : content)
+    setSendError('No se pudo enviar el mensaje. Revisa tu conexión e intenta de nuevo.')
   }
 
   // Seleccionar archivo → NO se envía; queda en espera para revisar y confirmar.
@@ -3130,18 +3253,29 @@ export default function ChatSection() {
                         title={profNombreHeader ? `Consulta con ${profNombreHeader}` : 'Consulta'}>
                         {profNombreHeader ? `Consulta con ${profNombreHeader}` : 'Consulta'}
                       </p>
-                      {/* Estado compacto: punto + profesión + estado + área (1 línea) */}
+                      {/* Estado compacto: punto + profesión + estado + área (1 línea).
+                          Con la consulta activa, el estado es la PRESENCIA real
+                          del profesional (late cada 30 s mientras tiene este chat
+                          a la vista): Conectado / Ausente · hace X min. */}
                       <p className={styles.chatStatus}>
-                        <span
-                          aria-hidden="true"
-                          className={styles.chatStatusDot}
-                          style={{ background: roomStatus === 'active' ? '#43c465' : roomStatus === 'waiting' ? '#e0b53c' : 'rgba(253,246,227,0.4)' }}
-                        />
-                        <span className={styles.chatStatusEstado}>
-                          {profProfesionHeader} · {roomStatus === 'waiting' ? 'Esperando profesional'
-                            : roomStatus === 'active' ? 'En línea'
-                            : 'Finalizada'}
-                        </span>
+                        {roomStatus === 'active' && presenciaPro.disponible ? (
+                          <span className={styles.chatStatusEstado}>
+                            {profProfesionHeader} · <Presencia {...presenciaPro} />
+                          </span>
+                        ) : (
+                          <>
+                            <span
+                              aria-hidden="true"
+                              className={styles.chatStatusDot}
+                              style={{ background: roomStatus === 'active' ? '#43c465' : roomStatus === 'waiting' ? '#e0b53c' : 'rgba(253,246,227,0.4)' }}
+                            />
+                            <span className={styles.chatStatusEstado}>
+                              {profProfesionHeader} · {roomStatus === 'waiting' ? 'Esperando profesional'
+                                : roomStatus === 'active' ? 'En línea'
+                                : 'Finalizada'}
+                            </span>
+                          </>
+                        )}
                         {(roomArea || form.areas.join(', ')) && (
                           <span className={styles.chatStatusArea}> · {roomArea || form.areas.join(', ')}</span>
                         )}
@@ -3152,7 +3286,7 @@ export default function ChatSection() {
 
                 {/* Valores orientativos (debajo del encabezado). Colapsable en
                     móvil para no saturar la vista del chat. Con abogado dice
-                    el piso de $200.000 (el aviso de cobro del hilo se va con
+                    el rango de $50.000 a $150.000 (el aviso de cobro del hilo se va con
                     el scroll y este queda a mano en la cabecera); con
                     contador no hay piso, así que solo explica cómo se cobra. */}
                 <details className={styles.chatAviso}>
@@ -3167,7 +3301,7 @@ export default function ChatSection() {
                       <><strong style={{ color:'#6d3c1b' }}>{AVISO_COSTO_ANTES.cifra} {AVISO_COSTO_ANTES.sufijo}.</strong>{' '}</>
                     )}
                     {AVISO_COSTO_ANTES.texto} Ver{' '}
-                    <a href="/terminos" target="_blank" rel="noopener noreferrer" style={{ color:'#6d3c1b', fontWeight:700 }}>términos</a>.
+                    <EnlaceLegal doc="terminos" style={{ color:'#6d3c1b', fontWeight:700 }}>términos de uso</EnlaceLegal>.
                   </p>
                 </details>
 
@@ -3265,7 +3399,7 @@ export default function ChatSection() {
                     </div>
                   )}
                   {/* Aviso destacado: toda consulta tiene cobro. La cifra
-                      ($200.000) solo con abogado; con contador, sin piso. */}
+                      ($50.000 a $150.000) solo con abogado; con contador, sin rango. */}
                   <div className={styles.avisoCobro} role="note">
                     <IconCobro />
                     <span>
@@ -3307,12 +3441,18 @@ export default function ChatSection() {
                                 <IconFirma size={16} />
                               </span>
                               <span style={{ display: 'flex', flexDirection: 'column', gap: 4, lineHeight: 1.35 }}>
-                                <strong>Tienes un documento para firmar</strong>
-                                <span style={{ opacity: 0.9 }}>Es rápido y sin costo. Fírmalo aquí mismo.</span>
+                                {/* Con `titulo` es el contrato de prestación de servicios
+                                    (ya verificado contra la plantilla oficial). */}
+                                <strong>{firma.titulo ? `${firma.titulo} para firmar` : 'Tienes un documento para firmar'}</strong>
+                                <span style={{ opacity: 0.9 }}>
+                                  {firma.titulo
+                                    ? 'Léelo y fírmalo aquí mismo antes de iniciar el servicio. No tiene costo.'
+                                    : 'Es rápido y sin costo. Fírmalo aquí mismo.'}
+                                </span>
                               </span>
                             </p>
                             <button className={styles.fileBtn} onClick={() => setFirmaCliente(firma)}>
-                              Firmar documento
+                              {firma.titulo ? 'Leer y firmar el contrato' : 'Firmar documento'}
                             </button>
                             <p className={styles.msgMetaOther}>
                               Abogado · {new Date(msg.created_at).toLocaleTimeString('es-CO', { hour:'2-digit', minute:'2-digit' })}
@@ -3329,6 +3469,7 @@ export default function ChatSection() {
                             <p className={styles.msgText}>✅ <strong>Firmaste el documento</strong></p>
                             <p className={styles.msgMetaMine}>
                               {new Date(msg.created_at).toLocaleTimeString('es-CO', { hour:'2-digit', minute:'2-digit' })}
+                              <Visto leidoEn={msg.leido_en} />
                             </p>
                           </div>
                         </div>
@@ -3337,7 +3478,7 @@ export default function ChatSection() {
                     const isAudio = msg.message_type === 'audio' && msg.file_url
                     const isImageMsg = !isAudio && !!msg.file_url && isImage(msg.file_name)
                     return (
-                      <div key={msg.id} className={mine ? styles.msgRowMine : styles.msgRowOther}>
+                      <div key={msg.id} className={`${mine ? styles.msgRowMine : styles.msgRowOther}${msg._nuevo ? ' aapMsgIn' : ''}`}>
                         <div className={`${mine ? styles.msgBubbleMine : styles.msgBubbleOther} ${isAudio ? styles.msgBubbleAudio : ''} ${isImageMsg ? styles.msgBubbleImg : ''}`}>
                           {isAudio ? (
                             // Color por rol: cliente (mine) → player dorado (theme dark);
@@ -3389,6 +3530,7 @@ export default function ChatSection() {
                           )}
                           <p className={mine ? styles.msgMetaMine : styles.msgMetaOther}>
                             {mine ? (localStorage.getItem('chat_nombre') || 'Tú') : 'Abogado'} · {new Date(msg.created_at).toLocaleTimeString('es-CO', { hour:'2-digit', minute:'2-digit' })}
+                            {mine && <Visto leidoEn={msg.leido_en} enviando={msg._enviando} />}
                           </p>
                         </div>
                       </div>
@@ -4147,7 +4289,7 @@ export default function ChatSection() {
             {formError && <p className={styles.formError}>{formError}</p>}
             {/* El precio, donde todavía cambia una decisión: pegado al botón
                 que crea la consulta. SOLO con abogado, que es el único con
-                piso de $200.000; con contador el botón va solo (no hay cifra
+                rango de $50.000 a $150.000; con contador el botón va solo (no hay cifra
                 que anunciar).
 
                 Va PEGADO al botón, como un solo bloque, porque el formulario es
