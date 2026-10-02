@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import Footer from '../components/layout/Footer'
@@ -30,16 +30,101 @@ import styles from './ProyectosLeyPage.module.css'
    ═══════════════════════════════════════════════════════════════════════════ */
 
 const LS_IDENT = 'pl_identidad'
-const LS_VOTED = 'pl_voted'
+const LS_VOTED = 'pl_voted'   // formato viejo: { hash: [proyectoId] } — solo decía "ya votó algo"
+const LS_VOTOS = 'pl_votos'   // { hash: { proyectoId: { completo, arts: { articuloId: postura } } } }
 
-const leerIdent = () => { try { return JSON.parse(localStorage.getItem(LS_IDENT) || 'null') } catch { return null } }
-const leerVotados = () => { try { return JSON.parse(localStorage.getItem(LS_VOTED) || '{}') } catch { return {} } }
-function marcarVotado(hash, proyectoId) {
-  const map = leerVotados()
-  const arr = new Set(map[hash] || [])
-  arr.add(proyectoId)
-  map[hash] = Array.from(arr)
-  localStorage.setItem(LS_VOTED, JSON.stringify(map))
+const leerJson = (k, def) => { try { return JSON.parse(localStorage.getItem(k) || 'null') ?? def } catch { return def } }
+const leerIdent = () => leerJson(LS_IDENT, null)
+
+/* Lo que esta persona ya votó en un proyecto, según este navegador.
+
+   La base guarda un voto por persona y ÁMBITO (el proyecto completo, o cada
+   artículo por separado), así que votar tres artículos hoy y otros cinco la
+   semana que viene siempre fue posible del lado del servidor. Lo que lo
+   impedía era este registro local, que solo anotaba "ya votó en el proyecto"
+   y cerraba la tarjeta entera. Ahora anota QUÉ votó:
+
+     completo → postura ('a_favor'…) o true si se sabe que votó pero no qué
+     arts     → { articuloId: postura | true }
+     legado   → votó antes de este cambio: se sabe que votó algo, no qué
+
+   Es una ayuda de pantalla, no el control: si el navegador no lo recuerda
+   (otro equipo, datos borrados), el servidor rechaza el artículo repetido y
+   aquí se anota entonces. */
+function leerMiVoto(hash, proyectoId) {
+  const v = leerJson(LS_VOTOS, {})[hash]?.[proyectoId]
+  if (v) return { completo: v.completo || null, arts: v.arts || {}, legado: false }
+  return { completo: null, arts: {}, legado: (leerJson(LS_VOTED, {})[hash] || []).includes(proyectoId) }
+}
+function guardarMiVoto(hash, proyectoId, { completo, arts }) {
+  const todo = leerJson(LS_VOTOS, {})
+  const proyectos = todo[hash] || (todo[hash] = {})
+  const p = proyectos[proyectoId] || (proyectos[proyectoId] = {})
+  if (completo) p.completo = completo
+  if (arts) p.arts = { ...(p.arts || {}), ...arts }
+  try { localStorage.setItem(LS_VOTOS, JSON.stringify(todo)) } catch { /* sin almacenamiento: vale para esta visita */ }
+  return { completo: p.completo || null, arts: p.arts || {}, legado: false }
+}
+
+/* El articulado se muestra por tandas: una ley de ochenta artículos, todos
+   abiertos, es una página que nadie termina de recorrer. */
+const ARTS_INICIO = 5
+const ARTS_TANDA  = 10
+const ART_RENGLONES = 4
+
+/* Texto de un artículo con Ver más / Ver menos. El botón solo aparece si de
+   verdad hay más de lo que se ve (se mide: en el celular caben menos palabras
+   por renglón que en el escritorio). */
+function TextoArticulo({ texto, className }) {
+  const [abierto, setAbierto] = useState(false)
+  const [sobra, setSobra] = useState(false)
+  const ref = useRef(null)
+
+  useLayoutEffect(() => {
+    const el = ref.current
+    if (!el || abierto) return
+    const medir = () => setSobra(el.scrollHeight > el.clientHeight + 1)
+    medir()
+    if (typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver(medir)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [texto, abierto])
+
+  return (
+    <div>
+      <p ref={ref} className={`${className}${abierto ? '' : ' ' + styles.textoCorto}`}
+        style={abierto ? undefined : { WebkitLineClamp: ART_RENGLONES }}>
+        {texto}
+      </p>
+      {(sobra || abierto) && (
+        <button type="button" className={styles.verMasTxt} onClick={() => setAbierto(a => !a)} aria-expanded={abierto}>
+          {abierto ? 'Ver menos' : 'Ver más'}
+        </button>
+      )}
+    </div>
+  )
+}
+
+/* Pie de una lista de artículos: cuántos faltan por mostrar y cómo recogerla. */
+function MasArticulos({ total, visibles, onMas, onMenos }) {
+  if (total <= ARTS_INICIO) return null
+  const faltan = total - visibles
+  return (
+    <div className={styles.masArts}>
+      {faltan > 0 && (
+        <button type="button" className={styles.masArtsBtn} onClick={onMas}>
+          Ver más artículos
+          <span className={styles.masArtsCuenta}>{faltan === 1 ? 'falta 1' : `faltan ${faltan}`}</span>
+        </button>
+      )}
+      {visibles > ARTS_INICIO && (
+        <button type="button" className={`${styles.masArtsBtn} ${styles.masArtsBtnMenos}`} onClick={onMenos}>
+          Ver menos
+        </button>
+      )}
+    </div>
+  )
 }
 
 const deptos = DEPARTAMENTOS
@@ -317,7 +402,7 @@ function subirA(el) {
 }
 
 /* ═══════════════ Formulario de voto de un proyecto ══════════════════════ */
-function VotoForm({ proyecto, articulos, identidad, onVotado }) {
+function VotoForm({ proyecto, articulos, identidad, miVoto, onVotado }) {
   /* El toggle aparece SIEMPRE que el proyecto tenga artículos. Antes solo
      salía si además `permite_articulado` estaba activo, y entonces el
      ciudadano no tenía forma de saber que existía esa posibilidad ni por qué
@@ -331,8 +416,16 @@ function VotoForm({ proyecto, articulos, identidad, onVotado }) {
      numeral sale del orden, no del documento: ver `marcasDeTitulo`. */
   const titulos = useMemo(() => marcasDeTitulo(articulos), [articulos])
   const articuladoOn   = !!proyecto.permite_articulado
-  const puedeArticular = hayArticulos && articuladoOn
-  const [modo, setModo] = useState('completo')          // 'completo' | 'articulado'
+  /* Quien ya votó algunos artículos vuelve a este formulario por los que le
+     faltan: los ya votados salen cerrados y solo queda el modo por artículos
+     (el voto al proyecto completo es para quien no ha empezado). */
+  const votados  = miVoto?.arts || {}
+  const nVotados = Object.keys(votados).length
+  const yaEmpezo = nVotados > 0 || !!miVoto?.legado
+  const [modo, setModo] = useState(yaEmpezo ? 'articulado' : 'completo')   // 'completo' | 'articulado'
+  const [verN, setVerN] = useState(ARTS_INICIO)         // artículos a la vista (ver más / ver menos)
+  const listaRef = useRef(null)
+  const verMenos = () => { setVerN(ARTS_INICIO); subirA(listaRef.current) }
   const [comp, setComp] = useState({ apoya: '', obs: '' })
   const [arts, setArts] = useState({})                  // articuloId → { apoya, obs }
   const [estado, setEstado] = useState('idle')          // idle | enviando | error
@@ -351,7 +444,7 @@ function VotoForm({ proyecto, articulos, identidad, onVotado }) {
   }, [paso])
 
   const setArt = (id, patch) => setArts(p => ({ ...p, [id]: { apoya: '', obs: '', ...p[id], ...patch } }))
-  const artsConPostura = Object.entries(arts).filter(([, v]) => v.apoya)
+  const artsConPostura = Object.entries(arts).filter(([id, v]) => v.apoya && !votados[id])
   const artById = (id) => articulos.find(a => a.id === id)
 
   // Paso 1 → 2: valida y arma las filas, luego muestra la confirmación.
@@ -380,10 +473,35 @@ function VotoForm({ proyecto, articulos, identidad, onVotado }) {
   async function enviar() {
     setErr('')
     setEstado('enviando')
-    const r = await emitirVotos(filasPend, identidad)
-    if (r.ok) { marcarVotado(identidad.hash, proyecto.id); onVotado() }
-    else if (r.code === 'duplicado') { marcarVotado(identidad.hash, proyecto.id); onVotado('duplicado') }
-    else if (r.code === 'otp') {
+    const esCompleto = filasPend[0]?.articulo_id == null
+    let r = await emitirVotos(filasPend, identidad)
+
+    if (esCompleto) {
+      if (r.ok) return onVotado({ completo: filasPend[0].apoya })
+      if (r.code === 'duplicado') return onVotado({ completo: true, repetido: true })
+    } else {
+      if (r.ok) return onVotado({ arts: Object.fromEntries(filasPend.map(f => [f.articulo_id, f.apoya])) })
+      if (r.code === 'duplicado') {
+        /* Alguno de estos artículos ya tenía su voto (desde otro equipo, o
+           con el navegador limpio). El lote no dice cuál, así que se mandan
+           uno por uno: el repetido se anota como ya votado y los demás
+           quedan registrados. */
+        const hechos = {}
+        let previos = 0
+        for (const f of filasPend) {
+          const x = await emitirVotos([f], identidad)
+          if (x.ok) hechos[f.articulo_id] = f.apoya
+          else if (x.code === 'duplicado') { hechos[f.articulo_id] = true; previos++ }
+          else { r = x; break }
+        }
+        const fallo = r.code === 'duplicado' ? '' : (r.code === 'otp'
+          ? 'Tu verificación por correo venció antes de terminar: los artículos que faltan puedes votarlos después de verificarte otra vez.'
+          : 'No alcanzamos a registrar todos los artículos; los que faltan siguen pendientes.')
+        if (Object.keys(hechos).length) return onVotado({ arts: hechos, previos, fallo })
+      }
+    }
+
+    if (r.code === 'otp') {
       setEstado('error')
       /* No se dice el plazo en el mensaje: el ciudadano no lleva la cuenta
          desde cuándo, y decirle un número solo sirve para discutirlo. */
@@ -403,7 +521,11 @@ function VotoForm({ proyecto, articulos, identidad, onVotado }) {
       >
         <div className={styles.confirmHead}>
           <h4 className={styles.confirmTitle}>Confirma tu voto</h4>
-          <p className={styles.confirmSub}>Revisa tu postura antes de registrarla. Solo podrás votar una vez por este proyecto.</p>
+          <p className={styles.confirmSub}>
+            {filasPend[0]?.articulo_id == null
+              ? 'Revisa tu postura antes de registrarla. Solo podrás votar una vez por este proyecto.'
+              : 'Revisa tu postura antes de registrarla. Cada artículo se vota una sola vez; los que no marcaste puedes votarlos después.'}
+          </p>
         </div>
         <ul className={styles.confirmList}>
           {filasPend.map((f, i) => {
@@ -441,7 +563,14 @@ function VotoForm({ proyecto, articulos, identidad, onVotado }) {
 
   return (
     <div className={styles.voto} ref={panelRef}>
-      {hayArticulos && (
+      {yaEmpezo && (
+        <p className={styles.progresoArts}>
+          {nVotados > 0
+            ? <>Ya votaste <strong>{nVotados} de {articulos.length}</strong> artículos. Marca tu postura en los que te faltan; los que ya votaste no se repiten.</>
+            : <>Ya habías participado en este proyecto. Puedes votar los artículos que te falten; si alguno ya tiene tu voto, no se repite.</>}
+        </p>
+      )}
+      {hayArticulos && !yaEmpezo && (
         <div className={styles.modoChoice} role="radiogroup" aria-label="¿Cómo quieres votar?">
           <span className={styles.modoChoiceTitle}>¿Cómo quieres votar?</span>
           <div className={styles.modoOpts}>
@@ -478,27 +607,32 @@ function VotoForm({ proyecto, articulos, identidad, onVotado }) {
               </button>
               <AnimatePresence initial={false}>
                 {verArts && (
-                  <motion.ol
-                    className={styles.revList}
+                  <motion.div
+                    className={styles.revWrap}
+                    ref={listaRef}
                     initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
                     transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
                   >
-                    {articulos.map((a, i) => (
-                      <Fragment key={a.id}>
-                      {titulos[i] && (
-                        <li className={styles.revSeccion}>
-                          <span className={styles.revSeccionNum}>Título {romano(titulos[i].orden)}</span>
-                          <span className={styles.revSeccionNom}>{titulos[i].nombre}</span>
+                    <ol className={styles.revList}>
+                      {articulos.slice(0, verN).map((a, i) => (
+                        <Fragment key={a.id}>
+                        {titulos[i] && (
+                          <li className={styles.revSeccion}>
+                            <span className={styles.revSeccionNum}>Título {romano(titulos[i].orden)}</span>
+                            <span className={styles.revSeccionNom}>{titulos[i].nombre}</span>
+                          </li>
+                        )}
+                        <li className={styles.revItem}>
+                          <span className={styles.revNum}>Art. {a.numero ?? '—'}</span>
+                          {a.titulo && <strong className={styles.revTitle}>{a.titulo}</strong>}
+                          {a.contenido && <TextoArticulo texto={a.contenido} className={styles.revBody} />}
                         </li>
-                      )}
-                      <li className={styles.revItem}>
-                        <span className={styles.revNum}>Art. {a.numero ?? '—'}</span>
-                        {a.titulo && <strong className={styles.revTitle}>{a.titulo}</strong>}
-                        {a.contenido && <p className={styles.revBody}>{a.contenido}</p>}
-                      </li>
-                      </Fragment>
-                    ))}
-                  </motion.ol>
+                        </Fragment>
+                      ))}
+                    </ol>
+                    <MasArticulos total={articulos.length} visibles={Math.min(verN, articulos.length)}
+                      onMas={() => setVerN(n => n + ARTS_TANDA)} onMenos={verMenos} />
+                  </motion.div>
                 )}
               </AnimatePresence>
             </div>
@@ -511,29 +645,49 @@ function VotoForm({ proyecto, articulos, identidad, onVotado }) {
           <ObsField id={`obs-${proyecto.id}`} value={comp.obs} onChange={v => setComp(c => ({ ...c, obs: v }))} />
         </div>
       ) : (
-        <div className={styles.artList}>
-          {articulos.map((a, i) => (
-            <Fragment key={a.id}>
-            {titulos[i] && (
-              <div className={styles.artSeccion}>
-                <span className={styles.artSeccionNum}>Título {romano(titulos[i].orden)}</span>
-                <span className={styles.artSeccionNom}>{titulos[i].nombre}</span>
-              </div>
-            )}
-            <div className={styles.artItem}>
-              <div className={styles.artHead}>
-                <span className={styles.artNum}>Art. {a.numero ?? '—'}</span>
-                <span className={styles.artTitle}>{a.titulo || 'Artículo'}</span>
-              </div>
-              {a.contenido && <p className={styles.artBody}>{a.contenido}</p>}
-              <div className={styles.votoRow}>
-                <span className={styles.votoLabel}>Apoya</span>
-                <SegmentApoya value={arts[a.id]?.apoya || ''} onChange={v => setArt(a.id, { apoya: v })} />
-              </div>
-              <ObsField id={`obs-${a.id}`} value={arts[a.id]?.obs || ''} onChange={v => setArt(a.id, { obs: v })} />
-            </div>
-            </Fragment>
-          ))}
+        <div className={styles.artList} ref={listaRef}>
+          {articulos.slice(0, verN).map((a, i) => {
+            const previo = votados[a.id]                       // postura, true (sin saber cuál) o nada
+            const meta = typeof previo === 'string' ? apoyaMeta(previo) : null
+            return (
+              <Fragment key={a.id}>
+              {titulos[i] && (
+                <div className={styles.artSeccion}>
+                  <span className={styles.artSeccionNum}>Título {romano(titulos[i].orden)}</span>
+                  <span className={styles.artSeccionNom}>{titulos[i].nombre}</span>
+                </div>
+              )}
+              {previo ? (
+                /* Ya votado: se ve que está, con qué postura, y no se puede repetir. */
+                <div className={`${styles.artItem} ${styles.artItemVotado}`}>
+                  <div className={styles.artHead}>
+                    <span className={styles.artNum}>Art. {a.numero ?? '—'}</span>
+                    <span className={styles.artTitle}>{a.titulo || 'Artículo'}</span>
+                    <span className={styles.artYa} style={meta ? { '--ya': meta.color } : undefined}>
+                      <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5" /></svg>
+                      {meta ? `Tu voto: ${meta.label}` : 'Ya votaste'}
+                    </span>
+                  </div>
+                </div>
+              ) : (
+                <div className={styles.artItem}>
+                  <div className={styles.artHead}>
+                    <span className={styles.artNum}>Art. {a.numero ?? '—'}</span>
+                    <span className={styles.artTitle}>{a.titulo || 'Artículo'}</span>
+                  </div>
+                  {a.contenido && <TextoArticulo texto={a.contenido} className={styles.artBody} />}
+                  <div className={styles.votoRow}>
+                    <span className={styles.votoLabel}>Apoya</span>
+                    <SegmentApoya value={arts[a.id]?.apoya || ''} onChange={v => setArt(a.id, { apoya: v })} />
+                  </div>
+                  <ObsField id={`obs-${a.id}`} value={arts[a.id]?.obs || ''} onChange={v => setArt(a.id, { obs: v })} />
+                </div>
+              )}
+              </Fragment>
+            )
+          })}
+          <MasArticulos total={articulos.length} visibles={Math.min(verN, articulos.length)}
+            onMas={() => setVerN(n => n + ARTS_TANDA)} onMenos={verMenos} />
         </div>
       )}
 
@@ -542,7 +696,13 @@ function VotoForm({ proyecto, articulos, identidad, onVotado }) {
       <button type="button" className={styles.votoBtn} onClick={irARevisar}>
         Revisar mi voto
       </button>
-      <p className={styles.votoNota}>Podrás votar una sola vez por este proyecto.</p>
+      <p className={styles.votoNota}>
+        {modo === 'completo'
+          ? 'Podrás votar una sola vez por este proyecto.'
+          : artsConPostura.length > 0
+            ? `Llevas ${artsConPostura.length} artículo${artsConPostura.length === 1 ? '' : 's'} marcado${artsConPostura.length === 1 ? '' : 's'}. Cada artículo se vota una sola vez; los demás puedes votarlos después.`
+            : 'Cada artículo se vota una sola vez. No tienes que marcarlos todos hoy: los demás puedes votarlos después.'}
+      </p>
     </div>
   )
 }
@@ -605,13 +765,23 @@ function Paginador({ pagina, total, onPagina }) {
 }
 
 /* ═══════════════ Tarjeta de un proyecto ═════════════════════════════════ */
-function ProyectoCard({ proyecto, identidad, votadoInicial, index }) {
+function ProyectoCard({ proyecto, identidad, index }) {
   const [abierto, setAbierto]   = useState(false)
-  const [tab, setTab]           = useState(votadoInicial ? 'resultados' : 'votar')
+  const [miVoto, setMiVoto]     = useState(() => leerMiVoto(identidad.hash, proyecto.id))
   const [articulos, setArticulos] = useState(null)   // null = no cargados
-  const [votado, setVotado]     = useState(votadoInicial)
   const [refresh, setRefresh]   = useState(0)
   const [aviso, setAviso]       = useState('')
+
+  /* `votado` = ya dejó algún voto aquí. Eso ya no cierra la tarjeta: si votó
+     por artículos y le faltan, puede seguir. Lo que la cierra es haber votado
+     el proyecto completo, o no tener ya nada pendiente. Mientras el articulado
+     no ha cargado no se sabe cuántos faltan (`pendientes` = null). */
+  const nVotados   = Object.keys(miVoto.arts).length
+  const votado     = !!miVoto.completo || miVoto.legado || nVotados > 0
+  const pendientes = articulos ? articulos.filter(a => !miVoto.arts[a.id]).length : null
+  const porArticulos = votado && !miVoto.completo && !!proyecto.permite_articulado
+  const puedeSeguir  = porArticulos && pendientes > 0
+  const [tab, setTab] = useState(votado ? 'resultados' : 'votar')
 
   useEffect(() => {
     if (!abierto || articulos !== null) return
@@ -621,16 +791,34 @@ function ProyectoCard({ proyecto, identidad, votadoInicial, index }) {
   }, [abierto, articulos, proyecto.id])
 
   const cardRef = useRef(null)
-  function handleVotado(motivo) {
-    setVotado(true)
+  // `res` = { completo } | { arts, previos, fallo } (ver VotoForm.enviar).
+  function handleVotado(res) {
+    const nuevo = guardarMiVoto(identidad.hash, proyecto.id, res)
+    setMiVoto(nuevo)
     setTab('resultados')
     setRefresh(x => x + 1)
     // La tarjeta cambia de alto al pasar a resultados: sin esto el aviso de
     // "voto registrado" queda arriba, fuera de la vista.
     subirA(cardRef.current)
-    setAviso(motivo === 'duplicado'
-      ? 'Ya habías registrado tu voto para este proyecto. Estos son los resultados.'
-      : '¡Gracias! Tu voto quedó registrado.')
+
+    if (res.completo) {
+      setAviso(res.repetido
+        ? 'Ya habías registrado tu voto para este proyecto. Estos son los resultados.'
+        : '¡Gracias! Tu voto quedó registrado.')
+      return
+    }
+    const plural = (n, uno, varios) => `${n} ${n === 1 ? uno : varios}`
+    const previos = res.previos || 0
+    const nuevos  = Object.keys(res.arts).length - previos
+    const faltan  = (articulos?.length || 0) - Object.keys(nuevo.arts).length
+    setAviso([
+      nuevos > 0 ? `¡Gracias! Registramos tu voto en ${plural(nuevos, 'artículo', 'artículos')}.` : '',
+      previos > 0 ? `${plural(previos, 'artículo ya tenía', 'artículos ya tenían')} tu voto y no se repitió.` : '',
+      res.fallo || '',
+      faltan > 0
+        ? `Te ${faltan === 1 ? 'falta' : 'faltan'} ${plural(faltan, 'artículo', 'artículos')}: puedes votarlos cuando quieras en «Seguir votando».`
+        : 'Ya votaste todos los artículos de este proyecto.',
+    ].filter(Boolean).join(' '))
   }
 
   return (
@@ -694,22 +882,36 @@ function ProyectoCard({ proyecto, identidad, votadoInicial, index }) {
                 </a>
               )}
               <div className={styles.innerTabs} role="tablist">
-                {(!votado ? [['votar', 'Votar'], ['resultados', 'Resultados']] : [['resultados', 'Resultados'], ['votar', 'Mi voto']]).map(([k, l]) => (
+                {(!votado
+                  ? [['votar', 'Votar'], ['resultados', 'Resultados']]
+                  : [['resultados', 'Resultados'], ['votar', puedeSeguir ? 'Seguir votando' : 'Mi voto']]
+                ).map(([k, l]) => (
                   <button key={k} type="button" role="tab" aria-selected={tab === k}
                     className={`${styles.innerTab} ${tab === k ? styles.innerTabOn : ''}`}
-                    onClick={() => setTab(k)} disabled={k === 'votar' && votado}>{l}</button>
+                    onClick={() => { setTab(k); if (k === 'votar') setAviso('') }}>
+                    {l}
+                    {k === 'votar' && puedeSeguir && <span className={styles.tabCuenta}>{pendientes}</span>}
+                  </button>
                 ))}
               </div>
 
               {aviso && <p className={`${styles.aviso} ${votado ? styles.avisoOk : ''}`}>{aviso}</p>}
 
-              {tab === 'votar' && !votado && (
-                articulos === null
+              {tab === 'votar' && (
+                // Con el articulado sin cargar no se sabe si le queda algo por votar.
+                articulos === null && (!votado || porArticulos)
                   ? <p className={styles.cargando}>Cargando proyecto…</p>
-                  : <VotoForm proyecto={proyecto} articulos={articulos} identidad={identidad} onVotado={handleVotado} />
-              )}
-              {tab === 'votar' && votado && (
-                <p className={styles.yaVoto}>Ya registraste tu voto para este proyecto. Gracias por participar.</p>
+                  : (!votado || puedeSeguir)
+                    ? <VotoForm key={nVotados} proyecto={proyecto} articulos={articulos} identidad={identidad} miVoto={miVoto} onVotado={handleVotado} />
+                    : (
+                      <p className={styles.yaVoto}>
+                        {miVoto.completo
+                          ? <>Votaste el proyecto completo{typeof miVoto.completo === 'string' && <>: <strong>{apoyaMeta(miVoto.completo).label}</strong></>}. Gracias por participar.</>
+                          : nVotados > 0 && pendientes === 0
+                            ? <>Ya votaste los {nVotados} artículos de este proyecto. Gracias por participar.</>
+                            : <>Ya registraste tu voto para este proyecto. Gracias por participar.</>}
+                      </p>
+                    )
               )}
               {tab === 'resultados' && (
                 <ResultadosProyecto proyecto={proyecto} articulos={articulos || []} refreshKey={refresh} autor={identidad?.nombre} />
@@ -727,7 +929,6 @@ export default function ProyectosLeyPage() {
   const [identidad, setIdentidad] = useState(leerIdent)
   const [prefill, setPrefill]     = useState(null)   // datos para reeditar al "Volver"
   const [proyectos, setProyectos] = useState(null)   // null = cargando
-  const votados = useMemo(() => (identidad ? (leerVotados()[identidad.hash] || []) : []), [identidad])
   const topRef = useRef(null)
 
   // Filtros de la lista: texto (nombre/número/tema) + rango de fecha de radicación.
@@ -874,8 +1075,7 @@ export default function ProyectosLeyPage() {
                     <div className={styles.list} ref={listaRef}>
                       {enPagina.map((p, i) => (
                         <ProyectoCard
-                          key={p.id} proyecto={p} identidad={identidad}
-                          votadoInicial={votados.includes(p.id)} index={i}
+                          key={`${identidad.hash}:${p.id}`} proyecto={p} identidad={identidad} index={i}
                         />
                       ))}
                     </div>

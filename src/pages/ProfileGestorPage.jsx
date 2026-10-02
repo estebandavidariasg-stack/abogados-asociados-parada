@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts'
 import { useAuth } from '../context/AuthContext'
 import { supabase, getAuthHeaders } from '../lib/supabase'
+import { unaComisionPorConsulta } from '../lib/cobroAsesoria'
 import { getQRUrl, downloadQRCard, chatUrlFor } from '../lib/qrCard'
 import LawyerInternalChat from '../components/chat/LawyerInternalChat'
 import styles from './ProfileGestorPage.module.css'
@@ -698,9 +699,19 @@ function SeccionEstadisticas({ aprobado, codigo }) {
 
                      Marcar "En curso" solo cuando status='active' dejaba sin
                      pintar un tramo por el que la consulta SÍ pasó. */
+                  /* `activo_at` es el primer mensaje con remitente "profesional",
+                     y los avisos automáticos (la ficha de contacto al
+                     confirmarse el pago) llevan ese mismo remitente. Si esa
+                     hora es POSTERIOR al cierre, no fue una respuesta del
+                     profesional sino uno de esos avisos: no cuenta, o la
+                     línea diría "En curso 4:38" después de "Finalizada 4:37".
+                     (El SQL que lo corrige en origen está en
+                     docs/sql/cobros-2026-10-01.sql, bloque C.) */
+                  const respondio = !!h.activo_at &&
+                    !(h.cerrada_at && new Date(h.activo_at) > new Date(h.cerrada_at))
                   const hitos = {
                     iniciada: true,
-                    en_curso: h.status === 'active' || !!h.activo_at,
+                    en_curso: h.status === 'active' || respondio,
                     cerrada:  !!h.resultado || h.status === 'closed',
                   }
                   return (
@@ -723,7 +734,7 @@ function SeccionEstadisticas({ aprobado, codigo }) {
                       <ConsultaProgreso
                         hitos={hitos}
                         resultado={h.resultado}
-                        tiempos={{ iniciada: h.created_at, en_curso: h.activo_at, cerrada: h.cerrada_at }}
+                        tiempos={{ iniciada: h.created_at, en_curso: respondio ? h.activo_at : null, cerrada: h.cerrada_at }}
                       />
                     </li>
                   )
@@ -948,7 +959,7 @@ function SeccionCobros({ aprobado, userId, tieneCert, onIrAPerfil }) {
         if (!res.ok) throw new Error('fetch')
         data = await res.json()
       }
-      setCobros(Array.isArray(data) ? data : [])
+      setCobros(unaComisionPorConsulta(data))
       setEstado('ready')
     } catch {
       setEstado('error')

@@ -3,12 +3,12 @@ import { sondear } from '../../utils/sondeo'
 import { supabase, getAuthHeaders } from '../../lib/supabase'
 
 const UbicarFirma = lazy(() => import('../firma/UbicarFirma'))
-import { contieneContacto } from '../../lib/validaciones'
+import { contieneContacto, contieneContactoHablado } from '../../lib/validaciones'
 import styles from './ContadorChatDashboard.module.css'
 import AudioPlayer from './AudioPlayer'
 import {
-  ChatImage, AdjuntoChat, VisorArchivo, subirArchivoChat, parseFichas, FichasContacto,
-  validarAdjuntoChat, CHAT_FILE_ACCEPT, prepararAdjuntoChat, nombreArchivoSeguro, describirErrorSubida, revisarContactoArchivo, crearTranscriptor,
+  ChatImage, ChatLightbox, AdjuntoChat, VisorArchivo, subirArchivoChat, parseFichas, FichasContacto,
+  validarAdjuntoChat, CHAT_FILE_ACCEPT, prepararAdjuntoChat, nombreArchivoSeguro, describirErrorSubida, revisarContactoArchivo, crearTranscriptor, AVISO_AUDIO_SIN_REVISAR,
   crearGrabadorAudio, extAudio, mimeAudioLimpio, describirErrorMicrofono, AUDIO_CONSTRAINTS, audioSinRevisar, AvisoAudioSinRevisar,
   // Visto (✓/✓✓) y presencia del cliente (Conectado / Ausente).
   Visto, Presencia, usePresencia, hayNoLeidosDeOtro, marcarLeidos, aplicarLeidoLocal,
@@ -23,8 +23,8 @@ import EnviarAFirmar from '../firma/EnviarAFirmar'
 import { DOC_CONTRATO_SERVICIOS } from '../../lib/contratoServicios'
 import { firmantesPendientes, bytesDeDoc } from '../../lib/firmaService'
 import {
-  COP, fetchCobroProfesional, fijarCobro, confirmarPagoAsesoria, formatMiles, parseMiles,
-  AVISO_COBRO_CONTADOR,
+  COP, fetchCobroProfesional, fijarCobro, confirmarPagoAsesoria, formatMiles, parseMiles, COBRO_MINIMO, COBRO_MAXIMO,
+  AVISO_COBRO_PROFESIONAL, validarMontoCobro,
 } from '../../lib/cobroAsesoria'
 
 // Parseo seguro de los payloads JSON de los mensajes de firma.
@@ -549,8 +549,8 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
     fetchRooms()
     // Sidebar por poll (lento, pausado con la pestaña oculta) + refresco al
     // volver. La sala ABIERTA se actualiza al instante por Realtime; las demás
-    // (preview/badge) refrescan cada 20s — basta para chats que no miras.
-    pollRooms.current = sondear(fetchRooms, 20000)
+    // (preview/badge) refrescan cada 10 s (la lista se reordena con ese refresco: la consulta con mensaje nuevo sube de primera) — basta para chats que no miras.
+    pollRooms.current = sondear(fetchRooms, 10000)
     const onVisible = () => { if (!document.hidden) fetchRooms() }
     document.addEventListener('visibilitychange', onVisible)
     return () => {
@@ -885,7 +885,7 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
         if (descartarGrabacionRef.current) { descartarGrabacionRef.current = false; audioChunksRef.current = []; return }
         if (blob.size > 0) {
           const fixedBlob = await fixAudioDuration(blob)
-          await uploadAudio(fixedBlob, actualType, texto)
+          await uploadAudio(fixedBlob, actualType, texto, transcriptor.exigeTexto)
         } else {
           setToast('La nota de voz quedó vacía. Graba al menos un segundo.')
         }
@@ -913,7 +913,7 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
   // `transcripcion`: texto de la nota de voz cuando exista (motor pendiente de
   // decidir). Pasa por contieneContacto como un mensaje de texto y se guarda
   // en chat_messages.transcripcion (docs/sql/consulta-otp-2026-09-17.sql).
-  async function uploadAudio(blob, mimeType = 'audio/webm', transcripcion = '') {
+  async function uploadAudio(blob, mimeType = 'audio/webm', transcripcion = '', exigirTexto = false) {
     if (!activeRoom) return
     const texto = String(transcripcion || '').trim()
     // Sin transcripción no hay nada que revisar, y una nota de voz es la
@@ -922,7 +922,11 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
     /* Si el navegador transcribe, la nota se revisa como un texto. Si no puede
        (Android se queda el micrófono; Firefox e iOS no traen el motor) se
        envía igual y se marca «sin revisar». Ver chatFiles.jsx. */
-    if (texto && contieneContacto(texto)) { setContactoBlocked(true); return }
+    // Los números dichos en palabras ("tres uno cero…") también cuentan.
+    if (texto && contieneContactoHablado(texto)) { setContactoBlocked(true); return }
+    // En un computador con reconocimiento de voz, sin texto no hubo revisión:
+    // la nota no sale (ver crearTranscriptor.exigeTexto en chatFiles).
+    if (!texto && exigirTexto) { setToast(AVISO_AUDIO_SIN_REVISAR); return }
     setUploadingAudio(true)
     let path = null
     try {
@@ -1019,11 +1023,11 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
 
   async function guardarCobro() {
     if (cobroBusy) return
-    // Toda consulta tiene cobro: el valor es obligatorio y mayor a 0.
+    // Toda consulta tiene cobro, y dentro del rango que el contador aceptó al
+    // registrarse (el mismo del abogado desde 2026-10-01): piso y techo.
     const m = parseMiles(cobroMonto)
-    if (!m || m <= 0) { setCobroErr('Ingresa el valor de la consulta.'); return }
-    // Sin rango: el de $50.000 a $150.000 es solo de los abogados (2026-09-28).
-    // El valor del contador lo decide él (ver tienePisoCobro en cobroAsesoria).
+    const invalido = validarMontoCobro(m)
+    if (invalido) { setCobroErr(invalido); return }
     setCobroBusy(true); setCobroErr('')
     try {
       // Solo el precio: la cuenta para consignar es el certificado bancario
@@ -1050,7 +1054,11 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
       await confirmarPagoAsesoria(cobro.id)
       const fresco = await fetchCobroProfesional(activeRoom.id)
       setCobro(fresco)
-      setToast('Pago confirmado. Se generó tu comisión de plataforma en “Pagos”.')
+      // El cobro de plataforma ya no nace aquí: el administrador confirma primero
+      // el valor. (Con el SQL anterior todavía se genera de una: se dice lo que pasó.)
+      setToast(fresco?.pago_profesional_id
+        ? 'Pago confirmado. Se generó tu comisión de plataforma en “Pagos”.'
+        : 'Pago confirmado. El administrador revisará el valor y, al confirmarlo, verás tu comisión de plataforma en “Pagos”.')
     } catch (err) {
       setToast('No se pudo confirmar el pago. Intenta de nuevo.')
     } finally {
@@ -1618,7 +1626,7 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
                     <path d="M12 6.2v1.4M12 16.4v1.4" />
                   </svg>
                   <span>
-                    <strong>{AVISO_COBRO_CONTADOR.titulo}</strong> {AVISO_COBRO_CONTADOR.texto}
+                    <strong>{AVISO_COBRO_PROFESIONAL.titulo}</strong> {AVISO_COBRO_PROFESIONAL.texto}
                   </span>
                 </div>
               )}
@@ -1933,7 +1941,7 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
               <label className={styles.cobroLabel}>Valor de la consulta (COP)</label>
               <input type="text" inputMode="numeric" value={cobroMonto}
                 onChange={e => { setCobroMonto(formatMiles(e.target.value)); setCobroErr('') }}
-                placeholder="Escribe el valor"
+                placeholder={`Entre ${formatMiles(COBRO_MINIMO)} y ${formatMiles(COBRO_MAXIMO)}`}
                 className={`${styles.cobroInput} ${styles.cobroAmount}`} />
               <p className={styles.cobroHint}>
                 El cliente verá tu cuenta bancaria certificada (la del registro)
@@ -2003,24 +2011,8 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
         </div>
       )}
 
-      {lightbox && (
-        <div className={styles.lightbox} onClick={() => setLightbox(null)} role="dialog" aria-label="Vista de imagen">
-          <img
-            src={lightbox}
-            alt=""
-            className={styles.lightboxImg}
-            onClick={(e) => e.stopPropagation()}
-            onContextMenu={(e) => e.preventDefault()}
-            draggable="false"
-          />
-          <button
-            className={styles.lightboxClose}
-            onClick={() => setLightbox(null)}
-            aria-label="Cerrar"
-            type="button"
-          >×</button>
-        </div>
-      )}
+      {/* El visor compartido: el mismo de los demás chats, con zoom. */}
+      <ChatLightbox src={lightbox} onClose={() => setLightbox(null)} />
       {/* El visor vive en la raiz, no dentro de una burbuja: se porta a <body>
           y asi no lo recorta el scroll del chat. */}
       <VisorArchivo archivo={verArchivo} onClose={() => setVerArchivo(null)} />

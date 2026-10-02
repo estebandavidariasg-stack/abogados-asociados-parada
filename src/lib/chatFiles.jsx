@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react'
+import { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { supabase, getAuthHeaders } from './supabase'
 import { compressImage } from '../utils/compressMedia'
@@ -483,13 +483,291 @@ export function ChatImage({ src, alt, btnClassName, imgClassName, onOpen, onBloc
   )
 }
 
-/* Estilos del visor a pantalla completa. Mismos valores que el lightbox del
-   chat de abogado/contador (fundido al abrir + hover del botón cerrar), vía un
-   <style> con clases propias para no arrastrar un .module.css. */
+/* ═══════════════════════════════════════════════════════════════════════
+   Zoom — todo archivo que se abre en la plataforma se puede acercar.
+
+   Vive aquí, en los dos visores compartidos, para que no haya que acordarse
+   de ponerlo en cada pantalla:
+     · PdfVisor    → contratos, documentos legales, adjuntos, modelos, firma
+     · ImagenZoom  → fotos y documentos escaneados (ChatLightbox,
+                     VisorArchivo, TarjetaPreview, visor de solo lectura)
+
+   Cómo se acerca, en cualquiera de los dos:
+     · botones − / 100 % / + (el del medio vuelve al tamaño inicial)
+     · rueda: en una imagen, directa; en un PDF, con Ctrl (la rueda sola
+       sigue bajando por el documento). El pellizco del trackpad llega como
+       Ctrl + rueda, así que también funciona.
+     · pellizco con dos dedos en el celular
+     · doble clic / doble toque: acerca al punto y vuelve
+     · con el archivo ampliado, se arrastra con el ratón para moverlo
+
+   El punto bajo el cursor (o entre los dedos) se queda quieto mientras cambia
+   el tamaño: sin eso, al acercar una cláusula el visor salta a otra parte.
+   ═══════════════════════════════════════════════════════════════════════ */
+const ZOOM_CSS = `
+.aapZoomMarco { position: relative; width: 100%; height: 100%; }
+.aapZoomPie { position: sticky; bottom: 0; height: 0; z-index: 3; pointer-events: none; }
+.aapZoomFlota { position: absolute; left: 0; right: 0; bottom: 0; height: 0; z-index: 3; pointer-events: none; }
+.aapZoom { position: absolute; left: 50%; bottom: max(12px, env(safe-area-inset-bottom)); transform: translateX(-50%); display: inline-flex; align-items: center; gap: 2px; padding: 4px; border-radius: 999px; background: rgba(52,33,18,0.92); border: 1px solid rgba(253,246,227,0.2); box-shadow: 0 8px 22px rgba(40,24,10,0.32); pointer-events: auto; font-family: 'Poppins', sans-serif; }
+.aapZoom button { display: grid; place-items: center; width: 36px; height: 36px; padding: 0; border: none; border-radius: 50%; background: transparent; color: #fdf6e3; cursor: pointer; transition: background 0.18s ease-out; }
+.aapZoom button:hover:not(:disabled) { background: rgba(253,246,227,0.16); }
+.aapZoom button:disabled { opacity: 0.35; cursor: default; }
+.aapZoom button:focus-visible { outline: 2px solid #e8c96a; outline-offset: 1px; }
+.aapZoom .aapZoomPct { width: auto; min-width: 54px; padding: 0 6px; border-radius: 999px; font: inherit; font-size: 0.74rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+.aapZoomLienzo { width: 100%; height: 100%; overflow: auto; display: flex; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; scrollbar-width: thin; scrollbar-color: rgba(253,246,227,0.4) transparent; }
+.aapZoomImg { margin: auto; flex-shrink: 0; display: block; border-radius: 4px; user-select: none; -webkit-user-select: none; -webkit-user-drag: none; }
+.aapZoomMovible { cursor: grab; }
+@media (pointer: coarse) { .aapZoom button { width: 42px; height: 42px; } .aapZoom .aapZoomPct { min-width: 58px; } }
+@media (prefers-reduced-motion: reduce) { .aapZoom button { transition: none; } }
+`
+
+const limitar = (v, min, max) => Math.min(max, Math.max(min, v))
+
+/* Quién desplaza en vertical: la caja si tiene alto fijo, o el primer ancestro
+   con scroll (el cuerpo de un modal). null = la página entera. */
+function quienDesplaza(el) {
+  for (let n = el; n && n !== document.body && n !== document.documentElement; n = n.parentElement) {
+    if (n.scrollHeight > n.clientHeight + 1 && /auto|scroll/.test(getComputedStyle(n).overflowY)) return n
+  }
+  return null
+}
+
+/* `cajaRef` va en el elemento que desplaza en horizontal y recibe los gestos;
+   `hojaRef` en lo que crece con el zoom. Quien lo usa pinta `zoom`. */
+export function useZoom({ min = 1, max = 4, paso = 0.25, rueda = 'ctrl', doble = 2 } = {}) {
+  const [zoom, setZoom] = useState(1)
+  const cajaRef = useRef(null)
+  const hojaRef = useRef(null)
+  const zoomRef = useRef(1)
+  const anclaRef = useRef(null)
+
+  // `foco` = punto de la pantalla que debe quedarse quieto ({ x, y } en
+  // coordenadas de ventana). Sin foco, el centro de lo que se ve de la caja.
+  const fijar = useCallback((valor, foco) => {
+    const z = limitar(Math.round(valor * 100) / 100, min, max)
+    if (z === zoomRef.current) return
+    const caja = cajaRef.current
+    const hoja = hojaRef.current
+    if (caja && hoja) {
+      const c = caja.getBoundingClientRect()
+      const h = hoja.getBoundingClientRect()
+      const fx = foco?.x ?? (Math.max(c.left, 0) + Math.min(c.right, window.innerWidth)) / 2
+      const fy = foco?.y ?? (Math.max(c.top, 0) + Math.min(c.bottom, window.innerHeight)) / 2
+      anclaRef.current = { fx, fy, ux: (fx - h.left) / (h.width || 1), uy: (fy - h.top) / (h.height || 1) }
+    }
+    zoomRef.current = z
+    setZoom(z)
+  }, [min, max])
+
+  // Con el tamaño nuevo ya en pantalla, se desplaza lo justo para que el punto
+  // anclado vuelva a quedar donde estaba.
+  useLayoutEffect(() => {
+    const a = anclaRef.current
+    anclaRef.current = null
+    const caja = cajaRef.current
+    const hoja = hojaRef.current
+    if (!a || !caja || !hoja) return
+    const h = hoja.getBoundingClientRect()
+    caja.scrollLeft += h.left + a.ux * h.width - a.fx
+    const dy = h.top + a.uy * h.height - a.fy
+    const quien = quienDesplaza(caja)
+    if (quien) quien.scrollTop += dy
+    else window.scrollBy({ top: dy, behavior: 'instant' })
+  }, [zoom])
+
+  useEffect(() => {
+    const caja = cajaRef.current
+    if (!caja) return
+
+    const alRodar = (e) => {
+      if (rueda !== 'siempre' && !e.ctrlKey && !e.metaKey) return
+      e.preventDefault()
+      const dy = e.deltaMode === 1 ? e.deltaY * 33 : e.deltaY   // Firefox cuenta en renglones
+      fijar(zoomRef.current * Math.exp(-dy * 0.0022), { x: e.clientX, y: e.clientY })
+    }
+
+    // Pellizco. Con eventos táctiles y preventDefault (no con touch-action):
+    // así el navegador no amplía la página entera y un dedo solo sigue
+    // desplazando como siempre.
+    let pellizco = null
+    let cuadro = 0
+    const separacion = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY)
+    const alTocar = (e) => {
+      if (e.touches.length === 2) pellizco = { d: separacion(e.touches), z: zoomRef.current }
+    }
+    const alPellizcar = (e) => {
+      if (!pellizco || e.touches.length !== 2) return
+      e.preventDefault()
+      const t = e.touches
+      const z = pellizco.z * separacion(t) / (pellizco.d || 1)
+      const foco = { x: (t[0].clientX + t[1].clientX) / 2, y: (t[0].clientY + t[1].clientY) / 2 }
+      cancelAnimationFrame(cuadro)
+      cuadro = requestAnimationFrame(() => fijar(z, foco))
+    }
+    const alSoltarDedos = (e) => { if (e.touches.length < 2) pellizco = null }
+
+    const alDobleClic = (e) => fijar(zoomRef.current > 1.01 ? 1 : doble, { x: e.clientX, y: e.clientY })
+
+    // Arrastre con el ratón, solo si hay algo que mover.
+    let arrastre = null
+    let huboArrastre = false
+    const alBajar = (e) => {
+      if (e.pointerType !== 'mouse' || e.button !== 0) return
+      const sobra = caja.scrollWidth > caja.clientWidth + 1 || caja.scrollHeight > caja.clientHeight + 1
+      if (!sobra && zoomRef.current <= 1) return
+      arrastre = { x: e.clientX, y: e.clientY, movio: false, quien: quienDesplaza(caja) }
+    }
+    const alArrastrar = (e) => {
+      if (!arrastre) return
+      const dx = e.clientX - arrastre.x
+      const dy = e.clientY - arrastre.y
+      if (!arrastre.movio && Math.hypot(dx, dy) < 4) return
+      arrastre.movio = true
+      caja.style.cursor = 'grabbing'
+      caja.scrollLeft -= dx
+      if (arrastre.quien) arrastre.quien.scrollTop -= dy
+      else window.scrollBy({ top: -dy, behavior: 'instant' })
+      arrastre.x = e.clientX
+      arrastre.y = e.clientY
+    }
+    const alSubir = () => {
+      if (!arrastre) return
+      // El clic que sigue a un arrastre no es un clic: no debe cerrar el visor.
+      if (arrastre.movio) { huboArrastre = true; setTimeout(() => { huboArrastre = false }, 0) }
+      arrastre = null
+      caja.style.cursor = ''
+    }
+    const alClic = (e) => {
+      if (!huboArrastre) return
+      huboArrastre = false
+      e.stopPropagation()
+      e.preventDefault()
+    }
+
+    caja.addEventListener('wheel', alRodar, { passive: false })
+    caja.addEventListener('touchstart', alTocar, { passive: true })
+    caja.addEventListener('touchmove', alPellizcar, { passive: false })
+    caja.addEventListener('touchend', alSoltarDedos)
+    caja.addEventListener('touchcancel', alSoltarDedos)
+    caja.addEventListener('dblclick', alDobleClic)
+    caja.addEventListener('pointerdown', alBajar)
+    caja.addEventListener('click', alClic, true)
+    window.addEventListener('pointermove', alArrastrar)
+    window.addEventListener('pointerup', alSubir)
+    return () => {
+      cancelAnimationFrame(cuadro)
+      caja.removeEventListener('wheel', alRodar)
+      caja.removeEventListener('touchstart', alTocar)
+      caja.removeEventListener('touchmove', alPellizcar)
+      caja.removeEventListener('touchend', alSoltarDedos)
+      caja.removeEventListener('touchcancel', alSoltarDedos)
+      caja.removeEventListener('dblclick', alDobleClic)
+      caja.removeEventListener('pointerdown', alBajar)
+      caja.removeEventListener('click', alClic, true)
+      window.removeEventListener('pointermove', alArrastrar)
+      window.removeEventListener('pointerup', alSubir)
+    }
+  }, [fijar, rueda, doble])
+
+  // Los botones van de escalón en escalón, aunque el pellizco haya dejado el
+  // zoom en un valor intermedio (137 % → 150 %, no 162 %).
+  const acercar = useCallback(() => fijar((Math.floor(zoomRef.current / paso + 1e-6) + 1) * paso), [fijar, paso])
+  const alejar = useCallback(() => fijar((Math.ceil(zoomRef.current / paso - 1e-6) - 1) * paso), [fijar, paso])
+  const restablecer = useCallback(() => fijar(1), [fijar])
+
+  return { zoom, min, max, cajaRef, hojaRef, fijar, acercar, alejar, restablecer }
+}
+
+/* Los tres botones. `z` es lo que devuelve useZoom. Por defecto se pegan al
+   borde inferior de lo que se ve del documento (aunque el que desplace sea la
+   página o el cuerpo de un modal); `flota` los fija al pie de un visor a
+   pantalla completa. */
+export function ZoomControles({ z, flota = false }) {
+  const pct = Math.round(z.zoom * 100)
+  return (
+    <div className={flota ? 'aapZoomFlota' : 'aapZoomPie'}>
+      <div className="aapZoom" role="group" aria-label="Zoom" onClick={(e) => e.stopPropagation()}>
+        <button type="button" onClick={z.alejar} disabled={z.zoom <= z.min + 0.001} aria-label="Alejar" title="Alejar">
+          <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
+            <path d="M6 12h12" />
+          </svg>
+        </button>
+        <button type="button" className="aapZoomPct" onClick={z.restablecer}
+          aria-label={`Zoom al ${pct} %. Volver al 100 %`} title="Volver al 100 %">
+          {pct}%
+        </button>
+        <button type="button" onClick={z.acercar} disabled={z.zoom >= z.max - 0.001} aria-label="Acercar" title="Acercar">
+          <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
+            <path d="M6 12h12M12 6v12" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  )
+}
+
+/* Imagen que llena su caja y se puede acercar. A tamaño inicial se ajusta
+   entera (sin estirarla más allá de su tamaño real); ampliada, la caja
+   desplaza. `onFondo` = clic en la zona vacía alrededor de la imagen (los
+   visores lo usan para cerrar). `margen` = aire en px entre imagen y borde. */
+export function ImagenZoom({ src, alt = '', onFondo, margen = 0, imgClassName = '' }) {
+  const z = useZoom({ min: 1, max: 5, paso: 0.5, rueda: 'siempre', doble: 2.5 })
+  const { cajaRef, hojaRef, restablecer } = z
+  const [base, setBase] = useState(null)   // tamaño ajustado a la caja, al 100 %
+
+  // Con el borde de la caja, no con su interior: al ampliar aparecen las
+  // barras de desplazamiento y el interior se encoge, que volvería a medir.
+  const medir = useCallback(() => {
+    const caja = cajaRef.current
+    const img = hojaRef.current
+    if (!caja || !img || !img.naturalWidth) return
+    const c = caja.getBoundingClientRect()
+    const s = Math.min((c.width - margen * 2) / img.naturalWidth, (c.height - margen * 2) / img.naturalHeight, 1)
+    const w = Math.max(1, Math.round(img.naturalWidth * s))
+    const h = Math.max(1, Math.round(img.naturalHeight * s))
+    setBase(prev => (prev && prev.w === w && prev.h === h ? prev : { w, h }))
+  }, [cajaRef, hojaRef, margen])
+
+  useEffect(() => { setBase(null); restablecer() }, [src, restablecer])
+
+  useEffect(() => {
+    const caja = cajaRef.current
+    if (!caja || typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver(medir)
+    ro.observe(caja)
+    return () => ro.disconnect()
+  }, [cajaRef, medir])
+
+  return (
+    <div className="aapZoomMarco">
+      <style>{ZOOM_CSS}</style>
+      <div ref={cajaRef} className="aapZoomLienzo"
+        onClick={(e) => { if (e.target === e.currentTarget) onFondo?.() }}>
+        <img
+          ref={hojaRef}
+          src={src}
+          alt={alt}
+          className={`aapZoomImg${z.zoom > 1 ? ' aapZoomMovible' : ''}${imgClassName ? ' ' + imgClassName : ''}`}
+          draggable="false"
+          onLoad={medir}
+          onContextMenu={(e) => e.preventDefault()}
+          style={base
+            ? { width: base.w * z.zoom, height: base.h * z.zoom }
+            : { maxWidth: `calc(100% - ${margen * 2}px)`, maxHeight: `calc(100% - ${margen * 2}px)`, objectFit: 'contain' }}
+        />
+      </div>
+      <ZoomControles z={z} flota />
+    </div>
+  )
+}
+
+/* Estilos del visor a pantalla completa (fundido al abrir + hover del botón
+   cerrar), vía un <style> con clases propias para no arrastrar un
+   .module.css. La imagen la pinta ImagenZoom. */
 const LIGHTBOX_CSS = `
-.aapLb { position: fixed; inset: 0; z-index: 10000; background: rgba(0,0,0,0.92); display: flex; align-items: center; justify-content: center; cursor: zoom-out; animation: aapLbIn 0.25s ease-out; }
-.aapLbImg { max-width: 92vw; max-height: 92vh; object-fit: contain; border-radius: 4px; box-shadow: 0 20px 60px rgba(0,0,0,0.5); cursor: default; user-select: none; -webkit-user-drag: none; }
-.aapLbClose { position: absolute; top: 20px; right: 24px; width: 44px; height: 44px; border-radius: 50%; background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.28); color: #fff; font-size: 1.6rem; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background .2s, transform .2s, border-color .2s; font-family: inherit; padding: 0; }
+.aapLb { position: fixed; inset: 0; z-index: 10000; background: rgba(0,0,0,0.92); animation: aapLbIn 0.25s ease-out; }
+.aapLbImg { box-shadow: 0 20px 60px rgba(0,0,0,0.5); }
+.aapLbClose { position: absolute; z-index: 4; top: 20px; right: 24px; width: 44px; height: 44px; border-radius: 50%; background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.28); color: #fff; font-size: 1.6rem; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background .2s, transform .2s, border-color .2s; font-family: inherit; padding: 0; }
 .aapLbClose:hover { background: rgba(255,255,255,0.22); border-color: rgba(255,255,255,0.5); transform: scale(1.06); }
 @keyframes aapLbIn { from { opacity: 0; } to { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .aapLb { animation: none; } }
@@ -515,15 +793,8 @@ export function ChatLightbox({ src, onClose }) {
   const overlay = (
     <>
       <style>{LIGHTBOX_CSS}</style>
-      <div className="aapLb" onClick={onClose} role="dialog" aria-label="Vista de imagen">
-        <img
-          src={src}
-          alt=""
-          className="aapLbImg"
-          onClick={(e) => e.stopPropagation()}
-          onContextMenu={(e) => e.preventDefault()}
-          draggable="false"
-        />
+      <div className="aapLb" role="dialog" aria-label="Vista de imagen">
+        <ImagenZoom src={src} onFondo={onClose} margen={24} imgClassName="aapLbImg" />
         <button className="aapLbClose" onClick={onClose} aria-label="Cerrar" type="button">×</button>
       </div>
     </>
@@ -753,6 +1024,9 @@ export async function revisarContactoArchivo(file, { roomId, authHeader } = {}) 
    navegador, que es gratis pero no está en todas partes:
 
      · Escritorio Chrome/Edge → transcribe, y la nota se revisa como un texto.
+       Ahí la transcripción es OBLIGATORIA: si sale vacía la nota no se envía
+       (ver `exigeTexto` en crearTranscriptor). La excepción de abajo es solo
+       para los equipos que no pueden transcribir.
      · Android → el micrófono es EXCLUSIVO. Se lo queda el MediaRecorder y el
        reconocedor no recibe audio: devuelve vacío siempre.
      · Firefox e iOS → no existe el motor.
@@ -786,28 +1060,48 @@ export function AvisoAudioSinRevisar() {
    Soportado en Chrome, Edge y Safari; en Firefox `soportado` es false y la
    nota se envía sin transcripción (como hasta ahora). Chrome corta el
    reconocimiento a ~60 s: se reanuda solo mientras la grabación siga. */
+const esEquipoMovil = () => typeof navigator !== 'undefined' && (
+  /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '') ||
+  (navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent || ''))   // iPad que se anuncia como Mac
+)
+
+/* `exigeTexto`: en un COMPUTADOR con motor de reconocimiento, una nota sin
+   transcripción no es "no se pudo por la plataforma" (eso es el celular,
+   donde el micrófono es exclusivo): es que la revisión falló, y entonces la
+   nota no debe salir. Quien graba lo pasa a uploadAudio.
+
+   Dos fallos que dejaban pasar un número de teléfono dicho en voz alta:
+     · El texto provisional se guardaba pisando un trozo con el siguiente.
+       Chrome entrega lo que va oyendo en VARIOS trozos ("mi número es 310" +
+       " 456 7890"); quedaba solo el último, siete dígitos sueltos que el
+       filtro no reconoce como teléfono. Ahora el texto se rearma completo,
+       con todos los trozos, en cada evento.
+     · Al parar se esperaba 1,5 s el resultado final; si el servicio tardaba
+       más, salía con lo que hubiera. Ahora espera hasta 2,5 s. */
 export function crearTranscriptor(lang = 'es-CO') {
   const SR = typeof window !== 'undefined' && (window.SpeechRecognition || window.webkitSpeechRecognition)
-  if (!SR) return { soportado: false, start() {}, stop: () => Promise.resolve('') }
-  let rec = null, activo = false, finales = [], interino = ''
-  const texto = () => [...finales, interino].join(' ').replace(/\s+/g, ' ').trim()
+  if (!SR) return { soportado: false, exigeTexto: false, start() {}, stop: () => Promise.resolve('') }
+  let rec = null, activo = false
+  let previas = []   // sesiones de reconocimiento ya cerradas (Chrome corta a ~60 s)
+  let sesion = ''    // la sesión en curso: lo definitivo y lo provisional, todo
+  const texto = () => [...previas, sesion].join(' ').replace(/\s+/g, ' ').trim()
+  const cerrarSesion = () => { if (sesion.trim()) previas.push(sesion); sesion = '' }
   const armar = () => {
     rec = new SR()
     rec.lang = lang; rec.continuous = true; rec.interimResults = true; rec.maxAlternatives = 1
     rec.onresult = (e) => {
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        const r = e.results[i]
-        if (r.isFinal) { finales.push(String(r[0]?.transcript || '').trim()); interino = '' }
-        else interino = String(r[0]?.transcript || '')
-      }
+      let t = ''
+      for (let i = 0; i < e.results.length; i++) t += ' ' + String(e.results[i][0]?.transcript || '')
+      sesion = t
     }
     rec.onerror = (e) => { if (e?.error === 'not-allowed' || e?.error === 'service-not-allowed') activo = false }
-    rec.onend = () => { if (activo) { try { rec.start() } catch { /* ya activo */ } } }
+    rec.onend = () => { cerrarSesion(); if (activo) { try { rec.start() } catch { /* ya activo */ } } }
   }
   return {
     soportado: true,
+    exigeTexto: !esEquipoMovil(),
     start() {
-      activo = true; finales = []; interino = ''
+      activo = true; previas = []; sesion = ''
       try { armar(); rec.start() } catch { activo = false }
     },
     stop() {
@@ -818,11 +1112,15 @@ export function crearTranscriptor(lang = 'es-CO') {
         const fin = () => { if (listo) return; listo = true; resolve(texto()) }
         rec.onend = fin
         try { rec.stop() } catch { fin() }
-        setTimeout(fin, 1500)   // por si el navegador no dispara onend
+        setTimeout(fin, 2500)   // por si el navegador no dispara onend
       })
     },
   }
 }
+
+export const AVISO_AUDIO_SIN_REVISAR =
+  'No pudimos revisar esta nota de voz, así que no se envió. Grábala de nuevo hablando claro ' +
+  'o escribe el mensaje. Si sigue pasando, usa Chrome o Edge.'
 
 /* ── Visor de PDF por imágenes ──────────────────────────────────────────────
    Android Chrome (y varios navegadores móviles) NO renderizan un PDF dentro de
@@ -841,24 +1139,81 @@ export function crearTranscriptor(lang = 'es-CO') {
    por si quien lo monta quiere mostrarlo. */
 const PDF_MAX_PAGINAS = 12
 
+/* ── Que abrir un documento no se sienta lento ─────────────────────────────
+   Entre el clic y la primera página pasaban tres cosas en fila: bajar pdf.js
+   (≈530 KB) y arrancar su worker (≈1,3 MB), bajar el documento y pintarlo.
+   Las dos primeras no dependen de qué documento se abra, así que se adelantan:
+
+     · precalentarPdf()      → baja pdf.js y deja el worker arrancado. Lo
+                               llama quien PINTA una lista de documentos
+                               (TarjetaPreview), no quien los abre.
+     · precargarArchivo(url) → baja el documento en segundo plano. La caché
+                               es por URL: el visor la reutiliza al abrir, y
+                               reabrir el mismo documento es instantáneo.
+
+   Con datos móviles en modo ahorro no se adelanta nada: ahí manda el usuario. */
+const ahorroDeDatos = () => typeof navigator !== 'undefined' && navigator.connection?.saveData === true
+const enReposo = (fn) => (typeof window !== 'undefined' && 'requestIdleCallback' in window
+  ? window.requestIdleCallback(fn, { timeout: 1200 })
+  : setTimeout(fn, 200))
+
+let _pdfCaliente = false
+export function precalentarPdf() {
+  if (_pdfCaliente || ahorroDeDatos()) return
+  _pdfCaliente = true
+  enReposo(() => {
+    import('./pdfARaster').then(m => m.calentar()).catch(() => { _pdfCaliente = false })
+  })
+}
+
+const BYTES_MAX = 6                 // documentos recientes que se conservan
+const _bytes = new Map()            // url → Promise<Uint8Array>
+function traerBytes(url) {
+  let p = _bytes.get(url)
+  if (p) return p
+  p = fetch(url).then(res => {
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    return res.arrayBuffer()
+  }).then(buf => new Uint8Array(buf))
+  // No se guardan los fallos ni los archivos grandes (un contrato escaneado de
+  // 15 MB no debe quedarse en memoria por si se vuelve a abrir).
+  p.then(b => { if (b.length > 8 * 1024 * 1024) _bytes.delete(url) }, () => { _bytes.delete(url) })
+  _bytes.set(url, p)
+  if (_bytes.size > BYTES_MAX) _bytes.delete(_bytes.keys().next().value)
+  return p
+}
+
+export function precargarArchivo(url, esImagen = false) {
+  if (!url || ahorroDeDatos()) return
+  if (esImagen) { const img = new Image(); img.decoding = 'async'; img.src = url; return }
+  precalentarPdf()
+  traerBytes(url).catch(() => {})
+}
+
 export function PdfVisor({ url, titulo = 'Documento', fondo = '#fff', maxPaginas = PDF_MAX_PAGINAS, onInfo }) {
   const [paginas, setPaginas] = useState(null)   // null = ni la primera está lista
   const [total, setTotal] = useState(0)           // páginas reales del PDF
   const [listo, setListo] = useState(false)       // terminó de rasterizar
   const [error, setError] = useState('')
-  const cajaRef = useRef(null)
+  // Del 50 % (la hoja entera en pantalla) al 300 % (la letra pequeña de un sello).
+  const z = useZoom({ min: 0.5, max: 3, paso: 0.25 })
+  const cajaRef = z.cajaRef
+  const [nitida, setNitida] = useState(false)   // ya se pidió la pasada en alta
+  const bytesRef = useRef(null)                  // el PDF, para volver a pintarlo
+  const anchoRef = useRef(0)                     // ancho en px de la primera pasada
   const onInfoRef = useRef(onInfo)
   onInfoRef.current = onInfo
 
   useEffect(() => {
     let vivo = true
-    setPaginas(null); setTotal(0); setListo(false); setError('')
+    setPaginas(null); setTotal(0); setListo(false); setError(''); setNitida(false)
+    bytesRef.current = null
     ;(async () => {
       try {
-        const res = await fetch(url)
-        if (!res.ok) throw new Error(`HTTP ${res.status}`)
-        const bytes = new Uint8Array(await res.arrayBuffer())
-        const { rasterizarPdf } = await import('./pdfARaster')
+        // El documento y pdf.js a la vez (antes uno detrás del otro); si
+        // alguien ya los adelantó (precargarArchivo), aquí ya están listos.
+        const [bytes, { rasterizarPdf }] = await Promise.all([traerBytes(url), import('./pdfARaster')])
+        bytesRef.current = bytes
         /* Nitidez: la página se pinta al ancho REAL en píxeles de la pantalla
            (ancho del visor × escalado del dispositivo). Con una escala fija de
            1.5 salía de ~918 px y el visor de modelos la estiraba a ~1250 en una
@@ -866,61 +1221,96 @@ export function PdfVisor({ url, titulo = 'Documento', fondo = '#fff', maxPaginas
            la memoria del celular (ahí el visor mide ~360 px: ~1080 px). */
         const ancho = cajaRef.current?.clientWidth || 800
         const anchoPx = Math.min(2400, Math.round(ancho * Math.min(window.devicePixelRatio || 1, 3)))
+        anchoRef.current = anchoPx
         await rasterizarPdf(bytes, 1.5, {
           maxPaginas, tipo: 'image/jpeg', calidad: 0.92, anchoPx,
           onPagina: (pagina, i, numPaginas) => {
-            if (!vivo) return
+            // Visor cerrado a mitad de camino: lanzar corta el bucle de
+            // rasterizarPdf en vez de seguir pintando páginas para nadie.
+            if (!vivo) throw new Error('visor cerrado')
             if (i === 0) { setTotal(numPaginas); onInfoRef.current?.({ total: numPaginas }) }
             setPaginas(prev => [...(prev || []), pagina])
           },
         })
         if (vivo) { setPaginas(prev => prev || []); setListo(true) }
       } catch (err) {
+        if (!vivo) return
         console.error('[PdfVisor] no se pudo rasterizar:', err)
-        if (vivo) { setError('No se pudo mostrar el documento aquí.'); setPaginas([]); setListo(true) }
+        setError('No se pudo mostrar el documento aquí.'); setPaginas([]); setListo(true)
       }
     })()
     return () => { vivo = false }
-  }, [url, maxPaginas])
+  }, [url, maxPaginas, cajaRef])
 
-  const caja = {
-    width: '100%', height: '100%', overflowY: 'auto', overflowX: 'hidden',
-    borderRadius: 12, background: fondo, WebkitOverflowScrolling: 'touch',
-  }
+  /* Nitidez al acercar. Las páginas se pintaron al ancho de la pantalla: al
+     150 % ya se verían estiradas. La primera vez que se pasa de ahí se
+     vuelven a pintar al doble (tope 2400 px) y se cambian una a una, sin
+     quitar las que ya se ven. Solo una vez, y solo en documentos de hasta 25
+     páginas: cada página en alta pesa varios MB en la memoria del celular. */
+  useEffect(() => { if (z.zoom >= 1.5) setNitida(true) }, [z.zoom])
+  useEffect(() => {
+    const bytes = bytesRef.current
+    const base = anchoRef.current
+    if (!nitida || !listo || error || !bytes || !base || base >= 1800 || total > 25) return
+    let vivo = true
+    import('./pdfARaster')
+      .then(({ rasterizarPdf }) => rasterizarPdf(bytes, 1.5, {
+        maxPaginas, tipo: 'image/jpeg', calidad: 0.9, anchoPx: Math.min(2400, base * 2),
+        onPagina: (pagina, i) => {
+          if (!vivo) throw new Error('visor cerrado')
+          setPaginas(prev => (prev && prev[i] ? prev.map((p, j) => (j === i ? pagina : p)) : prev))
+        },
+      }))
+      .catch(() => { /* se quedan las páginas de la primera pasada */ })
+    return () => { vivo = false }
+  }, [nitida, listo, error, total, maxPaginas])
 
-  // El ref va en la caja de cada estado: la de "Cargando" es la que se mide.
-  if (paginas === null) {
-    return (
-      <div ref={cajaRef} style={{ ...caja, display: 'grid', placeItems: 'center', color: '#8a6a28', fontSize: '0.85rem' }}>
-        Cargando documento…
-      </div>
-    )
-  }
-  if (error) {
-    return (
-      <div ref={cajaRef} style={{ ...caja, display: 'grid', placeItems: 'center', gap: 10, padding: 20, textAlign: 'center' }}>
-        <p style={{ margin: 0, color: '#6d3c1b', fontSize: '0.88rem' }}>{error}</p>
-        <a href={url} target="_blank" rel="noopener noreferrer"
-          style={{ fontSize: '0.82rem', fontWeight: 700, color: '#8a6a28' }}>
-          Abrirlo en otra pestaña
-        </a>
-      </div>
-    )
-  }
-  const recortado = listo && total > paginas.length
+  const cargando = paginas === null
+  const conPaginas = !cargando && !error && paginas.length > 0
+  const recortado = conPaginas && listo && total > paginas.length
+  /* Una sola estructura para los tres estados: la caja es siempre el mismo
+     elemento, que es el que se mide al montar y el que escucha los gestos. */
   return (
-    <div ref={cajaRef} style={caja} onContextMenu={e => e.preventDefault()}>
-      {paginas.map((p, i) => (
-        <img key={i} src={p.dataUrl} alt={`${titulo}, página ${i + 1}`} draggable={false}
-          style={{ display: 'block', width: '100%', height: 'auto', userSelect: 'none' }} />
-      ))}
-      {(!listo || recortado) && (
-        <p aria-live="polite" style={{ margin: 0, padding: '10px 14px', fontSize: '0.75rem', color: '#8a6a28', textAlign: 'center' }}>
-          {!listo
-            ? `Cargando página ${Math.min(paginas.length + 1, total || paginas.length + 1)}${total ? ` de ${total}` : ''}…`
-            : `Se muestran las primeras ${paginas.length} páginas de ${total}.`}
-        </p>
-      )}
+    <div className="aapZoomMarco" style={{ display: 'flex', flexDirection: 'column' }}>
+      <style>{ZOOM_CSS}</style>
+      <div
+        ref={cajaRef}
+        onContextMenu={e => e.preventDefault()}
+        className={z.zoom > 1 ? 'aapZoomMovible' : undefined}
+        style={{
+          flex: '1 1 auto', minHeight: 0, width: '100%', overflowY: 'auto',
+          overflowX: z.zoom > 1 ? 'auto' : 'hidden',
+          borderRadius: 12, background: fondo, WebkitOverflowScrolling: 'touch',
+          ...(conPaginas ? null : { display: 'grid', placeItems: 'center', gap: 10, padding: 20, textAlign: 'center' }),
+        }}
+      >
+        {cargando && <span style={{ color: '#8a6a28', fontSize: '0.85rem' }}>Cargando documento…</span>}
+        {!cargando && !conPaginas && (
+          <>
+            <p style={{ margin: 0, color: '#6d3c1b', fontSize: '0.88rem' }}>{error || 'El documento no tiene páginas.'}</p>
+            <a href={url} target="_blank" rel="noopener noreferrer"
+              style={{ fontSize: '0.82rem', fontWeight: 700, color: '#8a6a28' }}>
+              Abrirlo en otra pestaña
+            </a>
+          </>
+        )}
+        {conPaginas && (
+          <div ref={z.hojaRef} style={{ width: `${z.zoom * 100}%`, margin: '0 auto' }}>
+            {paginas.map((p, i) => (
+              <img key={i} src={p.dataUrl} alt={`${titulo}, página ${i + 1}`} draggable={false}
+                style={{ display: 'block', width: '100%', height: 'auto', userSelect: 'none' }} />
+            ))}
+            {(!listo || recortado) && (
+              <p aria-live="polite" style={{ margin: 0, padding: '10px 14px', fontSize: '0.75rem', color: '#8a6a28', textAlign: 'center' }}>
+                {!listo
+                  ? `Cargando página ${Math.min(paginas.length + 1, total || paginas.length + 1)}${total ? ` de ${total}` : ''}…`
+                  : `Se muestran las primeras ${paginas.length} páginas de ${total}.`}
+              </p>
+            )}
+          </div>
+        )}
+      </div>
+      {conPaginas && <ZoomControles z={z} />}
     </div>
   )
 }
@@ -971,10 +1361,8 @@ const VISOR_CSS = `
     display: flex; align-items: center; justify-content: center;
     padding: 0 14px 16px;
   }
-  .aapVisorImg {
-    max-width: 100%; max-height: 100%; object-fit: contain;
-    border-radius: 8px; user-select: none; -webkit-user-select: none;
-  }
+  .aapVisorLienzo { width: 100%; height: 100%; align-self: stretch; }
+  .aapVisorImg { border-radius: 8px; }
   .aapVisorPdf { width: 100%; max-width: 900px; align-self: flex-start; }
   @media (max-width: 600px) {
     .aapVisorBarra { padding: 8px 10px; gap: 8px; }
@@ -1174,8 +1562,9 @@ export function VisorArchivo({ archivo, onClose }) {
         </div>
         <div className="aapVisorCuerpo" onClick={(e) => { if (e.target === e.currentTarget) onClose?.() }}>
           {esImagen ? (
-            <img src={archivo.url} alt={nombre} className="aapVisorImg"
-              onContextMenu={(e) => e.preventDefault()} draggable="false" />
+            <div className="aapVisorLienzo">
+              <ImagenZoom src={archivo.url} alt={nombre} onFondo={onClose} imgClassName="aapVisorImg" />
+            </div>
           ) : (
             <div className="aapVisorPdf">
               <PdfVisor url={archivo.url} titulo={nombre} />

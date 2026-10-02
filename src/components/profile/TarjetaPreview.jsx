@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { supabase } from '../../lib/supabase'
-import { PdfVisor } from '../../lib/chatFiles'
+import { PdfVisor, ImagenZoom, precalentarPdf, precargarArchivo } from '../../lib/chatFiles'
 import styles from './TarjetaPreview.module.css'
 
 function PdfIcon({ size = 36 }) {
@@ -45,24 +45,53 @@ export default function TarjetaPreview({ displayUrl, rawPath, storagePath, compa
   const ext = pathForType.split('.').pop()?.toLowerCase() || ''
   const isImage = ['png', 'jpg', 'jpeg', 'webp'].includes(ext)
 
+  /* La espera al abrir un documento era casi toda de preparación: bajar y
+     arrancar pdf.js, firmar la URL y bajar el archivo. Se adelanta por pasos,
+     de menos a más compromiso:
+       · al pintarse (hay un PDF a la vista) → pdf.js queda listo
+       · al apuntar o enfocar el botón        → se firma la URL y se baja el archivo
+     Así el clic solo tiene que pintar. */
+  const firmaRef = useRef(null)   // la firma en curso, para no pedirla dos veces
+  useEffect(() => {
+    if (!isImage && (displayUrl || rawPath)) precalentarPdf()
+    // En la lista de documentos de un perfil (dos archivos, y quien abrió el
+    // perfil vino a verlos) el archivo se baja de una vez: en el celular no
+    // hay "apuntar" que avise antes del toque.
+    if (variant === 'row' && displayUrl) precargarArchivo(displayUrl, isImage)
+  }, [isImage, displayUrl, rawPath, variant])
+
   if (!displayUrl && !rawPath) return null
+
+  // URL lista para abrir: la que ya vino firmada o una firmada ahora.
+  function resolver() {
+    if (resolvedUrl) return Promise.resolve(resolvedUrl)
+    if (!firmaRef.current) {
+      firmaRef.current = (async () => {
+        // Legacy full URL: use directly; otherwise sign the path
+        if (/^https?:\/\//.test(rawPath)) return rawPath
+        const { data } = await supabase.storage
+          .from('tarjetas-profesionales')
+          .createSignedUrl(rawPath, 3600)
+        return data?.signedUrl || null
+      })().then(url => {
+        if (url) setResolvedUrl(url)
+        else firmaRef.current = null       // falló: el próximo intento vuelve a firmar
+        return url
+      }, () => { firmaRef.current = null; return null })
+    }
+    return firmaRef.current
+  }
+
+  function adelantar() {
+    resolver().then(url => { if (url) precargarArchivo(url, isImage) })
+  }
 
   async function handleOpen(e) {
     e.stopPropagation()
     if (resolvedUrl) { setOpen(true); return }
-
     setResolving(true)
     try {
-      // Legacy full URL: use directly; otherwise sign the path
-      if (/^https?:\/\//.test(rawPath)) {
-        setResolvedUrl(rawPath)
-      } else {
-        const { data } = await supabase.storage
-          .from('tarjetas-profesionales')
-          .createSignedUrl(rawPath, 3600)
-        if (data?.signedUrl) setResolvedUrl(data.signedUrl)
-      }
-      setOpen(true)
+      if (await resolver()) setOpen(true)
     } finally {
       setResolving(false)
     }
@@ -82,6 +111,9 @@ export default function TarjetaPreview({ displayUrl, rawPath, storagePath, compa
       type="button"
       className={styles.docRow}
       onClick={handleOpen}
+      onPointerEnter={adelantar}
+      onFocus={adelantar}
+      onTouchStart={adelantar}
       disabled={resolving}
       aria-label={`Ver ${label.toLowerCase()}`}
     >
@@ -104,6 +136,9 @@ export default function TarjetaPreview({ displayUrl, rawPath, storagePath, compa
       type="button"
       className={styles.compactBtn}
       onClick={handleOpen}
+      onPointerEnter={adelantar}
+      onFocus={adelantar}
+      onTouchStart={adelantar}
       disabled={resolving}
       aria-label={`Ver ${label.toLowerCase()}`}
     >
@@ -117,6 +152,9 @@ export default function TarjetaPreview({ displayUrl, rawPath, storagePath, compa
         type="button"
         className={styles.thumb}
         onClick={handleOpen}
+        onPointerEnter={adelantar}
+        onFocus={adelantar}
+        onTouchStart={adelantar}
         disabled={resolving}
         aria-label={`Ver ${label.toLowerCase()}`}
       >
@@ -160,13 +198,9 @@ export default function TarjetaPreview({ displayUrl, rawPath, storagePath, compa
           <div className={styles.viewer} onClick={e => e.stopPropagation()}>
             {isImage
               ? (
-                <img
-                  src={resolvedUrl}
-                  alt={label}
-                  className={styles.viewerImg}
-                  draggable={false}
-                  onContextMenu={e => e.preventDefault()}
-                />
+                <div className={styles.viewerLienzo}>
+                  <ImagenZoom src={resolvedUrl} alt={label} onFondo={close} imgClassName={styles.viewerImg} />
+                </div>
               )
               : (
                 // El <iframe> no muestra PDFs en móvil: se rasterizan a imagen.

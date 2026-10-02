@@ -274,7 +274,7 @@
 /* El encabezado de la página es sticky (46 px de logo más 1 rem arriba y
    abajo). Sin este margen, todo lo que se lleva a la vista con
    scrollIntoView aterriza debajo de él y se pierde el título. */
-.list, .card, .voto { scroll-margin-top: 94px; }
+.list, .card, .voto, .artList, .revWrap { scroll-margin-top: 94px; }
 .list { display: flex; flex-direction: column; gap: 1.2rem; }
 
 .card {
@@ -377,6 +377,22 @@
   transition: background 0.2s, color 0.2s;
 }
 .innerTab:disabled { opacity: 0.45; cursor: not-allowed; }
+.innerTab:focus-visible { outline: 2px solid var(--gold, #c9a84c); outline-offset: 1px; }
+/* Artículos que faltan por votar, junto a "Seguir votando". */
+.tabCuenta {
+  display: inline-block;
+  min-width: 1.35em;
+  margin-left: 0.4rem;
+  padding: 0.05rem 0.4rem;
+  border-radius: 999px;
+  background: var(--gold-dk, #8a6a28);
+  color: #fffef7;
+  font-size: 0.68rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  vertical-align: 1px;
+}
 .innerTabOn { background: #fffef7; color: #472f29; box-shadow: 0 1px 4px rgba(109, 60, 27, 0.1); }
 
 .aviso {
@@ -470,13 +486,115 @@
 .revisarBtn:hover { color: #472f29; }
 .revChev { transition: transform 0.3s ease; }
 .revChevUp { transform: rotate(180deg); }
+/* El recorte de la animación de alto va en el envoltorio: dentro viven la
+   lista y, debajo, el "ver más artículos". */
+.revWrap { overflow: hidden; }
 .revList {
   list-style: none;
-  overflow: hidden;
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
   margin-top: 0.5rem;
+}
+
+/* ── Ver más / Ver menos ───────────────────────────────────────────────────
+   Dos niveles, los dos con las mismas palabras:
+     · dentro de un artículo  → su texto se recorta a unos renglones
+     · al pie de la lista     → los artículos se muestran por tandas */
+.textoCorto {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.verMasTxt {
+  margin-top: 0.25rem;
+  padding: 0.2rem 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  font-family: 'Poppins', sans-serif;
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--gold-dk, #8a6a28);
+  text-decoration: underline;
+  text-decoration-color: rgba(138, 106, 40, 0.35);
+  text-underline-offset: 3px;
+  cursor: pointer;
+  transition: color 0.2s ease-out, text-decoration-color 0.2s ease-out;
+}
+.verMasTxt:hover { color: #6d3c1b; text-decoration-color: currentColor; }
+.verMasTxt:focus-visible, .masArtsBtn:focus-visible { outline: 2px solid var(--gold, #c9a84c); outline-offset: 2px; }
+
+/* Texto suelto y centrado, sin caja: el único botón con fondo del pie es
+   "Revisar mi voto". */
+.masArts {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.2rem 1.4rem;
+  margin-top: 0.75rem;
+}
+.masArtsBtn {
+  min-height: 40px;
+  padding: 0.6rem 0.4rem;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  font-family: 'Poppins', sans-serif;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #6d3c1b;
+  text-decoration: underline;
+  text-decoration-color: rgba(109, 60, 27, 0.32);
+  text-underline-offset: 4px;
+  cursor: pointer;
+  transition: color 0.2s ease-out, text-decoration-color 0.2s ease-out;
+}
+.masArtsBtn:hover { color: #472f29; text-decoration-color: var(--gold, #c9a84c); }
+.masArtsBtnMenos { color: #7a6550; }
+.masArtsCuenta {
+  display: inline-block;   /* fuera del subrayado del rótulo */
+  margin-left: 0.5rem;
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: #7a6550;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Seguir votando: lo ya votado y lo que falta ── */
+.progresoArts {
+  margin: 0;
+  padding: 0.7rem 1rem;
+  border-radius: 10px;
+  background: rgba(201, 168, 76, 0.12);
+  font-size: 0.86rem;
+  line-height: 1.55;
+  color: #5f4a35;
+}
+.progresoArts strong { color: #472f29; font-variant-numeric: tabular-nums; }
+.artItemVotado {
+  padding-block: 0.7rem;
+  background: rgba(109, 60, 27, 0.035);
+  border-style: dashed;
+}
+.artItemVotado .artTitle { color: #6f5c48; font-weight: 500; }
+.artYa {
+  --ya: #7a6550;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-left: auto;
+  padding: 0.15rem 0.6rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ya) 13%, transparent);
+  color: color-mix(in srgb, var(--ya) 82%, #2a1a10);
+  font-size: 0.72rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .verMasTxt, .masArtsBtn { transition: none; }
 }
 .revItem {
   background: rgba(255, 254, 241, 0.7);
@@ -638,7 +756,7 @@
 
 .votoErr { font-size: 0.84rem; color: #b4442f; font-weight: 600; margin: 0; }
 .votoBtn {
-  align-self: flex-start;
+  align-self: center;
   font-family: 'Poppins', sans-serif;
   font-size: 0.84rem;
   font-weight: 600;
@@ -654,7 +772,7 @@
 .votoBtn:hover:not(:disabled) { background: var(--navy-md); }
 .votoBtn:active:not(:disabled) { transform: translateY(1px); }
 .votoBtn:disabled { opacity: 0.6; cursor: default; }
-.votoNota { font-size: 0.74rem; color: #9a8064; margin: -0.3rem 0 0; }
+.votoNota { font-size: 0.74rem; color: #9a8064; margin: -0.3rem 0 0; text-align: center; text-wrap: balance; }
 
 /* ── Estados de lista ── */
 .loaderList { display: flex; flex-direction: column; gap: 1.2rem; }

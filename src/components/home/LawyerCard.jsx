@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useLayoutEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { supabase } from '../../lib/supabase'
 import SocialLinks from '../profile/SocialLinks'
@@ -72,6 +72,75 @@ function StarDisplay({ rating, total, dark = false }) {
         {rating} ({total})
       </span>
     </div>
+  )
+}
+
+/* "Sobre mí" con Ver más / Ver menos. Una presentación de quince renglones
+   empujaba los documentos y el botón de consulta fuera de la primera
+   pantalla del perfil. Se recorta por renglones, y el botón solo aparece si
+   de verdad hay más texto del que se ve (se mide, no se cuenta por letras:
+   en el celular caben menos palabras por renglón). */
+const DESC_RENGLONES = 4
+
+function Descripcion({ texto }) {
+  const [abierta, setAbierta] = useState(false)
+  const [sobra, setSobra] = useState(false)
+  const ref = useRef(null)
+
+  useLayoutEffect(() => {
+    const el = ref.current
+    if (!el || abierta) return
+    const medir = () => setSobra(el.scrollHeight > el.clientHeight + 1)
+    medir()
+    if (typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver(medir)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [texto, abierta])
+
+  return (
+    <>
+      <p
+        ref={ref}
+        className={`${styles.modalDesc}${abierta ? '' : ' ' + styles.modalDescCorta}`}
+        style={abierta ? undefined : { WebkitLineClamp: DESC_RENGLONES }}
+      >
+        {texto}
+      </p>
+      {(sobra || abierta) && (
+        <button type="button" className={styles.verMas} onClick={() => setAbierta(a => !a)} aria-expanded={abierta}>
+          {abierta ? 'Ver menos' : 'Ver más'}
+          <svg
+            className={`${styles.ratingChevron}${abierta ? ' ' + styles.ratingChevronUp : ''}`}
+            viewBox="0 0 24 24" width="12" height="12" fill="none"
+            stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"
+          >
+            <path d="M6 9l6 6 6-6" />
+          </svg>
+        </button>
+      )}
+    </>
+  )
+}
+
+/* Consultas exitosas del profesional (cobradas y verificadas). La cifra llega
+   agregada en /api/professionals (`consultas_exitosas`). Con cero no se pinta:
+   un "0" junto al nombre de quien acaba de llegar resta en vez de informar. */
+/* La cifra manda: grande y en la letra del nombre (Cinzel), con el rótulo en
+   dos renglones al lado y un filete dorado entre los dos. Sin pastilla ni
+   color de "éxito": en esta tarjeta todo es café y dorado, y un verde ahí se
+   leía como una etiqueta genérica pegada encima. */
+function Exitosas({ total }) {
+  if (!(total > 0)) return null
+  const una = total === 1
+  return (
+    <span className={styles.exitosas}>
+      <span className={styles.exitosasNum}>{Number(total).toLocaleString('es-CO')}</span>
+      <span className={styles.exitosasLbl}>
+        <span>{una ? 'consulta' : 'consultas'}</span>
+        <span>{una ? 'exitosa' : 'exitosas'}</span>
+      </span>
+    </span>
   )
 }
 
@@ -301,6 +370,8 @@ export default function LawyerCard({
             </div>
           )}
 
+          <Exitosas total={lawyer.consultas_exitosas} />
+
           {/* Iconos de redes en la tarjeta (pequeños) */}
           {isSuperAdmin && (
             <div style={{ marginTop: 10 }} onClick={e => e.stopPropagation()}>
@@ -403,6 +474,7 @@ export default function LawyerCard({
                     </span>
                   </button>
                 </div>
+                <Exitosas total={lawyer.consultas_exitosas} />
               </div>
             </div>
 
@@ -495,7 +567,7 @@ export default function LawyerCard({
             {lawyer.descripcion && (
               <div className={styles.modalSection}>
                 <h4 className={styles.modalSectionTitle}>Sobre mí</h4>
-                <p className={styles.modalDesc}>{lawyer.descripcion}</p>
+                <Descripcion texto={lawyer.descripcion} />
               </div>
             )}
 

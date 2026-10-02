@@ -29,25 +29,30 @@ export function parseMiles(v) {
   return Number(String(v ?? '').replace(/\D/g, '')) || 0
 }
 
-// Piso del cobro de una asesoría DE ABOGADO. NO es una sugerencia: es el
-// mínimo que el abogado acepta al registrarse y el que valida su formulario de
-// cobro. Vive aquí, en un solo sitio, para que cambiarlo sea cambiar un
-// número: lo leen los avisos al cliente, la validación del cobro y las
-// condiciones que se muestran antes del registro.
+// Rango del cobro de una consulta, de ABOGADO o de CONTADOR. NO es una
+// sugerencia: es lo que el profesional acepta al registrarse y lo que valida su
+// formulario de cobro (piso y techo). Vive aquí, en un solo sitio, para que
+// cambiarlo sea cambiar un número: lo leen los avisos al cliente, la
+// validación del cobro, las condiciones del registro y el mensaje de
+// bienvenida que manda el administrador al aprobar.
+// (El correo de bienvenida sale de api/notify.js, que no puede importar este
+// módulo: allá están los mismos dos números, hay que cambiarlos a la par.)
 //
-// Solo los abogados tienen rango (decisión 2026-09-28). El contador fija su
-// valor libremente: no se le exige ni se le anuncia al cliente ninguna cifra.
-// Todo lo que hable del rango pasa por tienePisoCobro(tipo), con
-// tipo = 'abogado' | 'contador' (chat_rooms.tipo_profesional o profiles.rol).
-//
-// Desde 2026-09-30 es un RANGO, no un piso: de $50.000 a $150.000 por
-// consulta (antes "desde $200.000"). El techo también se valida: por
-// políticas internas no se puede cobrar más.
+// De $50.000 a $150.000 por consulta (2026-09-30; antes "desde $200.000").
+// Hasta 2026-10-01 el contador cobraba sin rango; desde entonces tiene el
+// mismo que el abogado.
 export const COBRO_MINIMO = 50000
 export const COBRO_MAXIMO = 150000
-export const tienePisoCobro = (tipo) => tipo !== 'contador'
 const RANGO_COBRO = `entre ${COP.format(COBRO_MINIMO)} y ${COP.format(COBRO_MAXIMO)}`
-export const cobroMinimoDe = (tipo) => (tienePisoCobro(tipo) ? COBRO_MINIMO : 0)
+
+/* Devuelve '' si el valor se puede cobrar, o el motivo para mostrarlo en el
+   formulario de cobro. Lo usan los paneles del abogado y del contador. */
+export function validarMontoCobro(monto) {
+  if (!monto || monto <= 0) return 'Ingresa el valor de la consulta.'
+  if (monto < COBRO_MINIMO) return `El valor mínimo por consulta es ${COP.format(COBRO_MINIMO)}.`
+  if (monto > COBRO_MAXIMO) return `El valor máximo por consulta es ${COP.format(COBRO_MAXIMO)}.`
+  return ''
+}
 
 /* Aviso de apertura de la consulta: toda consulta tiene cobro. Se pinta como
    banner destacado en el chat del cliente. No se guarda como mensaje: el
@@ -63,11 +68,6 @@ export const AVISO_COBRO_CLIENTE = {
     'El profesional informa el valor exacto antes de empezar. ' +
     'El pago se realiza directamente al profesional.',
 }
-// Con contador: mismo aviso, sin cifra.
-export const avisoCobroCliente = (tipo) => (tienePisoCobro(tipo) ? AVISO_COBRO_CLIENTE : {
-  titulo: AVISO_COBRO_CLIENTE.titulo,
-  texto: 'El profesional te dice el valor exacto aquí mismo, antes de asesorarte. Le pagas a él directamente.',
-})
 
 /* Una línea para los botones que CREAN la consulta (formulario y modal de
    nueva consulta). Va ahí, y no solo dentro del chat, porque es el único
@@ -81,8 +81,6 @@ export const avisoCobroCliente = (tipo) => (tienePisoCobro(tipo) ? AVISO_COBRO_C
    tres actores enredados: "El profesional confirma el valor exacto antes de
    asesorarte y le pagas directamente a él". Además decía "confirma", que
    suena a que el precio ya se sabía; no se sabe, lo pone él. */
-// SOLO para consultas con abogado: con contador no se muestra (no hay piso
-// que anunciar). Quien lo pinte debe preguntar antes tienePisoCobro(tipo).
 export const AVISO_COSTO_ANTES = {
   cifra: `Entre ${COP.format(COBRO_MINIMO)} y ${COP.format(COBRO_MAXIMO)}`,
   // Sin esto la cifra no dice de qué es: el lector tenía que deducirlo.
@@ -90,20 +88,41 @@ export const AVISO_COSTO_ANTES = {
   texto: 'El profesional informa el valor exacto antes de empezar. El pago se realiza directamente al profesional.',
 }
 
-// Este aviso lo ven SOLO los profesionales. Al cliente se le dice el rango,
-// no el valor: el exacto lo pone el profesional en cada caso.
+// Este aviso lo ven SOLO los profesionales (abogado y contador). Al cliente se
+// le dice el rango, no el valor: el exacto lo pone el profesional en cada caso.
 export const AVISO_COBRO_PROFESIONAL = {
   titulo: 'Define el cobro antes de asesorar.',
   texto:
     `Según nuestras políticas internas, la consulta se encuentra ${RANGO_COBRO}. ` +
     'El cliente realiza el pago directamente al profesional.',
 }
-// Contador: sin piso, el valor es suyo.
-export const AVISO_COBRO_CONTADOR = {
-  titulo: AVISO_COBRO_PROFESIONAL.titulo,
-  texto:
-    'Fija el valor con el botón Cobro antes de asesorar. ' +
-    'El valor lo decides tú según el caso. El cliente te paga directamente a ti.',
+
+/* El acuerdo de cobro del mensaje de bienvenida (chat interno, AdminPage). */
+export const ACUERDO_COBRO_BIENVENIDA =
+  `Cobra la consulta. El valor va de ${COP.format(COBRO_MINIMO)} a ${COP.format(COBRO_MAXIMO)}: ` +
+  'tú lo defines dentro de ese rango y lo confirmas con el cliente antes de empezar.'
+
+/* Una comisión de gestor por consulta.
+
+   La base llegó a guardar DOS para la misma consulta: una al definirse el
+   cobro y otra al pagarse (pagar_pago / confirmar_pago_profesional no miraban
+   si ya existía). docs/sql/cobros-2026-10-01.sql borra las repetidas y lo
+   impide por índice; mientras ese SQL no esté aplicado, las pantallas que
+   listan o pagan comisiones pasan por aquí para no mostrar ni pagar dos
+   veces la misma. De cada consulta queda la pagada si la hay, si no la
+   solicitada, si no la más antigua. Lo ya pagado nunca se oculta. */
+export function unaComisionPorConsulta(cobros) {
+  const lista = Array.isArray(cobros) ? cobros : []
+  const peso = (c) => (c.estado === 'pagado' ? 0 : c.estado === 'solicitado' ? 1 : 2)
+  const mejor = new Map()
+  for (const c of lista) {
+    if (!c.room_id) continue
+    const m = mejor.get(c.room_id)
+    if (!m || peso(c) < peso(m) || (peso(c) === peso(m) && new Date(c.created_at) < new Date(m.created_at))) {
+      mejor.set(c.room_id, c)
+    }
+  }
+  return lista.filter(c => !c.room_id || c.estado === 'pagado' || mejor.get(c.room_id) === c)
 }
 
 // Etiquetas legibles de estado (para chips).

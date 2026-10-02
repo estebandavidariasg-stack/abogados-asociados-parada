@@ -16,6 +16,9 @@ const CATEGORIAS = [
 const CATEGORIAS_FORM = CATEGORIAS.filter(c => c !== 'Todas')
 
 const PAGE_SIZE = 12
+// Modelos a la vista al llegar; "Ver más" suma de a tantos y "Ver menos" vuelve
+// aquí. La lista completa de una categoría empujaba el resto del inicio muy abajo.
+const MODELOS_INICIO = 6
 const FORMAT_LABEL = { docx: 'WORD', xlsx: 'EXCEL', pdf: 'PDF' }
 
 // MIME → formato (cubre los 3 formatos del bucket)
@@ -193,6 +196,7 @@ export default function ModelosContractualesSection() {
   const [hasMore, setHasMore]         = useState(false)
   const [categoria, setCategoria]     = useState('Todas')
   const [page, setPage]               = useState(0)
+  const [verN, setVerN]               = useState(MODELOS_INICIO)   // cuántos se muestran
   const [error, setError]             = useState('')
 
   // ── Admin ────────────────────────────────────────────────────────────
@@ -253,6 +257,7 @@ export default function ModelosContractualesSection() {
   useEffect(() => {
     if (!visible) return
     setPage(0)
+    setVerN(MODELOS_INICIO)
     fetchPage(categoria, 0, false)
   }, [visible, categoria, fetchPage])
 
@@ -264,6 +269,25 @@ export default function ModelosContractualesSection() {
     const next = page + 1
     setPage(next)
     fetchPage(categoria, next, true)
+  }
+
+  // Ver más: muestra otra tanda y, si ya no alcanzan los que hay cargados,
+  // trae la siguiente página. Ver menos: vuelve a la tanda inicial y sube al
+  // comienzo de la sección (si no, uno queda mirando lo que venía después).
+  function handleVerMas() {
+    const objetivo = verN + MODELOS_INICIO
+    setVerN(objetivo)
+    if (objetivo > modelos.length && hasMore && !loadingMore) handleLoadMore()
+  }
+  function handleVerMenos() {
+    setVerN(MODELOS_INICIO)
+    const suave = !window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    // En dos tiempos, como el botón "Iniciar consulta" del perfil: la lista
+    // se recoge y las secciones de arriba aún se están acomodando, así que el
+    // primer desplazamiento queda corto; el segundo lo deja en su sitio.
+    const ir = (behavior) => sectionRef.current?.scrollIntoView({ behavior, block: 'start' })
+    requestAnimationFrame(() => ir(suave ? 'smooth' : 'auto'))
+    setTimeout(() => ir('auto'), 700)
   }
 
   /* Bucket público: URL directa, sin firmar. NO pasa por downloadChatFile:
@@ -554,7 +578,7 @@ export default function ModelosContractualesSection() {
       ) : (
         <>
           <div className={styles.list}>
-            {modelos.map((m, i) => (
+            {modelos.slice(0, verN).map((m, i) => (
               <motion.article
                 key={m.id}
                 className={styles.row}
@@ -609,16 +633,27 @@ export default function ModelosContractualesSection() {
             ))}
           </div>
 
-          {hasMore && (
+          {(modelos.length > verN || hasMore || verN > MODELOS_INICIO) && (
             <div className={styles.loadMoreWrap}>
-              <button
-                type="button"
-                className={styles.loadMoreBtn}
-                onClick={handleLoadMore}
-                disabled={loadingMore}
-              >
-                {loadingMore ? 'Cargando…' : 'Cargar más'}
-              </button>
+              {(modelos.length > verN || hasMore) && (
+                <button
+                  type="button"
+                  className={styles.loadMoreBtn}
+                  onClick={handleVerMas}
+                  disabled={loadingMore}
+                >
+                  {loadingMore ? 'Cargando…' : 'Ver más'}
+                </button>
+              )}
+              {verN > MODELOS_INICIO && (
+                <button
+                  type="button"
+                  className={`${styles.loadMoreBtn} ${styles.loadLessBtn}`}
+                  onClick={handleVerMenos}
+                >
+                  Ver menos
+                </button>
+              )}
             </div>
           )}
         </>

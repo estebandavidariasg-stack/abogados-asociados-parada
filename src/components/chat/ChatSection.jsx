@@ -11,7 +11,7 @@ import {
   parseFichas, FichasContacto,
   validarAdjuntoChat, CHAT_FILE_ACCEPT, prepararAdjuntoChat, nombreArchivoSeguro, describirErrorSubida,
   crearGrabadorAudio, extAudio, mimeAudioLimpio, describirErrorMicrofono, AUDIO_CONSTRAINTS,
-  revisarContactoArchivo, crearTranscriptor, PdfVisor,
+  revisarContactoArchivo, crearTranscriptor, AVISO_AUDIO_SIN_REVISAR, PdfVisor, ImagenZoom,
   // Visto (✓/✓✓) y presencia del profesional (Conectado / Ausente).
   Visto, Presencia, usePresencia, hayNoLeidosDeOtro, marcarLeidos, aplicarLeidoLocal,
   nuevoIdMensaje, fusionarMensajes, useFirmasEstado,
@@ -22,7 +22,7 @@ import { EnlaceLegal } from '../shared/DocumentosLegales'
 const VerificationStep = lazy(() => import('../auth/VerificationStep'))
 import {
   COP, fetchCobroCliente, clienteMarcoPago, subirComprobanteCliente, descargarReciboPDF,
-  avisoCobroCliente, AVISO_COSTO_ANTES, tienePisoCobro,
+  AVISO_COBRO_CLIENTE, AVISO_COSTO_ANTES,
 } from '../../lib/cobroAsesoria'
 // Lazy: arrastra ~30 kB de datos geográficos (32 departamentos + ~1.100
 // municipios) que solo se usan en el paso del formulario, nunca en el
@@ -45,7 +45,7 @@ function parseFirmaOk(content) {
   try { const o = JSON.parse(content); return o?.t === 'firma_ok' ? o : null } catch { return null }
 }
 import { IconPaperclip, IconMic, IconFirma, IconDownload } from '../shared/Icons'
-import { validarCelular, validarCorreo, normalizarCelular, contieneContacto, contieneContactoEstricto, formatCedula, esDeptoBogota } from '../../lib/validaciones'
+import { validarCelular, validarCorreo, normalizarCelular, contieneContacto, contieneContactoHablado, contieneContactoEstricto, formatCedula, esDeptoBogota } from '../../lib/validaciones'
 import { sondear } from '../../utils/sondeo'
 import { AREAS_DERECHO } from '../../lib/areasDerecho'
 import { AREAS_CONTADURIA } from '../../lib/areasContaduria'
@@ -1176,9 +1176,7 @@ function NuevaConsultaModal({ prof, tipo, sending, error, onCancel, onConfirm })
         {error && <p style={{ margin:'10px 0 0', color:'#8f2f22', fontSize:'0.8rem' }}>{error}</p>}
 
         {/* El cliente que repite también decide aquí: cada consulta se cobra
-            aparte, no queda cubierta por la que ya pagó. Solo con abogado:
-            el contador no tiene piso que anunciar. */}
-        {tienePisoCobro(tipo) && (
+            aparte, no queda cubierta por la que ya pagó. */}
           <div className={`${styles.avisoCosto} ${styles.avisoCostoSuelto}`} style={{ marginTop: 16 }}>
             <span className={styles.avisoCostoIcono} aria-hidden="true">
               <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor"
@@ -1193,7 +1191,6 @@ function NuevaConsultaModal({ prof, tipo, sending, error, onCancel, onConfirm })
               <span className={styles.avisoCostoTexto}>{AVISO_COSTO_ANTES.texto}</span>
             </span>
           </div>
-        )}
 
         <div style={{ display:'flex', gap:8, justifyContent:'flex-end', marginTop:18 }}>
           <button type="button" disabled={sending} onClick={onCancel}
@@ -1269,9 +1266,9 @@ function VisorDocumento({ titulo, url, onClose }) {
             <PdfVisor url={url} titulo={titulo} />
           </div>
         ) : (
-          <img src={url} alt={titulo} draggable={false}
-            onContextMenu={e => e.preventDefault()}
-            style={{ maxWidth:'100%', maxHeight:'100%', objectFit:'contain', borderRadius:12, pointerEvents:'none' }} />
+          <div style={{ width:'100%', height:'100%' }}>
+            <ImagenZoom src={url} alt={titulo} onFondo={onClose} />
+          </div>
         )}
       </div>
     </div>,
@@ -3063,7 +3060,7 @@ export default function ChatSection() {
         const blob = new Blob(audioChunksRef.current, { type: actualType })
         // Cancelada con el botón del micrófono: se descarta sin subir.
         if (descartarGrabacionRef.current) { descartarGrabacionRef.current = false; audioChunksRef.current = []; return }
-        if (blob.size > 0) { const fixedBlob = await fixAudioDuration(blob); await uploadAudio(fixedBlob, actualType, texto) }
+        if (blob.size > 0) { const fixedBlob = await fixAudioDuration(blob); await uploadAudio(fixedBlob, actualType, texto, transcriptor.exigeTexto) }
         else setSendError('La nota de voz quedó vacía. Mantén la grabación al menos un segundo.')
       }
       recorder.start(100); transcriptor.start(); setRecording(true); setRecordingTime(0)
@@ -3087,7 +3084,7 @@ export default function ChatSection() {
   // `transcripcion`: texto de la nota de voz cuando exista (pendiente de decidir
   // el motor de transcripción). Se revisa con contieneContacto igual que un
   // mensaje de texto y se guarda en chat_messages.transcripcion.
-  async function uploadAudio(blob, mimeType = 'audio/webm', transcripcion = '') {
+  async function uploadAudio(blob, mimeType = 'audio/webm', transcripcion = '', exigirTexto = false) {
     if (!roomId) return
     const texto = String(transcripcion || '').trim()
     /* Cuando el navegador SÍ transcribe, la nota se revisa como un texto y se
@@ -3096,7 +3093,11 @@ export default function ChatSection() {
        «sin revisar» para el profesional y el administrador: exigir la
        transcripción dejaba las notas de voz inservibles en casi todo teléfono.
        Ver `audioSinRevisar` en chatFiles.jsx. */
-    if (texto && contieneContacto(texto)) { setContactoWarning(true); return }
+    // Los números dichos en palabras ("tres uno cero…") también cuentan.
+    if (texto && contieneContactoHablado(texto)) { setContactoWarning(true); return }
+    // En un computador con reconocimiento de voz, sin texto no hubo revisión:
+    // la nota no sale (ver crearTranscriptor.exigeTexto en chatFiles).
+    if (!texto && exigirTexto) { setSendError(AVISO_AUDIO_SIN_REVISAR); return }
     if (!texto) setAvisoAudio(Date.now())   // la marca de tiempo reinicia los 8 s en cada nota
     setUploading(true); setSendError('')
     let path = null
@@ -3317,10 +3318,9 @@ export default function ChatSection() {
                 </div>
 
                 {/* Valores orientativos (debajo del encabezado). Colapsable en
-                    móvil para no saturar la vista del chat. Con abogado dice
-                    el rango de $50.000 a $150.000 (el aviso de cobro del hilo se va con
-                    el scroll y este queda a mano en la cabecera); con
-                    contador no hay piso, así que solo explica cómo se cobra. */}
+                    móvil para no saturar la vista del chat. Dice el rango de
+                    la consulta (el aviso de cobro del hilo se va con el scroll
+                    y este queda a mano en la cabecera). */}
                 <details className={styles.chatAviso}>
                   <summary className={styles.chatAvisoSummary}>
                     <strong style={{ color:'#6d3c1b' }}>Valores orientativos</strong>
@@ -3329,9 +3329,7 @@ export default function ChatSection() {
                     </span>
                   </summary>
                   <p className={styles.chatAvisoTexto}>
-                    {tienePisoCobro(form.tipo_profesional) && (
-                      <><strong style={{ color:'#6d3c1b' }}>{AVISO_COSTO_ANTES.cifra} {AVISO_COSTO_ANTES.sufijo}.</strong>{' '}</>
-                    )}
+                    <strong style={{ color:'#6d3c1b' }}>{AVISO_COSTO_ANTES.cifra} {AVISO_COSTO_ANTES.sufijo}.</strong>{' '}
                     {AVISO_COSTO_ANTES.texto} Ver{' '}
                     <EnlaceLegal doc="terminos" style={{ color:'#6d3c1b', fontWeight:700 }}>términos de uso</EnlaceLegal>.
                   </p>
@@ -3430,13 +3428,13 @@ export default function ChatSection() {
                       <p className={styles.chatEmptyHint}>Un abogado se unirá en breve.</p>
                     </div>
                   )}
-                  {/* Aviso destacado: toda consulta tiene cobro. La cifra
-                      ($50.000 a $150.000) solo con abogado; con contador, sin rango. */}
+                  {/* Aviso destacado: toda consulta tiene cobro, con el mismo
+                      rango para abogado y contador. */}
                   <div className={styles.avisoCobro} role="note">
                     <IconCobro />
                     <span>
-                      <strong>{avisoCobroCliente(form.tipo_profesional).titulo}</strong>{' '}
-                      {avisoCobroCliente(form.tipo_profesional).texto}
+                      <strong>{AVISO_COBRO_CLIENTE.titulo}</strong>{' '}
+                      {AVISO_COBRO_CLIENTE.texto}
                     </span>
                   </div>
                   {messages.map(msg => {
@@ -4343,18 +4341,16 @@ export default function ChatSection() {
             </>)}
             {formError && <p className={styles.formError}>{formError}</p>}
             {/* El precio, donde todavía cambia una decisión: pegado al botón
-                que crea la consulta. SOLO con abogado, que es el único con
-                rango de $50.000 a $150.000; con contador el botón va solo (no hay cifra
-                que anunciar).
+                que crea la consulta. El rango es el mismo con abogado y con
+                contador.
 
                 Va PEGADO al botón, como un solo bloque, porque el formulario es
                 todo crema y una caja crema encima de crema no se ve (1,08:1 de
                 separación: invisible como forma). Unido al botón no hace falta
                 que compita por la mirada; no se puede pulsar sin haberlo visto. */}
             {(() => {
-              const conPiso = tienePisoCobro(form.tipo_profesional)
               const boton = (
-                <button className={`${styles.btnGold} ${conPiso ? styles.btnGoldPegado : ''}`} onClick={handleFormSubmit} disabled={submitting || sending}>
+                <button className={`${styles.btnGold} ${styles.btnGoldPegado}`} onClick={handleFormSubmit} disabled={submitting || sending}>
                   {solicitudAbierta
                     ? ((submitting || sending) ? 'Publicando…' : 'Publicar mi consulta')
                     : (desdeIA || profesionalDeepLink)
@@ -4364,7 +4360,6 @@ export default function ChatSection() {
                           : (form.tipo_profesional === 'contador' ? 'Buscar contadores disponibles' : 'Buscar abogados disponibles'))}
                 </button>
               )
-              if (!conPiso) return boton
               return (
                 <div className={styles.bloqueCosto}>
                   <div className={styles.avisoCosto}>

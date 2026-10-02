@@ -153,6 +153,69 @@ export function contieneContacto(texto) {
   return false
 }
 
+/* ── Números dichos en voz alta ───────────────────────────────────────────
+   La transcripción de una nota de voz no siempre trae cifras: "tres uno
+   cero, cuatro cincuenta y seis…" puede llegar en palabras, y ahí
+   `contieneContacto` no ve ningún dígito. Esto pasa las palabras a cifras
+   ("tres diez" → "3 10", "cincuenta y seis" → "56", "trescientos diez" →
+   "310", "doble cero" → "0 0") y deja el resto del texto igual. */
+const N_UNIDAD = { cero: 0, uno: 1, un: 1, una: 1, dos: 2, tres: 3, cuatro: 4, cinco: 5, seis: 6, siete: 7, ocho: 8, nueve: 9 }
+const N_ESPECIAL = {
+  diez: 10, once: 11, doce: 12, trece: 13, catorce: 14, quince: 15, dieciseis: 16, diecisiete: 17,
+  dieciocho: 18, diecinueve: 19, veinte: 20, veintiuno: 21, veintiun: 21, veintiuna: 21, veintidos: 22,
+  veintitres: 23, veinticuatro: 24, veinticinco: 25, veintiseis: 26, veintisiete: 27, veintiocho: 28, veintinueve: 29,
+}
+const N_DECENA = { treinta: 30, cuarenta: 40, cincuenta: 50, sesenta: 60, setenta: 70, ochenta: 80, noventa: 90 }
+const N_CENTENA = {
+  cien: 100, ciento: 100, doscientos: 200, trescientos: 300, cuatrocientos: 400, quinientos: 500,
+  seiscientos: 600, setecientos: 700, ochocientos: 800, novecientos: 900,
+}
+
+export function numerosHablados(texto) {
+  const pal = String(texto || '').toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .split(/\s+/).filter(Boolean)
+  const limpia = (p) => (p || '').replace(/[.,;:¡!¿?]/g, '')
+  const out = []
+  for (let i = 0; i < pal.length; i++) {
+    const p = limpia(pal[i])
+    // "doble cero", "triple siete"
+    if ((p === 'doble' || p === 'triple') && limpia(pal[i + 1]) in N_UNIDAD) {
+      const d = String(N_UNIDAD[limpia(pal[i + 1])])
+      out.push(...Array(p === 'doble' ? 2 : 3).fill(d)); i++
+      continue
+    }
+    // Decena y, si sigue, "y" + unidad: "cincuenta y seis".
+    const decena = (j) => {
+      const q = limpia(pal[j])
+      if (q in N_ESPECIAL) return { v: N_ESPECIAL[q], usa: 1 }
+      if (q in N_DECENA) {
+        return limpia(pal[j + 1]) === 'y' && limpia(pal[j + 2]) in N_UNIDAD
+          ? { v: N_DECENA[q] + N_UNIDAD[limpia(pal[j + 2])], usa: 3 }
+          : { v: N_DECENA[q], usa: 1 }
+      }
+      return null
+    }
+    if (p in N_CENTENA) {
+      const d = decena(i + 1)
+      if (d) { out.push(String(N_CENTENA[p] + d.v)); i += d.usa; continue }
+      // "trescientos uno" sí; "cien" a secas también.
+      if (p !== 'cien' && limpia(pal[i + 1]) in N_UNIDAD) { out.push(String(N_CENTENA[p] + N_UNIDAD[limpia(pal[i + 1])])); i++; continue }
+      out.push(String(N_CENTENA[p])); continue
+    }
+    const d = decena(i)
+    if (d) { out.push(String(d.v)); i += d.usa - 1; continue }
+    if (p in N_UNIDAD) { out.push(String(N_UNIDAD[p])); continue }
+    out.push(pal[i])
+  }
+  return out.join(' ')
+}
+
+/* El filtro de una nota de voz: su transcripción tal cual y con los números
+   dichos en palabras ya pasados a cifras. */
+export const contieneContactoHablado = (texto) =>
+  contieneContacto(texto) || contieneContacto(numerosHablados(texto))
+
 /* ── Versión estricta, para el formulario de la consulta ──────────────────
    La descripción del caso la leen profesionales que todavía no han sido
    contratados, así que ahí no puede viajar ningún dato con el que contactar

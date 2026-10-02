@@ -23,6 +23,46 @@ const norm = (s) => (s || '').toString().toLowerCase().normalize('NFD').replace(
 // Día local en formato YYYY-MM-DD, el mismo que devuelven los <input type="date">.
 const soloFecha = (ts) => (ts ? new Date(ts).toLocaleDateString('sv') : '')
 
+const ROL_LABEL = { abogado: 'Abogado', contador: 'Contador' }
+
+/* Profesional de la consulta de cada PQRS → { room_id: { nombre, rol } }.
+   La PQRS guarda la sala, no el profesional: se resuelve con las asignaciones
+   (gana el que la atendió, `status = 'active'`) y sus perfiles. Por tandas de
+   100 para no pasarse del largo de URL. */
+async function profesionalesDe(filas, headers) {
+  const salas = [...new Set(filas.map(r => r.room_id).filter(Boolean))]
+  if (!salas.length) return {}
+  const porSala = {}
+  for (let i = 0; i < salas.length; i += 100) {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/chat_room_lawyers?room_id=in.(${salas.slice(i, i + 100).join(',')})&select=room_id,lawyer_id,status`,
+      { headers }
+    )
+    const asign = res.ok ? await res.json() : []
+    for (const a of (Array.isArray(asign) ? asign : [])) {
+      if (!porSala[a.room_id] || a.status === 'active') porSala[a.room_id] = a.lawyer_id
+    }
+  }
+  const ids = [...new Set(Object.values(porSala))]
+  const perfil = {}
+  for (let i = 0; i < ids.length; i += 100) {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/profiles?id=in.(${ids.slice(i, i + 100).join(',')})&select=id,nombre,apellido,username,rol`,
+      { headers }
+    )
+    const ps = res.ok ? await res.json() : []
+    for (const p of (Array.isArray(ps) ? ps : [])) perfil[p.id] = p
+  }
+  const out = {}
+  for (const [sala, id] of Object.entries(porSala)) {
+    const p = perfil[id]
+    if (!p) continue
+    const nombre = [p.nombre, p.apellido].filter(Boolean).join(' ').trim() || (p.username ? `@${p.username}` : 'Profesional')
+    out[sala] = { nombre, rol: p.rol }
+  }
+  return out
+}
+
 // `onCambio`: avisa al panel cuando cambia el estado de una PQRS, para que
 // el badge del riel se recuente al instante y no al siguiente poll.
 export default function PqrsAdmin({ onCambio } = {}) {
@@ -36,6 +76,7 @@ export default function PqrsAdmin({ onCambio } = {}) {
   const [desde, setDesde]     = useState('')           // YYYY-MM-DD
   const [hasta, setHasta]     = useState('')
   const [busy, setBusy]       = useState(null)
+  const [profPorSala, setProfPorSala] = useState({})   // room_id → { nombre, rol } del profesional de esa consulta
 
   useEffect(() => {
     let cancel = false
@@ -49,7 +90,11 @@ export default function PqrsAdmin({ onCambio } = {}) {
         )
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
         const data = await res.json()
-        if (!cancel) setRows(Array.isArray(data) ? data : [])
+        const filas = Array.isArray(data) ? data : []
+        if (!cancel) setRows(filas)
+        // A qué profesional va dirigida cada una. Va aparte y sin bloquear: si
+        // falla, las PQRS se ven igual, solo sin ese dato.
+        profesionalesDe(filas, headers).then(m => { if (!cancel) setProfPorSala(m) }).catch(() => {})
       } catch {
         if (!cancel) setError('No se pudieron cargar las PQRS. Revisa que la política de lectura del superadmin esté aplicada.')
       } finally {
@@ -89,7 +134,7 @@ export default function PqrsAdmin({ onCambio } = {}) {
     if (desde && dia < desde) return false
     if (hasta && dia > hasta) return false
     if (!qn) return true
-    const hay = `${r.radicado || ''} ${r.client_nombre || ''} ${r.client_email || ''} ${r.codigo_referencia || ''} ${r.mensaje || ''}`
+    const hay = `${r.radicado || ''} ${r.client_nombre || ''} ${r.client_email || ''} ${r.codigo_referencia || ''} ${r.mensaje || ''} ${profPorSala[r.room_id]?.nombre || ''}`
     return norm(hay).includes(qn)
   })
   const hayFiltros  = !!(q || desde || hasta || tipo !== 'todos')
@@ -128,7 +173,7 @@ export default function PqrsAdmin({ onCambio } = {}) {
             <input
               type="search"
               className={styles.searchInput}
-              placeholder="Buscar por radicado, cliente, correo o texto…"
+              placeholder="Buscar por radicado, cliente, profesional, correo o texto…"
               value={q}
               onChange={(e) => setQ(e.target.value)}
               aria-label="Buscar PQRS"
@@ -202,6 +247,16 @@ export default function PqrsAdmin({ onCambio } = {}) {
               </div>
 
               {r.radicado && <p className={styles.radicado}>{r.radicado}</p>}
+
+              {/* Sobre quién es la PQRS: el profesional que atendió esa consulta. */}
+              {r.room_id && (
+                <p className={styles.pqrProfesional}>
+                  <span>Profesional</span>
+                  {profPorSala[r.room_id]
+                    ? <><strong>{profPorSala[r.room_id].nombre}</strong> · {ROL_LABEL[profPorSala[r.room_id].rol] || 'Profesional'}</>
+                    : <em>Sin profesional asignado a esa consulta</em>}
+                </p>
+              )}
 
               <p className={styles.texto}>{r.mensaje}</p>
 

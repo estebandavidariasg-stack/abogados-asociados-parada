@@ -18,6 +18,7 @@ import CamposRegistro from '../components/admin/CamposRegistro'
 import AdminStats from '../components/admin/AdminStats'
 import RolesAdmin from '../components/admin/RolesAdmin'
 import { IconCheck, IconX, IconPaperclip } from '../components/shared/Icons'
+import { ACUERDO_COBRO_BIENVENIDA } from '../lib/cobroAsesoria'
 
 // ── Iconos SVG (estilo Lucide, currentColor) — sin emojis como iconos ──
 const IconInbox  = (p) => (<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>)
@@ -50,7 +51,7 @@ const bienvenidaProfesional = (rol) => {
     '',
     'Tres acuerdos antes de tu primera consulta:',
     '',
-    '• Cobra la consulta. Tú defines el valor y lo confirmas con el cliente antes de empezar.',
+    `• ${ACUERDO_COBRO_BIENVENIDA}`,
     '• No compartas datos de contacto dentro del chat: ni teléfonos, ni correos, ni redes.',
     '• Envía los archivos y poderes por el chat de la plataforma, así queda el respaldo.',
     '',

@@ -30,6 +30,9 @@
   background: rgba(201,168,76,0.22); border-radius: 999px; padding: 1px 8px; min-width: 20px; text-align: center;
 }
 
+/* Trabajo pendiente del admin dentro de una sub-pestaña. */
+.subTabAlerta { color: #fff; background: #b5651d; white-space: nowrap; }
+
 /* ── Cabecera de sección ── */
 .section { display: flex; flex-direction: column; gap: 16px; }
 .head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
@@ -249,6 +252,23 @@
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .payError { margin: 10px 0 0; font-size: 0.8rem; font-weight: 600; color: #b23b3b; }
+
+/* Confirmar el precio de una asesoría: el valor y lo que se le cobra al profesional. */
+.precioCampo { display: flex; flex-direction: column; gap: 6px; }
+.precioCampo > span { font-size: 0.74rem; font-weight: 700; letter-spacing: 0.04em; color: #7a6655; text-transform: uppercase; }
+.precioInput {
+  width: 100%; box-sizing: border-box;
+  border: 1.5px solid rgba(109,60,27,0.22); border-radius: 10px; background: #fff;
+  padding: 10px 14px; font-family: inherit; font-size: 1.25rem; font-weight: 700;
+  color: #472f29; font-variant-numeric: tabular-nums;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+.precioInput:focus { outline: none; border-color: #c9a84c; box-shadow: 0 0 0 3px rgba(201,168,76,0.25); }
+.precioDesglose { margin: 14px 0 0; padding: 12px 14px; border-radius: 10px; background: #fcf9f5; display: flex; flex-direction: column; gap: 6px; }
+.precioDesglose > div { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.precioDesglose dt { font-size: 0.82rem; color: #7a6655; }
+.precioDesglose dd { margin: 0; font-size: 0.9rem; font-weight: 700; color: #472f29; font-variant-numeric: tabular-nums; }
+.precioAviso { margin: 10px 0 0; font-size: 0.8rem; line-height: 1.5; color: #8a5a12; }
 .payActions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
 .payCancel {
   border: 1px solid rgba(109,60,27,0.18); background: #fff; color: #5b4633; cursor: pointer;

@@ -133,6 +133,53 @@ async function handleDocs(req, res, id) {
   }
 }
 
+/* ── Consultas exitosas por profesional ──────────────────────────────────
+   "Exitosa" es lo mismo que en el resto de la plataforma (estadísticas del
+   gestor, Mis Cobros): `chat_rooms.resultado = 'exito'`, que la base marca
+   cuando la consulta quedó cobrada y verificada (generar_cobro /
+   confirmar_pago_asesoria). No se inventa aquí otra definición.
+
+   Cuenta para quien la ATENDIÓ (`chat_room_lawyers.status = 'active'`): una
+   sala puede invitar a varios profesionales y solo uno la toma.
+
+   Dos lecturas planas y el cruce en memoria, en vez de un embed de PostgREST:
+   así no depende de que exista la llave foránea entre las dos tablas (el
+   esquema del chat se aplicó a mano). Van con la clave privilegiada porque
+   la anon no lee estas tablas; de aquí solo sale un número por profesional.
+   Devuelve Map(id → total), o null si no se pudo leer. */
+const PAGINA = 1000
+const MAX_PAGINAS = 20
+
+async function leerTodo(ruta) {
+  const filas = []
+  for (let i = 0; i < MAX_PAGINAS; i++) {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/${ruta}&limit=${PAGINA}&offset=${i * PAGINA}`, {
+      headers: { apikey: SUPABASE_PRIV_KEY, Authorization: `Bearer ${SUPABASE_PRIV_KEY}` },
+    })
+    if (!r.ok) return null
+    const lote = await r.json()
+    if (!Array.isArray(lote)) return null
+    filas.push(...lote)
+    if (lote.length < PAGINA) break
+  }
+  return filas
+}
+
+async function contarExitosas(ids, rol) {
+  const inList = ids.map(encodeURIComponent).join(',')
+  const [salas, atendidas] = await Promise.all([
+    leerTodo(`chat_rooms?resultado=eq.exito&tipo_profesional=eq.${rol}&select=id&order=id`),
+    leerTodo(`chat_room_lawyers?lawyer_id=in.(${inList})&status=eq.active&select=lawyer_id,room_id&order=room_id`),
+  ])
+  if (!salas || !atendidas) return null
+  const exitosas = new Set(salas.map(s => s.id))
+  const total = new Map()
+  for (const a of atendidas) {
+    if (exitosas.has(a.room_id)) total.set(a.lawyer_id, (total.get(a.lawyer_id) || 0) + 1)
+  }
+  return total
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' })
@@ -173,6 +220,8 @@ export default async function handler(req, res) {
     // sola query, en vez de que cada tarjeta del home dispare la suya (N+1).
     const ids = lista.map(p => p.id).filter(Boolean)
     if (ids.length) {
+      // Sale ya, en paralelo con las calificaciones; se recoge más abajo.
+      const exitosasP = contarExitosas(ids, rol).catch(() => null)
       try {
         const inList = ids.map(encodeURIComponent).join(',')
         const rRes = await fetch(
@@ -200,6 +249,11 @@ export default async function handler(req, res) {
           }
         }
       } catch { /* si falla, las tarjetas caen a su propia query */ }
+
+      // Consultas exitosas de cada profesional, para la tarjeta. Si falla, el
+      // campo no viaja y la tarjeta simplemente no pinta la cifra.
+      const exitosas = await exitosasP
+      if (exitosas) for (const p of lista) p.consultas_exitosas = exitosas.get(p.id) || 0
     }
 
     // Cache en el CDN de Vercel: 1 min fresco + 1 min sirviendo stale mientras

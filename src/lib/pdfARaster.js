@@ -16,6 +16,25 @@ import workerUrl from 'pdfjs-dist/legacy/build/pdf.worker.min.mjs?url'
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl
 
+/* Un solo worker para toda la sesión. pdf.js arranca uno nuevo por documento
+   si no se le pasa ninguno, y ese arranque (descargar 1,3 MB y compilarlos)
+   era casi toda la espera al abrir una tarjeta profesional o un certificado
+   de una página. Con el worker compartido solo se paga la primera vez, y
+   `calentar()` permite pagarla ANTES del clic: quien muestra una lista de
+   documentos lo llama al pintarla (ver precalentarPdf en chatFiles). */
+let _worker = null
+function trabajador() {
+  try {
+    if (!_worker || _worker.destroyed) _worker = new pdfjsLib.PDFWorker({ name: 'pb-pdf' })
+    return _worker
+  } catch {
+    return undefined   // sin worker propio, pdf.js crea el suyo como antes
+  }
+}
+export function calentar() { trabajador() }
+
+const abrir = (bytes) => pdfjsLib.getDocument({ data: bytes, worker: trabajador() }).promise
+
 /* Devuelve [{ dataUrl, width, height }] — una entrada por página.
    Trabaja sobre una COPIA: pdf.js desacopla (detach) el buffer que recibe, y si
    fuera el original el llamador se quedaría sin bytes (p.ej. para estamparFirma).
@@ -29,7 +48,7 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl
    REAL del PDF, aunque `maxPaginas` recorte cuántas se rasterizan. */
 export async function rasterizarPdf(pdfBytes, scale = 2, { maxPaginas = Infinity, tipo = 'image/png', calidad, anchoPx, onPagina } = {}) {
   const bytes = pdfBytes instanceof Uint8Array ? pdfBytes.slice() : new Uint8Array(pdfBytes)
-  const pdf = await pdfjsLib.getDocument({ data: bytes }).promise
+  const pdf = await abrir(bytes)
   const paginas = []
   const total = Math.min(pdf.numPages, maxPaginas)
   for (let i = 1; i <= total; i++) {
@@ -56,7 +75,7 @@ export async function rasterizarPdf(pdfBytes, scale = 2, { maxPaginas = Infinity
    bytes, igual que el resto. Quien lo abre lo libera con `destroy()`. */
 export async function abrirPdf(pdfBytes) {
   const bytes = pdfBytes instanceof Uint8Array ? pdfBytes.slice() : new Uint8Array(pdfBytes)
-  return pdfjsLib.getDocument({ data: bytes }).promise
+  return abrir(bytes)
 }
 
 /* Texto de un PDF, en orden de lectura, con un salto por línea. Lo usa la
@@ -64,7 +83,7 @@ export async function abrirPdf(pdfBytes) {
    escaneado (solo imagen) devuelve cadena vacía. */
 export async function textoDePdf(pdfBytes) {
   const bytes = pdfBytes instanceof Uint8Array ? pdfBytes.slice() : new Uint8Array(pdfBytes)
-  const pdf = await pdfjsLib.getDocument({ data: bytes }).promise
+  const pdf = await abrir(bytes)
   let out = ''
   for (let i = 1; i <= pdf.numPages; i++) {
     const page = await pdf.getPage(i)

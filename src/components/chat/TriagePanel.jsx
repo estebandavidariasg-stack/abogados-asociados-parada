@@ -3,7 +3,7 @@ import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { pedirIA } from '../../lib/aiClient';
 import styles from './TriagePanel.module.css';
-import { AVISO_COSTO_ANTES, tienePisoCobro } from '../../lib/cobroAsesoria'
+import { AVISO_COSTO_ANTES } from '../../lib/cobroAsesoria'
 
 const PLANTILLAS = [
   'Tengo un problema de [área]. Pasó [cuándo]. Quiero [objetivo].',
@@ -164,9 +164,7 @@ export default function TriagePanel({ tipoProfesional = 'abogado', onIniciarChat
           {/* El precio, desde el primer segundo. Este panel es donde el cliente
               cuenta su caso: enterarse del costo al final, después de haberlo
               escrito todo, ya no le sirve para decidir. Mismo texto y misma
-              cifra que el aviso del formulario (lib/cobroAsesoria). Solo con
-              abogado: el contador no tiene piso que anunciar. */}
-          {tienePisoCobro(tipoProfesional) && (
+              cifra que el aviso del formulario (lib/cobroAsesoria). */}
           <div className={styles.avisoCosto}>
             <span className={styles.avisoCostoIcono} aria-hidden="true">
               <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor"
@@ -183,7 +181,6 @@ export default function TriagePanel({ tipoProfesional = 'abogado', onIniciarChat
               <span className={styles.avisoCostoTexto}>{AVISO_COSTO_ANTES.texto}</span>
             </span>
           </div>
-          )}
 
           <div className={styles.thread} ref={threadRef}>
             {thread.map((m, i) => (

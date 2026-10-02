@@ -1415,6 +1415,17 @@
 .cobroModal {
   max-width: 460px;
 }
+/* Lo que reportó el profesional: el valor que el admin está por confirmar. */
+.cobroReportado {
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(201, 168, 76, 0.13);
+  font-size: 0.8rem;
+  line-height: 1.5;
+  color: #5b4633;
+}
+.cobroReportado strong { color: var(--navy, #6d3c1b); font-variant-numeric: tabular-nums; }
 .cobroForm {
   display: flex;
   flex-direction: column;

@@ -94,7 +94,19 @@ export default function LawyersSection() {
         }
         const json = await res.json()
         if (cancelled) return
-        setLawyers(Array.isArray(json) ? json : [])
+        const lista = Array.isArray(json) ? json : []
+        // La lectura directa del superadmin no trae las consultas exitosas
+        // (las agrega el endpoint): se toman de ahí para que vea la misma
+        // tarjeta que el visitante. Si falla, la tarjeta va sin la cifra.
+        if (isSuperAdmin && lista.length) {
+          try {
+            const pub = await fetch(`/api/professionals?rol=${profesion}`).then(r => (r.ok ? r.json() : []))
+            const exitosas = new Map((Array.isArray(pub) ? pub : []).map(p => [p.id, p.consultas_exitosas]))
+            for (const p of lista) p.consultas_exitosas = exitosas.get(p.id)
+          } catch { /* sin cifra */ }
+          if (cancelled) return
+        }
+        setLawyers(lista)
       } catch (err) {
         console.error('[LawyersSection] fetch error:', err)
         if (!cancelled) setLawyers([])

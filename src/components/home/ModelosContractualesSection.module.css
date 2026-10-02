@@ -290,8 +290,24 @@
    ══════════════════════════════════════════ */
 .loadMoreWrap {
   display: flex;
+  flex-wrap: wrap;
   justify-content: center;
+  gap: 12px;
   margin-top: 2.5rem;
+}
+/* "Ver menos": la acción secundaria, sin borde dorado, para que "Ver más"
+   siga siendo la que llama. */
+.loadLessBtn {
+  border-color: rgba(109, 60, 27, 0.22);
+  color: var(--muted);
+}
+.loadLessBtn:hover {
+  background: rgba(109, 60, 27, 0.06);
+  font-weight: inherit;
+}
+.loadMoreBtn:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
 }
 .loadMoreBtn {
   background: transparent;

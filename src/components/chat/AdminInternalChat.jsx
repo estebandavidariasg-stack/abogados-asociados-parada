@@ -187,6 +187,9 @@ export default function AdminInternalChat({ miId, initialSelectedId, onOpenRoom 
   const [sending, setSending]           = useState(false)
   const [loadingUsers, setLoadingUsers] = useState(true)
   const [noLeidos, setNoLeidos]         = useState({})
+  // Hora (ms) del último mensaje con cada profesional, en cualquier sentido.
+  // Ordena la lista: la conversación con actividad más reciente va primero.
+  const [ultimos, setUltimos]           = useState({})
   // Hay más de una cuenta superadmin. Los profesionales le escribían a una u
   // otra (elegida al azar por `limit=1`), así que la cuenta con la que entraba
   // el admin no veía la mitad de los hilos. El hilo y los no leídos se arman
@@ -370,15 +373,38 @@ export default function AdminInternalChat({ miId, initialSelectedId, onOpenRoom 
     noLeidosInFlight.current = true
     try {
       const headers = await getAuthHeaders()
-      const nRes = await fetch(
-        `${SUPABASE_URL}/rest/v1/mensajes_internos?to_id=in.(${adminIdsRef.current.join(',')})&leido=eq.false&select=from_id`,
-        { headers, signal: timeoutSignal(15000) }
-      )
+      const ids = adminIdsRef.current.join(',')
+      const [nRes, uRes] = await Promise.all([
+        fetch(
+          `${SUPABASE_URL}/rest/v1/mensajes_internos?to_id=in.(${ids})&leido=eq.false&select=from_id`,
+          { headers, signal: timeoutSignal(15000) }
+        ),
+        // Lo más reciente de todas las conversaciones (solo quién y cuándo):
+        // con eso se sabe cuál subió, sin traer los textos.
+        fetch(
+          `${SUPABASE_URL}/rest/v1/mensajes_internos?or=(to_id.in.(${ids}),from_id.in.(${ids}))&select=from_id,to_id,created_at&order=created_at.desc&limit=400`,
+          { headers, signal: timeoutSignal(15000) }
+        ),
+      ])
       const nData = await nRes.json()
       if (Array.isArray(nData)) {
         const counts = {}
         nData.forEach(m => { counts[m.from_id] = (counts[m.from_id] || 0) + 1 })
         setNoLeidos(counts)
+      }
+      const uData = await uRes.json().catch(() => null)
+      if (Array.isArray(uData)) {
+        const admins = adminIdsRef.current
+        const ult = {}
+        for (const m of uData) {   // vienen del más nuevo al más viejo: gana el primero
+          const otro = admins.includes(m.from_id) ? m.to_id : m.from_id
+          if (otro && !ult[otro]) ult[otro] = new Date(m.created_at).getTime()
+        }
+        // Misma referencia si nada cambió: no se repinta la lista cada 6 s.
+        setUltimos(prev => {
+          const k = Object.keys(ult)
+          return k.length === Object.keys(prev).length && k.every(id => prev[id] === ult[id]) ? prev : ult
+        })
       }
     } catch (_) {
       // siguiente tick
@@ -461,6 +487,7 @@ export default function AdminInternalChat({ miId, initialSelectedId, onOpenRoom 
     const id = nuevoIdMensaje()
     setSendError('')
     setTexto('')
+    setUltimos(u => ({ ...u, [destino]: Date.now() }))   // la conversación sube ya
     setMessages(prev => [...prev, {
       id, from_id: miId, to_id: destino, mensaje: cuerpo,
       created_at: new Date().toISOString(), leido: false, _enviando: true,
@@ -762,6 +789,9 @@ export default function AdminInternalChat({ miId, initialSelectedId, onOpenRoom 
     if (ciuFilter !== 'todos' && municipioDe(a) !== ciuFilter) return false
     return coincide(a)
   })
+  // Con mensaje más reciente, primero. Entre los que nunca han escrito se
+  // conserva el orden alfabético en que llegan (el sort es estable).
+  .sort((a, b) => (ultimos[b.id] || 0) - (ultimos[a.id] || 0))
 
   // Chips de rol disponibles: solo se muestran los que existen en la lista para
   // no ofrecer un filtro que devuelve 0 resultados.

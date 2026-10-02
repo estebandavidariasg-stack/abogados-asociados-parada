@@ -112,9 +112,8 @@ const ROLES = [
 
    `COBRO_MINIMO` / `COBRO_MAXIMO` vienen de lib/cobroAsesoria, los mismos
    números que valida el formulario de cobro: si aquí dijera una cifra y allá
-   otra, la promesa del registro sería falsa. Ese rango es SOLO del abogado; el
-   contador fija su valor libremente (2026-09-28), por eso tiene sus propias
-   condiciones. */
+   otra, la promesa del registro sería falsa. El rango es el mismo para el
+   abogado y el contador (2026-10-01). */
 const REGLA_TODA_CONSULTA = {
   titulo: 'Toda consulta se cobra',
   texto: 'No hay asesorías gratuitas. Fijas el valor antes de empezar y el cliente te paga directamente a ti; la plataforma no intermedia el dinero.',
@@ -132,18 +131,6 @@ const CONDICIONES = {
       {
         titulo: `La consulta va de ${COP.format(COBRO_MINIMO)} a ${COP.format(COBRO_MAXIMO)}`,
         texto: 'Es el rango establecido en nuestras políticas internas. El profesional define el valor de la consulta dentro de este rango.',
-      },
-      REGLA_DESCUENTO,
-    ],
-  },
-  contador: {
-    titulo: 'Cómo se cobra en Parada Bridge',
-    entrada: 'Tres reglas que aceptas al crear tu perfil.',
-    puntos: [
-      REGLA_TODA_CONSULTA,
-      {
-        titulo: 'El valor lo decides tú',
-        texto: 'No hay un piso fijo: pones el valor de cada consulta según el caso, antes de empezar a asesorar.',
       },
       REGLA_DESCUENTO,
     ],
@@ -1135,7 +1122,7 @@ export default function RegisterModal({ onClose }) {
 
         {/* ══════════════ CONDICIONES — antes de pedir un solo dato ══════════════ */}
         {rol && verificationStep === 'condiciones' && (() => {
-          const c = CONDICIONES[rol === 'gestor' ? 'gestor' : rol === 'contador' ? 'contador' : 'profesional']
+          const c = CONDICIONES[rol === 'gestor' ? 'gestor' : 'profesional']
           const claveContrato = contratoDeRol(rol)
           const contrato = DOCS_LEGALES[claveContrato]
           return (

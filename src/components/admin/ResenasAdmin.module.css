@@ -210,6 +210,16 @@
 .radicado {
   font-size: 0.78rem; font-weight: 700; letter-spacing: 0.03em; color: #8a5a10;
 }
+/* Sobre qué profesional es la PQRS. */
+.pqrProfesional {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px;
+  margin: 0; font-size: 0.84rem; color: #5b4633; overflow-wrap: anywhere;
+}
+.pqrProfesional > span {
+  font-size: 0.64rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #8a735f;
+}
+.pqrProfesional strong { color: #6d3c1b; }
+.pqrProfesional em { font-style: normal; color: #8a735f; }
 .pendiente {
   font-size: 0.64rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
   color: #8a5a10; background: rgba(230,160,40,0.16); padding: 2px 8px; border-radius: 999px;

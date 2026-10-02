@@ -203,6 +203,7 @@ export default function SuperAdminChatViewer({ initialRoomId = null }) {
   const [pagoGenerando, setPagoGenerando] = useState(false) // POST generar_cobro en curso
   // Modal con el detalle de la consulta (código, partes y desglose del cobro).
   const [detallesOpen, setDetallesOpen] = useState(false)
+  const [asesoria, setAsesoria]     = useState(null)     // lo que el profesional le cobró al cliente (pagos_asesoria)
   const [pagoOk, setPagoOk]         = useState(false)    // toast inline "✓ Cobro generado"
   const [pagoError, setPagoError]   = useState('')       // mensaje de error inline (dismissible)
   // Modal "Definir cobro" + sus campos (total / % empresa / % gestor).
@@ -346,7 +347,7 @@ export default function SuperAdminChatViewer({ initialRoomId = null }) {
   // Al abrir/cambiar de sala, traemos el estado del cobro de esa consulta y
   // limpiamos los avisos inline del cobro anterior.
   useEffect(() => {
-    setPago(null); setPagoOk(false); setPagoError(''); setPagoConfirmado(false)
+    setPago(null); setAsesoria(null); setPagoOk(false); setPagoError(''); setPagoConfirmado(false)
     setCobroModalOpen(false)
     if (!activeRoom) return
     loadPago(activeRoom.id)
@@ -364,7 +365,7 @@ export default function SuperAdminChatViewer({ initialRoomId = null }) {
     setPagoLoading(true)
     try {
       const headers = await getAuthHeaders()
-      const [pagoRes, roomRes] = await Promise.all([
+      const [pagoRes, roomRes, aseRes] = await Promise.all([
         fetch(
           `${SUPABASE_URL}/rest/v1/pagos_profesional?room_id=eq.${rid}&select=id,estado,total_consulta,pct_empresa,pct_gestor,monto_empresa,comision_gestor,monto,pagado_at,gestor_id,codigo&order=created_at.desc`,
           { headers }
@@ -373,14 +374,21 @@ export default function SuperAdminChatViewer({ initialRoomId = null }) {
           `${SUPABASE_URL}/rest/v1/chat_rooms?id=eq.${rid}&select=pago_confirmado&limit=1`,
           { headers }
         ),
+        // El valor que el profesional le cobró al cliente: es el que el admin confirma.
+        fetch(
+          `${SUPABASE_URL}/rest/v1/pagos_asesoria?room_id=eq.${rid}&select=monto,estado,recibo_num&limit=1`,
+          { headers }
+        ),
       ])
       const rows = await pagoRes.json().catch(() => [])
       const [roomRow] = await roomRes.json().catch(() => [])
+      const aseRows = await aseRes.json().catch(() => [])
       // Solo actualizamos si seguimos en la misma sala (evita carrera al cambiar rápido).
       setActiveRoom(cur => {
         if (cur?.id === rid) {
           setPago(Array.isArray(rows) && rows.length ? rows[0] : null)
           setPagoConfirmado(!!roomRow?.pago_confirmado)
+          setAsesoria(Array.isArray(aseRows) && aseRows.length ? aseRows[0] : null)
         }
         return cur
       })
@@ -396,7 +404,10 @@ export default function SuperAdminChatViewer({ initialRoomId = null }) {
   function openCobroModal() {
     if (!activeRoom) return
     const d = cfgDefaults || {}
-    setCfgTotal (d.default_total != null ? String(d.default_total) : '')
+    // El total arranca en lo que el profesional reportó haberle cobrado al
+    // cliente: el admin lo confirma o lo corrige. Sin asesoría, el valor por defecto.
+    setCfgTotal (Number(asesoria?.monto) > 0 ? String(Math.round(Number(asesoria.monto)))
+      : d.default_total != null ? String(d.default_total) : '')
     setCfgPctEmp(d.pct_empresa   != null ? String(d.pct_empresa)   : '')
     setCfgPctGes(d.comision_gestor_pct != null ? String(d.comision_gestor_pct) : '')
     setPagoError(''); setPagoOk(false)
@@ -1270,7 +1281,16 @@ export default function SuperAdminChatViewer({ initialRoomId = null }) {
                 className={`${styles.confirmModal} ${styles.cobroModal}`}
                 onClick={e => e.stopPropagation()}
               >
-                <h3 className={styles.confirmTitle}>Definir cobro de la consulta</h3>
+                <h3 className={styles.confirmTitle}>Confirmar el precio y generar el cobro</h3>
+                {Number(asesoria?.monto) > 0 && (
+                  <p className={styles.cobroReportado}>
+                    El profesional reportó <strong>{formatCOP(asesoria.monto)}</strong>
+                    {asesoria.estado === 'pagado'
+                      ? ' y confirmó que el cliente ya le pagó.'
+                      : '; el cliente todavía no figura como pagado.'}{' '}
+                    Confirma ese valor o corrígelo: el cobro al profesional nace al confirmarlo.
+                  </p>
+                )}
 
                 <div className={styles.cobroForm}>
                   <label className={styles.cobroField}>

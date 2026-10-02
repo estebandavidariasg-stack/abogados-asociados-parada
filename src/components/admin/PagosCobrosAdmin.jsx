@@ -4,6 +4,7 @@ import { supabase, getAuthHeaders } from '../../lib/supabase'
 import { IconCheck } from '../shared/Icons'
 import styles from './PagosCobrosAdmin.module.css'
 import { VisorArchivo } from '../../lib/chatFiles'
+import { unaComisionPorConsulta, formatMiles, parseMiles } from '../../lib/cobroAsesoria'
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
 
@@ -291,7 +292,7 @@ export default function PagosCobrosAdmin() {
     try {
       const headers = await getAuthHeaders()
       const [pRes, coRes, prRes, gRes, aRes, cfgRes] = await Promise.all([
-        fetch(`${SUPABASE_URL}/rest/v1/pagos_profesional?select=id,profesional_id,monto,total_consulta,pct_empresa,pct_gestor,estado,comision_gestor,gestor_id,codigo,created_at,pagado_at&order=created_at.desc`, { headers }),
+        fetch(`${SUPABASE_URL}/rest/v1/pagos_profesional?select=id,room_id,profesional_id,monto,total_consulta,pct_empresa,pct_gestor,estado,comision_gestor,gestor_id,codigo,created_at,pagado_at&order=created_at.desc`, { headers }),
         fetch(`${SUPABASE_URL}/rest/v1/gestor_cobros?select=*&order=created_at.desc`, { headers }),
         fetch(`${SUPABASE_URL}/rest/v1/profiles?rol=in.(abogado,contador)&select=id,nombre,apellido,cedula,username,email,rol`, { headers }),
         fetch(`${SUPABASE_URL}/rest/v1/profiles?rol=eq.gestor&select=id,nombre,apellido,cedula,username,email,certificado_bancario_url`, { headers }),
@@ -300,7 +301,7 @@ export default function PagosCobrosAdmin() {
       ])
       const [p, co, pr, g, a, cfg] = await Promise.all([pRes.json(), coRes.json(), prRes.json(), gRes.json(), aRes.json(), cfgRes.json()])
       setPagos(Array.isArray(p) ? p : [])
-      setCobros(Array.isArray(co) ? co : [])
+      setCobros(unaComisionPorConsulta(co))
       setProfes(Array.isArray(pr) ? pr : [])
       setGest(Array.isArray(g) ? g : [])
       setAsesorias(Array.isArray(a) ? a : [])
@@ -478,27 +479,43 @@ export default function PagosCobrosAdmin() {
     }
   }
 
-  // Comisión generada por cada asesoría (vía pago_profesional_id → pagos_profesional).
+  // Comisión generada por cada asesoría: por su enlace (pago_profesional_id) o,
+  // si el cobro se definió antes de que existiera el enlace, por la consulta.
   const comisionPorPagoProf = useMemo(() => {
     const m = new Map(); for (const p of pagos) m.set(p.id, Number(p.monto) || 0); return m
   }, [pagos])
+  const comisionPorSala = useMemo(() => {
+    const m = new Map()
+    for (const p of pagos) if (p.room_id && p.estado !== 'anulado') m.set(p.room_id, Number(p.monto) || 0)
+    return m
+  }, [pagos])
 
-  // Asesorías enriquecidas + filtradas (búsqueda por nombre/cédula + estado).
+  /* Asesorías enriquecidas. `_porConfirmar`: el cliente pagó y el profesional
+     lo confirmó, pero el ADMIN todavía no ha confirmado ese valor, así que al
+     profesional aún no se le ha generado su cobro de plataforma. */
+  const asesoriasTodas = useMemo(() => asesorias.map(a => {
+    const prof = profById.get(a.profesional_id) || null
+    const conCobro = !!a.pago_profesional_id || comisionPorSala.has(a.room_id)
+    return {
+      ...a,
+      _nombre: nombreDe(prof) || '—',
+      _cedula: prof?.cedula || '',
+      _rol: prof?.rol || null,
+      _comision: a.pago_profesional_id
+        ? (comisionPorPagoProf.get(a.pago_profesional_id) || 0)
+        : (comisionPorSala.get(a.room_id) || 0),
+      _porConfirmar: a.estado === 'pagado' && !conCobro && Number(a.monto) > 0,
+    }
+  }), [asesorias, profById, comisionPorPagoProf, comisionPorSala])
+  const nPorConfirmar = useMemo(() => asesoriasTodas.filter(a => a._porConfirmar).length, [asesoriasTodas])
+
+  // Filtradas (búsqueda por nombre/cédula + estado).
   const asesoriasFiltradas = useMemo(() => {
     const q = norm(qA), qc = normCedula(qA)
-    return asesorias
-      .map(a => {
-        const prof = profById.get(a.profesional_id) || null
-        return {
-          ...a,
-          _nombre: nombreDe(prof) || '—',
-          _cedula: prof?.cedula || '',
-          _rol: prof?.rol || null,
-          _comision: a.pago_profesional_id ? (comisionPorPagoProf.get(a.pago_profesional_id) || 0) : 0,
-        }
-      })
+    return asesoriasTodas
       .filter(a => {
-        if (estadoA !== 'todos' && a.estado !== estadoA) return false
+        if (estadoA === 'por_confirmar') { if (!a._porConfirmar) return false }
+        else if (estadoA !== 'todos' && a.estado !== estadoA) return false
         if (q || qc) {
           const enTexto = norm(a._nombre).includes(q)
           const enCedula = qc && normCedula(a._cedula).includes(qc)
@@ -506,7 +523,60 @@ export default function PagosCobrosAdmin() {
         }
         return true
       })
-  }, [asesorias, profById, comisionPorPagoProf, qA, estadoA])
+  }, [asesoriasTodas, qA, estadoA])
+
+  // ── El admin confirma el precio de una asesoría → nace el cobro al profesional ──
+  const [precioModal, setPrecioModal] = useState(null)   // { asesoria } | null
+  const [precioValor, setPrecioValor] = useState('')
+  const [precioBusy, setPrecioBusy]   = useState(false)
+  const [precioError, setPrecioError] = useState('')
+
+  function abrirPrecioModal(asesoria) {
+    setPrecioValor(formatMiles(String(Math.round(Number(asesoria.monto) || 0))))
+    setPrecioError('')
+    setPrecioModal({ asesoria })
+  }
+
+  async function confirmarPrecio() {
+    const a = precioModal?.asesoria
+    if (!a || precioBusy) return
+    const total = parseMiles(precioValor)
+    const pe = Number(pctEmpresa), pg = Number(pctGestor)
+    if (!(total > 0)) { setPrecioError('Escribe el valor de la consulta.'); return }
+    if (!(pe >= 0 && pe <= 100) || !(pg >= 0 && pg <= 100)) {
+      setPrecioError('Revisa los porcentajes de comisión (arriba, en esta misma pestaña).'); return
+    }
+    setPrecioBusy(true); setPrecioError('')
+    try {
+      const headers = await getAuthHeaders()
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/generar_cobro`, {
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ p_room_id: a.room_id, p_total: total, p_pct_empresa: pe, p_pct_gestor: pg }),
+      })
+      if (!res.ok) {
+        const j = await res.json().catch(() => null)
+        const msg = String(j?.message || '')
+        if (j?.code === '23505' || /ya existe un cobro/i.test(msg)) throw new Error('Esta consulta ya tiene un cobro generado.')
+        if (j?.code === '42501' || /no autorizado/i.test(msg)) throw new Error('No autorizado para generar este cobro.')
+        if (/profesional asignado/i.test(msg)) throw new Error('La consulta no tiene profesional asignado.')
+        throw new Error(msg || 'No se pudo generar el cobro. Intenta de nuevo.')
+      }
+      // Trazabilidad del gestor (correo "comisión disponible"), si la consulta trae uno.
+      fetch('/api/notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: headers.Authorization },
+        body: JSON.stringify({ type: 'gestor_trazabilidad', data: { evento: 'cierre', roomId: a.room_id } }),
+      }).catch(() => {})
+      setPrecioModal(null)
+      flash('Precio confirmado. Se generó el cobro al profesional.')
+      await cargar({ silencioso: true })
+    } catch (err) {
+      setPrecioError(err.message || 'No se pudo generar el cobro.')
+    } finally {
+      setPrecioBusy(false)
+    }
+  }
 
   const resumenA = useMemo(() => {
     let cobrado = 0, comisiones = 0, pend = 0
@@ -702,6 +772,12 @@ export default function PagosCobrosAdmin() {
         >
           <IconWallet /> Asesorías (cobro al cliente)
           <span className={styles.subTabBadge}>{asesorias.length}</span>
+          {nPorConfirmar > 0 && (
+            <span className={`${styles.subTabBadge} ${styles.subTabAlerta}`}
+              title="Asesorías pagadas cuyo precio falta confirmar">
+              {nPorConfirmar} por confirmar
+            </span>
+          )}
         </button>
       </div>
 
@@ -1076,8 +1152,9 @@ export default function PagosCobrosAdmin() {
               {savingCfg ? 'Guardando…' : 'Guardar porcentajes'}
             </button>
             <p className={styles.sub} style={{ margin: 0, flex: '1 1 340px', minWidth: 260, alignSelf: 'center' }}>
-              Al confirmarse una asesoría, el profesional paga a la empresa el
-              <strong> {pctEmpresa || '—'}%</strong> de lo cobrado. Si la consulta trae gestor,
+              Cuando el profesional reporta que el cliente pagó, la asesoría queda
+              <strong> por confirmar</strong>: tú confirmas el valor y solo entonces se le genera
+              su cobro, el <strong>{pctEmpresa || '—'}%</strong> de lo cobrado. Si la consulta trae gestor,
               su comisión es el <strong>{pctGestor || '—'}%</strong> de esa parte de la empresa
               (sale de la tajada de la empresa, no se le suma al profesional).
             </p>
@@ -1124,6 +1201,8 @@ export default function PagosCobrosAdmin() {
               <EstadoChips
                 opciones={[
                   { k: 'todos', label: 'Todas', n: asesorias.length },
+                  // Pagadas por el cliente cuyo valor el admin aún no confirma.
+                  { k: 'por_confirmar', label: 'Por confirmar', n: nPorConfirmar },
                   { k: 'pagado', label: 'Pagadas', n: asesorias.filter(a => a.estado === 'pagado').length },
                   { k: 'pendiente', label: 'Pendientes', n: asesorias.filter(a => a.estado === 'pendiente').length },
                   // 'gratuita' es un estado heredado (ya no se puede crear):
@@ -1173,7 +1252,13 @@ export default function PagosCobrosAdmin() {
                       <td>{a.estado === 'gratuita'
                         ? <span className={styles.muted}>Sin valor</span>
                         : <EstadoPill estado={a.estado === 'pagado' ? 'pagado' : 'pendiente'} />}</td>
-                      <td className={styles.num}>{a._comision > 0 ? fmtCOP(a._comision) : <span className={styles.muted}>—</span>}</td>
+                      <td className={styles.num}>
+                        {a._porConfirmar ? (
+                          <button type="button" className={styles.payBtn} onClick={() => abrirPrecioModal(a)}>
+                            Confirmar precio
+                          </button>
+                        ) : a._comision > 0 ? fmtCOP(a._comision) : <span className={styles.muted}>—</span>}
+                      </td>
                       <td className={styles.num}>{a.recibo_num || <span className={styles.muted}>—</span>}</td>
                     </tr>
                   ))}
@@ -1182,6 +1267,75 @@ export default function PagosCobrosAdmin() {
             </div>
           )}
         </section>
+      )}
+
+      {/* ── Modal: el admin confirma el precio de una asesoría ──
+          El valor lo reportó el profesional. Mientras el admin no lo confirme
+          (o lo corrija), al profesional no se le cobra nada. */}
+      {precioModal && createPortal(
+        (() => {
+          const a = precioModal.asesoria
+          const total = parseMiles(precioValor)
+          const pe = Number(pctEmpresa) || 0
+          const montoEmp = Math.round(total * pe / 100)
+          const cambio = total > 0 && total !== Math.round(Number(a.monto) || 0)
+          return (
+            <div
+              className={styles.payOverlay}
+              role="dialog" aria-modal="true" aria-labelledby="precioModalTitle"
+              onClick={() => !precioBusy && setPrecioModal(null)}
+            >
+              <div className={styles.payModal} onClick={(e) => e.stopPropagation()}>
+                <h3 id="precioModalTitle" className={styles.payTitle}>Confirmar el precio de la consulta</h3>
+                <p className={styles.paySub}>
+                  {a._nombre !== '—' ? <strong>{a._nombre}</strong> : 'El profesional'} reportó{' '}
+                  <strong>{fmtCOP(a.monto)}</strong>{a.recibo_num ? ` · recibo ${a.recibo_num}` : ''}
+                </p>
+                <p className={styles.payHint}>
+                  Confirma el valor que el cliente pagó, o corrígelo si no coincide. Al confirmar se
+                  genera el cobro de plataforma al profesional; antes de eso no se le cobra nada.
+                </p>
+
+                <label className={styles.precioCampo}>
+                  <span>Valor confirmado (COP)</span>
+                  <input
+                    type="text" inputMode="numeric" autoFocus
+                    className={styles.precioInput}
+                    value={precioValor}
+                    onChange={(e) => { setPrecioValor(formatMiles(e.target.value)); setPrecioError('') }}
+                  />
+                </label>
+
+                <dl className={styles.precioDesglose}>
+                  <div>
+                    <dt>Cobro al profesional ({pe}%)</dt>
+                    <dd>{fmtCOP(montoEmp)}</dd>
+                  </div>
+                  <div>
+                    <dt>Le queda al profesional</dt>
+                    <dd>{fmtCOP(Math.max(0, total - montoEmp))}</dd>
+                  </div>
+                </dl>
+                {cambio && (
+                  <p className={styles.precioAviso}>
+                    Vas a registrar un valor distinto al que reportó el profesional.
+                  </p>
+                )}
+                {precioError && <p className={styles.payError} role="alert">{precioError}</p>}
+
+                <div className={styles.payActions}>
+                  <button type="button" className={styles.payCancel} onClick={() => setPrecioModal(null)} disabled={precioBusy}>
+                    Cancelar
+                  </button>
+                  <button type="button" className={styles.payConfirm} onClick={confirmarPrecio} disabled={precioBusy || !(total > 0)}>
+                    {precioBusy ? 'Generando cobro…' : 'Confirmar y generar cobro'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )
+        })(),
+        document.body
       )}
 
       {/* ── Modal: confirmar el pago de un profesional ──

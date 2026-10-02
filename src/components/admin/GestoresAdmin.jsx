@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { supabase, getAuthHeaders } from '../../lib/supabase'
+import { unaComisionPorConsulta } from '../../lib/cobroAsesoria'
 import { VisorArchivo } from '../../lib/chatFiles'
 import { IconCheck, IconX, IconQR } from '../shared/Icons'
 import SocialLinks from '../profile/SocialLinks'
@@ -111,7 +112,7 @@ export default function GestoresAdmin({ onChange }) {
       setGestores(Array.isArray(g) ? g : [])
       setCodigos(Array.isArray(c) ? c : [])
       setRooms(Array.isArray(r) ? r : [])
-      setCobros(Array.isArray(co) ? co : [])
+      setCobros(unaComisionPorConsulta(co))
     } catch { /* noop */ }
     finally { setLoading(false) }
   }

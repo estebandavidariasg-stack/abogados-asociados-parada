@@ -21,6 +21,7 @@ const PAL = {
   cafe:     hx('#6D3C1B'),
   gold:     hx('#C9A84C'),
   muted:    hx('#9A8064'),
+  texto:    hx('#5F4B3A'),   // cuerpo del artículo: más suave que el título, legible en papel
   hair:     hx('#E6D9C7'),
   a_favor:  hx('#2E7D5B'),
   en_contra:hx('#B4442F'),
@@ -118,9 +119,19 @@ export async function generarReportePDF({ proyecto, articulos = [], resumen = []
     y = A4.h - M - 62
   }
 
+  /* La Helvetica estándar solo trae el juego WinAnsi. El articulado sale de
+     PDF del Congreso, a menudo escaneados: una ligadura (ﬁ), un guion raro o
+     una flecha hacen fallar drawText y el informe entero no se genera. Lo que
+     no se puede escribir se cambia por su equivalente o por un espacio. */
+  const juego = new Set(font.getCharacterSet())
+  const CAMBIOS = { 'ﬁ': 'fi', 'ﬂ': 'fl', '‐': '-', '‑': '-', '‒': '-', '―': '-', ' ': ' ', '\t': ' ' }
+  const limpio = (t) => Array.from(String(t ?? ''))
+    .map(ch => (ch === '\n' ? ch : CAMBIOS[ch] ?? (juego.has(ch.codePointAt(0)) ? ch : ' ')))
+    .join('')
+
   // Envuelve texto a un ancho máximo (en pt) devolviendo líneas.
   function wrap(text, size, f, maxW) {
-    const words = String(text).split(/\s+/)
+    const words = limpio(text).split(/\s+/)
     const lines = []
     let cur = ''
     for (const w of words) {
@@ -141,34 +152,56 @@ export async function generarReportePDF({ proyecto, articulos = [], resumen = []
   y -= 2
   const metaLinea = [proyecto.numero, proyecto.fecha_radicacion ? `Radicado el ${fmtFechaLarga(proyecto.fecha_radicacion)}` : null]
     .filter(Boolean).join('  ·  ')
-  if (metaLinea) { page.drawText(metaLinea, { x: M, y, size: 10, font, color: PAL.cafe }); y -= 15 }
-  page.drawText(`${filtroLabel(filtro)}     Fecha de descarga: ${fechaDescarga}`, { x: M, y, size: 9.5, font, color: PAL.muted })
+  if (metaLinea) { page.drawText(limpio(metaLinea), { x: M, y, size: 10, font, color: PAL.cafe }); y -= 15 }
+  page.drawText(limpio(`${filtroLabel(filtro)}     Fecha de descarga: ${fechaDescarga}`), { x: M, y, size: 9.5, font, color: PAL.muted })
   y -= 15
 
   // ── Ámbito seleccionado ──
+  // Cada artículo lleva su texto: quien descarga el resultado de un artículo
+  // necesita leer qué dice, no solo su número.
+  const deArticulo = (a) => ({ id: a.id, titulo: tituloArticulo(a), contenido: a.contenido || '' })
   let scopes
   if (scopeSel === 'completo') {
     scopes = [{ id: null, titulo: 'Proyecto completo' }]
   } else if (scopeSel && scopeSel !== 'todos') {
     const a = articulos.find(x => x.id === scopeSel)
-    scopes = a ? [{ id: a.id, titulo: tituloArticulo(a) }] : [{ id: null, titulo: 'Proyecto completo' }]
+    scopes = a ? [deArticulo(a)] : [{ id: null, titulo: 'Proyecto completo' }]
   } else {
-    scopes = [{ id: null, titulo: 'Proyecto completo' }, ...articulos.map(a => ({ id: a.id, titulo: tituloArticulo(a) }))]
+    scopes = [{ id: null, titulo: 'Proyecto completo' }, ...articulos.map(deArticulo)]
   }
   const ambitoTxt = scopeSel === 'todos'
     ? 'Ámbito: proyecto completo y cada artículo'
     : `Ámbito: ${scopes[0].titulo}`
-  page.drawText(ambitoTxt, { x: M, y, size: 9.5, font, color: PAL.muted })
-  y -= 20
+  for (const line of wrap(ambitoTxt, 9.5, font, CW)) {
+    page.drawText(line, { x: M, y, size: 9.5, font, color: PAL.muted }); y -= 13
+  }
+  y -= 7
 
-  const BLOCK_H = 168
+  const BLOCK_H = 168      // título + gráfica
+  const PIE = M + 14       // hasta dónde se puede escribir (debajo va el pie de página)
   for (const sc of scopes) {
-    if (y - BLOCK_H < M) { nuevaPagina() }
+    // Con texto, basta con que quepan el título y unos renglones: el texto
+    // sigue en la página siguiente y la gráfica se acomoda al final.
+    if (y - (sc.contenido ? 70 : BLOCK_H) < M) { nuevaPagina() }
 
     // Título del ámbito
     const tLines = wrap(sc.titulo, 12.5, bold, CW)
     for (const line of tLines) { page.drawText(line, { x: M, y, size: 12.5, font: bold, color: PAL.cafe }); y -= 16 }
     y -= 4
+
+    // Lo que dice el artículo, párrafo por párrafo.
+    if (sc.contenido) {
+      for (const parrafo of limpio(sc.contenido).split(/\n+/)) {
+        if (!parrafo.trim()) continue
+        for (const line of wrap(parrafo, 9.5, font, CW)) {
+          if (y < PIE) nuevaPagina()
+          page.drawText(line, { x: M, y, size: 9.5, font, color: PAL.texto }); y -= 12.5
+        }
+        y -= 4
+      }
+      y -= 8
+      if (y - (BLOCK_H - 24) < M) nuevaPagina()
+    }
 
     const c = contar(resumen, sc.id, filtro)
     const total = c.a_favor + c.en_contra + c.neutral
