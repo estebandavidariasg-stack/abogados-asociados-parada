@@ -90,10 +90,12 @@ export default function HomePage() {
       />
       <SubNav onUnirse={() => setRegisterOpen(true)} />
       <IntroSection onUnirse={() => setRegisterOpen(true)} />
-      <VideoCarousel/>
       <ChatSection />
       <LawyersSection />
       <RankingSection />
+      {/* Visitantes: solo el primer video, grande tipo publicidad al abrir la
+          página. Administradores: además el bloque para gestionar los videos. */}
+      <VideoCarousel/>
       <TestimoniosSection />
       <ModelosContractualesSection />
       <NoticiasSection />

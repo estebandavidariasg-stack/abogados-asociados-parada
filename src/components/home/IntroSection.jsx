@@ -39,16 +39,22 @@ export default function IntroSection({ onUnirse }) {
           <span style={{ color: 'var(--navy)' }}>Parada</span> Bridge
         </span>
 
+        {/* Tres líneas fijas (cada una entra desde su propia máscara). Los
+            espacios entre spans mantienen el texto continuo para lectores de
+            pantalla y al copiar. */}
         <h1 id="intro-heading" className={styles.heading}>
-          <em>Conectamos personas</em> con las soluciones profesionales que necesitan.
+          <span className={styles.linea} style={{ '--i': 0 }}>
+            <span className={styles.lineaTexto}><em>Plataforma de Servicios</em></span>
+          </span>{' '}
+          <span className={styles.linea} style={{ '--i': 1 }}>
+            <span className={styles.lineaTexto}>Jurídicos y Contables</span>
+          </span>{' '}
+          <span className={styles.linea} style={{ '--i': 2 }}>
+            <span className={styles.lineaTexto}>con Presencia a Nivel Global</span>
+          </span>
         </h1>
 
         <div className={styles.divider} aria-hidden="true" />
-
-        <p className={styles.subtitle}>
-          Conecta con profesionales verificados y de experiencia confiable, de
-          forma simple y sin barreras geográficas, en Colombia y el exterior.
-        </p>
 
         <div className={styles.actions}>
           <a

@@ -33,19 +33,9 @@
   line-height: 1.2;
   color: var(--navy);
   text-wrap: balance;
-  margin: 0 0 1rem;
+  margin: 0;
 }
 .heading em { font-style: italic; color: var(--gold); }
-.desc {
-  font-family: 'Poppins', sans-serif;
-  font-size: 0.9rem;
-  font-weight: 300;
-  line-height: 1.8;
-  color: var(--muted);
-  max-width: 480px;
-  margin: 0 auto;
-  text-wrap: pretty;
-}
 
 /* ── Podio ── */
 .podium {

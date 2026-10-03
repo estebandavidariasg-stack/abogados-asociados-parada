@@ -180,7 +180,7 @@ export default function LawyersSection() {
           Nuestra red de profesionales
         </motion.span>
         <motion.h2 className={styles.title} variants={fadeUp}>
-          Encuentra el profesional <em>adecuado</em> para tu caso
+          Encuentra el Profesional <em>Adecuado</em> para tu Caso
         </motion.h2>
         <motion.p className={styles.desc} variants={fadeUp}>
           Todos los profesionales que hacen parte de nuestra red han sido previamente verificados para ofrecer una experiencia basada en confianza, transparencia y calidad.

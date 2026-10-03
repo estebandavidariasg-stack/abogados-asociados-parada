@@ -34,8 +34,8 @@
   z-index: 0;
 }
 
-/* Franja inferior que suaviza el paso a VideoCarousel (fondo ivory #faf7f2).
-   Ya no va hacia navy porque el Hero fue movido más abajo en la página. */
+/* Franja inferior que funde el crema del hero con el blanco de la Consulta
+   (los videos se movieron debajo del ranking). */
 .section::after {
   content: '';
   position: absolute;
@@ -43,7 +43,7 @@
   right: 0;
   bottom: 0;
   height: 140px;
-  background: linear-gradient(to bottom, transparent 0%, #faf7f2 100%);
+  background: linear-gradient(to bottom, transparent 0%, #ffffff 100%);
   pointer-events: none;
   z-index: 0;
 }
@@ -51,7 +51,7 @@
 .content {
   position: relative;
   z-index: 1;
-  max-width: 880px;
+  max-width: 1040px;
   text-align: center;
   display: flex;
   flex-direction: column;
@@ -85,33 +85,59 @@
   background: linear-gradient(to left, transparent, #d4a02a);
 }
 
+/* Titular en Title Case, apilado en tres líneas fijas:
+     Plataforma de Servicios        (dorado metálico)
+     Jurídicos y Contables
+     con Presencia a Nivel Global
+   Cada línea sube desde su propia máscara, una tras otra. */
 .heading {
   font-family: 'Cormorant Garamond', serif;
   font-style: italic;
   font-weight: 400;
-  font-size: clamp(2.6rem, 6vw, 5rem);
-  line-height: 1.1;
+  font-size: clamp(2.6rem, 6vw, 5.4rem);
+  line-height: 1.06;
   color: #28180a;
-  margin: 0 0 1.8rem;
-  letter-spacing: -0.01em;
-  animation: introFadeUp 0.9s ease 0.1s both;
+  margin: 0 0 2rem;
+  letter-spacing: -0.012em;
 }
 
-/* Italic dorado VIVO con gradient metálico — capta atención y le da
-   presencia editorial. background-clip: text permite usar gradient
-   en lugar de un color plano apagado. El filter drop-shadow SÍ se
-   aplica al "texto recortado" (a diferencia de text-shadow, que
-   queda detrás del fill transparente y no se ve). */
+/* La máscara (overflow) deja aire arriba (tildes), abajo (la "f" y la "j"
+   cursivas bajan de la línea) y a los lados (la cursiva se inclina); los
+   márgenes negativos devuelven ese aire para no abrir el interlineado. */
+.linea {
+  display: block;
+  overflow: hidden;
+  padding: 0.1em 0.16em 0.22em;
+  margin: -0.1em -0.16em -0.22em;
+}
+
+.lineaTexto {
+  display: block;
+  text-wrap: balance;
+  animation: lineaSube 1.15s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: calc(0.12s + var(--i, 0) * 0.13s);
+}
+
+@keyframes lineaSube {
+  0%   { transform: translateY(125%); opacity: 0; }
+  35%  { opacity: 1; }
+  100% { transform: translateY(0); opacity: 1; }
+}
+
+/* Dorado metálico (mismo degradado de siempre) + un destello de luz que
+   cruza el texto: primero al terminar de entrar y luego cada 12 s. El
+   destello es una segunda capa estrecha que vive FUERA del texto en reposo,
+   así el dorado se ve idéntico entre pasadas. El drop-shadow SÍ se aplica
+   al texto recortado (text-shadow quedaría detrás del relleno transparente). */
 .heading em {
   font-style: italic;
   font-weight: 500;
-  background: linear-gradient(
-    135deg,
-    #f5cb5c 0%,
-    #e3a82a 30%,
-    #c88a14 60%,
-    #8c5e0e 100%
-  );
+  background-image:
+    linear-gradient(100deg, transparent 32%, rgba(255, 247, 220, 0.95) 50%, transparent 68%),
+    linear-gradient(135deg, #f5cb5c 0%, #e3a82a 30%, #c88a14 60%, #8c5e0e 100%);
+  background-size: 45% 100%, 100% 100%;
+  background-repeat: no-repeat;
+  background-position: -120% 0, 0 0;
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -119,27 +145,39 @@
   filter:
     drop-shadow(0 1px 0 rgba(140, 94, 14, 0.25))
     drop-shadow(0 2px 8px rgba(200, 138, 20, 0.18));
+  animation: destello 12s cubic-bezier(0.45, 0, 0.25, 1) 1.5s infinite;
 }
 
-/* Línea divisoria fina dorada — elegancia editorial */
+@keyframes destello {
+  0%        { background-position: -120% 0, 0 0; }
+  16%, 100% { background-position:  220% 0, 0 0; }
+}
+
+/* Línea dorada con un rombo al centro: se dibuja desde el medio cuando el
+   titular termina de entrar. */
 .divider {
-  width: 100px;
+  position: relative;
+  width: 120px;
   height: 2px;
   background: linear-gradient(to right, transparent, #e3a82a 50%, transparent);
-  margin: 0 0 1.8rem;
-  opacity: 1;
-  animation: introFadeUp 1s ease 0.15s both;
+  /* Sin párrafo intermedio: la línea dorada da paso directo a los botones. */
+  margin: 0 0 2.6rem;
+  animation: lineaDibuja 0.9s cubic-bezier(0.16, 1, 0.3, 1) 0.6s both;
+}
+.divider::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 7px;
+  height: 7px;
+  background: linear-gradient(135deg, #f5cb5c, #c88a14);
+  transform: translate(-50%, -50%) rotate(45deg);
 }
 
-.subtitle {
-  font-family: 'Poppins', sans-serif;
-  font-size: clamp(1rem, 1.3vw, 1.15rem);
-  font-weight: 400;
-  line-height: 1.75;
-  color: rgba(40, 26, 13, 0.72);
-  max-width: 640px;
-  margin: 0 0 2.8rem;
-  animation: introFadeUp 1s ease 0.2s both;
+@keyframes lineaDibuja {
+  from { opacity: 0; transform: scaleX(0); }
+  to   { opacity: 1; transform: scaleX(1); }
 }
 
 /* ── CTAs ──────────────────────────────────────────────────────── */
@@ -149,7 +187,7 @@
   align-items: center;
   justify-content: center;
   flex-wrap: wrap;
-  animation: introFadeUp 1.1s ease 0.3s both;
+  animation: introFadeUp 1s cubic-bezier(0.16, 1, 0.3, 1) 0.7s both;
 }
 
 .ctaBase {
@@ -232,7 +270,7 @@
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.08),
     0 6px 20px rgba(71, 47, 41, 0.28);
-  animation: introFadeUp 1.2s ease 0.38s both;
+  animation: introFadeUp 1s cubic-bezier(0.16, 1, 0.3, 1) 0.8s both;
 }
 .ctaCivic:hover {
   transform: translateY(-2px);
@@ -268,7 +306,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .eyebrow, .heading, .divider, .subtitle, .actions, .ctaCivic {
+  .eyebrow, .lineaTexto, .heading em, .divider, .actions, .ctaCivic {
     animation: none;
   }
 }
@@ -284,19 +322,35 @@
   .eyebrow { letter-spacing: 0.3em; }
   .eyebrow::before,
   .eyebrow::after { width: 18px; margin: 0 10px; }
-  .heading { font-size: clamp(2rem, 9vw, 2.8rem); margin-bottom: 1.4rem; }
-  .subtitle { font-size: 0.95rem; margin-bottom: 2.2rem; }
+  .heading { font-size: clamp(2.6rem, 8.6vw, 3.8rem); margin-bottom: 1.6rem; }
+  .divider { margin-bottom: 2.2rem; }
   .actions { flex-direction: column; width: 100%; gap: 0.8rem; }
-  .ctaPrimary, .ctaSecondary, .ctaCivic { width: 100%; max-width: 320px; }
+  .ctaPrimary, .ctaSecondary, .ctaCivic { width: 100%; max-width: 400px; }
   .ctaCivic { margin-top: 0.9rem; }
 }
 
+/* Celular: el titular manda. En vez de encoger las 3 líneas hasta que
+   "con Presencia a Nivel Global" quepa entera (quedaba en ~33px y sobraba
+   media pantalla), la letra crece y cada línea se reparte en dos, pareja:
+     Plataforma / de Servicios · Jurídicos y / Contables ·
+     con Presencia / a Nivel Global
+   Los botones se ensanchan y cierran el tracking para no partirse. */
 @media (max-width: 480px) {
-  .section { padding: calc(72px + 2rem) 1rem 5rem; }
-  .heading { font-size: clamp(1.8rem, 10vw, 2.4rem); }
-  .eyebrow { font-size: 0.6rem; letter-spacing: 0.18em; }
+  .section { padding: calc(72px + 1.5rem) 1rem 4.5rem; }
+  .eyebrow { font-size: 0.6rem; letter-spacing: 0.18em; margin-bottom: 1.2rem; }
   .eyebrow::before,
   .eyebrow::after { width: 14px; margin: 0 8px; }
+  .heading {
+    font-size: clamp(2.5rem, 12vw, 3.3rem);
+    line-height: 1.04;
+    margin-bottom: 1.5rem;
+  }
+  .divider { margin-bottom: 2rem; }
+  .ctaPrimary, .ctaSecondary, .ctaCivic {
+    padding: 0.95rem 1.1rem;
+    letter-spacing: 0.12em;
+  }
+  .ctaCivic { font-size: 0.68rem; letter-spacing: 0.07em; }
 }
 
 /* Pantallas muy angostas (≤360px): tracking y guiones aún más cerrados para

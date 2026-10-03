@@ -1069,7 +1069,7 @@ function StepCedula({ onNew, onCasos }) {
   return (
     <div className={`${styles.card} aap-card-cedula`}>
       <p className={styles.cedulaTitle}>Identificación</p>
-      <p className={styles.cedulaHint}>Ingresa tu cédula para iniciar o retomar una consulta. Usamos este dato únicamente para proteger tu consulta, identificar tu proceso y garantizar la confidencialidad de tu información.</p>
+      <p className={styles.cedulaHint}>Ingresa tu cédula para iniciar o retomar una consulta.</p>
       <div className={styles.field} style={{ marginBottom:16 }}>
         <label className={styles.label}>Número de cédula <span className={styles.required}>*</span></label>
         <input className={styles.input} value={cedula}
@@ -3239,9 +3239,6 @@ export default function ChatSection() {
         <h2 className={styles.title}>Consulta <span className={styles.titleGold}>Privada</span></h2>
         <p className={styles.subtitle}>
           Describe tu situación y conecta con profesionales verificados de forma rápida y segura.
-        </p>
-        <p className={styles.subtitle} style={{ marginTop: '0.6rem', fontSize: '0.85rem', opacity: 0.8 }}>
-          Tu información personal permanece protegida durante todo el proceso mediante un sistema de identificación anónima.
         </p>
       </div>
 

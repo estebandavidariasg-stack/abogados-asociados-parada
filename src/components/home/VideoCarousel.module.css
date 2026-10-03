@@ -1,20 +1,24 @@
 /* ── BASE ─────────────────────────────────────────────── */
+/* Va entre el Ranking (blanco) y Testimonios (arranca en blanco): mismo suelo
+   crema del hero, que nace y muere en blanco para no dejar costuras. */
 .section {
   position: relative;
   padding: 6rem 0 5rem;
-  background: var(--ivory);
+  background:
+    radial-gradient(ellipse 70% 40% at 50% 14%, #ffffff 0%, transparent 65%),
+    linear-gradient(180deg, #ffffff 0%, #faf7f2 160px, #efe7d4 100%);
   overflow: hidden;
   --slide-gap: 460px;
 }
 
-/* Funde el fondo ivory (#faf7f2) con el blanco de ChatSection debajo */
+/* Funde el crema con el blanco de Testimonios debajo */
 .section::after {
   content: '';
   position: absolute;
   bottom: 0;
   left: 0;
   right: 0;
-  height: 80px;
+  height: 140px;
   background: linear-gradient(to bottom, transparent, #ffffff);
   pointer-events: none;
   z-index: 1;
@@ -27,48 +31,34 @@
 /* ── ENCABEZADO ───────────────────────────────────────── */
 .header {
   text-align: center;
-  margin-bottom: 4rem;
+  margin-bottom: 2.5rem;
   padding: 0 2rem;
   position: relative;
   z-index: 2;
 }
 
-.eyebrow {
-  display: block;
-  font-family: 'Poppins', sans-serif;
-  font-size: 0.65rem;
-  font-weight: 600;
-  letter-spacing: 0.35em;
-  text-transform: uppercase;
-  color: var(--gold);
-  margin-bottom: 1rem;
-}
-
-.title {
-  font-family: 'Cormorant Garamond', serif;
-  font-size: clamp(2rem, 4vw, 3.2rem);
-  font-weight: 300;
-  color: var(--navy);
-  margin: 0 auto 1rem;
-  max-width: 20ch;            /* fuerza el quiebre en ~2 líneas, no de borde a borde */
-  line-height: 1.15;
-  text-wrap: balance;         /* reparte las líneas de forma pareja */
-}
-
-.title em {
-  font-style: italic;
-  color: var(--gold);
-}
-
-.subtitle {
+/* Aviso para el administrador (los visitantes no ven esta sección). */
+.adminNota {
   font-family: 'Poppins', sans-serif;
   font-size: 0.85rem;
-  font-weight: 300;
+  line-height: 1.7;
   color: var(--muted);
-  max-width: 480px;
+  max-width: 520px;
   margin: 0 auto;
-  line-height: 1.9;
-  letter-spacing: 0.03em;
+  text-wrap: balance;
+}
+.adminNota strong {
+  display: block;
+  margin-bottom: 0.35rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--navy);
+}
+
+@media (max-width: 768px) {
+  .header { padding: 0 1.25rem; margin-bottom: 2rem; }
 }
 
 /* ── FAB SUPERADMIN ───────────────────────────────────── */
@@ -661,4 +651,113 @@
   object-fit: contain !important;
   background: #000;
   border-radius: 0 !important;
+}
+
+/* ═══════════════════════════════════════════════════
+   VIDEO TIPO PUBLICIDAD — el primer video del carrusel aparece grande
+   sobre la página al abrirla, con una X para salir (cerrado = no vuelve).
+═══════════════════════════════════════════════════ */
+.promo {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal, 10000);
+  display: grid;
+  place-items: center;
+  padding: 4vh 4vw;
+  background:
+    radial-gradient(ellipse 55% 45% at 50% 50%, rgba(201, 168, 76, 0.14), transparent 70%),
+    rgba(22, 14, 8, 0.88);
+  cursor: pointer;            /* tocar fuera del video también cierra */
+}
+
+.promoFrame {
+  position: relative;
+  max-width: 92vw;
+  max-height: 86vh;
+  background: #0d0805;
+  cursor: default;
+  box-shadow:
+    0 0 0 1px rgba(201, 168, 76, 0.55),
+    0 30px 90px rgba(0, 0, 0, 0.55),
+    0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+.promoVideo {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+  background: #0d0805;
+}
+
+/* X de cerrar: sobre la esquina del video, crema con aro dorado. */
+.promoCerrar {
+  position: absolute;
+  top: -18px;
+  right: -18px;
+  z-index: 30;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--cream, #fffef1);
+  color: var(--navy, #472f29);
+  border: 1px solid rgba(201, 168, 76, 0.8);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+  cursor: pointer;
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), background 0.2s ease, color 0.2s ease;
+}
+.promoCerrar:hover {
+  background: var(--gold, #c9a84c);
+  color: #28180a;
+  transform: rotate(90deg);
+}
+.promoCerrar:active { transform: rotate(90deg) scale(0.94); }
+.promoCerrar:focus-visible {
+  outline: 2px solid var(--gold, #c9a84c);
+  outline-offset: 3px;
+}
+
+/* Aviso de sonido: el navegador suele exigir que el video arranque en
+   silencio; un toque lo activa. */
+.promoSonido {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  z-index: 30;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.55rem 1rem;
+  min-height: 40px;
+  border-radius: 999px;
+  border: 1px solid rgba(201, 168, 76, 0.7);
+  background: rgba(255, 254, 241, 0.94);
+  color: var(--navy, #472f29);
+  font-family: 'Poppins', sans-serif;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  cursor: pointer;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3);
+  transition: background 0.2s ease, transform 0.2s ease;
+}
+.promoSonido:hover { background: var(--gold-lt, #e8c96a); transform: translateY(-1px); }
+.promoSonido:focus-visible {
+  outline: 2px solid var(--gold, #c9a84c);
+  outline-offset: 3px;
+}
+
+/* En pantallas angostas el video ocupa casi todo el ancho: la X entra en el
+   marco para no quedar cortada contra el borde. */
+@media (max-width: 640px) {
+  .promoCerrar { top: 10px; right: 10px; }
+  .promoSonido { top: 10px; left: 10px; font-size: 0.66rem; letter-spacing: 0.1em; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .promoCerrar, .promoSonido { transition: none; }
+  .promoCerrar:hover { transform: none; }
 }

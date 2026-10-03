@@ -147,12 +147,8 @@ export default function RankingSection() {
       >
         <span className={styles.eyebrow}>Ranking · {periodo}</span>
         <h2 id="ranking-heading" className={styles.heading}>
-          Los profesionales <em>mejor valorados</em>
+          Los Profesionales <em>Mejor Valorados</em>
         </h2>
-        <p className={styles.desc}>
-          Un top cinco que combina la calificación de los clientes con el volumen de consultas
-          atendidas. Toca a un profesional para ver su perfil e iniciar tu consulta.
-        </p>
       </motion.header>
 
       {/* ── Podio 1–3 ── */}

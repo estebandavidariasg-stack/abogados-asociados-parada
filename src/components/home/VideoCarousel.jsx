@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { motion } from 'framer-motion'
-import { headerStagger, eyebrowReveal, fadeUp, VIEWPORT } from '../../lib/motionVariants'
+import { createPortal } from 'react-dom'
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
+import { EASE } from '../../lib/motionVariants'
 import { useAuth } from '../../context/AuthContext'
 import { supabase } from '../../lib/supabase'
 import { compressVideo } from '../../utils/compressMedia'
@@ -11,6 +12,20 @@ import { IconVideoCamera, IconX } from '../shared/Icons'
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
+
+/* El video tipo publicidad sale apenas se abre la página. Cuando el visitante
+   lo cierra (o termina), se recuerda en su navegador y no vuelve a salir.
+   La marca va ligada al video: si el administrador pone otro video de
+   primero, ese nuevo sí sale una vez. Sin almacenamiento (modo privado), el
+   estado en memoria evita que reaparezca en la misma visita. */
+const PROMO_KEY = 'pb_video_promo_cerrado'
+const claveVideo = (v) => String(v?.id ?? v?.video_url ?? '')
+function promoYaCerrado(video) {
+  try { return localStorage.getItem(PROMO_KEY) === claveVideo(video) } catch { return false }
+}
+function marcarPromoCerrado(video) {
+  try { localStorage.setItem(PROMO_KEY, claveVideo(video)) } catch { /* sin almacenamiento */ }
+}
 
 /* ─────────────────────────────────────────────
    Formatea segundos → "m:ss"
@@ -246,6 +261,144 @@ function VideoControls({ videoEl, onEnded }) {
   )
 }
 
+/* ─────────────────────────────────────────────
+   VideoPublicidad – el primer video del carrusel aparece grande sobre la
+   página, tipo anuncio, con una X para salir. Intenta sonar; si el navegador
+   bloquea el audio, arranca en silencio y ofrece "Activar sonido".
+   Se cierra con la X, con Esc, tocando fuera del video o al terminar.
+───────────────────────────────────────────── */
+function VideoPublicidad({ video, ratioInicial, onClose }) {
+  const [videoEl,    setVideoEl]    = useState(null)
+  const [silenciado, setSilenciado] = useState(false)
+  const [ratio,      setRatio]      = useState(ratioInicial || null)
+  const dialogRef = useRef(null)
+  const cerrarRef = useRef(null)
+  const reduce = useReducedMotion()
+
+  const cerrar = useCallback(() => {
+    videoEl?.pause()
+    onClose()
+  }, [videoEl, onClose])
+
+  /* Reproducir con sonido; si la política de autoplay lo impide, en silencio. */
+  useEffect(() => {
+    const v = videoEl
+    if (!v) return
+    const sync = () => setSilenciado(v.muted)
+    v.addEventListener('volumechange', sync)
+    v.muted = false
+    v.play().catch(() => {
+      v.muted = true
+      v.play().catch(() => {})
+    })
+    return () => v.removeEventListener('volumechange', sync)
+  }, [videoEl])
+
+  /* Mientras está abierto: la página no se desplaza y el foco vive en la X. */
+  useEffect(() => {
+    const previo = document.activeElement
+    const overflowPrevio = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    cerrarRef.current?.focus({ preventScroll: true })
+    return () => {
+      document.body.style.overflow = overflowPrevio
+      previo?.focus?.({ preventScroll: true })
+    }
+  }, [])
+
+  /* Esc cierra; Tab no se escapa del video a la página de atrás. */
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key === 'Escape') { cerrar(); return }
+      if (e.key !== 'Tab' || !dialogRef.current) return
+      const focos = dialogRef.current.querySelectorAll('button, input')
+      if (!focos.length) return
+      const primero = focos[0]
+      const ultimo  = focos[focos.length - 1]
+      if (!dialogRef.current.contains(document.activeElement)) { e.preventDefault(); primero.focus() }
+      else if (e.shiftKey && document.activeElement === primero) { e.preventDefault(); ultimo.focus() }
+      else if (!e.shiftKey && document.activeElement === ultimo) { e.preventDefault(); primero.focus() }
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [cerrar])
+
+  // Lo más grande posible sin salirse de la pantalla, respetando la forma
+  // del video (vertical u horizontal).
+  const r = ratio || 16 / 9
+  const tamano = r < 1
+    ? { height: `min(86vh, 920px, calc(92vw / ${r}))` }
+    : { width:  `min(92vw, 1200px, calc(86vh * ${r}))` }
+
+  return createPortal(
+    <motion.div
+      className={styles.promo}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: reduce ? 0 : 0.35, ease: EASE }}
+      onClick={(e) => { if (e.target === e.currentTarget) cerrar() }}
+    >
+      <motion.div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Video de Parada Bridge"
+        className={styles.promoFrame}
+        style={{ ...tamano, aspectRatio: `${r}` }}
+        initial={reduce ? false : { opacity: 0, scale: 0.94, y: 28 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={reduce ? { opacity: 0 } : { opacity: 0, scale: 0.97, y: 14 }}
+        transition={{ duration: 0.6, ease: EASE }}
+      >
+        <button
+          ref={cerrarRef}
+          type="button"
+          className={styles.promoCerrar}
+          onClick={cerrar}
+          aria-label="Cerrar video"
+          title="Cerrar"
+        >
+          <IconX size={14} />
+        </button>
+
+        <video
+          ref={setVideoEl}
+          src={video.video_url}
+          poster={video.poster_url || undefined}
+          className={styles.promoVideo}
+          playsInline
+          preload="auto"
+          onLoadedMetadata={e => {
+            const { videoWidth: w, videoHeight: h } = e.target
+            if (w && h) setRatio(w / h)
+          }}
+        />
+
+        {videoEl && <VideoControls videoEl={videoEl} onEnded={cerrar} />}
+
+        {silenciado && (
+          <button
+            type="button"
+            className={styles.promoSonido}
+            onClick={() => {
+              if (!videoEl) return
+              videoEl.muted = false
+              if (videoEl.volume === 0) videoEl.volume = 1
+            }}
+          >
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true">
+              <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
+            </svg>
+            Activar sonido
+          </button>
+        )}
+      </motion.div>
+    </motion.div>,
+    document.body
+  )
+}
+
 /* ═══════════════════════════════════════════════
    COMPONENTE PRINCIPAL
 ═══════════════════════════════════════════════ */
@@ -266,6 +419,15 @@ export default function VideoCarousel() {
   /* Controla si la sección es visible en viewport (dispara play() y unmute). */
   const [sectionVisible, setSectionVisible] = useState(false)
 
+  /* Video tipo publicidad:
+       'pendiente' → aún no sale; se abre apenas cargan los videos
+       'abierta'   → el video grande está en pantalla
+       'cerrada'   → el visitante lo cerró: el carrusel queda quieto (cartel)
+                     hasta que él mismo le dé play o elija otro video
+       'omitida'   → ya lo había cerrado antes: no sale, y el carrusel del
+                     administrador se comporta como siempre */
+  const [promo, setPromo] = useState('pendiente')
+
   const videoInputRef   = useRef(null)
   const uploadTargetRef = useRef(null)
   const videoRefs       = useRef({})
@@ -279,22 +441,35 @@ export default function VideoCarousel() {
       // Carga pública → endpoint cacheado en el CDN (api/carousel.js), para no
       // pegar a Supabase en cada visita. Tras editar (admin) → directo a
       // Supabase con `fresh=true`, así ve su cambio sin esperar la caché.
-      const res = fresh
-        ? await fetch(
-            `${SUPABASE_URL}/rest/v1/videos_carrusel?select=*&order=orden.asc&activo=eq.true`,
-            { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } }
-          )
-        : await fetch('/api/carousel')
-      const data = await res.json()
+      const directo = (cols) => fetch(
+        `${SUPABASE_URL}/rest/v1/videos_carrusel?select=${cols}&order=orden.asc&activo=eq.true`,
+        { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } }
+      ).then(r => r.json())
+
+      let data = null
+      if (fresh) {
+        data = await directo('*')
+      } else {
+        // Si el endpoint no responde (p. ej. `npm run dev`, donde /api no
+        // existe, o una caída de la función), se lee directo de Supabase con
+        // las mismas columnas públicas para que el video igual aparezca.
+        try {
+          const res = await fetch('/api/carousel')
+          if (res.ok) data = await res.json()
+        } catch { /* cae al directo */ }
+        if (!Array.isArray(data)) data = await directo('id,video_url,poster_url,orden,activo')
+      }
       if (Array.isArray(data) && data.length > 0) setVideos(data)
     } catch { /* sin videos aún */ }
   }
 
   const activeVideos = editing ? editVideos : videos
+  const videoPromo   = videos[0]?.video_url ? videos[0] : null
 
   /* ── IntersectionObserver: detecta cuando la sección está en pantalla ──
      threshold:0.25 → dispara cuando ~1/4 de la sección es visible. Esto controla
-     a la vez si el video activo debe reproducirse (ver effect más abajo).
+     a la vez si el video activo debe reproducirse (solo existe para el
+     administrador; los visitantes no ven la sección).
   */
   useEffect(() => {
     if (!sectionRef.current) return
@@ -305,6 +480,39 @@ export default function VideoCarousel() {
     )
     obs.observe(target)
     return () => obs.disconnect()
+  }, [puedeEditar])
+
+  /* ── Video grande apenas se abre la página ──
+     Un respiro corto para que el inicio alcance a pintarse. Si en ese momento
+     hay otro modal abierto (página bloqueada), espera a que se cierre. */
+  useEffect(() => {
+    if (promo !== 'pendiente' || editing || !videoPromo) return
+    if (promoYaCerrado(videoPromo)) { setPromo('omitida'); return }
+    let t
+    const intentar = () => {
+      if (document.body.style.overflow === 'hidden') { t = setTimeout(intentar, 1000); return }
+      setPromo('abierta')
+    }
+    t = setTimeout(intentar, 900)
+    return () => clearTimeout(t)
+  }, [promo, editing, videoPromo])
+
+  const cerrarPromo = useCallback(() => {
+    marcarPromoCerrado(videoPromo)
+    setPromo('cerrada')
+  }, [videoPromo])
+
+  /* El carrusel suena por su cuenta solo si no hay video grande abierto ni
+     por abrir, y si el visitante no acaba de cerrarlo. */
+  const enLineaAutoplay = sectionVisible && (
+    promo === 'omitida' ||
+    (promo === 'pendiente' && (editing || !videoPromo))
+  )
+
+  /* Elegir un video del carrusel es querer verlo: vuelve el autoplay. */
+  const elegir = useCallback((i) => {
+    setCurrent(i)
+    setPromo(p => (p === 'cerrada' ? 'omitida' : p))
   }, [])
 
   /* ── Detectar ratio del video ── */
@@ -339,7 +547,7 @@ export default function VideoCarousel() {
         return
       }
 
-      if (sectionVisible) {
+      if (enLineaAutoplay) {
         videoEl.muted = false
         videoEl.play().catch(() => {
           // Política de autoplay con audio puede bloquear: forzar mute y reintentar.
@@ -350,7 +558,7 @@ export default function VideoCarousel() {
         videoEl.pause()
       }
     })
-  }, [current, activeVideos.length, sectionVisible])
+  }, [current, activeVideos.length, enLineaAutoplay])
 
   /* ── Avance automático al terminar ── */
   function handleVideoEnded() {
@@ -554,28 +762,36 @@ export default function VideoCarousel() {
 
   const hasVideos = activeVideos.length > 0
 
+  const publicidad = (
+    <AnimatePresence>
+      {promo === 'abierta' && videoPromo && (
+        <VideoPublicidad
+          key="promo"
+          video={videoPromo}
+          ratioInicial={videoRatios[0]}
+          onClose={cerrarPromo}
+        />
+      )}
+    </AnimatePresence>
+  )
+
+  /* Visitantes: la sección de videos ya no se muestra; solo el primer video,
+     grande y tipo publicidad, al abrir la página. */
+  if (!puedeEditar) return publicidad
+
+  /* Administradores: ven el bloque para subir, quitar y ordenar los videos. */
   return (
     <section className={styles.section} ref={sectionRef}>
       <div className={styles.bg} />
 
-      {/* Encabezado */}
-      <motion.div
-        className={styles.header}
-        variants={headerStagger}
-        initial="hidden"
-        whileInView="visible"
-        viewport={VIEWPORT}
-      >
-        <motion.span className={styles.eyebrow} variants={eyebrowReveal}>
-          Plataforma de servicios jurídicos y contables a nivel global
-        </motion.span>
-        <motion.h2 className={styles.title} variants={fadeUp}>
-          Más que una firma, un <em>puente</em> hacia las soluciones profesionales
-        </motion.h2>
-        <motion.p className={styles.subtitle} variants={fadeUp}>
-          Tienes una necesidad; nosotros asignamos al profesional más calificado para tu caso y resolvemos, de manera simple, lo que necesitas.
-        </motion.p>
-      </motion.div>
+      <div className={styles.header}>
+        <p className={styles.adminNota}>
+          <strong>Videos de publicidad</strong>
+          Solo los administradores ven este bloque. A los visitantes el primer
+          video les aparece grande al abrir la página, con una X para cerrar;
+          una vez cerrado no les vuelve a salir.
+        </p>
+      </div>
 
       {/* FAB de edición (superadmin o admin) */}
       {puedeEditar && !editing && (
@@ -627,7 +843,7 @@ export default function VideoCarousel() {
                     visibility:    visible ? 'visible' : 'hidden',
                     cursor:     isActive ? 'default' : 'pointer',
                   }}
-                  onClick={() => !isActive && setCurrent(i)}
+                  onClick={() => !isActive && elegir(i)}
                 >
                   {vid.video_url ? (
                     <>
@@ -652,6 +868,9 @@ export default function VideoCarousel() {
                         playsInline
                         loop={false}
                         onLoadedMetadata={e => handleVideoMeta(e, i)}
+                        /* Si el visitante cerró el video grande y luego le da
+                           play aquí, el carrusel vuelve a su comportamiento normal. */
+                        onPlay={() => setPromo(p => (p === 'cerrada' ? 'omitida' : p))}
                         /* NO ponemos muted aquí; se controla por JS en los effects */
                       />
 
@@ -718,7 +937,7 @@ export default function VideoCarousel() {
               <button
                 key={i}
                 className={`${styles.dot} ${i === current ? styles.dotActive : ''}`}
-                onClick={() => setCurrent(i)}
+                onClick={() => elegir(i)}
                 aria-label={`Video ${i + 1}`}
               />
             ))}
@@ -740,6 +959,8 @@ export default function VideoCarousel() {
         style={{ display: 'none' }}
         onChange={handleVideoUpload}
       />
+
+      {publicidad}
     </section>
   )
 }
