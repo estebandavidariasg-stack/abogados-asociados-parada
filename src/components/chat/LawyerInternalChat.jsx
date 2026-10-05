@@ -50,19 +50,26 @@ function fmtFechaHora(ts) {
    veía. Ahora el hilo se arma contra cualquier
    superadmin y se envía siempre al mismo (el de
    id menor, estable entre sesiones).
+   Las cuentas con rol 'admin' también escriben
+   desde el panel: entran al hilo (si no, su
+   mensaje se guardaba y el profesional no lo
+   veía), pero van DESPUÉS de los superadmins
+   para que el destino siga siendo el mismo.
 ───────────────────────────────────────────── */
 async function fetchAdminIds() {
   const headers = await getAuthHeaders()
   const res = await fetch(
-    `${SUPABASE_URL}/rest/v1/profiles?rol=eq.superadmin&select=id&order=id.asc`,
+    `${SUPABASE_URL}/rest/v1/profiles?rol=in.(superadmin,admin)&select=id,rol&order=id.asc`,
     { headers, signal: timeoutSignal(15000) }
   )
   const data = await res.json()
-  return Array.isArray(data) ? data.map(d => d.id).filter(Boolean) : []
+  if (!Array.isArray(data)) return []
+  const ids = (rol) => data.filter(d => d.id && d.rol === rol).map(d => d.id)
+  return [...ids('superadmin'), ...ids('admin')]
 }
 
 export default function LawyerInternalChat({ miId }) {
-  const [adminIds,  setAdminIds]  = useState([])     // todas las cuentas superadmin
+  const [adminIds,  setAdminIds]  = useState([])     // cuentas del panel: superadmins primero, luego admins
   const adminId = adminIds[0] || null                // destino de lo que envía el profesional
   const [messages,  setMessages]  = useState([])
   const [texto,     setTexto]     = useState('')

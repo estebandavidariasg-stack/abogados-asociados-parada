@@ -174,18 +174,20 @@ export default function AdminPage() {
     setActiveTab('chat_interno')
   }
 
-  // Hay más de una cuenta superadmin y los profesionales escriben a cualquiera
-  // de ellas: los no leídos se cuentan contra TODAS (misma regla que el chat
-  // interno). Requiere la política de lectura de docs/sql/admin-roles-2026-09-17.sql;
-  // sin ella la consulta devuelve solo lo propio, como antes.
+  // Hay más de una cuenta de panel (superadmin y admin) y los profesionales
+  // escriben a cualquiera de ellas: los no leídos se cuentan contra TODAS (misma
+  // regla que el chat interno). Las políticas de lectura del panel sobre
+  // mensajes_internos ya están en la base ("internos ver superadmin", que
+  // acepta también 'admin').
+  const esPanel = profile?.rol === 'superadmin' || profile?.rol === 'admin'
   const [adminIds, setAdminIds] = useState([])
   useEffect(() => {
-    if (loading || !user?.id || profile?.rol !== 'superadmin') return
+    if (loading || !user?.id || !esPanel) return
     let alive = true
     ;(async () => {
       try {
         const headers = await getAuthHeaders()
-        const r = await fetch(`${SUPABASE_URL}/rest/v1/profiles?rol=eq.superadmin&select=id&order=id.asc`, { headers })
+        const r = await fetch(`${SUPABASE_URL}/rest/v1/profiles?rol=in.(superadmin,admin)&select=id&order=id.asc`, { headers })
         const d = await r.json()
         const ids = Array.isArray(d) ? d.map(x => x.id).filter(Boolean) : []
         if (alive) setAdminIds(ids.includes(user.id) ? ids : [user.id, ...ids])
@@ -196,7 +198,7 @@ export default function AdminPage() {
 
   // Mensajes internos sin leer → badge del riel (poll 30s, pausado en oculto).
   useEffect(() => {
-    if (loading || !user?.id || profile?.rol !== 'superadmin') return
+    if (loading || !user?.id || !esPanel) return
     let alive = true
     const destinos = (adminIds.length ? adminIds : [user.id]).join(',')
     async function tick() {
@@ -361,16 +363,25 @@ export default function AdminPage() {
     marcarProcesando(id, 'aprobando')
     try {
       const headers = await getAuthHeaders()
-      await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${id}`, {
-        method: 'PATCH', headers,
+      // Se pide la fila de vuelta y se comprueba: antes el resultado no se
+      // miraba, y si la base rechazaba el cambio (p. ej. el trigger que protege
+      // `aprobado`) igual salían la bienvenida, el correo y el aviso "Aprobado"
+      // con la cuenta todavía pendiente.
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${id}&select=id,aprobado`, {
+        method: 'PATCH', headers: { ...headers, Prefer: 'return=representation' },
         body: JSON.stringify({ aprobado: true }),
       })
+      const filas = await res.json().catch(() => null)
+      if (!res.ok || !Array.isArray(filas) || filas[0]?.aprobado !== true) {
+        setAprobarError(`No se pudo aprobar${filas?.message ? `: ${filas.message}` : ''}. La cuenta sigue pendiente.`)
+        return
+      }
       // Compromiso al chat interno (+ adjunto opcional). Best-effort.
       let avisoAdjunto = ''
       try { await enviarCompromisoInterno(id, headers, file, rol) }
       catch (err) { avisoAdjunto = ` ${err.message || 'El adjunto no se pudo enviar.'}` }
-      // Mismo texto por correo (type 'aprobacion'; el endpoint valida superadmin
-      // y resuelve el correo server-side). Best-effort: no bloquea la aprobación.
+      // Mismo texto por correo (type 'aprobacion'; el endpoint valida cuenta de
+      // panel y resuelve el correo server-side). Best-effort: no bloquea la aprobación.
       try {
         await fetch('/api/notify', {
           method: 'POST',
@@ -1091,7 +1102,7 @@ export default function AdminPage() {
               <span className={styles.brandMark}>PB</span>
               <div className={styles.brandText}>
                 <strong>Administración</strong>
-                <small className={styles.brandRole}>Superadmin</small>
+                <small className={styles.brandRole}>{esSuperadmin ? 'Superadmin' : 'Admin'}</small>
               </div>
             </div>
 

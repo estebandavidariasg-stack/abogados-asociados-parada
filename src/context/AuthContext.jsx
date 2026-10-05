@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from 'react'
+import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 
 const AuthContext = createContext({})
@@ -43,6 +43,35 @@ export function AuthProvider({ children }) {
     }, 50 * 60 * 1000)
 
     return () => clearInterval(interval)
+  }, [])
+
+  // La sesión vive en localStorage, que comparten TODAS las pestañas del
+  // navegador. Si en otra pestaña se cerraba sesión o se entraba con otra
+  // cuenta, esta seguía con el `user` viejo en memoria mientras sus peticiones
+  // ya salían con el token nuevo: todo insert con `from_id = <cuenta vieja>` lo
+  // rechazaba la base ("Sin permiso para enviar" en el chat interno, al probar
+  // admin y profesional en el mismo navegador). Cuando la cuenta guardada deja
+  // de ser la de esta pestaña, se recarga para arrancar con la sesión real.
+  //
+  // Solo con el evento `storage`, que el navegador entrega a las OTRAS
+  // pestañas y nunca a la que escribe. A propósito NO se revisa al volver a
+  // la pestaña: el registro (RegisterModal) y la recuperación de contraseña
+  // inician sesión por su cuenta, sin pasar por este contexto, y recargar al
+  // volver del selector de archivos les borraría el formulario a medias.
+  // El refresco de token de la MISMA cuenta no toca `sb_user`: no recarga.
+  const idEnMemoria = useRef(null)
+  idEnMemoria.current = user?.id || null
+  useEffect(() => {
+    function onStorage(e) {
+      if (e.key !== null && e.key !== 'sb_user') return
+      const mio = idEnMemoria.current
+      if (!mio) return   // pestaña sin sesión propia: nada que desmentir
+      let idGuardado = null
+      try { idGuardado = JSON.parse(localStorage.getItem('sb_user') || 'null')?.id || null } catch { /* sb_user ilegible = sin sesión */ }
+      if (idGuardado !== mio) window.location.reload()
+    }
+    window.addEventListener('storage', onStorage)
+    return () => window.removeEventListener('storage', onStorage)
   }, [])
 
   async function signUp({ nombre, apellido, username, telefono, email, password }) {

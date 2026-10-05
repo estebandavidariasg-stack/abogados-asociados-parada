@@ -57,6 +57,14 @@ export function parseRevision(m) {
   }
 }
 
+// Título + fecha de las tarjetas del chat interno. Comparten renglón si caben
+// (título a la izquierda, fecha a la derecha); en celular la fecha baja debajo
+// del título. Antes la fecha iba con `nowrap` y se salía de la tarjeta.
+const CABECERA_TARJETA = {
+  flex: 1, minWidth: 0, display: 'flex', flexWrap: 'wrap',
+  alignItems: 'baseline', justifyContent: 'space-between', gap: '2px 10px',
+}
+
 // Tarjeta COMPACTA de "Solicitud de revisión" compartida por ambos lados del
 // chat interno: una sola tarjeta chica con los datos en línea. Si se pasa
 // `onVerConversacion` (lado admin) y el mensaje trae la sala, muestra el botón
@@ -71,8 +79,10 @@ export function RevisionCard({ rev, fecha, styles, onVerConversacion }) {
             <path d="m9 15 2 2 4-4" />
           </svg>
         </span>
-        <span className={styles.revisionTitle}>Solicitud de revisión</span>
-        <span style={{ marginLeft: 'auto', fontSize: '0.66rem', opacity: 0.6, whiteSpace: 'nowrap' }}>{fecha}</span>
+        <span style={CABECERA_TARJETA}>
+          <span className={styles.revisionTitle}>Solicitud de revisión</span>
+          <span style={{ fontSize: '0.66rem', opacity: 0.6 }}>{fecha}</span>
+        </span>
       </div>
       <p style={{ margin: 0, fontSize: '0.76rem', lineHeight: 1.5 }}>
         {rev.profesional && <><strong>{rev.profesional}</strong> pide revisar </>}
@@ -141,11 +151,13 @@ export function BienvenidaCard({ b, fecha }) {
               <path d="M20 6 9 17l-5-5" />
             </svg>
           </span>
-          <strong style={{
-            fontFamily: "'Cinzel', Georgia, serif", fontSize: '0.95rem',
-            color: '#6d3c1b', letterSpacing: '0.01em',
-          }}>Bienvenido a Parada Bridge</strong>
-          <span style={{ marginLeft: 'auto', fontSize: '0.64rem', color: '#8a7663', whiteSpace: 'nowrap' }}>{fecha}</span>
+          <span style={CABECERA_TARJETA}>
+            <strong style={{
+              fontFamily: "'Cinzel', Georgia, serif", fontSize: '0.95rem',
+              color: '#6d3c1b', letterSpacing: '0.01em',
+            }}>Bienvenido a Parada Bridge</strong>
+            <span style={{ fontSize: '0.64rem', color: '#8a7663' }}>{fecha}</span>
+          </span>
         </div>
 
         <p style={{ margin: '0 0 10px', fontSize: '0.84rem', lineHeight: 1.55, color: '#472f29' }}>
@@ -193,9 +205,9 @@ export default function AdminInternalChat({ miId, initialSelectedId, onOpenRoom 
   // Hay más de una cuenta superadmin. Los profesionales le escribían a una u
   // otra (elegida al azar por `limit=1`), así que la cuenta con la que entraba
   // el admin no veía la mitad de los hilos. El hilo y los no leídos se arman
-  // contra TODAS las cuentas superadmin; miId sigue siendo el remitente.
-  // (Leer/marcar los mensajes dirigidos a la otra cuenta exige las políticas
-  // de docs/sql/admin-roles-2026-09-17.sql; sin ellas se ve solo lo propio.)
+  // contra TODAS las cuentas del panel (superadmin y admin); miId sigue siendo
+  // el remitente. Las políticas de mensajes_internos ya lo permiten: cualquier
+  // cuenta envía a su nombre, y las de panel leen y marcan leído todo.
   const [adminIds, setAdminIds] = useState(() => (miId ? [miId] : []))
   const adminIdsRef = useRef(adminIds)
   useEffect(() => { adminIdsRef.current = adminIds }, [adminIds])
@@ -206,7 +218,7 @@ export default function AdminInternalChat({ miId, initialSelectedId, onOpenRoom 
       try {
         const headers = await getAuthHeaders()
         const r = await fetch(
-          `${SUPABASE_URL}/rest/v1/profiles?rol=eq.superadmin&select=id&order=id.asc`,
+          `${SUPABASE_URL}/rest/v1/profiles?rol=in.(superadmin,admin)&select=id&order=id.asc`,
           { headers, signal: timeoutSignal(15000) }
         )
         const d = await r.json()
@@ -508,8 +520,14 @@ export default function AdminInternalChat({ miId, initialSelectedId, onOpenRoom 
       if (!res.ok) {
         const detail = await res.text().catch(() => '')
         console.error('Error enviando mensaje interno:', res.status, detail)
+        // 401/403 casi nunca es la política: es que la sesión de esta pestaña
+        // ya no es la de la cuenta que escribe (venció, o se entró con otra
+        // cuenta en el mismo navegador). Se muestra el código real del servidor
+        // para no mandar a nadie a revisar lo que no es.
+        let codigo = ''
+        try { codigo = JSON.parse(detail)?.code || '' } catch { /* respuesta sin JSON */ }
         throw new Error(res.status === 401 || res.status === 403
-          ? 'Sin permiso para enviar (revisa las políticas de mensajes_internos).'
+          ? `No se pudo enviar: la sesión de esta pestaña no es válida${codigo ? ` (${codigo})` : ''}. Recarga la página y vuelve a entrar.`
           : `No se pudo enviar (HTTP ${res.status}). Intenta de nuevo.`)
       }
       setMessages(prev => prev.map(m => (m.id === id ? { ...m, _enviando: false } : m)))

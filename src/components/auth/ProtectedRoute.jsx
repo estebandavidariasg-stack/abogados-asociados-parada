@@ -5,11 +5,13 @@ import { useEffect } from 'react'
 export default function ProtectedRoute({ children, requireAdmin = false }) {
   const { user, profile, loading } = useAuth()
   const navigate = useNavigate()
+  // "Admin" = cuenta de panel: superadmin o admin.
+  const esPanel = profile?.rol === 'superadmin' || profile?.rol === 'admin'
 
   useEffect(() => {
     if (loading) return
     if (!user) { navigate('/'); return }
-    if (requireAdmin && profile?.rol !== 'superadmin') { navigate('/'); return }
+    if (requireAdmin && !esPanel) { navigate('/'); return }
   }, [user, profile, loading, navigate, requireAdmin])
 
   // Mientras carga, mostrar pantalla de espera
@@ -37,7 +39,7 @@ export default function ProtectedRoute({ children, requireAdmin = false }) {
   )
 
   if (!user) return null
-  if (requireAdmin && profile?.rol !== 'superadmin') return null
+  if (requireAdmin && !esPanel) return null
 
   return children
 }

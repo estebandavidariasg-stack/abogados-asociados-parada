@@ -194,7 +194,7 @@ export default function EnviarAFirmar({ contrato, abogadoId, onClose, onDone, mo
     telefono: profile?.celular || profile?.telefono || '',
     correo: user?.email || '',
     ciudad: profile?.ciudad || '',
-    rol: profile?.rol === 'contador' ? 'contador' : profile?.rol === 'superadmin' ? 'administrador' : 'abogado',
+    rol: profile?.rol === 'contador' ? 'contador' : (profile?.rol === 'superadmin' || profile?.rol === 'admin') ? 'administrador' : 'abogado',
   }
   const [firmantes, setFirmantes] = useState(
     esChat

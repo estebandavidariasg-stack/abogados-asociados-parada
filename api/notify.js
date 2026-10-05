@@ -6,6 +6,11 @@ import { getCallerProfile, lawyerAssignedToRoom } from './_lib/adminAuth.js'
 
 const ADMIN_NOTIFY_EMAIL = process.env.ADMIN_NOTIFY_EMAIL || 'abogadosyasociados.parada@gmail.com'
 
+// Cuenta de panel: 'superadmin' o 'admin'. El admin hace todo lo operativo;
+// lo único exclusivo del superadmin es gestionar cuentas de panel y roles
+// (crear_admin, editar_cuenta_panel, borrar_cuenta_panel), que NO usan esto.
+const esPanel = (c) => c?.rol === 'superadmin' || c?.rol === 'admin'
+
 // Escapa texto del usuario antes de meterlo en el HTML del correo (evita que
 // un mensaje con < > rompa el layout o inyecte marcado).
 function esc(s) {
@@ -679,10 +684,10 @@ export default async function handler(req, res) {
     const ctaUrl = buildCtaUrl(recipientRole, codigoReferencia)
 
     // ── Aviso al profesional cuando el admin aprueba su cuenta ──
-    // Acción sensible (suplantable para phishing): exige superadmin.
+    // Acción sensible (suplantable para phishing): exige cuenta de panel.
     if (type === 'account_approved') {
       const caller = await getCallerProfile(req)
-      if (caller?.rol !== 'superadmin') {
+      if (!esPanel(caller)) {
         return res.status(401).json({ error: 'No autorizado.' })
       }
       const { lawyerId } = data || {}
@@ -708,10 +713,10 @@ export default async function handler(req, res) {
     }
 
     // ── Aprobación + compromiso (lo dispara el panel al aprobar) ──
-    // Solo superadmin; el correo del profesional se resuelve server-side.
+    // Solo cuenta de panel; el correo del profesional se resuelve server-side.
     if (type === 'aprobacion') {
       const caller = await getCallerProfile(req)
-      if (caller?.rol !== 'superadmin') {
+      if (!esPanel(caller)) {
         return res.status(401).json({ error: 'No autorizado.' })
       }
       const { lawyerId } = data || {}
@@ -958,12 +963,13 @@ export default async function handler(req, res) {
     }
 
     // ── "El administrador te escribió" (chat interno) ──
-    // Exige superadmin. Throttle server-side: máx. 1 correo por hora por
+    // Exige cuenta de panel (superadmin o admin: los dos escriben en el chat
+    // interno). Throttle server-side: máx. 1 correo por hora por
     // destinatario — si en la última hora el admin ya le había escrito otro
     // mensaje, se asume avisado y NO se reenvía (el chat interno es de ráfagas).
     if (type === 'internal_message') {
       const caller = await getCallerProfile(req)
-      if (caller?.rol !== 'superadmin') {
+      if (!esPanel(caller)) {
         return res.status(401).json({ error: 'No autorizado.' })
       }
       const { toId } = data || {}
@@ -1000,14 +1006,14 @@ export default async function handler(req, res) {
     }
 
     // ── Aviso al profesional cuando el admin rechaza su solicitud ──
-    // También sensible → exige superadmin. Con `data.eliminarCuenta: true`
+    // También sensible → exige cuenta de panel. Con `data.eliminarCuenta: true`
     // (rechazo de una SOLICITUD PENDIENTE), además borra el perfil y el
     // usuario de auth con la service-role: así el correo queda libre y la
     // persona puede registrarse de nuevo corrigiendo sus datos. Defensa:
     // NUNCA se borra una cuenta con aprobado=true (revocar ≠ rechazar).
     if (type === 'account_rejected') {
       const caller = await getCallerProfile(req)
-      if (caller?.rol !== 'superadmin') {
+      if (!esPanel(caller)) {
         return res.status(401).json({ error: 'No autorizado.' })
       }
       const { lawyerId, eliminarCuenta } = data || {}
@@ -1028,6 +1034,12 @@ export default async function handler(req, res) {
       } catch { /* perfil queda null */ }
       if (!perfil) {
         return res.status(404).json({ error: 'Perfil no encontrado.' })
+      }
+      // Las cuentas de panel no se rechazan ni se borran por aquí: quitarlas es
+      // gestión de roles (borrar_cuenta_panel, solo superadmin). Sin este
+      // candado un admin podría eliminar a un superadmin por esta vía.
+      if (perfil.rol === 'superadmin' || perfil.rol === 'admin') {
+        return res.status(403).json({ error: 'Las cuentas de administración se gestionan desde Roles.' })
       }
 
       // Correo de rechazo (best-effort: si no hay email, el borrado igual procede).
@@ -1141,7 +1153,7 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: 'Gestor inválido.' })
       }
       const caller = await getCallerProfile(req)
-      if (caller?.rol !== 'superadmin') {
+      if (!esPanel(caller)) {
         return res.status(401).json({ error: 'No autorizado.' })
       }
       if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
@@ -1229,10 +1241,10 @@ export default async function handler(req, res) {
     }
 
     // ── Ficha de contacto cruzada (cliente ↔ abogado) ──
-    // Acción sensible (envía datos personales) → exige superadmin.
+    // Acción sensible (envía datos personales) → exige cuenta de panel.
     if (type === 'contact_card') {
       const caller = await getCallerProfile(req)
-      if (caller?.rol !== 'superadmin') {
+      if (!esPanel(caller)) {
         return res.status(403).json({ error: 'No autorizado.' })
       }
       const { lawyerData, clientData } = req.body || {}
@@ -1266,10 +1278,10 @@ export default async function handler(req, res) {
 
     // ── Resultado de un proyecto de ley → correo a quienes votaron ──
     // Acción sensible: envía correo de marca a direcciones arbitrarias del body
-    // + adjunta un PDF. Exige superadmin (igual que contact_card).
+    // + adjunta un PDF. Exige cuenta de panel (igual que contact_card).
     if (type === 'proyecto_resultado') {
       const caller = await getCallerProfile(req)
-      if (caller?.rol !== 'superadmin') {
+      if (!esPanel(caller)) {
         return res.status(401).json({ error: 'No autorizado.' })
       }
 
@@ -1419,13 +1431,13 @@ export default async function handler(req, res) {
       }
 
       // Autorización por evento:
-      //  · cierre/pago: solo superadmin (los dispara el panel del admin).
+      //  · cierre/pago: solo cuenta de panel (los dispara el panel del admin).
       //  · en_curso: profesional autenticado Y asignado a esa sala.
       //  · inicio: flujo ANÓNIMO del cliente (igual que new_consultation); el
       //    dedupe por sala limita el abuso a 1 correo por sala real con código.
       if (evento === 'cierre' || evento === 'pago' || evento === 'rechazado' || evento === 'no_exitoso') {
         const caller = await getCallerProfile(req)
-        if (caller?.rol !== 'superadmin') {
+        if (!esPanel(caller)) {
           return res.status(401).json({ error: 'No autorizado.' })
         }
       } else if (evento === 'en_curso') {
@@ -1607,10 +1619,10 @@ export default async function handler(req, res) {
     // profesional con service role (no se expone en el cliente).
     if (type === 'chat_inactivity') {
       // Acción de admin (tab Alertas): envía correo al profesional Y sella
-      // notificado_at (ancla la barrera de 4h). Debe exigir superadmin — antes
+      // notificado_at (ancla la barrera de 4h). Debe exigir cuenta de panel — antes
       // era invocable sin auth, permitiendo manipular el reloj de reasignación.
       const caller = await getCallerProfile(req)
-      if (caller?.rol !== 'superadmin') {
+      if (!esPanel(caller)) {
         return res.status(401).json({ error: 'No autorizado.' })
       }
       const { lawyerId, roomId, clientNombre, area, createdAt } = data || {}

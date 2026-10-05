@@ -483,7 +483,7 @@ async function handleCensura(req, res) {
 
   // Quién llama: profesional autenticado, o cliente anónimo de una sala abierta.
   const perfil = await getCallerProfile(req);
-  if (perfil && !['abogado', 'contador', 'superadmin'].includes(perfil.rol)) {
+  if (perfil && !['abogado', 'contador', 'superadmin', 'admin'].includes(perfil.rol)) {
     res.status(403).json({ error: 'No autorizado' }); return;
   }
   try {

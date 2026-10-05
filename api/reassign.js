@@ -1,7 +1,8 @@
 /* ────────────────────────────────────────────────────────────────────────
    POST /api/reassign
    El admin confirma reasignar una sala inactiva a otro abogado disponible.
-   Seguridad: solo superadmin. Valida que el abogado elegido esté aprobado.
+   Seguridad: solo cuenta de panel (superadmin o admin). Valida que el abogado
+   elegido esté aprobado.
 
    Acciones (service-role):
      1. Quita al abogado inactivo de la sala (si vino oldLawyerId)
@@ -24,9 +25,9 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Faltan datos (roomId, newLawyerId).' })
   }
 
-  // 1) Solo superadmin.
+  // 1) Solo cuenta de panel (superadmin o admin).
   const caller = await getCallerProfile(req)
-  if (caller?.rol !== 'superadmin') {
+  if (caller?.rol !== 'superadmin' && caller?.rol !== 'admin') {
     // Autenticado pero sin permiso → 403 (no 401).
     return res.status(403).json({ error: 'No autorizado.' })
   }

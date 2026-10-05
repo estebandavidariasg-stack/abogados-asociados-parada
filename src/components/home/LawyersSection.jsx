@@ -46,7 +46,8 @@ export default function LawyersSection() {
   const [ciudad, setCiudad]             = useState('')
   const [shouldFetch, setShouldFetch]   = useState(false)
   const { profile }                     = useAuth()
-  const isSuperAdmin                    = profile?.rol === 'superadmin'
+  // Vista de administración del listado: superadmin o admin, sin distinción.
+  const isSuperAdmin                    = profile?.rol === 'superadmin' || profile?.rol === 'admin'
 
   // Performance: esta seccion esta debajo del hero, asi que diferimos perfiles
   // y fotos remotas hasta que el usuario este cerca de verla.

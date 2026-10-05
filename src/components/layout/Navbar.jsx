@@ -38,7 +38,9 @@ export default function Navbar({ onLogin, onRegister }) {
     ?? (profile?.username ? `@${profile.username}` : null)
     ?? (user?.user_metadata?.username ? `@${user.user_metadata.username}` : null)
     ?? 'Usuario'
-  const isSuperAdmin = profile?.rol === 'superadmin'
+  // Superadmin o admin: los dos entran al panel (antes el admin no tenía enlace
+  // y solo llegaba escribiendo /admin a mano).
+  const isSuperAdmin = profile?.rol === 'superadmin' || profile?.rol === 'admin'
   const perfilHref =
     profile?.rol === 'contador' ? '/perfil-contador'
     : profile?.rol === 'gestor' ? '/perfil-gestor'
