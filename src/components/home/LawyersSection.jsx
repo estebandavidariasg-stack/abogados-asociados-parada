@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
 import { headerStagger, eyebrowReveal, fadeUp, VIEWPORT } from '../../lib/motionVariants'
 import LawyerCard from './LawyerCard'
+import FirmaCard from './FirmaCard'
 import styles from './LawyersSection.module.css'
 import { useAuth } from '../../context/AuthContext'
 import { getAuthHeaders } from '../../lib/supabase'
@@ -40,7 +41,7 @@ export default function LawyersSection() {
   const sectionRef = useRef(null)
   const [lawyers, setLawyers]           = useState([])
   const [loading, setLoading]           = useState(true)
-  const [profesion, setProfesion]       = useState('abogado')   // 'abogado' | 'contador'
+  const [profesion, setProfesion]       = useState('abogado')   // 'abogado' | 'contador' | 'firma'
   const [areaDerecho, setAreaDerecho]   = useState('')
   const [departamento, setDepartamento] = useState('')
   const [ciudad, setCiudad]             = useState('')
@@ -48,6 +49,10 @@ export default function LawyersSection() {
   const { profile }                     = useAuth()
   // Vista de administración del listado: superadmin o admin, sin distinción.
   const isSuperAdmin                    = profile?.rol === 'superadmin' || profile?.rol === 'admin'
+  // Las firmas comparten esta cinta con abogados y contadores. Cada una es UNA
+  // tarjeta (firma + Director + equipo); sus miembros no se repiten sueltos.
+  const esFirmas = profesion === 'firma'
+  const PLURAL   = { abogado: 'abogados', contador: 'contadores', firma: 'firmas' }[profesion]
 
   // Performance: esta seccion esta debajo del hero, asi que diferimos perfiles
   // y fotos remotas hasta que el usuario este cerca de verla.
@@ -81,7 +86,9 @@ export default function LawyersSection() {
         // evita pegar a Supabase en cada carga del home. Superadmin: directo a
         // Supabase (mismo truco que VideoCarousel con fetchVideos(true)), para
         // que vea al profesional que acaba de aprobar sin esperar la caché.
-        const res = isSuperAdmin
+        // Las firmas llegan siempre armadas del endpoint (firma + Director +
+        // equipo): no hay lectura directa equivalente.
+        const res = isSuperAdmin && !esFirmas
           ? await fetch(
               `${SUPABASE_URL}/rest/v1/profiles?aprobado=eq.true&rol=eq.${profesion}&select=${PUBLIC_COLS}`,
               { headers: await getAuthHeaders() }
@@ -95,18 +102,25 @@ export default function LawyersSection() {
         }
         const json = await res.json()
         if (cancelled) return
-        const lista = Array.isArray(json) ? json : []
+        let lista = Array.isArray(json) ? json : []
         // La lectura directa del superadmin no trae las consultas exitosas
-        // (las agrega el endpoint): se toman de ahí para que vea la misma
-        // tarjeta que el visitante. Si falla, la tarjeta va sin la cifra.
-        if (isSuperAdmin && lista.length) {
+        // ni a qué firma pertenece cada quien (los agrega el endpoint): se
+        // toman de ahí para que vea la misma cinta que el visitante. Si falla,
+        // la tarjeta va sin la cifra.
+        if (isSuperAdmin && !esFirmas && lista.length) {
           try {
             const pub = await fetch(`/api/professionals?rol=${profesion}`).then(r => (r.ok ? r.json() : []))
-            const exitosas = new Map((Array.isArray(pub) ? pub : []).map(p => [p.id, p.consultas_exitosas]))
-            for (const p of lista) p.consultas_exitosas = exitosas.get(p.id)
+            const meta = new Map((Array.isArray(pub) ? pub : []).map(p => [p.id, p]))
+            for (const p of lista) {
+              p.consultas_exitosas = meta.get(p.id)?.consultas_exitosas
+              p.firma = meta.get(p.id)?.firma
+            }
           } catch { /* sin cifra */ }
           if (cancelled) return
         }
+        // Quien pertenece a una firma sale dentro de la tarjeta de su firma,
+        // no como tarjeta suelta (la consulta sí lo sigue ofreciendo).
+        if (!esFirmas) lista = lista.filter(p => !p.firma)
         setLawyers(lista)
       } catch (err) {
         console.error('[LawyersSection] fetch error:', err)
@@ -118,11 +132,14 @@ export default function LawyersSection() {
     }
     fetchLawyers()
     return () => { cancelled = true }
-  }, [profesion, shouldFetch, isSuperAdmin])
+  }, [profesion, shouldFetch, isSuperAdmin, esFirmas])
 
   // Al cambiar de profesión, resetear filtros secundarios
   function changeProfesion(p) {
     if (p === profesion) return
+    // La lista anterior es de otro tipo (personas ↔ firmas): se vacía ya para
+    // que no se pinte con la tarjeta equivocada mientras llega la nueva.
+    setLawyers([]); setLoading(true)
     setProfesion(p)
     setAreaDerecho(''); setDepartamento(''); setCiudad('')
   }
@@ -205,6 +222,13 @@ export default function LawyersSection() {
         >
           Contadores
         </button>
+        <button
+          type="button"
+          className={`${styles.profesionChip} ${esFirmas ? styles.profesionChipActive : ''}`}
+          onClick={() => changeProfesion('firma')}
+        >
+          Firmas
+        </button>
       </div>
 
       {/* ── Filtros — siempre visibles para que la UI sea consistente entre
@@ -266,7 +290,9 @@ export default function LawyersSection() {
         {/* Contador de resultados */}
         {hasFilters && (
           <p className={styles.filterCount}>
-            {filtered.length} {profesion === 'contador'
+            {filtered.length} {esFirmas
+              ? `firma${filtered.length !== 1 ? 's' : ''} encontrada${filtered.length !== 1 ? 's' : ''}`
+              : profesion === 'contador'
               ? `contador${filtered.length !== 1 ? 'es' : ''} encontrado${filtered.length !== 1 ? 's' : ''}`
               : `abogado${filtered.length !== 1 ? 's' : ''} encontrado${filtered.length !== 1 ? 's' : ''}`}
           </p>
@@ -276,14 +302,14 @@ export default function LawyersSection() {
       {/* ── Grid ── */}
       {loading ? (
         <p className={styles.empty}>
-          Cargando {profesion === 'contador' ? 'contadores' : 'abogados'}...
+          Cargando {PLURAL}...
         </p>
       ) : filtered.length === 0 ? (
         <div className={styles.emptyWrap}>
           <p className={styles.empty}>
             {hasFilters
-              ? `No hay ${profesion === 'contador' ? 'contadores' : 'abogados'} que coincidan con los filtros.`
-              : `Próximamente se añadirán ${profesion === 'contador' ? 'contadores' : 'abogados'} a esta sección.`}
+              ? `No hay ${PLURAL} que coincidan con los filtros.`
+              : `Próximamente se añadirán ${PLURAL} a esta sección.`}
           </p>
           {hasFilters && (
             <button className={styles.filterClear} onClick={clearFilters}>
@@ -292,7 +318,7 @@ export default function LawyersSection() {
           )}
         </div>
       ) : (
-        <ProfesionalesCinta items={filtered} isSuperAdmin={isSuperAdmin} calm={!!hasFilters} />
+        <ProfesionalesCinta items={filtered} isSuperAdmin={isSuperAdmin} calm={!!hasFilters} firmas={esFirmas} />
       )}
     </section>
   )
@@ -306,7 +332,7 @@ export default function LawyersSection() {
    activos, se reduce el movimiento, o hay pocas tarjetas para llenar la fila,
    se desactiva el bucle: la fila queda quieta pero el arrastre y las flechas
    siguen desplazándola. */
-function ProfesionalesCinta({ items, isSuperAdmin, calm }) {
+function ProfesionalesCinta({ items, isSuperAdmin, calm, firmas = false }) {
   const reduce = useReducedMotion()
   const wrapRef = useRef(null)
   const [anchoVisible, setAnchoVisible] = useState(0)
@@ -333,27 +359,35 @@ function ProfesionalesCinta({ items, isSuperAdmin, calm }) {
   const loop = !reduce && !calm && desborda && items.length >= 2
   const { scrollerRef, step, handlers } = useCarrusel({ speed: 34, loop })
   const copias = loop ? [0, 1] : [0]
+  // Las firmas arrancan siendo pocas: si caben todas, la fila se centra y no
+  // finge desplazarse (sin desvanecido en los bordes, que tapaba media primera
+  // tarjeta, ni flechas que no mueven nada).
+  const quieta = firmas && anchoVisible > 0 && !desborda
 
   return (
     <div className={styles.cintaWrap} ref={wrapRef}>
-      <div className={styles.cinta} ref={scrollerRef} {...handlers}>
+      <div className={`${styles.cinta} ${quieta ? styles.cintaQuieta : ''}`} ref={scrollerRef} {...handlers}>
         <div className={styles.track}>
           {copias.flatMap((copia) =>
             items.map((l) => (
               <div className={styles.slide} key={`${copia}-${l.id}`}>
-                <LawyerCard
-                  lawyer={l}
-                  isSuperAdmin={isSuperAdmin}
-                  reveal={false}
-                  ghost={copia === 1}
-                />
+                {firmas ? (
+                  <FirmaCard firma={l} reveal={false} ghost={copia === 1} />
+                ) : (
+                  <LawyerCard
+                    lawyer={l}
+                    isSuperAdmin={isSuperAdmin}
+                    reveal={false}
+                    ghost={copia === 1}
+                  />
+                )}
               </div>
             ))
           )}
         </div>
       </div>
 
-      <CintaFlechas onPrev={() => step(-1)} onNext={() => step(1)} />
+      {!quieta && <CintaFlechas onPrev={() => step(-1)} onNext={() => step(1)} />}
     </div>
   )
 }

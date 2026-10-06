@@ -234,10 +234,11 @@ async function handleAbogado(req, res) {
   let { mensajes } = req.body || {};
   const { adjuntos, roomId, accion, memoria } = req.body || {};
 
-  // Solo profesionales autenticados (abogado/contador).
+  // Solo profesionales autenticados (abogado/contador) y las firmas, que
+  // atienden consultas igual que un profesional (resumen/análisis de la sala).
   const perfil = await getCallerProfile(req);
   if (!perfil) { res.status(401).json({ error: 'No autenticado' }); return; }
-  if (perfil.rol !== 'abogado' && perfil.rol !== 'contador') {
+  if (perfil.rol !== 'abogado' && perfil.rol !== 'contador' && perfil.rol !== 'firma') {
     res.status(403).json({ error: 'No autorizado' }); return;
   }
   // Solo profesionales APROBADOS por la administración pueden usar el asistente
@@ -483,7 +484,7 @@ async function handleCensura(req, res) {
 
   // Quién llama: profesional autenticado, o cliente anónimo de una sala abierta.
   const perfil = await getCallerProfile(req);
-  if (perfil && !['abogado', 'contador', 'superadmin', 'admin'].includes(perfil.rol)) {
+  if (perfil && !['abogado', 'contador', 'firma', 'superadmin', 'admin'].includes(perfil.rol)) {
     res.status(403).json({ error: 'No autorizado' }); return;
   }
   try {

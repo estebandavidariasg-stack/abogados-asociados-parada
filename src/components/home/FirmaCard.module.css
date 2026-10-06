@@ -1,0 +1,295 @@
+/* ══════════════════════════════════════════════════════════════════
+   Tarjeta pública de una FIRMA.
+   La tarjeta de la cinta y el modal son los de LawyerCard.module.css; aquí
+   va solo lo que distingue a una firma: el logo en cuadro, el equipo en la
+   tarjeta y la lista de profesionales dentro del modal. Café y dorado, como
+   toda la cara pública.
+   ══════════════════════════════════════════════════════════════════ */
+
+/* ── Logo: cuadro redondeado y logo entero (las personas van en círculo) ── */
+.logo {
+  flex: 0 0 auto;
+  width: 96px;
+  height: 96px;
+  margin-bottom: 1.1rem;
+  border-radius: 22px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #fff;
+  border: 2px solid rgba(201, 168, 76, 0.3);
+  box-shadow: 0 4px 16px rgba(109,60,27, 0.1);
+  transition: border-color 0.35s, box-shadow 0.35s;
+}
+.logo img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  padding: 10px;
+  box-sizing: border-box;
+  object-fit: contain;
+}
+.logoModal {
+  width: 104px;
+  height: 104px;
+  margin-bottom: 0;
+}
+
+/* Pastilla "Firma": tinta con dorado, el par de más contraste de la marca. */
+.pillFirma {
+  background: #472f29;
+  color: #f2d580;
+  border: 1px solid #472f29;
+}
+
+.alcance {
+  margin: 3px 0 0;
+  font-size: 0.74rem;
+  line-height: 1.4;
+  color: #7d6046;
+}
+
+/* Quién está al frente: se nombra en la tarjeta, sin tener que abrir la firma. */
+.dirige {
+  margin: 12px 0 0;
+  font-size: 0.8rem;
+  font-weight: 600;
+  line-height: 1.35;
+  color: #472f29;
+}
+.dirige > span {
+  display: block;
+  margin-bottom: 1px;
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #a07c20;
+}
+
+/* ── Equipo en la tarjeta: caras apiladas + cuántos son ── */
+.equipo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 10px;
+}
+.pila { display: flex; }
+.pila > span {
+  width: 30px;
+  height: 30px;
+  margin-left: -9px;
+  border-radius: 50%;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  font-family: 'Cinzel', serif;
+  font-size: 0.6rem;
+  font-weight: 700;
+  color: #6d3c1b;
+  background: linear-gradient(135deg, #f7eee6, #eedfce);
+  border: 2px solid #fdf4ec;   /* el fondo de la tarjeta: separa una cara de la otra */
+}
+.pila > span:first-child { margin-left: 0; }
+.pila img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.equipoTxt {
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: #6f5c48;
+}
+
+/* La cifra de consultas exitosas se alinea a la izquierda dentro del modal;
+   en la tarjeta de la cinta todo va centrado. */
+.centrado {
+  display: flex;
+  justify-content: center;
+}
+
+/* ── Modal ── */
+.modalFirma { max-width: 640px; }
+
+.enlace {
+  color: #6d3c1b;
+  text-decoration: underline;
+  text-decoration-color: rgba(201, 168, 76, 0.8);
+  text-underline-offset: 3px;
+  overflow-wrap: anywhere;
+}
+.enlace:hover { text-decoration-color: currentColor; }
+
+.cuenta {
+  color: #a07c20;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+/* El Director: mismo papel dorado que lo distingue en el panel de la firma. */
+.director {
+  padding: 14px 16px;
+  border: 1px solid rgba(201, 168, 76, 0.45);
+  border-radius: 14px;
+  background: linear-gradient(160deg, #fffdf4 0%, #fdf6e6 100%);
+}
+.director .pro { padding: 0; }
+
+.lista > .pro + .pro { border-top: 1px solid rgba(109,60,27, 0.08); }
+.lista > .pro:first-child { padding-top: 2px; }
+.lista > .pro:last-child  { padding-bottom: 2px; }
+
+/* ── Una persona de la firma ── */
+.pro {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px 14px;
+  padding: 14px 0;
+}
+.proAvatar {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  font-family: 'Cinzel', serif;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #6d3c1b;
+  background: linear-gradient(145deg, #fbf4ee, #f5e8dd);
+  border: 2px solid rgba(201, 168, 76, 0.3);
+}
+.proAvatar img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.proInfo { min-width: 0; }
+.proNombre {
+  margin: 0;
+  font-family: 'Cinzel', serif;
+  font-size: 0.96rem;
+  font-weight: 600;
+  line-height: 1.3;
+  color: #6d3c1b;
+  /* El rótulo de rol baja a su propia línea cuando el nombre es largo; en
+     fila flexible queda al borde, sin el margen que trae como texto corrido. */
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+}
+.proNombre > span { margin-left: 0; }
+.proAreas {
+  margin: 3px 0 0;
+  font-size: 0.76rem;
+  line-height: 1.5;
+  color: #7d6046;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+.proCifras {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 14px;
+  margin-top: 6px;
+  font-size: 0.74rem;
+  color: #6f5c48;
+}
+.proCifras strong {
+  font-weight: 700;
+  color: #472f29;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+/* Aviso sobre esa persona (p. ej. "Registro incompleto" en el panel del admin). */
+.proEstado {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: #f6f2ee;
+  font-weight: 600;
+  color: #6f5c48;
+}
+
+.proAcciones {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+.btnConsulta,
+.btnPerfil {
+  appearance: none;
+  min-height: 40px;
+  padding: 9px 16px;
+  border-radius: 10px;
+  font-family: inherit;
+  font-size: 0.78rem;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.btnConsulta {
+  border: none;
+  background: var(--gold);
+  color: var(--navy);
+  font-weight: 700;
+  box-shadow: 0 4px 14px rgba(201, 168, 76, 0.26);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+.btnConsulta:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(201, 168, 76, 0.38);
+}
+.btnPerfil {
+  background: none;
+  border: 1px solid rgba(109,60,27, 0.22);
+  color: #6d3c1b;
+  font-weight: 600;
+  transition: border-color 0.2s, background 0.2s;
+}
+.btnPerfil:hover {
+  border-color: #6d3c1b;
+  background: rgba(109,60,27, 0.04);
+}
+.btnConsulta:focus-visible,
+.btnPerfil:focus-visible {
+  outline: 2px solid #8a6a28;
+  outline-offset: 2px;
+}
+
+.sinEquipo {
+  margin: 0;
+  font-size: 0.84rem;
+  line-height: 1.6;
+  color: #7d6046;
+}
+
+@media (max-width: 600px) {
+  .logo { width: 80px; height: 80px; border-radius: 18px; }
+  .logoModal { width: 88px; height: 88px; }
+
+  /* En teléfono las acciones bajan debajo de los datos, lado a lado. */
+  .pro { grid-template-columns: auto minmax(0, 1fr); }
+  .proAvatar { width: 52px; height: 52px; font-size: 0.95rem; }
+  .proAcciones {
+    grid-column: 1 / -1;
+    flex-direction: row;
+  }
+  .proAcciones > * { flex: 1 1 0; padding-inline: 10px; }
+  .director { padding: 12px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .logo, .btnConsulta, .btnPerfil { transition: none; }
+  .btnConsulta:hover { transform: none; }
+}

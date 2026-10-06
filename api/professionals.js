@@ -40,6 +40,59 @@ const PUBLIC_COLS = [
 
 const ROLES_VALIDOS = new Set(['abogado', 'contador'])
 
+/* ── Firmas ──────────────────────────────────────────────────────────────
+   Una firma (profiles.rol = 'firma') aparece en el inicio como UNA tarjeta:
+   sus datos, su Director y debajo sus aliados/colaboradores. Desde el
+   2026-10-05 el equipo son FICHAS informativas (tabla firma_miembros,
+   docs/sql/perfil-firma-v2-2026-10-05.sql), no cuentas: la consulta,
+   la calificación y las consultas exitosas son de la firma.
+
+   Todo esto se lee con la clave privilegiada y un whitelist propio. Si el
+   SQL aún no se aplicó, las lecturas fallan y el inicio degrada solo: sin
+   firmas, nunca un error para el visitante. */
+const FIRMA_COLS = [
+  'id', 'nombre', 'foto_url', 'video_url', 'descripcion', 'area_derecho',
+  'ciudad', 'departamento', 'alcance_servicio', 'experiencia', 'pagina_web',
+  'instagram', 'linkedin', 'facebook', 'twitter', 'whatsapp', 'tiktok',
+].join(',')
+// Lo público de un miembro: nunca cédula, celular, correo ni rutas de archivos.
+const MIEMBRO_COLS = [
+  'id', 'firma_id', 'cargo', 'rol', 'nombre', 'apellido', 'area_derecho', 'universidad',
+  'experiencia', 'departamento', 'ciudad', 'descripcion', 'foto_url',
+].join(',')
+
+const privHeaders = () => ({ apikey: SUPABASE_PRIV_KEY, Authorization: `Bearer ${SUPABASE_PRIV_KEY}` })
+
+async function leerPriv(ruta) {
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/${ruta}`, { headers: privHeaders() })
+  if (!r.ok) return null
+  const j = await r.json()
+  return Array.isArray(j) ? j : null
+}
+
+// Calificación (promedio + total) de cada profesional de la lista, en una
+// sola consulta. Muta la lista; si falla, las tarjetas piden la suya.
+async function anotarCalificaciones(lista) {
+  const ids = lista.map(p => p.id).filter(Boolean)
+  if (!ids.length) return
+  try {
+    const ratings = await leerPriv(`chat_ratings?lawyer_id=in.(${ids.map(encodeURIComponent).join(',')})&select=lawyer_id,rating`)
+    if (!ratings) return
+    const acc = {} // lawyer_id → { sum, total }
+    for (const r of ratings) {
+      const v = Number(r.rating)
+      if (!r.lawyer_id || !Number.isFinite(v)) continue
+      const a = acc[r.lawyer_id] || (acc[r.lawyer_id] = { sum: 0, total: 0 })
+      a.sum += v; a.total += 1
+    }
+    for (const p of lista) {
+      const a = acc[p.id]
+      p.rating_promedio = a ? parseFloat((a.sum / a.total).toFixed(1)) : null
+      p.rating_total    = a ? a.total : 0
+    }
+  } catch { /* sin calificaciones */ }
+}
+
 /* ── Documentos de confianza públicos ────────────────────────────────────
    Los dos que responden a "¿puedo confiar en esta persona?": la tarjeta
    profesional (ejerce) y el certificado disciplinario (está al día).
@@ -71,6 +124,57 @@ const FIRMA_TTL = 3600
 async function handleDocs(req, res, id) {
   res.setHeader('Cache-Control', 'no-store')
   if (!ES_UUID.test(id)) return res.status(400).json({ error: 'Id inválido.' })
+  // Miembro de una firma (ficha informativa): tarjeta profesional y
+  // certificado disciplinario, los mismos dos de cualquier profesional.
+  if (req.query.tipo === 'miembro') {
+    try {
+      const [m] = (await leerPriv(`firma_miembros?id=eq.${id}&select=firma_id,tarjeta_archivo_url,certificado_disciplinario_url`)) || []
+      if (!m) return res.status(200).json([])
+      const [f] = (await leerPriv(`profiles?id=eq.${m.firma_id}&aprobado=eq.true&rol=eq.firma&select=id`)) || []
+      if (!f) return res.status(200).json([])
+      const items = [
+        { label: 'Tarjeta profesional',      path: m.tarjeta_archivo_url },
+        { label: 'Certificado disciplinario', path: m.certificado_disciplinario_url },
+      ].filter(d => d.path)
+      const listos = []
+      for (const d of items) {
+        const ext = d.path.split('.').pop()
+        if (/^https?:\/\//.test(d.path)) { listos.push({ label: d.label, url: d.path, ext }); continue }
+        const sg = await fetch(`${SUPABASE_URL}/storage/v1/object/sign/tarjetas-profesionales/${d.path}`, {
+          method: 'POST',
+          headers: { ...privHeaders(), 'Content-Type': 'application/json' },
+          body: JSON.stringify({ expiresIn: FIRMA_TTL }),
+        })
+        const j = sg.ok ? await sg.json() : null
+        if (j?.signedURL) listos.push({ label: d.label, url: `${SUPABASE_URL}/storage/v1${j.signedURL}`, ext })
+      }
+      return res.status(200).json(listos)
+    } catch {
+      return res.status(200).json([])
+    }
+  }
+  // Firma: su documento público es la cámara de comercio (existencia y
+  // representación legal). El certificado bancario nunca sale de aquí.
+  if (req.query.tipo === 'firma') {
+    try {
+      const [fila] = (await leerPriv(`profiles?id=eq.${id}&aprobado=eq.true&rol=eq.firma&select=camara_comercio_url`)) || []
+      const path = fila?.camara_comercio_url
+      if (!path) return res.status(200).json([])
+      const ext = path.split('.').pop()
+      if (/^https?:\/\//.test(path)) return res.status(200).json([{ label: 'Cámara de comercio', url: path, ext }])
+      const s = await fetch(`${SUPABASE_URL}/storage/v1/object/sign/tarjetas-profesionales/${path}`, {
+        method: 'POST',
+        headers: { ...privHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ expiresIn: FIRMA_TTL }),
+      })
+      const firmado = s.ok ? await s.json() : null
+      return res.status(200).json(firmado?.signedURL
+        ? [{ label: 'Cámara de comercio', url: `${SUPABASE_URL}/storage/v1${firmado.signedURL}`, ext }]
+        : [])
+    } catch {
+      return res.status(200).json([])
+    }
+  }
   try {
     const cols = DOCS_PUBLICOS.map(d => d.col).join(',')
     // Va con la clave privilegiada porque la anon no tiene GRANT sobre estas
@@ -167,8 +271,10 @@ async function leerTodo(ruta) {
 
 async function contarExitosas(ids, rol) {
   const inList = ids.map(encodeURIComponent).join(',')
+  // Sin `rol` (firmas) cuentan las salas de los dos tipos.
+  const porTipo = rol ? `&tipo_profesional=eq.${rol}` : ''
   const [salas, atendidas] = await Promise.all([
-    leerTodo(`chat_rooms?resultado=eq.exito&tipo_profesional=eq.${rol}&select=id&order=id`),
+    leerTodo(`chat_rooms?resultado=eq.exito${porTipo}&select=id&order=id`),
     leerTodo(`chat_room_lawyers?lawyer_id=in.(${inList})&status=eq.active&select=lawyer_id,room_id&order=room_id`),
   ])
   if (!salas || !atendidas) return null
@@ -178,6 +284,51 @@ async function contarExitosas(ids, rol) {
     if (exitosas.has(a.room_id)) total.set(a.lawyer_id, (total.get(a.lawyer_id) || 0) + 1)
   }
   return total
+}
+
+/* GET ?rol=firma → [{...firma, director, miembros[]}]. Solo firmas APROBADAS
+   y con Director: sin él la firma aún no terminó de armarse. La calificación
+   y las consultas exitosas son de la FIRMA (es ella quien atiende). */
+async function handleFirmas(req, res) {
+  try {
+    const [firmas, equipo] = await Promise.all([
+      leerPriv(`profiles?aprobado=eq.true&rol=eq.firma&cuenta_eliminada_en=is.null&select=${FIRMA_COLS}`),
+      leerPriv(`firma_miembros?select=${MIEMBRO_COLS}&order=creado_en.asc`),
+    ])
+    if (!firmas || !equipo) {
+      // SQL sin aplicar o sin clave privilegiada: no hay firmas que mostrar.
+      res.setHeader('Cache-Control', 'no-store')
+      return res.status(200).json([])
+    }
+
+    const ids = firmas.map(f => f.id)
+    const [, exitosas] = await Promise.all([
+      anotarCalificaciones(firmas),
+      ids.length ? contarExitosas(ids, null).catch(() => null) : null,
+    ])
+    for (const f of firmas) if (exitosas) f.consultas_exitosas = exitosas.get(f.id) || 0
+
+    const lista = []
+    for (const f of firmas) {
+      const suyos = equipo.filter(m => m.firma_id === f.id)
+      const director = suyos.find(m => m.cargo === 'director')
+      if (!director) continue
+      const limpio = ({ firma_id, ...m }) => m   // el id de la firma ya va arriba
+      lista.push({
+        ...f,
+        director: limpio(director),
+        miembros: suyos.filter(m => m !== director).map(limpio)
+          .sort((a, b) => `${a.nombre} ${a.apellido}`.localeCompare(`${b.nombre} ${b.apellido}`, 'es')),
+      })
+    }
+    lista.sort((a, b) => (b.miembros.length - a.miembros.length) || String(a.nombre).localeCompare(String(b.nombre), 'es'))
+
+    res.setHeader('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=60')
+    return res.status(200).json(lista)
+  } catch {
+    res.setHeader('Cache-Control', 'no-store')
+    return res.status(200).json([])
+  }
 }
 
 export default async function handler(req, res) {
@@ -190,8 +341,9 @@ export default async function handler(req, res) {
 
   if (req.query.docs) return handleDocs(req, res, String(req.query.docs))
 
-  // Solo 'abogado' | 'contador' — evita que se inyecte cualquier rol.
+  // Solo 'abogado' | 'contador' | 'firma' — evita que se inyecte cualquier rol.
   const rol = String(req.query.rol || 'abogado').toLowerCase()
+  if (rol === 'firma') return handleFirmas(req, res)
   if (!ROLES_VALIDOS.has(rol)) {
     return res.status(400).json({ error: 'Rol inválido.' })
   }

@@ -40,11 +40,13 @@ function docsEnCache(clave) {
 
 // Pide (y cachea) los documentos públicos de un profesional. La usa tanto la
 // apertura del modal como la precarga en hover, de ahí que viva fuera.
-async function pedirDocsPublicos(id) {
-  const clave = `${id}:false`
+// `miembro`: ficha de un miembro de una firma (tabla firma_miembros), que
+// tiene sus propios documentos públicos.
+async function pedirDocsPublicos(id, miembro = false) {
+  const clave = `${id}:${miembro ? 'm' : 'p'}`
   const yaEsta = docsEnCache(clave)
   if (yaEsta) return yaEsta
-  const res = await fetch(`/api/professionals?docs=${encodeURIComponent(id)}`)
+  const res = await fetch(`/api/professionals?docs=${encodeURIComponent(id)}${miembro ? '&tipo=miembro' : ''}`)
   const json = res.ok ? await res.json() : []
   // `ext` sustituye al path para detectar el tipo: el visitante no necesita
   // saber dónde vive el archivo, solo si es PDF o imagen.
@@ -56,7 +58,7 @@ async function pedirDocsPublicos(id) {
 
 
 // Muestra estrellas doradas (solo lectura)
-function StarDisplay({ rating, total, dark = false }) {
+export function StarDisplay({ rating, total, dark = false }) {
   if (!rating) return null
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -82,7 +84,7 @@ function StarDisplay({ rating, total, dark = false }) {
    en el celular caben menos palabras por renglón). */
 const DESC_RENGLONES = 4
 
-function Descripcion({ texto }) {
+export function Descripcion({ texto }) {
   const [abierta, setAbierta] = useState(false)
   const [sobra, setSobra] = useState(false)
   const ref = useRef(null)
@@ -130,7 +132,7 @@ function Descripcion({ texto }) {
    dos renglones al lado y un filete dorado entre los dos. Sin pastilla ni
    color de "éxito": en esta tarjeta todo es café y dorado, y un verde ahí se
    leía como una etiqueta genérica pegada encima. */
-function Exitosas({ total }) {
+export function Exitosas({ total }) {
   if (!(total > 0)) return null
   const una = total === 1
   return (
@@ -142,6 +144,34 @@ function Exitosas({ total }) {
       </span>
     </span>
   )
+}
+
+/* Lleva a la Consulta Privada con este profesional ya elegido. ChatSection
+   lee el hash (#chat?abogado=<id>&tipo=<rol>) en el paso de cédula: tras la
+   cédula salta directo al formulario con el profesional bloqueado y, al
+   enviar, entra al chat con él. Lo usan el perfil del profesional y la
+   tarjeta de una firma (cada miembro tiene su propio "Iniciar consulta"). */
+export function irAConsulta(lawyer) {
+  const tipo = lawyer.rol === 'contador' ? 'contador' : 'abogado'
+  // Miembro de una firma: la consulta es CON LA FIRMA (ella la atiende, cobra
+  // y envía sus fichas de contacto); el miembro queda como destinatario.
+  window.location.hash = lawyer.esMiembro && lawyer.firma?.id
+    ? `#chat?firma=${encodeURIComponent(lawyer.firma.id)}&miembro=${encodeURIComponent(lawyer.id)}&tipo=${tipo}`
+    : `#chat?abogado=${encodeURIComponent(lawyer.id)}&tipo=${tipo}`
+  // Aterriza en el CUADRO DE CÉDULA (#consulta-form), no en el título de la
+  // sección — igual que el botón "Cuéntanos tu caso" del hero: mismo offset
+  // (-80px) y corrección en dos fases para contrarrestar los reveals de
+  // framer-motion que mueven el alto.
+  setTimeout(() => {
+    const target = document.getElementById('consulta-form') || document.getElementById('chat')
+    if (!target) return
+    const posicionar = (behavior) => {
+      const top = target.getBoundingClientRect().top + window.scrollY - 80
+      window.scrollTo({ top: Math.max(0, top), behavior })
+    }
+    posicionar('smooth')
+    setTimeout(() => posicionar('auto'), 700)
+  }, 140)
 }
 
 export default function LawyerCard({
@@ -212,7 +242,7 @@ export default function LawyerCard({
   // ignora cualquier fallo: es una optimización, no un requisito.
   function precargarDocs() {
     if (isSuperAdmin || ghost) return
-    pedirDocsPublicos(lawyer.id).catch(() => {})
+    pedirDocsPublicos(lawyer.id, !!lawyer.esMiembro).catch(() => {})
   }
 
   // El "ya lo pedí" vive en un ref, NO en docsState: si el estado estuviera en
@@ -248,7 +278,7 @@ export default function LawyerCard({
           }))
           if (!cancelled) setDocs(firmados.filter(Boolean))
         } else {
-          const publicos = await pedirDocsPublicos(lawyer.id)
+          const publicos = await pedirDocsPublicos(lawyer.id, !!lawyer.esMiembro)
           if (!cancelled) setDocs(publicos)
         }
       } catch { /* sin documentos → la sección no se pinta */ }
@@ -450,6 +480,11 @@ export default function LawyerCard({
                     {[lawyer.ciudad, lawyer.departamento].filter(Boolean).join(', ')}
                   </p>
                 )}
+                {lawyer.firma?.nombre && (
+                  <p className={styles.modalLocation} style={{ color: '#7d6046', fontWeight: 600 }}>
+                    {lawyer.cargo_firma === 'director' ? 'Director' : 'Aliado/Colaborador'} · {lawyer.firma.nombre}
+                  </p>
+                )}
                 {/* Comentarios de clientes — SIEMPRE disponible en el modal
                     (con o sin calificación previa). */}
                 <div style={{ marginTop: 8 }}>
@@ -615,29 +650,7 @@ export default function LawyerCard({
             <button
               type="button"
               className={styles.modalCta}
-              onClick={() => {
-                setOpen(false)
-                // Deep-link a la Consulta Privada con este profesional pre-seleccionado.
-                // ChatSection parsea el hash (#chat?abogado=<id>&tipo=<rol>) en el paso
-                // de cédula: tras la cédula, salta directo al formulario con el
-                // profesional bloqueado y, al enviar, entra al chat con él ya elegido.
-                const tipo = lawyer.rol === 'contador' ? 'contador' : 'abogado'
-                window.location.hash = `#chat?abogado=${encodeURIComponent(lawyer.id)}&tipo=${tipo}`
-                // Aterriza en el CUADRO DE CÉDULA (#consulta-form), no en el
-                // título de la sección — igual que el botón "Cuéntanos tu caso"
-                // del hero: mismo offset (-80px) y corrección en dos fases para
-                // contrarrestar los reveals de framer-motion que mueven el alto.
-                setTimeout(() => {
-                  const target = document.getElementById('consulta-form') || document.getElementById('chat')
-                  if (!target) return
-                  const posicionar = (behavior) => {
-                    const top = target.getBoundingClientRect().top + window.scrollY - 80
-                    window.scrollTo({ top: Math.max(0, top), behavior })
-                  }
-                  posicionar('smooth')
-                  setTimeout(() => posicionar('auto'), 700)
-                }, 140)
-              }}
+              onClick={() => { setOpen(false); irAConsulta(lawyer) }}
             >
               INICIAR CONSULTA
             </button>

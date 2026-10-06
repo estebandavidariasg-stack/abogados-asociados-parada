@@ -44,6 +44,7 @@ export default function Navbar({ onLogin, onRegister }) {
   const perfilHref =
     profile?.rol === 'contador' ? '/perfil-contador'
     : profile?.rol === 'gestor' ? '/perfil-gestor'
+    : profile?.rol === 'firma' ? '/perfil-firma'
     : '/perfil'
 
   return (

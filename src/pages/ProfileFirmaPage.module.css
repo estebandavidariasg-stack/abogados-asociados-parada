@@ -1,0 +1,376 @@
+/* ══════════════════════════════════════════════════════════════════
+   Panel de la FIRMA.
+   El armazón (página, riel, cabeceras, tarjetas, estados, botones) es el del
+   panel del gestor (ProfileGestorPage.module.css) y los campos son los de
+   ProfilePage.module.css. Aquí vive solo lo propio de la firma: el recorrido
+   obligatorio, las filas del equipo y el logo.
+   ══════════════════════════════════════════════════════════════════ */
+
+/* ── Recorrido (aprobación → Director → equipo) ── */
+.ruta {
+  max-width: 620px;
+  margin: 0 auto 1.75rem;   /* centrado: es el paso en el que va toda la firma */
+}
+.rutaLabel { font-size: 0.64rem; letter-spacing: 0.05em; }
+.rutaLabel[data-state="done"]    { color: #1f7a4d; }
+.rutaLabel[data-state="current"] { color: #6d3c1b; }
+
+.bloque + .bloque { margin-top: 1.25rem; }
+
+/* Badge numérico del riel: el mismo del panel del profesional. Va aquí y no
+   reutilizando su clase, porque allá los ajustes (riel expandido, celular)
+   cuelgan de SU `.sidebar`, que en este panel es el riel del gestor. */
+.navConBadge { position: relative; }
+.navBadge {
+  position: absolute;
+  top: 5px;
+  right: 9px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--gold, #c9a84c);
+  color: #472f29;
+  font-size: 0.62rem;
+  font-weight: 800;
+  line-height: 1;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.9);
+  pointer-events: none;
+}
+/* Riel expandido (al pasar el mouse): al borde derecho, a la altura del nombre. */
+aside:hover .navBadge {
+  top: 50%;
+  transform: translateY(-50%);
+  right: 10px;
+  box-shadow: none;
+}
+@media (max-width: 860px) {
+  /* En fila (tableta) el riel no se expande: el badge vuelve a su esquina. */
+  aside:hover .navBadge { top: 5px; transform: none; right: 9px; box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.9); }
+}
+@media (max-width: 480px) {
+  /* Mosaicos con el icono arriba: el badge se ancla al icono. */
+  .navBadge,
+  aside:hover .navBadge { top: 4px; right: calc(50% - 20px); }
+}
+
+/* Acción principal de la firma: dorado con la letra en tinta.
+   La pieza dorada del panel del gestor llevaba el texto café sobre un
+   degradado que terminaba en bronce (contraste 2,3:1 en ese extremo) y en la
+   serif de los títulos, de trazo fino a este tamaño. Aquí el dorado no baja
+   de tono medio (la tinta queda en 6,6:1 o más en toda la superficie) y la
+   letra es la de la interfaz. */
+.btnOro {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 1.35rem;
+  border: 1px solid rgba(120, 88, 24, 0.38);
+  border-radius: 12px;
+  background: linear-gradient(180deg, #f4dc8e 0%, #dcbb5a 100%);
+  color: #472f29;
+  font-family: 'Poppins', sans-serif;
+  font-size: 0.86rem;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  cursor: pointer;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6), 0 6px 16px rgba(160, 124, 32, 0.26);
+  transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease, background 0.2s ease;
+}
+.btnOro:hover:not(:disabled) {
+  transform: translateY(-1px);
+  background: linear-gradient(180deg, #f7e3a0 0%, #e2c364 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), 0 10px 22px rgba(160, 124, 32, 0.34);
+}
+.btnOro:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: inset 0 2px 4px rgba(120, 88, 24, 0.22);
+}
+.btnOro:focus-visible {
+  outline: 2px solid #6d3c1b;
+  outline-offset: 3px;
+}
+.btnOro:disabled {
+  opacity: 0.55;
+  cursor: default;
+  box-shadow: none;
+}
+
+/* ── Filas del equipo ── */
+.lista {
+  position: relative;
+  z-index: 1;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.lista > li + li { border-top: 1px solid rgba(109,60,27, 0.08); }
+
+/* Tres columnas fijas: quién es · estado · acción. Los anchos no dependen
+   del contenido, así el estado y la acción caen alineados de fila en fila. */
+.persona {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 9rem 5.5rem;
+  align-items: center;
+  gap: 0.6rem 1rem;
+  padding: 0.85rem 0;
+}
+.lista > li:first-child .persona { padding-top: 0.2rem; }
+.lista > li:last-child .persona  { padding-bottom: 0.2rem; }
+
+/* El Director: mismo papel dorado de las tarjetas de bienvenida. */
+.personaDestacada {
+  padding: 1rem 1.15rem;
+  border: 1px solid rgba(201, 168, 76, 0.45);
+  border-radius: 14px;
+  background: linear-gradient(160deg, #fffdf4 0%, #fdf6e6 100%);
+  box-shadow: 0 6px 22px rgba(109, 60, 27, 0.06);
+}
+
+.avatar {
+  flex: 0 0 auto;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  font-family: 'Cinzel', serif;
+  font-weight: 700;
+  font-size: 1.02rem;
+  color: #6d3c1b;
+  background: linear-gradient(135deg, #f7eee6, #eedfce);
+  border: 1px solid rgba(109,60,27, 0.12);
+  user-select: none;
+}
+.avatar img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Quién es: abre su perfil. */
+.personaVer {
+  appearance: none;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 1rem;
+  text-align: left;
+  color: inherit;
+  cursor: pointer;
+  border-radius: 12px;
+}
+.personaVer:focus-visible {
+  outline: 2px solid #8a6a28;
+  outline-offset: 4px;
+}
+.personaVer:hover .personaNombreTxt {
+  text-decoration: underline;
+  text-decoration-color: rgba(109, 60, 27, 0.35);
+  text-underline-offset: 3px;
+}
+.personaEstado {
+  display: flex;
+  justify-content: center;
+}
+.personaAccion {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.personaInfo {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.personaNombre {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  font-family: 'Poppins', sans-serif;
+  font-weight: 700;
+  font-size: 0.95rem;
+  line-height: 1.3;
+  color: #6d3c1b;
+}
+.personaMeta {
+  margin: 0;
+  font-family: 'Poppins', sans-serif;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: #6f5c48;
+  overflow-wrap: anywhere;
+}
+.personaCorreo {
+  margin: 0;
+  font-family: 'Poppins', sans-serif;
+  font-size: 0.74rem;
+  color: #7d6a58;
+  overflow-wrap: anywhere;
+}
+
+/* Acciones de icono (editar, eliminar): solo el glifo; el color aparece al
+   acercarse. Eliminar se tiñe de rojo, editar de tinta. */
+.btnIcono2 {
+  appearance: none;
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: none;
+  color: #8f6f58;
+  cursor: pointer;
+  transition: color 0.18s, background 0.18s, border-color 0.18s;
+}
+.btnIcono2:hover {
+  color: #6d3c1b;
+  background: rgba(109, 60, 27, 0.06);
+  border-color: rgba(109, 60, 27, 0.18);
+}
+.btnIcono2:focus-visible {
+  outline: 2px solid #8a6a28;
+  outline-offset: 2px;
+}
+.btnPeligro:hover {
+  color: #a23b3b;
+  background: #fbeaea;
+  border-color: rgba(162, 59, 59, 0.25);
+}
+.btnPeligro:focus-visible { outline-color: #a23b3b; }
+
+/* Botones en fila (video: cambiar / quitar). */
+.filaBotones {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin-top: 6px;
+}
+.btnTexto {
+  appearance: none;
+  background: none;
+  border: none;
+  padding: 6px 2px;
+  cursor: pointer;
+  font-family: 'Poppins', sans-serif;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #a23b3b;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: rgba(162, 59, 59, 0.35);
+}
+.btnTexto:hover { text-decoration-color: currentColor; }
+.btnTexto:disabled { opacity: 0.5; cursor: default; }
+
+/* "Entiendo" del diálogo de eliminar la cuenta. */
+.entiendo {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 0 0 18px;
+  padding: 10px 12px;
+  border: 1px solid rgba(162, 59, 59, 0.25);
+  border-radius: 10px;
+  background: #fdf3f3;
+  font-family: 'Poppins', sans-serif;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: #6f3b3b;
+  cursor: pointer;
+}
+.entiendo input { width: 16px; height: 16px; margin: 2px 0 0; accent-color: #a23b3b; flex: 0 0 auto; }
+
+.sinResultados {
+  position: relative;
+  z-index: 1;
+  margin: 0;
+  padding: 1.4rem 0 0.6rem;
+  text-align: center;
+  font-family: 'Poppins', sans-serif;
+  font-size: 0.86rem;
+  color: #6f5c48;
+}
+
+/* ── Diálogo ancho (eliminar la cuenta de la firma) ── */
+.dialogo {
+  max-width: 460px;
+  max-height: calc(100dvh - 2rem);
+  overflow-y: auto;
+  text-align: left;
+}
+
+
+/* ── Mi firma ── */
+.logoBox {
+  width: 112px;
+  height: 112px;
+  border-radius: 22px;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  background: #fff;
+  border: 1px solid rgba(109,60,27, 0.12);
+  box-shadow: 0 8px 22px rgba(109,60,27, 0.1);
+}
+.logoBox img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  padding: 10px;
+  box-sizing: border-box;
+  object-fit: contain;
+}
+.logoBox span {
+  font-family: 'Cinzel', serif;
+  font-weight: 700;
+  font-size: 2.2rem;
+  color: #6d3c1b;
+  user-select: none;
+}
+
+.dosCols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.4rem 1.25rem;
+}
+
+@media (max-width: 640px) {
+  .dosCols { grid-template-columns: 1fr; }
+
+  /* En teléfono la persona ocupa la fila y debajo van estado y acción. */
+  .persona,
+  .personaDestacada { grid-template-columns: minmax(0, 1fr) auto; }
+  .personaVer { grid-column: 1 / -1; gap: 0.8rem; }
+  .personaEstado { justify-content: flex-start; }
+  .btnIcono2 { width: 44px; height: 44px; }
+  .personaDestacada { padding: 0.9rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btnIcono2, .btnOro { transition: none; }
+  .btnOro:hover:not(:disabled) { transform: none; }
+}

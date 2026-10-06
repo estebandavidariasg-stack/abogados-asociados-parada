@@ -1830,6 +1830,11 @@
   background: rgba(30, 122, 100, 0.14);
   color: #1a6b56;
 }
+/* Firma: tinta con dorado, la misma pastilla que lleva en su tarjeta pública. */
+.cardRolBadgeFirma {
+  background: #472f29;
+  color: #f2d580;
+}
 
 /* ── Badge mini en chips de Contratos (resultados + chip seleccionado) ── */
 .contratoResultRow .cardRolBadge,

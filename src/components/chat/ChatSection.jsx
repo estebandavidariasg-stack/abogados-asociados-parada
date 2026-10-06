@@ -1027,6 +1027,10 @@ function StepCedula({ onNew, onCasos }) {
   // Cuando viene, tras la cédula saltamos al formulario con ese profesional
   // pre-seleccionado (sin pasar por el paso de método/IA ni por la lista).
   const abogadoURL = urlParams.get('abogado') || ''
+  // Miembro de una firma: #chat?firma=<id>&miembro=<id>&tipo=<rol>. La
+  // consulta es con la firma; el miembro queda como destinatario.
+  const firmaURL   = urlParams.get('firma') || ''
+  const miembroURL = urlParams.get('miembro') || ''
   const tipoURL    = urlParams.get('tipo') === 'contador' ? 'contador' : 'abogado'
   const [cedula, setCedula] = useState('')
   const [codigo, setCodigo] = useState(codigoURL)
@@ -1057,8 +1061,11 @@ function StepCedula({ onNew, onCasos }) {
     // aunque el componente no se haya re-renderizado.
     const p = new URLSearchParams(window.location.hash.split('?')[1] || '')
     const abg = p.get('abogado') || abogadoURL
+    const fir = p.get('firma') || firmaURL
+    const mie = p.get('miembro') || miembroURL
     const tp  = (p.get('tipo') || tipoURL) === 'contador' ? 'contador' : 'abogado'
-    const deepLink = abg ? { abogadoId: abg, tipo: tp } : null
+    const deepLink = abg ? { abogadoId: abg, tipo: tp }
+      : fir ? { firmaId: fir, miembroId: mie, tipo: tp } : null
     // Con casos abiertos → lista de casos (multi-chat, máx 5). Sin casos →
     // flujo normal de nueva consulta.
     if (abiertas.length > 0) onCasos(deepLink)
@@ -2320,11 +2327,11 @@ export default function ChatSection() {
   async function abrirMisCasos(deepLink) {
     setStep('casos')
     const abiertos = await cargarCasos()
-    if (deepLink?.abogadoId) {
+    if (deepLink?.abogadoId || deepLink?.firmaId) {
       limpiarDeepLinkHash()
-      const tipo = deepLink.tipo === 'contador' ? 'contador' : 'abogado'
-      const prof = await resolverProfesional(deepLink.abogadoId, tipo)
+      const prof = await resolverDeepLink(deepLink)
       if (!prof) return
+      const tipo = (prof.rol || deepLink.tipo) === 'contador' ? 'contador' : 'abogado'
       // ¿Ya hay una conversación abierta con ESTE profesional? → retomarla
       // (nunca dos consultas con el mismo profesional). Compara por id y, si
       // la RPC vieja no trae prof_id, por nombre.
@@ -2367,14 +2374,43 @@ export default function ChatSection() {
     return prof
   }
 
+  // Una FIRMA como profesional de la consulta. Es la firma quien atiende
+  // (la sala se asigna a su id, ella cobra y manda sus fichas de contacto);
+  // el miembro que el cliente tocó en la tarjeta viaja como destinatario
+  // (`miembro`) y da la profesión y las áreas del caso.
+  async function resolverFirma(firmaId, miembroId, tipo) {
+    try {
+      const res = await fetch('/api/professionals?rol=firma')
+      const lista = res.ok ? await res.json() : []
+      const firma = (Array.isArray(lista) ? lista : []).find(x => String(x.id) === String(firmaId))
+      if (!firma) return null
+      const equipo = [firma.director, ...(firma.miembros || [])].filter(Boolean)
+      const miembro = equipo.find(m => String(m.id) === String(miembroId)) || firma.director || null
+      return {
+        id: firma.id,
+        nombre: firma.nombre,
+        apellido: '',
+        rol: miembro?.rol || tipo,
+        foto_url: firma.foto_url || null,
+        area_derecho: miembro?.area_derecho || firma.area_derecho || '',
+        esFirma: true,
+        miembro: miembro ? { id: miembro.id, nombre: miembro.nombre, apellido: miembro.apellido, cargo: miembro.cargo, rol: miembro.rol } : null,
+      }
+    } catch { return null }
+  }
+  const resolverDeepLink = (dl) => (dl?.firmaId
+    ? resolverFirma(dl.firmaId, dl.miembroId, dl.tipo === 'contador' ? 'contador' : 'abogado')
+    : resolverProfesional(dl.abogadoId, dl.tipo === 'contador' ? 'contador' : 'abogado'))
+
   // Tras la cédula: si viene un profesional por deep-link (LawyerCard →
-  // #chat?abogado=<id>&tipo=<rol>), lo buscamos en la lista pública (cacheada
-  // en el CDN, misma data del home) y saltamos al formulario con él bloqueado.
-  // Si no existe / no está aprobado, caemos al flujo normal de método.
+  // #chat?abogado=<id>&tipo=<rol>, o una firma con #chat?firma=…&miembro=…),
+  // lo buscamos en la lista pública (cacheada en el CDN, misma data del home)
+  // y saltamos al formulario con él bloqueado. Si no existe / no está
+  // aprobado, caemos al flujo normal de método.
   async function handleNew(deepLink) {
-    if (!deepLink?.abogadoId) { setProfesionalDeepLink(null); setStep('metodo'); return }
-    const tipo = deepLink.tipo === 'contador' ? 'contador' : 'abogado'
-    const prof = await resolverProfesional(deepLink.abogadoId, tipo)
+    if (!deepLink?.abogadoId && !deepLink?.firmaId) { setProfesionalDeepLink(null); setStep('metodo'); return }
+    const prof = await resolverDeepLink(deepLink)
+    const tipo = (prof?.rol || deepLink.tipo) === 'contador' ? 'contador' : 'abogado'
 
     if (!prof) {
       // El profesional ya no existe o no está aprobado → limpiar el param y
@@ -2412,8 +2448,8 @@ export default function ChatSection() {
   function limpiarDeepLinkHash() {
     try {
       const params = new URLSearchParams(window.location.hash.split('?')[1] || '')
-      if (params.has('abogado') || params.has('tipo')) {
-        params.delete('abogado'); params.delete('tipo')
+      if (params.has('abogado') || params.has('tipo') || params.has('firma') || params.has('miembro')) {
+        params.delete('abogado'); params.delete('tipo'); params.delete('firma'); params.delete('miembro')
         const qs = params.toString()
         history.replaceState(null, '', `#chat${qs ? `?${qs}` : ''}`)
       }
@@ -2616,8 +2652,13 @@ export default function ChatSection() {
     // identificador anónimo (client_cedula) sigue siendo el hash SHA-256.
     const cedulaRaw   = localStorage.getItem('chat_cedula_raw') || ''
     const cedulaLinea = cedulaRaw ? `\n**Cédula: ${formatCedula(cedulaRaw)}**` : ''
+    // Consulta con una firma: se deja escrito para quién era (la firma la
+    // atiende, pero sabe a qué miembro buscaba el cliente).
+    const dirigida = profElegido?.esFirma && profElegido.miembro
+      ? `\n**Consulta dirigida a:** ${`${profElegido.miembro.nombre || ''} ${profElegido.miembro.apellido || ''}`.trim()} (${profElegido.miembro.cargo === 'director' ? 'Director' : 'Aliado/Colaborador'} · ${profElegido.nombre})`
+      : ''
     const primerMensaje =
-      `Hola, mi nombre es ${nombre} ${apellido}.${cedulaLinea}\n\n**Ubicación:** ${ubicacionTxt}\n**Área(s):** ${areas.join(', ')}\n\n**Descripción del caso:**\n${descripcion}${resumenBloque}`
+      `Hola, mi nombre es ${nombre} ${apellido}.${cedulaLinea}${dirigida}\n\n**Ubicación:** ${ubicacionTxt}\n**Área(s):** ${areas.join(', ')}\n\n**Descripción del caso:**\n${descripcion}${resumenBloque}`
 
     const baseRoom = {
       area_derecho:     areas.join(', '),
@@ -4065,6 +4106,12 @@ export default function ChatSection() {
                   <span className={styles.deepLinkName}>
                     {`${profesionalDeepLink.nombre||''} ${profesionalDeepLink.apellido||''}`.trim()}
                   </span>
+                  {profesionalDeepLink.esFirma && profesionalDeepLink.miembro && (
+                    <span className={styles.deepLinkArea} style={{ color: '#6d3c1b', fontWeight: 600 }}>
+                      Dirigida a {`${profesionalDeepLink.miembro.nombre || ''} ${profesionalDeepLink.miembro.apellido || ''}`.trim()}
+                      {' · '}{profesionalDeepLink.miembro.cargo === 'director' ? 'Director' : 'Aliado/Colaborador'}
+                    </span>
+                  )}
                   {profesionalDeepLink.area_derecho && (
                     <span className={styles.deepLinkArea}>{profesionalDeepLink.area_derecho}</span>
                   )}
@@ -4159,7 +4206,10 @@ export default function ChatSection() {
                   { value: 'otro',              label: 'Otro' },
                   { value: 'prefiero_no_decir', label: 'Prefiero no decirlo' },
                 ].map(opt => {
-                  const sel = form.genero === opt.value
+                  // "Otro" guarda lo que la persona escriba (cualquier texto
+                  // que no sea una de las opciones fijas cuenta como "otro").
+                  const esOtroLibre = opt.value === 'otro' && !!form.genero && !['femenino', 'masculino', 'prefiero_no_decir'].includes(form.genero)
+                  const sel = form.genero === opt.value || esOtroLibre
                   return (
                     <button
                       key={opt.value}
@@ -4174,6 +4224,18 @@ export default function ChatSection() {
                   )
                 })}
               </div>
+              {!!form.genero && !['femenino', 'masculino', 'prefiero_no_decir'].includes(form.genero) && (
+                <input
+                  type="text"
+                  className={styles.input}
+                  style={{ marginTop: 8 }}
+                  maxLength={40}
+                  placeholder="¿Cómo te identificas?"
+                  aria-label="Escribe tu género"
+                  value={form.genero === 'otro' ? '' : form.genero}
+                  onChange={e => setForm(f => ({ ...f, genero: e.target.value.trim() ? e.target.value : 'otro' }))}
+                />
+              )}
             </div>
 
             <Suspense fallback={null}>

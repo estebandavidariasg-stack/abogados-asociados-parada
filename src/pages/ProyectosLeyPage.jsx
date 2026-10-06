@@ -388,10 +388,10 @@ function IdentidadGate({ onListo, initial }) {
 
 /* Lleva la vista al bloque que acaba de cambiar.
 
-   Sin esto, al pulsar "Revisar mi voto" tras marcar quince artículos el
-   formulario se encoge a un resumen de tres líneas, pero el navegador
-   conserva el desplazamiento: uno se queda mirando el pie de página y el
-   resumen que hay que confirmar está arriba, fuera de pantalla.
+   Sin esto, al pasar a resultados tras votar quince artículos, o al recoger
+   una lista con "Ver menos", el bloque se encoge pero el navegador conserva
+   el desplazamiento: uno se queda mirando el pie de página y lo que cambió
+   está arriba, fuera de pantalla.
 
    El destino lleva `scroll-margin-top` en el CSS porque el encabezado es
    sticky y si no el título queda tapado debajo. */
@@ -401,8 +401,13 @@ function subirA(el) {
   el.scrollIntoView({ behavior: suave ? 'smooth' : 'auto', block: 'start' })
 }
 
-/* ═══════════════ Formulario de voto de un proyecto ══════════════════════ */
-function VotoForm({ proyecto, articulos, identidad, miVoto, onVotado }) {
+const MSG_OTP_VENCIDO = 'Tu verificación por correo ya no está vigente. Pulsa “Volver” arriba, verifica tu correo otra vez y vuelve a marcar tu postura.'
+
+/* ═══════════════ Formulario de voto de un proyecto ══════════════════════
+   `onVotado` recibe { completo, repetido } o { arts: { articuloId: postura|true } }
+   cada vez que el servidor acepta un voto; `onTerminar` es el ciudadano
+   pidiendo ver resultados con artículos todavía por votar. */
+function VotoForm({ proyecto, articulos, identidad, miVoto, onVotado, onTerminar }) {
   /* El toggle aparece SIEMPRE que el proyecto tenga artículos. Antes solo
      salía si además `permite_articulado` estaba activo, y entonces el
      ciudadano no tenía forma de saber que existía esa posibilidad ni por qué
@@ -427,148 +432,78 @@ function VotoForm({ proyecto, articulos, identidad, miVoto, onVotado }) {
   const listaRef = useRef(null)
   const verMenos = () => { setVerN(ARTS_INICIO); subirA(listaRef.current) }
   const [comp, setComp] = useState({ apoya: '', obs: '' })
-  const [arts, setArts] = useState({})                  // articuloId → { apoya, obs }
-  const [estado, setEstado] = useState('idle')          // idle | enviando | error
-  const [err, setErr] = useState('')
+  const [arts, setArts] = useState({})                  // articuloId → { apoya, obs, enviando, err }
+  const [estado, setEstado] = useState('idle')          // envío del proyecto completo: idle | enviando
+  const [err, setErr] = useState('')                    // error del proyecto completo
   const [verArts, setVerArts] = useState(false)         // revisar articulado (modo completo)
-  const [paso, setPaso] = useState('form')              // 'form' | 'revisar'
-  const [filasPend, setFilasPend] = useState([])        // votos listos por confirmar
-
-  // Al cambiar de paso (form ↔ revisar) se sube al panel, no en el primer
-  // render: ahí la tarjeta se acaba de abrir y ya está donde el usuario mira.
-  const panelRef = useRef(null)
-  const montado  = useRef(false)
-  useEffect(() => {
-    if (!montado.current) { montado.current = true; return }
-    subirA(panelRef.current)
-  }, [paso])
 
   const setArt = (id, patch) => setArts(p => ({ ...p, [id]: { apoya: '', obs: '', ...p[id], ...patch } }))
-  const artsConPostura = Object.entries(arts).filter(([id, v]) => v.apoya && !votados[id])
-  const artById = (id) => articulos.find(a => a.id === id)
+  const faltan = articulos.length - nVotados
+  /* Marcados pero sin pulsar "Registrar voto": se avisa antes de terminar,
+     porque al pasar a resultados esas marcas se pierden. */
+  const sinRegistrar = Object.entries(arts).filter(([id, v]) => v.apoya && !votados[id]).length
+  const listaLarga = articulos.length > ARTS_INICIO
 
-  // Paso 1 → 2: valida y arma las filas, luego muestra la confirmación.
-  function irARevisar() {
-    setErr('')
-    const base = {
-      cedula_hash: identidad.hash,
-      nombre: identidad.nombre, cedula: identidad.cedula, celular: identidad.celular,
-      correo: identidad.correo, departamento: identidad.departamento, municipio: identidad.municipio,
-    }
-    let filas = []
-    if (modo === 'completo') {
-      if (!comp.apoya) return setErr('Elige tu postura sobre el proyecto (A favor, En contra o Neutral).')
-      filas = [{ proyecto_id: proyecto.id, articulo_id: null, apoya: comp.apoya, observaciones: comp.obs.trim() || null, ...base }]
-    } else {
-      if (artsConPostura.length === 0) return setErr('Marca tu postura en al menos un artículo.')
-      filas = artsConPostura.map(([id, v]) => ({
-        proyecto_id: proyecto.id, articulo_id: id, apoya: v.apoya, observaciones: (v.obs || '').trim() || null, ...base,
-      }))
-    }
-    setFilasPend(filas)
-    setPaso('revisar')
-  }
+  const filaBase = () => ({
+    cedula_hash: identidad.hash,
+    nombre: identidad.nombre, cedula: identidad.cedula, celular: identidad.celular,
+    correo: identidad.correo, departamento: identidad.departamento, municipio: identidad.municipio,
+  })
+  const mensajeDeError = (r) => r.code === 'otp'
+    /* No se dice el plazo en el mensaje: el ciudadano no lleva la cuenta
+       desde cuándo, y decirle un número solo sirve para discutirlo. */
+    ? MSG_OTP_VENCIDO
+    : (r.msg || 'No se pudo registrar tu voto. Intenta de nuevo.')
 
-  // Paso 2 → registro definitivo (vía RPC seguro pl_emitir_votos).
-  async function enviar() {
+  /* Sin paso de revisión: el voto queda registrado al pulsar el botón (vía el
+     RPC seguro pl_emitir_votos). La advertencia de que no se puede cambiar va
+     encima del botón, en lugar de una pantalla aparte que obligaba a bajar
+     hasta el final para confirmar. */
+  async function votarCompleto() {
+    if (!comp.apoya || estado === 'enviando') return
     setErr('')
     setEstado('enviando')
-    const esCompleto = filasPend[0]?.articulo_id == null
-    let r = await emitirVotos(filasPend, identidad)
-
-    if (esCompleto) {
-      if (r.ok) return onVotado({ completo: filasPend[0].apoya })
-      if (r.code === 'duplicado') return onVotado({ completo: true, repetido: true })
-    } else {
-      if (r.ok) return onVotado({ arts: Object.fromEntries(filasPend.map(f => [f.articulo_id, f.apoya])) })
-      if (r.code === 'duplicado') {
-        /* Alguno de estos artículos ya tenía su voto (desde otro equipo, o
-           con el navegador limpio). El lote no dice cuál, así que se mandan
-           uno por uno: el repetido se anota como ya votado y los demás
-           quedan registrados. */
-        const hechos = {}
-        let previos = 0
-        for (const f of filasPend) {
-          const x = await emitirVotos([f], identidad)
-          if (x.ok) hechos[f.articulo_id] = f.apoya
-          else if (x.code === 'duplicado') { hechos[f.articulo_id] = true; previos++ }
-          else { r = x; break }
-        }
-        const fallo = r.code === 'duplicado' ? '' : (r.code === 'otp'
-          ? 'Tu verificación por correo venció antes de terminar: los artículos que faltan puedes votarlos después de verificarte otra vez.'
-          : 'No alcanzamos a registrar todos los artículos; los que faltan siguen pendientes.')
-        if (Object.keys(hechos).length) return onVotado({ arts: hechos, previos, fallo })
-      }
-    }
-
-    if (r.code === 'otp') {
-      setEstado('error')
-      /* No se dice el plazo en el mensaje: el ciudadano no lleva la cuenta
-         desde cuándo, y decirle un número solo sirve para discutirlo. */
-      setErr('Tu verificación por correo ya no está vigente. Pulsa “Volver” arriba, verifica tu correo otra vez y vuelve a marcar tu postura.')
-    }
-    else { setEstado('error'); setErr(r.msg || 'No se pudo registrar tu voto. Intenta de nuevo.') }
+    const fila = { proyecto_id: proyecto.id, articulo_id: null, apoya: comp.apoya, observaciones: comp.obs.trim() || null, ...filaBase() }
+    const r = await emitirVotos([fila], identidad)
+    if (r.ok) return onVotado({ completo: comp.apoya })
+    if (r.code === 'duplicado') return onVotado({ completo: true, repetido: true })
+    setEstado('idle')
+    setErr(mensajeDeError(r))
   }
 
-  /* ── Paso 2: confirmación del voto (evita registrar por error uno irreversible) ── */
-  if (paso === 'revisar') {
-    return (
-      <motion.div
-        ref={panelRef}
-        className={styles.voto}
-        initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-      >
-        <div className={styles.confirmHead}>
-          <h4 className={styles.confirmTitle}>Confirma tu voto</h4>
-          <p className={styles.confirmSub}>
-            {filasPend[0]?.articulo_id == null
-              ? 'Revisa tu postura antes de registrarla. Solo podrás votar una vez por este proyecto.'
-              : 'Revisa tu postura antes de registrarla. Cada artículo se vota una sola vez; los que no marcaste puedes votarlos después.'}
-          </p>
-        </div>
-        <ul className={styles.confirmList}>
-          {filasPend.map((f, i) => {
-            const m = apoyaMeta(f.apoya)
-            const a = f.articulo_id ? artById(f.articulo_id) : null
-            return (
-              <li key={i} className={styles.confirmItem}>
-                <div className={styles.confirmItemHead}>
-                  <span className={styles.confirmAmbito}>
-                    {a ? `Artículo ${a.numero ?? ''}${a.titulo ? ` — ${a.titulo}` : ''}` : 'Proyecto completo'}
-                  </span>
-                  <span className={styles.confirmBadge} style={{ color: m.color, background: `color-mix(in srgb, ${m.color} 14%, transparent)` }}>
-                    {m.label}
-                  </span>
-                </div>
-                {f.observaciones && <p className={styles.confirmObs}>“{f.observaciones}”</p>}
-              </li>
-            )
-          })}
-        </ul>
-
-        {err && <p className={styles.votoErr} role="alert">{err}</p>}
-
-        <div className={styles.reviewActions}>
-          <button type="button" className={styles.ghostBtn} onClick={() => { setErr(''); setEstado('idle'); setPaso('form') }} disabled={estado === 'enviando'}>
-            ← Corregir
-          </button>
-          <button type="button" className={styles.votoBtn} onClick={enviar} disabled={estado === 'enviando'}>
-            {estado === 'enviando' ? 'Registrando…' : 'Confirmar y registrar voto'}
-          </button>
-        </div>
-      </motion.div>
-    )
+  /* Cada artículo se registra por sí solo, en cuanto se pulsa su botón. Si el
+     servidor dice que ya tenía voto (otro equipo, navegador limpio) se anota
+     como votado sin error: el resultado es el mismo. */
+  async function votarArticulo(a) {
+    const v = arts[a.id]
+    if (!v?.apoya || v.enviando) return
+    setArt(a.id, { enviando: true, err: '' })
+    const fila = { proyecto_id: proyecto.id, articulo_id: a.id, apoya: v.apoya, observaciones: (v.obs || '').trim() || null, ...filaBase() }
+    const r = await emitirVotos([fila], identidad)
+    if (r.ok) return onVotado({ arts: { [a.id]: v.apoya } })
+    if (r.code === 'duplicado') return onVotado({ arts: { [a.id]: true } })
+    setArt(a.id, { enviando: false, err: mensajeDeError(r) })
   }
+
+  const btnTerminar = (
+    <button type="button" className={styles.terminarBtn} onClick={onTerminar}>
+      Terminar y ver resultados
+    </button>
+  )
 
   return (
-    <div className={styles.voto} ref={panelRef}>
+    <div className={styles.voto}>
       {yaEmpezo && (
-        <p className={styles.progresoArts}>
-          {nVotados > 0
-            ? <>Ya votaste <strong>{nVotados} de {articulos.length}</strong> artículos. Marca tu postura en los que te faltan; los que ya votaste no se repiten.</>
-            : <>Ya habías participado en este proyecto. Puedes votar los artículos que te falten; si alguno ya tiene tu voto, no se repite.</>}
-        </p>
+        <div className={styles.progresoArts}>
+          <p className={styles.progresoTxt}>
+            {nVotados > 0
+              ? <>Ya votaste <strong>{nVotados} de {articulos.length}</strong> artículos. Marca tu postura en los que te faltan; los que ya votaste no se repiten.</>
+              : <>Ya habías participado en este proyecto. Puedes votar los artículos que te falten; si alguno ya tiene tu voto, no se repite.</>}
+          </p>
+          {/* Arriba solo cuando la lista es larga: con cinco artículos el botón
+              del final está a la vista y repetirlo sería ruido. */}
+          {nVotados > 0 && listaLarga && btnTerminar}
+        </div>
       )}
       {hayArticulos && !yaEmpezo && (
         <div className={styles.modoChoice} role="radiogroup" aria-label="¿Cómo quieres votar?">
@@ -678,9 +613,18 @@ function VotoForm({ proyecto, articulos, identidad, miVoto, onVotado }) {
                   {a.contenido && <TextoArticulo texto={a.contenido} className={styles.artBody} />}
                   <div className={styles.votoRow}>
                     <span className={styles.votoLabel}>Apoya</span>
-                    <SegmentApoya value={arts[a.id]?.apoya || ''} onChange={v => setArt(a.id, { apoya: v })} />
+                    <SegmentApoya value={arts[a.id]?.apoya || ''} onChange={v => setArt(a.id, { apoya: v, err: '' })} />
                   </div>
                   <ObsField id={`obs-${a.id}`} value={arts[a.id]?.obs || ''} onChange={v => setArt(a.id, { obs: v })} />
+                  {arts[a.id]?.err && <p className={styles.votoErr} role="alert">{arts[a.id].err}</p>}
+                  <div className={styles.artAcciones}>
+                    <span className={styles.artNota}>Este voto no se puede cambiar.</span>
+                    <button type="button" className={styles.votoBtn}
+                      onClick={() => votarArticulo(a)}
+                      disabled={!arts[a.id]?.apoya || !!arts[a.id]?.enviando}>
+                      {arts[a.id]?.enviando ? 'Registrando…' : 'Registrar voto'}
+                    </button>
+                  </div>
                 </div>
               )}
               </Fragment>
@@ -691,18 +635,26 @@ function VotoForm({ proyecto, articulos, identidad, miVoto, onVotado }) {
         </div>
       )}
 
-      {err && <p className={styles.votoErr} role="alert">{err}</p>}
-
-      <button type="button" className={styles.votoBtn} onClick={irARevisar}>
-        Revisar mi voto
-      </button>
-      <p className={styles.votoNota}>
-        {modo === 'completo'
-          ? 'Podrás votar una sola vez por este proyecto.'
-          : artsConPostura.length > 0
-            ? `Llevas ${artsConPostura.length} artículo${artsConPostura.length === 1 ? '' : 's'} marcado${artsConPostura.length === 1 ? '' : 's'}. Cada artículo se vota una sola vez; los demás puedes votarlos después.`
-            : 'Cada artículo se vota una sola vez. No tienes que marcarlos todos hoy: los demás puedes votarlos después.'}
-      </p>
+      {modo === 'completo' ? (
+        <>
+          {err && <p className={styles.votoErr} role="alert">{err}</p>}
+          <p className={styles.votoAviso}>Este voto no se puede cambiar. Podrás votar una sola vez por este proyecto.</p>
+          <button type="button" className={styles.votoBtn} onClick={votarCompleto} disabled={!comp.apoya || estado === 'enviando'}>
+            {estado === 'enviando' ? 'Registrando…' : 'Registrar mi voto'}
+          </button>
+        </>
+      ) : (
+        <>
+          {nVotados > 0 && btnTerminar}
+          <p className={styles.votoNota}>
+            {sinRegistrar > 0
+              ? `Tienes ${sinRegistrar} artículo${sinRegistrar === 1 ? '' : 's'} marcado${sinRegistrar === 1 ? '' : 's'} sin registrar: pulsa «Registrar voto» en cada uno para que cuente.`
+              : nVotados > 0
+                ? `Te ${faltan === 1 ? 'falta' : 'faltan'} ${faltan} artículo${faltan === 1 ? '' : 's'} por votar. No tienes que votarlos todos hoy: puedes volver cuando quieras.`
+                : 'Cada artículo queda registrado al pulsar su botón y se vota una sola vez. No tienes que votarlos todos hoy: los demás puedes votarlos después.'}
+          </p>
+        </>
+      )}
     </div>
   )
 }
@@ -791,34 +743,49 @@ function ProyectoCard({ proyecto, identidad, index }) {
   }, [abierto, articulos, proyecto.id])
 
   const cardRef = useRef(null)
-  // `res` = { completo } | { arts, previos, fallo } (ver VotoForm.enviar).
-  function handleVotado(res) {
-    const nuevo = guardarMiVoto(identidad.hash, proyecto.id, res)
-    setMiVoto(nuevo)
+  /* Lo votado por artículos, al día aunque dos respuestas del servidor
+     lleguen casi a la vez (el ciudadano puede pulsar "Registrar voto" en un
+     artículo mientras el anterior todavía va). */
+  const artsRef = useRef(miVoto.arts)
+
+  function irAResultados(texto) {
     setTab('resultados')
-    setRefresh(x => x + 1)
+    setAviso(texto)
     // La tarjeta cambia de alto al pasar a resultados: sin esto el aviso de
     // "voto registrado" queda arriba, fuera de la vista.
     subirA(cardRef.current)
+  }
+
+  const TODOS_VOTADOS = '¡Gracias! Ya votaste todos los artículos de este proyecto.'
+
+  // `res` = { completo, repetido } | { arts: { articuloId: postura|true } } (ver VotoForm).
+  // Por artículos la tarjeta no salta a resultados en cada voto: el artículo
+  // queda cerrado en su sitio y se pasa a resultados solo cuando ya no falta
+  // ninguno, o cuando el ciudadano pulsa "Terminar y ver resultados".
+  function handleVotado(res) {
+    const guardado = guardarMiVoto(identidad.hash, proyecto.id, res)
+    artsRef.current = { ...artsRef.current, ...guardado.arts }
+    const nuevo = { ...guardado, arts: artsRef.current }
+    setMiVoto(nuevo)
+    setRefresh(x => x + 1)
 
     if (res.completo) {
-      setAviso(res.repetido
+      irAResultados(res.repetido
         ? 'Ya habías registrado tu voto para este proyecto. Estos son los resultados.'
         : '¡Gracias! Tu voto quedó registrado.')
       return
     }
-    const plural = (n, uno, varios) => `${n} ${n === 1 ? uno : varios}`
-    const previos = res.previos || 0
-    const nuevos  = Object.keys(res.arts).length - previos
-    const faltan  = (articulos?.length || 0) - Object.keys(nuevo.arts).length
-    setAviso([
-      nuevos > 0 ? `¡Gracias! Registramos tu voto en ${plural(nuevos, 'artículo', 'artículos')}.` : '',
-      previos > 0 ? `${plural(previos, 'artículo ya tenía', 'artículos ya tenían')} tu voto y no se repitió.` : '',
-      res.fallo || '',
-      faltan > 0
-        ? `Te ${faltan === 1 ? 'falta' : 'faltan'} ${plural(faltan, 'artículo', 'artículos')}: puedes votarlos cuando quieras en «Seguir votando».`
-        : 'Ya votaste todos los artículos de este proyecto.',
-    ].filter(Boolean).join(' '))
+    const faltan = (articulos?.length || 0) - Object.keys(nuevo.arts).length
+    if (articulos && faltan <= 0) irAResultados(TODOS_VOTADOS)
+  }
+
+  function terminarVotacion() {
+    const n = Object.keys(artsRef.current).length
+    const total = articulos?.length || 0
+    const faltan = total - n
+    irAResultados(faltan > 0
+      ? `¡Gracias! Tu voto quedó registrado en ${n} de ${total} artículos. ${faltan === 1 ? 'El que falta puedes votarlo' : `Los ${faltan} que faltan puedes votarlos`} cuando quieras en «Seguir votando».`
+      : TODOS_VOTADOS)
   }
 
   return (
@@ -902,7 +869,10 @@ function ProyectoCard({ proyecto, identidad, index }) {
                 articulos === null && (!votado || porArticulos)
                   ? <p className={styles.cargando}>Cargando proyecto…</p>
                   : (!votado || puedeSeguir)
-                    ? <VotoForm key={nVotados} proyecto={proyecto} articulos={articulos} identidad={identidad} miVoto={miVoto} onVotado={handleVotado} />
+                    /* Sin `key` por el número de votados: cada artículo se
+                       registra por separado y el formulario debe conservar
+                       las posturas marcadas en los demás. */
+                    ? <VotoForm proyecto={proyecto} articulos={articulos} identidad={identidad} miVoto={miVoto} onVotado={handleVotado} onTerminar={terminarVotacion} />
                     : (
                       <p className={styles.yaVoto}>
                         {miVoto.completo

@@ -413,3 +413,82 @@
   /* En el celular la fila ya es de dedo (40px de icono + padding). */
   .contrato { padding-right: 0.25rem; }
 }
+
+/* ── Selector de rol con 2 o 4 opciones ───────────────────────────────
+   El registro público tiene cuatro perfiles (abogado, contador, gestor,
+   firma); cuando una firma registra a su equipo solo hay dos. En teléfono
+   los cuatro no caben en una fila sin apretar el rótulo: pasan a 2 × 2. */
+.roleCols2 { grid-template-columns: repeat(2, 1fr); }
+.roleCols4 { grid-template-columns: repeat(4, 1fr); }
+@media (max-width: 440px) {
+  .roleCols4 { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* ── Firma: alcance del servicio (dos opciones excluyentes) ───────────
+   Mismo lenguaje que el selector de rol: tarjeta clara, borde fino y dorado
+   al elegir. El radio nativo se conserva (teclado y lectores de pantalla). */
+.alcance {
+  display: grid;
+  /* Tres opciones (nacional, internacional, ambos): en una fila cuando caben,
+     apiladas cuando no. */
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0.6rem;
+}
+.alcanceOp {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 0.8rem 0.85rem;
+  background: #f8f9fc;
+  border: 1.5px solid rgba(109,60,27, 0.15);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
+}
+.alcanceOp:hover { border-color: rgba(109,60,27, 0.4); }
+/* Anillo de foco solo con teclado: con el ratón ya basta el estado elegido. */
+.alcanceOp:has(.alcanceRadio:focus-visible) {
+  outline: 2px solid var(--gold-dk, #8a6a28);
+  outline-offset: 2px;
+}
+.alcanceOpActiva {
+  border-color: var(--gold, #c9a84c);
+  background: linear-gradient(135deg, rgba(201, 168, 76, 0.14), rgba(201, 168, 76, 0.05));
+  box-shadow: 0 4px 14px rgba(201, 168, 76, 0.18);
+}
+.alcanceOpError:not(.alcanceOpActiva) { border-color: #a23b3b; }
+.alcanceRadio {
+  flex: 0 0 auto;
+  margin: 3px 0 0;
+  accent-color: var(--gold-dk, #8a6a28);
+}
+.alcanceTxt {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.alcanceTxt strong {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--navy, #472f29);
+}
+.alcanceTxt span {
+  font-size: 0.7rem;
+  line-height: 1.4;
+  color: #6f5c48;
+}
+@media (max-width: 440px) {
+  .alcance { grid-template-columns: 1fr; }
+}
+
+/* Rótulo de grupo dentro de la caja de áreas (Derecho / Contaduría). */
+.areasGrupo {
+  grid-column: 1 / -1;
+  margin-top: 6px;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #7a5a12;
+}
+.areasGrupo:first-child { margin-top: 0; }

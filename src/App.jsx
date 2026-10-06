@@ -8,6 +8,7 @@ import HomePage from './pages/HomePage'   // eager: es el landing público (LCP)
 const ProfilePage         = lazy(() => import('./pages/ProfilePage'))
 const ProfileContadorPage = lazy(() => import('./pages/ProfileContadorPage'))
 const ProfileGestorPage   = lazy(() => import('./pages/ProfileGestorPage'))
+const ProfileFirmaPage    = lazy(() => import('./pages/ProfileFirmaPage'))
 const AdminPage           = lazy(() => import('./pages/AdminPage'))
 const ResetPasswordPage   = lazy(() => import('./pages/ResetPasswordPage'))
 const OpinarPage          = lazy(() => import('./pages/OpinarPage'))
@@ -114,6 +115,7 @@ export default function App() {
         <Route path="/perfil"           element={<ProfilePage />} />
         <Route path="/perfil-contador"  element={<ProfileContadorPage />} />
         <Route path="/perfil-gestor"    element={<ProfileGestorPage />} />
+        <Route path="/perfil-firma"     element={<ProfileFirmaPage />} />
         <Route path="/admin"            element={<AdminPage />} />
         <Route path="/nueva-contrasena" element={<ResetPasswordPage />} />
         <Route path="/opinar"           element={<OpinarPage />} />

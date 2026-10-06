@@ -360,11 +360,11 @@ export default function AdminInternalChat({ miId, initialSelectedId, onOpenRoom 
     setLoadingUsers(true)
     try {
       const headers = await getAuthHeaders()
-      // Trae abogados, contadores Y gestores aprobados (todos pueden chatear con
-      // el admin). Se piden username/email/cedula para la búsqueda del sidebar;
+      // Trae abogados, contadores, gestores Y firmas aprobados (todos pueden
+      // chatear con el admin). Se piden username/email/cedula para la búsqueda del sidebar;
       // los gestores traen menos campos, por eso se accede con guardas más abajo.
       const res = await fetch(
-        `${SUPABASE_URL}/rest/v1/profiles?aprobado=eq.true&rol=in.(abogado,contador,gestor)&select=id,nombre,apellido,foto_url,ciudad,departamento,rol,username,email,cedula&order=nombre.asc`,
+        `${SUPABASE_URL}/rest/v1/profiles?aprobado=eq.true&rol=in.(abogado,contador,gestor,firma)&select=id,nombre,apellido,foto_url,ciudad,departamento,rol,username,email,cedula&order=nombre.asc`,
         { headers }
       )
       const data = await res.json()
@@ -830,7 +830,12 @@ export default function AdminInternalChat({ miId, initialSelectedId, onOpenRoom 
     return [ciudad, a.departamento].filter(Boolean).join(' · ')
   }
 
-  const nombreRol = rol => rol === 'contador' ? 'Contador' : rol === 'gestor' ? 'Gestor' : 'Abogado'
+  const nombreRol = rol => rol === 'contador' ? 'Contador' : rol === 'gestor' ? 'Gestor' : rol === 'firma' ? 'Firma' : 'Abogado'
+  // "ti y el abogado" / "ti y la firma".
+  const conArticulo = rol => (rol === 'firma' ? 'la firma' : `el ${nombreRol(rol).toLowerCase()}`)
+  const clasePill = rol => rol === 'contador' ? styles.rolPillContador
+    : rol === 'gestor' || rol === 'firma' ? styles.rolPillGestor
+    : styles.rolPillAbogado
 
   // Los gestores se registran sin nombre ni apellido (solo usuario), así que
   // sin este respaldo su fila salía en blanco en la lista y en la cabecera.
@@ -888,6 +893,15 @@ export default function AdminInternalChat({ miId, initialSelectedId, onOpenRoom 
                 onClick={() => setRolFilter('gestor')}
               >
                 Gestores
+              </button>
+            )}
+            {rolesPresentes.has('firma') && (
+              <button
+                type="button"
+                className={`${styles.rolChip} ${rolFilter === 'firma' ? styles.rolChipActive : ''}`}
+                onClick={() => setRolFilter('firma')}
+              >
+                Firmas
               </button>
             )}
           </div>
@@ -964,7 +978,7 @@ export default function AdminInternalChat({ miId, initialSelectedId, onOpenRoom 
               <div className={styles.itemInfo}>
                 <p className={styles.itemNombre}>{nombreDe(a)}</p>
                 <p className={styles.itemCiudad}>
-                  <span className={`${styles.rolPill} ${a.rol === 'contador' ? styles.rolPillContador : a.rol === 'gestor' ? styles.rolPillGestor : styles.rolPillAbogado}`}>
+                  <span className={`${styles.rolPill} ${clasePill(a.rol)}`}>
                     {nombreRol(a.rol)}
                   </span>
                   {ubicacionDe(a) && <span className={styles.itemCiudadTxt}> · {ubicacionDe(a)}</span>}
@@ -1003,12 +1017,12 @@ export default function AdminInternalChat({ miId, initialSelectedId, onOpenRoom 
               <div>
                 <p className={styles.chatHeadNombre}>
                   {nombreDe(selected)}
-                  <span className={`${styles.rolPill} ${selected.rol === 'contador' ? styles.rolPillContador : selected.rol === 'gestor' ? styles.rolPillGestor : styles.rolPillAbogado}`}>
+                  <span className={`${styles.rolPill} ${clasePill(selected.rol)}`}>
                     {nombreRol(selected.rol)}
                   </span>
                 </p>
                 <p className={styles.chatHeadSub}>
-                  Chat interno · Visible solo para ti y el {nombreRol(selected.rol).toLowerCase()}
+                  Chat interno · Visible solo para ti y {conArticulo(selected.rol)}
                   {ubicacionDe(selected) && <> · {ubicacionDe(selected)}</>}
                 </p>
               </div>

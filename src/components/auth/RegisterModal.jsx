@@ -76,6 +76,41 @@ function validarCedula(v) {
   return { valid: true, msg: 'Cédula válida' }
 }
 
+// NIT: 9 dígitos, con o sin dígito de verificación ("900123456" o "900123456-7").
+function validarNit(v) {
+  const raw = String(v || '').trim()
+  if (!raw) return { valid: null, msg: '' }
+  if (!/^\d{9}(-?\d)?$/.test(raw)) return { valid: false, msg: '9 dígitos, con o sin dígito de verificación.' }
+  return { valid: true, msg: 'NIT válido' }
+}
+
+// El logo se guarda sobre fondo blanco: así se muestra en la tarjeta de la
+// firma, y un PNG transparente no sale con fondo negro al pasar a JPEG (el
+// bucket de fotos recibe JPEG, igual que la foto de un profesional).
+export function logoSobreBlanco(file, lado = 800) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file)
+    const img = new Image()
+    img.onload = () => {
+      const k = Math.min(1, lado / Math.max(img.naturalWidth, img.naturalHeight, 1))
+      const c = document.createElement('canvas')
+      c.width  = Math.max(1, Math.round(img.naturalWidth * k))
+      c.height = Math.max(1, Math.round(img.naturalHeight * k))
+      const g = c.getContext('2d')
+      g.fillStyle = '#ffffff'
+      g.fillRect(0, 0, c.width, c.height)
+      g.drawImage(img, 0, 0, c.width, c.height)
+      URL.revokeObjectURL(url)
+      c.toBlob(
+        (b) => (b ? resolve(new File([b], 'logo.jpg', { type: 'image/jpeg' })) : reject(new Error('sin imagen'))),
+        'image/jpeg', 0.9
+      )
+    }
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('no es una imagen')) }
+    img.src = url
+  })
+}
+
 // ── Iconos de rol ──────────────────────────────────────────────────────────
 const IconAbogado = () => (
   <svg viewBox="0 0 24 24" fill="none" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
@@ -93,16 +128,33 @@ const IconGestor = () => (
   </svg>
 )
 
+const IconFirma = () => (
+  <svg viewBox="0 0 24 24" fill="none" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+    {/* Un despacho: frontón, cuatro columnas y escalinata (la versión anterior
+        era una casa con puerta y se leía como "inicio"). */}
+    <path d="M12 2.6 20.6 7.6H3.4z"/>
+    <path d="M5 10.6h14M6.5 10.6v6.3M10.2 10.6v6.3M13.8 10.6v6.3M17.5 10.6v6.3M4.6 16.9h14.8M3 20.6h18"/>
+  </svg>
+)
+
 const IconContrato = () => (
   <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/>
   </svg>
 )
 
+// Alcance del servicio de una firma (también lo usa su panel).
+export const OPCIONES_ALCANCE = [
+  { v: 'nacional',      t: 'Nivel nacional',      d: 'Atienden casos en Colombia.' },
+  { v: 'internacional', t: 'Nivel internacional', d: 'Atienden solo fuera del país.' },
+  { v: 'ambos',         t: 'Ambos',               d: 'Atienden en Colombia y fuera del país.' },
+]
+
 const ROLES = [
   { key: 'abogado',  label: 'Abogado',  Icon: IconAbogado  },
   { key: 'contador', label: 'Contador', Icon: IconContador },
   { key: 'gestor',   label: 'Gestor',   Icon: IconGestor   },
+  { key: 'firma',    label: 'Firma',    Icon: IconFirma    },
 ]
 
 /* Las reglas de dinero que nadie va a leer en el contrato.
@@ -155,12 +207,39 @@ const CONDICIONES = {
   },
 }
 
+/* La firma atiende TODAS las consultas; su Director y sus aliados son
+   perfiles informativos de su tarjeta. Lo que tiene que saber antes de llenar
+   nada es el orden (aprobación → Director → equipo) y que las consultas y los
+   cobros son suyos. Sin dos puntos en los textos (pedido del dueño). */
+CONDICIONES.firma = {
+  titulo: 'Cómo funciona una firma en Parada Bridge',
+  entrada: 'Tres reglas que aceptas al registrar tu firma.',
+  puntos: [
+    {
+      titulo: 'Primero la firma, después su Director',
+      texto: 'La administración revisa y aprueba la firma. Al entrar, el primer paso es registrar a tu Director. Es obligatorio y sin él la firma no aparece en el inicio.',
+    },
+    {
+      titulo: 'Tu equipo se muestra en tu tarjeta',
+      texto: 'Tu Director y tus aliados y colaboradores son perfiles informativos que tú registras y editas. Aparecen en la tarjeta de la firma, pero no tienen cuenta ni atienden por separado.',
+    },
+    {
+      titulo: `La firma atiende y cobra cada consulta, de ${COP.format(COBRO_MINIMO)} a ${COP.format(COBRO_MAXIMO)}`,
+      texto: 'Todas las consultas llegan al panel de la firma, sin importar a quién de tu equipo buscaba el cliente. La firma fija el valor dentro de ese rango y el cliente le paga directamente. Si toma el caso, ese valor se descuenta de los honorarios.',
+    },
+  ],
+}
+
 const ROLE_TITLE = {
   abogado:  'Crear perfil como Abogado',
   contador: 'Crear perfil como Contador',
   gestor:   'Crear perfil como Gestor',
+  firma:    'Registrar una Firma',
 }
 
+/* Registro público: abogado, contador, gestor o firma. (El Director y los
+   aliados de una firma NO se registran aquí: son fichas que la firma crea en
+   su panel, ver MiembroFirmaModal.) */
 export default function RegisterModal({ onClose }) {
   // rol seleccionado en el paso inicial. null = aún elige rol.
   const [rol, setRol] = useState(null)
@@ -221,6 +300,47 @@ export default function RegisterModal({ onClose }) {
   // pedirlo al final era dejar cuentas aprobadas a las que no se puede pagar.
   const [gestorCertFile, setGestorCertFile] = useState(null)
   const gestorCertInputRef = useRef(null)
+
+  // ── Campos de firma ─────────────────────────────────────────────────────
+  // El logo, la cámara de comercio y el certificado bancario reutilizan los
+  // huecos del profesional (foto, "tarjeta", certificado bancario): es el
+  // mismo paso con otro rótulo. Lo propio de la firma es el NIT y el alcance.
+  const [nit, setNit]               = useState('')
+  const [nitTouched, setNitTouched] = useState(false)
+  const [alcance, setAlcance]       = useState('')   // 'nacional' | 'internacional' | 'ambos'
+  // "Otro/Otra" en las áreas: lo que la persona escribe reemplaza al literal.
+  const [areaOtraTexto, setAreaOtraTexto] = useState('')
+
+  /* Los requisitos de la contraseña se pliegan al salir del campo, y al
+     plegarse sube todo lo que hay debajo. Si eso ocurre en mitad del clic que
+     quitó el foco, el botón se suelta sobre otro control y el clic se pierde:
+     el primer clic después de escribir la contraseña (un área, el alcance de
+     la firma) no hacía nada. Con un clic en curso se espera a que termine;
+     con el teclado se pliegan de inmediato, como antes. */
+  const punteroAbajo = useRef(false)
+  useEffect(() => {
+    const abajo  = () => { punteroAbajo.current = true }
+    const arriba = () => { punteroAbajo.current = false }
+    document.addEventListener('pointerdown', abajo, true)
+    document.addEventListener('pointerup', arriba, true)
+    document.addEventListener('pointercancel', arriba, true)
+    return () => {
+      document.removeEventListener('pointerdown', abajo, true)
+      document.removeEventListener('pointerup', arriba, true)
+      document.removeEventListener('pointercancel', arriba, true)
+    }
+  }, [])
+  function cerrarRequisitos() {
+    if (!punteroAbajo.current) { setPwFocus(false); return }
+    const fin = () => {
+      document.removeEventListener('pointerup', fin)
+      document.removeEventListener('pointercancel', fin)
+      // Tras el `click`, que se despacha justo después de soltar.
+      setTimeout(() => setPwFocus(false), 0)
+    }
+    document.addEventListener('pointerup', fin)
+    document.addEventListener('pointercancel', fin)
+  }
 
   const recaptchaRef = useRef()
   // Para llevar el foco al primer campo marcado tras un intento fallido.
@@ -285,6 +405,18 @@ export default function RegisterModal({ onClose }) {
   const pwEmpty    = regPassword.length === 0
 
   const isPro = rol === 'abogado' || rol === 'contador'
+  const esFirma = rol === 'firma'
+  // Pasan por el paso 'docs' (foto o logo + documentos) con la cuenta ya creada.
+  const conDocs = isPro || esFirma
+  const nitVal  = validarNit(nit)
+  const rolesVisibles = ROLES
+  // Cabeceras de la cuenta que se está creando (la sesión temporal recién abierta).
+  const headersCuenta = () => getAuthHeaders()
+  // "Otro" (contador, firma) u "Otra" (abogado) marcado en las áreas.
+  const OTRO_AREA = rol === 'abogado' ? 'Otra' : 'Otro'
+  const areaOtraOn = areas.includes(OTRO_AREA)
+  // Lo que se guarda: la lista sin el literal, más el texto escrito.
+  const areasFinales = areas.filter(a => a !== 'Otro' && a !== 'Otra').concat(areaOtraOn && areaOtraTexto.trim() ? [areaOtraTexto.trim()] : [])
 
 
   const AREAS_LIST = rol === 'contador' ? AREAS_CONTADURIA : AREAS_DERECHO
@@ -310,21 +442,27 @@ export default function RegisterModal({ onClose }) {
      desde cada onChange. */
   function validarTodo() {
     const e = {}
-    if (!nombre.trim())   e.nombre = 'Escribe tu nombre'
-    if (!apellido.trim()) e.apellido = 'Escribe tu apellido'
+    if (!nombre.trim())   e.nombre = esFirma ? 'Escribe el nombre de la firma' : 'Escribe el nombre'
+    if (!esFirma && !apellido.trim()) e.apellido = 'Escribe el apellido'
     if (!usernameNorm) e.username = 'Elige un nombre de usuario'
     else if (validarUsername(username).valid === false) e.username = validarUsername(username).msg
     if (telVal.valid !== true)    e.telefono = 'Celular de 10 dígitos que empiece por 3'
-    if (cedulaVal.valid !== true) e.cedula = 'Cédula de 6 a 12 dígitos'
+    if (!esFirma && cedulaVal.valid !== true) e.cedula = 'Cédula de 6 a 12 dígitos'
+    if (esFirma && nitVal.valid !== true)     e.nit = 'NIT de 9 dígitos, con o sin dígito de verificación'
     if (!emailVal.valid)  e.email = 'Correo no válido'
     if (!pwValid)         e.password = 'La contraseña no cumple los requisitos'
     if (isPro) {
       if (!universidad.trim()) e.universidad = 'Selecciona tu universidad'
-      if (!tarjetaFile)        e.tarjeta = 'Adjunta tu tarjeta profesional'
+      if (!tarjetaFile)        e.tarjeta = 'Adjunta la tarjeta profesional'
+    }
+    if ((isPro || esFirma) && areaOtraOn && !areaOtraTexto.trim()) e.areaOtra = `Escribe cuál es esa ${rol === 'abogado' ? 'otra área' : 'otra especialidad'}`
+    if (esFirma) {
+      if (!alcance)     e.alcance = 'Indica si la firma atiende a nivel nacional, internacional o ambos'
+      if (!tarjetaFile) e.tarjeta = 'Adjunta la cámara de comercio'
     }
     if (rol === 'gestor' && !gestorCertFile) e.certificado = 'Adjunta tu certificado bancario'
     if (!departamento)  e.ubicacion = 'Selecciona departamento y municipio'
-    else if (!ciudad.trim()) e.ubicacion = 'Selecciona tu municipio o localidad'
+    else if (!ciudad.trim()) e.ubicacion = 'Selecciona el municipio o la localidad'
     for (const c of camposExtra) {
       if (c.requerido && c.tipo !== 'checkbox' && !String(respuestasExtra[c.id] ?? '').trim()) {
         e[`extra_${c.id}`] = `Completa "${c.etiqueta}"`
@@ -362,10 +500,10 @@ export default function RegisterModal({ onClose }) {
     if (!file) return
     const allowed = ['application/pdf', 'image/png', 'image/jpeg', 'image/webp']
     if (!allowed.includes(file.type)) {
-      setError('Formato de tarjeta no permitido. Usa PDF, PNG, JPG o WEBP.'); return
+      setError('Formato no permitido. Usa PDF, PNG, JPG o WEBP.'); return
     }
     if (file.size / (1024 * 1024) > 10) {
-      setError('La tarjeta no puede superar 10 MB'); return
+      setError('El archivo no puede superar 10 MB'); return
     }
     setError(null)
     setTarjetaFile(file)
@@ -380,6 +518,7 @@ export default function RegisterModal({ onClose }) {
     setCertBancFile(null); setCertDiscFile(null); setDocsError('')
     setVerificationStep('condiciones'); setOtpError('')
     setAceptoCondiciones(false)
+    setNit(''); setNitTouched(false); setAlcance(''); setAreaOtraTexto('')
     setCaptchaValue(null); recaptchaRef.current?.reset()
     setRespuestasExtra({})
     cargarCamposExtra(r)   // campos personalizados del admin maestro
@@ -391,7 +530,7 @@ export default function RegisterModal({ onClose }) {
     // Una sola pasada: se recogen TODOS los fallos, se marcan los campos y se
     // lleva el foco al primero, en vez de ir revelandolos de uno en uno.
     setIntentado(true)
-    setCedulaTouched(true); setTelTouched(true); setEmailTouched(true); setPwTouched(true)
+    setCedulaTouched(true); setNitTouched(true); setTelTouched(true); setEmailTouched(true); setPwTouched(true)
     const errs = validarTodo()
     if (Object.keys(errs).length > 0) {
       setError(null)
@@ -436,7 +575,9 @@ export default function RegisterModal({ onClose }) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         email: (emailOverride ?? regEmail).trim().toLowerCase(),
-        tipoRegistro: rol,          // 'abogado' | 'contador' | 'gestor'
+        // 'firma' en ese endpoint es la firma ELECTRÓNICA: el registro de
+        // una firma-perfil tiene su propio tipo.
+        tipoRegistro: esFirma ? 'firma_perfil' : rol,   // 'abogado' | 'contador' | 'gestor' | 'firma_perfil'
         recaptchaToken: captchaValue,
       }),
     })
@@ -475,9 +616,9 @@ export default function RegisterModal({ onClose }) {
 
       // Verificación OK — recién ahora creamos la cuenta.
       await actuallyCreateAccount()
-      // Profesional: sigue el paso de foto + certificados (sesión temporal
-      // viva). Gestor: directo a la pantalla final.
-      setVerificationStep(isPro ? 'docs' : 'done')
+      // Profesional y firma: sigue el paso de foto/logo + documentos (con la
+      // cuenta ya creada). Gestor: directo a la pantalla final.
+      setVerificationStep(conDocs ? 'docs' : 'done')
     } catch (err) {
       setOtpError(err.message || 'Código inválido o expirado')
     } finally {
@@ -516,36 +657,40 @@ export default function RegisterModal({ onClose }) {
     // se vería como un CAMBIO de email y el trigger lo rechaza con
     // "No puedes cambiar tu email desde este endpoint". Por eso se normaliza.
     const emailNorm = regEmail.trim().toLowerCase()
-    // 1. signUp — crea auth.users. El trigger crea la fila en profiles con
-    //    rol='abogado' por defecto; la corregimos en el UPSERT (paso 4).
-    const metaData = { nombre, apellido, username: usernameNorm, telefono }
-    const { error: signUpError } = await supabase.auth.signUp({
-      email: emailNorm,
-      password: regPassword,
-      options: { data: metaData },
-    })
-    if (signUpError) throw new Error(signUpError.message || 'Error al crear cuenta')
+    let userId
+    {
+      // 1. signUp — crea auth.users. El trigger crea la fila en profiles con
+      //    rol='abogado' por defecto; la corregimos en el UPSERT (paso 4).
+      const metaData = { nombre, apellido, username: usernameNorm, telefono }
+      const { error: signUpError } = await supabase.auth.signUp({
+        email: emailNorm,
+        password: regPassword,
+        options: { data: metaData },
+      })
+      if (signUpError) throw new Error(signUpError.message || 'Error al crear cuenta')
 
-    // 2. Sign-in temporal para obtener token (necesario para el UPSERT y para
-    //    subir la tarjeta al bucket privado con RLS auth.uid() = folder).
-    const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
-      email: emailNorm,
-      password: regPassword,
-    })
-    if (signInError || !signInData?.user?.id) {
-      throw new Error('Cuenta creada pero no se pudo fijar el rol. Contacta al administrador.')
+      // 2. Sign-in temporal para obtener token (necesario para el UPSERT y para
+      //    subir la tarjeta al bucket privado con RLS auth.uid() = folder).
+      const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+        email: emailNorm,
+        password: regPassword,
+      })
+      if (signInError || !signInData?.user?.id) {
+        throw new Error('Cuenta creada pero no se pudo fijar el rol. Contacta al administrador.')
+      }
+      userId = signInData.user.id
     }
-    const userId = signInData.user.id
 
     // 3. Subir la tarjeta profesional (si aplica y se adjuntó). Mismo path y
     //    bucket que ProfilePage: `<userId>/tarjeta.<ext>` en
     //    tarjetas-profesionales. Guardamos el PATH (bucket privado → se firma
     //    on demand al visualizar en el perfil).
+    //    La firma sube aquí su cámara de comercio: mismo hueco, otro nombre.
     let tarjetaPath = null
-    if (isPro && tarjetaFile) {
-      const headers = await getAuthHeaders()
+    if (conDocs && tarjetaFile) {
+      const headers = await headersCuenta()
       const ext  = tarjetaFile.name.split('.').pop().toLowerCase()
-      const path = `${userId}/tarjeta.${ext}`
+      const path = `${userId}/${esFirma ? 'camara-comercio' : 'tarjeta'}.${ext}`
       const upRes = await fetch(
         `${SUPABASE_URL}/storage/v1/object/tarjetas-profesionales/${path}`,
         {
@@ -585,7 +730,7 @@ export default function RegisterModal({ onClose }) {
     }
 
     // 4. UPSERT en profiles con el rol y campos correctos.
-    const headers = await getAuthHeaders()
+    const headers = await headersCuenta()
     // Respuestas a los campos personalizados → jsonb {etiqueta: valor}
     // (solo los respondidos; el admin las ve al revisar la solicitud).
     const datosAdicionales = {}
@@ -609,11 +754,24 @@ export default function RegisterModal({ onClose }) {
       ...(Object.keys(datosAdicionales).length ? { datos_adicionales: datosAdicionales } : {}),
     }
 
-    if (isPro) {
+    if (esFirma) {
+      // Firma: sin apellido ni cédula; NIT, alcance, áreas y su documento.
+      Object.assign(payload, {
+        apellido: '',
+        cedula: null,
+        nit: nit.trim(),
+        alcance_servicio: alcance,
+        area_derecho: areasFinales.length ? areasFinales.join(', ') : null,
+        experiencia: experiencia || null,
+        departamento: departamento || null,
+        ciudad: (barrio.trim() ? `${ciudad.trim()} - ${barrio.trim()}` : ciudad.trim()) || null,
+        camara_comercio_url: tarjetaPath,
+      })
+    } else if (isPro) {
       Object.assign(payload, {
         // area_derecho guarda la lista separada por comas (para contador
         // significa especialidades contables — misma columna, ver CLAUDE.md).
-        area_derecho: areas.length ? areas.join(', ') : null,
+        area_derecho: areasFinales.length ? areasFinales.join(', ') : null,
         experiencia: experiencia || null,
         universidad: universidad.trim() || null,
         departamento: departamento || null,
@@ -651,11 +809,11 @@ export default function RegisterModal({ onClose }) {
       throw new Error(errBody.message || 'No se pudo crear el perfil')
     }
 
-    // 5. Profesional: la sesión temporal se conserva para el paso 'docs'
-    //    (foto + certificados suben con RLS auth.uid() = folder). El signOut
-    //    ocurre al terminar ese paso. Gestor: cierra sesión de una vez.
+    // 5. Profesional y firma: la cuenta sigue abierta para el paso 'docs'
+    //    (foto/logo + documentos suben con RLS auth.uid() = folder). El
+    //    signOut ocurre al terminar ese paso. Gestor: cierra sesión de una vez.
     setNewUserId(userId)
-    if (!isPro) await supabase.auth.signOut()
+    if (!conDocs) await supabase.auth.signOut()
   }
 
   // ── Paso 'docs': foto + certificados + oficina → PATCH perfil → signOut ──
@@ -666,7 +824,8 @@ export default function RegisterModal({ onClose }) {
     if (!raw.type.startsWith('image/')) { setDocsError('La foto debe ser una imagen.'); return }
     setDocsError('')
     // Comprime de una vez (≤1200px, JPEG) — mismo criterio que ProfilePage.
-    compressImage(raw, 1200, 0.85, 'image/jpeg')
+    // El logo de una firma va aparte: sobre blanco y sin recortar.
+    ;(esFirma ? logoSobreBlanco(raw) : compressImage(raw, 1200, 0.85, 'image/jpeg'))
       .then(f => {
         setFotoFile(f)
         setFotoPreview(prev => { if (prev) URL.revokeObjectURL(prev); return URL.createObjectURL(f) })
@@ -695,12 +854,14 @@ export default function RegisterModal({ onClose }) {
   const tieneCertificado  = !!certBancFile && !!certDiscFile
 
   function validarDocs() {
-    if (!fotoFile)         return 'Sube tu foto de perfil (obligatoria).'
-    if (!tieneTarjeta)     return 'Adjunta tu tarjeta profesional (obligatoria).'
+    if (!fotoFile)         return esFirma ? 'Sube el logo de la firma (obligatorio).' : 'Sube la foto de perfil (obligatoria).'
+    if (!tieneTarjeta)     return esFirma ? 'Adjunta la cámara de comercio (obligatoria).' : 'Adjunta la tarjeta profesional (obligatoria).'
     if (!certBancFile)     return 'Adjunta la cuenta bancaria certificada (obligatoria).'
-    if (!certDiscFile)     return 'Adjunta el certificado disciplinario (obligatorio).'
+    if (!esFirma && !certDiscFile) return 'Adjunta el certificado disciplinario (obligatorio).'
     if (descripcionPublica.trim().length < DESCRIPCION_MIN) {
-      return `Cuenta tu experiencia laboral: al menos ${DESCRIPCION_MIN} caracteres (es lo que los clientes leen en tu tarjeta).`
+      return esFirma
+        ? `Presenta la firma: al menos ${DESCRIPCION_MIN} caracteres (es lo que los clientes leen en su tarjeta).`
+        : `Cuenta la experiencia laboral: al menos ${DESCRIPCION_MIN} caracteres (es lo que los clientes leen en la tarjeta).`
     }
     return ''
   }
@@ -712,7 +873,7 @@ export default function RegisterModal({ onClose }) {
     if (falta) { setDocsError(falta); return }
     setDocsSubmitting(true); setDocsError('')
     try {
-      const headers = await getAuthHeaders()
+      const headers = await headersCuenta()
 
       // 1. Foto de perfil → profile-photos/avatars/<uid>.jpg (bucket público).
       const fotoPath = `avatars/${newUserId}.jpg`
@@ -738,7 +899,8 @@ export default function RegisterModal({ onClose }) {
       }
       const cambios = { foto_url: fotoUrl }
       if (tarjetaDocsFile) {
-        cambios.tarjeta_archivo_url = await subirDoc(tarjetaDocsFile, 'tarjeta', 'la tarjeta profesional')
+        if (esFirma) cambios.camara_comercio_url = await subirDoc(tarjetaDocsFile, 'camara-comercio', 'la cámara de comercio')
+        else cambios.tarjeta_archivo_url = await subirDoc(tarjetaDocsFile, 'tarjeta', 'la tarjeta profesional')
       }
       if (certBancFile) {
         cambios.certificado_bancario_url = await subirDoc(certBancFile, 'certificados/certificado', 'el certificado bancario')
@@ -764,7 +926,7 @@ export default function RegisterModal({ onClose }) {
       // 3. PATCH del perfil con todo lo del paso.
       const patchRes = await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${newUserId}`, {
         method: 'PATCH',
-        headers: { ...(await getAuthHeaders()), Prefer: 'return=minimal' },
+        headers: { ...(await headersCuenta()), Prefer: 'return=minimal' },
         body: JSON.stringify({
           ...cambios,
           direccion_oficina: direccionOficina.trim() || null,
@@ -774,7 +936,7 @@ export default function RegisterModal({ onClose }) {
       })
       if (!patchRes.ok) throw new Error('No se pudo guardar la información del perfil.')
 
-      // 4. Fin: cerrar la sesión temporal y mostrar la pantalla final.
+      // 4. Fin: cerrar la sesión temporal.
       await supabase.auth.signOut()
       setVerificationStep('done')
     } catch (err) {
@@ -810,7 +972,9 @@ export default function RegisterModal({ onClose }) {
 
         <p className={styles.eyebrow}><span style={{ color: 'var(--navy)' }}>Parada</span> Bridge</p>
         <h3 className={styles.title}>
-          {verificationStep === 'docs' ? 'Completa tu perfil' : rol ? ROLE_TITLE[rol] : 'Registrarse'}
+          {verificationStep === 'docs'
+            ? (esFirma ? 'Completa tu firma' : 'Completa tu perfil')
+            : rol ? ROLE_TITLE[rol] : 'Registrarse'}
         </h3>
 
         {error && <p className={styles.msgError}>{error}</p>}
@@ -819,9 +983,9 @@ export default function RegisterModal({ onClose }) {
         {/* Solo visible mientras se elige y se llena el formulario. Una vez
             enviado el codigo, cambiar de rol invalidaria lo ya escrito; y con
             la cuenta ya creada ('done') no queda nada que elegir. */}
-        <div className={extra.roleSelector}
+        <div className={`${extra.roleSelector} ${rolesVisibles.length === 2 ? extra.roleCols2 : rolesVisibles.length === 4 ? extra.roleCols4 : ''}`}
           style={['docs', 'verify', 'done'].includes(verificationStep) ? { display: 'none' } : undefined}>
-          {ROLES.map(({ key, label, Icon }) => (
+          {rolesVisibles.map(({ key, label, Icon }) => (
             <button
               key={key}
               type="button"
@@ -858,23 +1022,25 @@ export default function RegisterModal({ onClose }) {
         {rol && verificationStep === 'docs' && (
           <form className={styles.form} onSubmit={handleDocsSubmit}>
             <p className={styles.hint} style={{ marginTop: 0 }}>
-              Correo verificado ✓. Sube lo que el administrador revisará para
-              aprobar tu perfil. Así no tendrás que esperar una segunda revisión.
+              {esFirma
+                ? 'Correo verificado ✓. Sube lo que el administrador revisará para aprobar la firma. Así no tendrás que esperar una segunda revisión.'
+                : 'Correo verificado ✓. Sube lo que el administrador revisará para aprobar tu perfil. Así no tendrás que esperar una segunda revisión.'}
             </p>
 
             {/* Foto de perfil */}
             <div className={styles.field}>
               <label className={styles.label}>
-                Foto de perfil <span className={styles.req}>*</span>
+                {esFirma ? 'Logo de la firma' : 'Foto de perfil'} <span className={styles.req}>*</span>
                 <span className={`${extra.tag} ${extra.tagReq}`}>Obligatorio</span>
               </label>
               <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
                 <div
                   aria-hidden="true"
                   style={{
-                    width: 72, height: 72, borderRadius: '50%', flex: '0 0 auto',
+                    width: 72, height: 72, borderRadius: esFirma ? 14 : '50%', flex: '0 0 auto',
+                    // El logo se ve entero (contain) sobre blanco; la foto llena el círculo.
                     background: fotoPreview
-                      ? `center / cover no-repeat url(${fotoPreview})`
+                      ? `#fff center / ${esFirma ? 'contain' : 'cover'} no-repeat url(${fotoPreview})`
                       : 'rgba(120,120,120,0.08)',
                     border: fotoPreview ? '2px solid #c9a84c' : '2px dashed rgba(120,120,120,0.4)',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -883,18 +1049,19 @@ export default function RegisterModal({ onClose }) {
                   {!fotoPreview && (
                     <svg viewBox="0 0 24 24" width="34" height="34" fill="none"
                       stroke="#9a938c" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-                      <circle cx="12" cy="8" r="4" />
-                      <path d="M4 21c0-4 3.6-7 8-7s8 3 8 7" />
+                      {esFirma
+                        ? <path d="M3 21h18M5 21V10M19 21V10M9 21v-6h6v6M2.5 10 12 4l9.5 6z" />
+                        : <><circle cx="12" cy="8" r="4" /><path d="M4 21c0-4 3.6-7 8-7s8 3 8 7" /></>}
                     </svg>
                   )}
                 </div>
                 <div style={{ display: 'grid', gap: 4 }}>
                   <button type="button" className={extra.uploadBtn}
                     onClick={() => fotoInputRef.current?.click()}>
-                    {fotoFile ? 'Cambiar foto' : 'Subir foto'}
+                    {fotoFile ? (esFirma ? 'Cambiar logo' : 'Cambiar foto') : (esFirma ? 'Subir logo' : 'Subir foto')}
                   </button>
                   <span style={{ fontSize: '0.68rem', opacity: 0.65 }}>
-                    Aparecerá en tu tarjeta pública. JPG/PNG.
+                    {esFirma ? 'Aparecerá en la tarjeta pública de la firma. JPG/PNG.' : 'Aparecerá en la tarjeta pública. JPG/PNG.'}
                   </span>
                 </div>
               </div>
@@ -906,12 +1073,12 @@ export default function RegisterModal({ onClose }) {
                 el Paso C; si esa subida falló, aquí se exige de nuevo. */}
             <div className={styles.field}>
               <label className={styles.label}>
-                Tarjeta profesional <span className={styles.req}>*</span>
+                {esFirma ? 'Cámara de comercio' : 'Tarjeta profesional'} <span className={styles.req}>*</span>
                 <span className={`${extra.tag} ${extra.tagReq}`}>Obligatorio</span>
               </label>
               {tarjetaSubidaPath && !tarjetaDocsFile ? (
                 <div className={extra.docAdjunto}>
-                  <span className={extra.fileName}>✓ {tarjetaFile?.name || 'Tarjeta adjunta'} (ya recibida)</span>
+                  <span className={extra.fileName}>✓ {tarjetaFile?.name || 'Documento adjunto'} (ya recibida)</span>
                   <button type="button" className={extra.linkMini}
                     onClick={() => tarjetaDocsInputRef.current?.click()}>
                     Cambiar archivo
@@ -921,12 +1088,12 @@ export default function RegisterModal({ onClose }) {
                 <>
                   <button type="button" className={extra.uploadBtn}
                     onClick={() => tarjetaDocsInputRef.current?.click()}>
-                    {tarjetaDocsFile ? 'Cambiar archivo' : 'Subir tarjeta profesional'}
+                    {tarjetaDocsFile ? 'Cambiar archivo' : esFirma ? 'Subir cámara de comercio' : 'Subir tarjeta profesional'}
                   </button>
                   {tarjetaDocsFile && <div className={extra.fileName}>✓ {tarjetaDocsFile.name}</div>}
                   {!tarjetaSubidaPath && !tarjetaDocsFile && (
                     <span className={extra.docHint}>
-                      No pudimos recibir la tarjeta del formulario. Súbela de nuevo (PDF o imagen).
+                      No pudimos recibir el documento del formulario. Súbelo de nuevo (PDF o imagen).
                     </span>
                   )}
                 </>
@@ -939,11 +1106,11 @@ export default function RegisterModal({ onClose }) {
             {/* Certificados: obligatorio al menos uno de los dos */}
             <fieldset className={extra.docGroup}>
               <legend className={styles.label}>
-                Certificados <span className={styles.req}>*</span>
-                <span className={`${extra.tag} ${extra.tagReq}`}>Obligatorio · ambos</span>
+                {esFirma ? 'Certificado' : 'Certificados'} <span className={styles.req}>*</span>
+                <span className={`${extra.tag} ${extra.tagReq}`}>{esFirma ? 'Obligatorio' : 'Obligatorio · ambos'}</span>
               </legend>
               <p className={extra.docHint} style={{ marginTop: 0 }}>
-                Sube los dos. PDF o imagen, máx. 10 MB cada uno.
+                {esFirma ? 'PDF o imagen, máx. 10 MB.' : 'Sube los dos. PDF o imagen, máx. 10 MB cada uno.'}
               </p>
 
               <div className={extra.docSlot}>
@@ -963,6 +1130,7 @@ export default function RegisterModal({ onClose }) {
                 )}
               </div>
 
+              {!esFirma && (
               <div className={extra.docSlot}>
                 <span className={extra.docSlotName}>Certificado disciplinario</span>
                 <button type="button" className={extra.uploadBtn}
@@ -982,9 +1150,12 @@ export default function RegisterModal({ onClose }) {
                   Los clientes podrán consultarlo dentro del chat para confiar en ti.
                 </span>
               </div>
+              )}
             </fieldset>
 
-            {/* Modelo contractual (opcional) */}
+            {/* Modelo contractual (opcional) — herramienta de quien atiende
+                consultas; una firma no envía contratos por sí misma. */}
+            {!esFirma && (
             <div className={styles.field}>
               <label className={styles.label}>
                 Modelo contractual
@@ -1006,6 +1177,7 @@ export default function RegisterModal({ onClose }) {
                 Tu contrato base para enviar a firma desde cualquier chat. Podrás subirlo o cambiarlo luego en tu perfil.
               </span>
             </div>
+            )}
 
             {/* Experiencia laboral (obligatoria) — es el "Sobre mí" que el
                 cliente lee al abrir su tarjeta en el home. Se pide aquí y no
@@ -1019,17 +1191,21 @@ export default function RegisterModal({ onClose }) {
                 hechos, que es lo que el cliente necesita para decidir. */}
             <div className={styles.field}>
               <label className={styles.label}>
-                Experiencia laboral
+                {esFirma ? 'Presentación de la firma' : 'Experiencia laboral'}
                 <span className={`${extra.tag} ${extra.tagReq}`}>Obligatorio</span>
               </label>
               <span className={extra.docHint} style={{ marginTop: 0, marginBottom: 6 }}>
-                Dónde has trabajado, en qué eres bueno y qué tipo de procesos has llevado.
+                {esFirma
+                  ? 'Qué hace la firma, a quién atiende y en qué casos tiene más recorrido.'
+                  : 'Dónde has trabajado, en qué eres bueno y qué tipo de procesos has llevado.'}
               </span>
               <textarea
                 className={styles.input}
                 rows={4}
                 maxLength={DESCRIPCION_MAX}
-                placeholder={rol === 'contador'
+                placeholder={esFirma
+                  ? "Ej: Firma de abogados y contadores con 15 años acompañando a pymes y familias en Bogotá. Atendemos derecho laboral, societario y tributario, y llevamos la contabilidad y la revisoría fiscal de empresas del sector comercial."
+                  : rol === 'contador'
                   ? "Ej: Contadora pública con 12 años en revisoría fiscal y auditoría externa. He trabajado en el sector solidario y en empresas comerciales, llevando cierres contables, declaraciones de renta e implementación de NIIF."
                   : "Ej: Abogado especializado en derecho laboral, con 6 años acompañando a trabajadores en procesos de despido injustificado y liquidaciones. He llevado casos ante el Ministerio de Trabajo y tribunales de Bogotá."}
                 value={descripcionPublica}
@@ -1040,7 +1216,7 @@ export default function RegisterModal({ onClose }) {
                 display: 'flex', justifyContent: 'space-between', gap: 8,
                 marginTop: 4, fontSize: '0.68rem', color: 'var(--muted, #6f5c48)',
               }}>
-                <span>Es lo primero que lee un cliente en tu tarjeta del inicio.</span>
+                <span>{esFirma ? 'Es lo primero que lee un cliente en la tarjeta de la firma.' : 'Es lo primero que lee un cliente en la tarjeta del inicio.'}</span>
                 <span style={{
                   color: descripcionPublica.trim().length < DESCRIPCION_MIN
                     ? '#9a5b3a'
@@ -1085,7 +1261,9 @@ export default function RegisterModal({ onClose }) {
               {docsSubmitting ? 'Enviando…' : 'Enviar para revisión →'}
             </button>
             <p className={styles.hint}>
-              El administrador revisará tu perfil completo y te avisaremos por correo.
+              {esFirma
+                ? 'El administrador revisará la firma y te avisaremos por correo.'
+                : 'El administrador revisará tu perfil completo y te avisaremos por correo.'}
             </p>
           </form>
         )}
@@ -1111,8 +1289,9 @@ export default function RegisterModal({ onClose }) {
               color: 'var(--navy, #6d3c1b)', fontSize: 14, lineHeight: 1.6,
               margin: '0 0 22px', padding: '0 4px',
             }}>
-              Tu cuenta está pendiente de aprobación por el administrador.
-              Te avisaremos por correo cuando esté lista.
+              {esFirma
+                ? 'Tu firma está pendiente de aprobación por el administrador. Te avisaremos por correo; al entrar, el primer paso será registrar a tu Director.'
+                : 'Tu cuenta está pendiente de aprobación por el administrador. Te avisaremos por correo cuando esté lista.'}
             </p>
             <button type="button" className={`btn-solid ${styles.submit}`} onClick={onClose}>
               Ir al inicio
@@ -1122,13 +1301,15 @@ export default function RegisterModal({ onClose }) {
 
         {/* ══════════════ CONDICIONES — antes de pedir un solo dato ══════════════ */}
         {rol && verificationStep === 'condiciones' && (() => {
-          const c = CONDICIONES[rol === 'gestor' ? 'gestor' : 'profesional']
+          const c = CONDICIONES[rol === 'gestor' ? 'gestor' : esFirma ? 'firma' : 'profesional']
           const claveContrato = contratoDeRol(rol)
           const contrato = DOCS_LEGALES[claveContrato]
           return (
             <div className={extra.condiciones}>
               <p className={extra.condTitulo}>{c.titulo}</p>
-              <p className={extra.condEntrada}>{c.entrada}</p>
+              <p className={extra.condEntrada}>
+                {c.entrada}
+              </p>
 
               <ul className={extra.condLista}>
                 {c.puntos.map((p) => (
@@ -1197,6 +1378,13 @@ export default function RegisterModal({ onClose }) {
 
             {/* Nombre + Apellido: los pide todo rol, gestor incluido. Es a quien
                 se le paga una comision, hace falta saber quien es. */}
+            {esFirma ? (
+              <div className={styles.field}>
+                <label className={styles.label}>Nombre de la firma <span className={styles.req}>*</span></label>
+                <input type="text" className={cls('nombre')} placeholder="Razón social o nombre comercial"
+                  value={nombre} onChange={(e) => setNombre(e.target.value)} maxLength={90} required />
+              </div>
+            ) : (
             <div className={styles.row}>
                 <div className={styles.field}>
                   <label className={styles.label}>Nombre <span className={styles.req}>*</span></label>
@@ -1209,6 +1397,7 @@ export default function RegisterModal({ onClose }) {
                     value={apellido} onChange={(e) => setApellido(e.target.value)} required />
               </div>
             </div>
+            )}
 
             {/* Username. Se teclea como la persona quiera y se GUARDA en
                 minúsculas: así "EstebanArias" y "estebanarias" no acaban siendo
@@ -1216,7 +1405,7 @@ export default function RegisterModal({ onClose }) {
                 2026-09-28): se entra con el correo, no con el usuario. */}
             <div className={styles.field}>
               <label className={styles.label}>Nombre de usuario <span className={styles.req}>*</span></label>
-              <input type="text" className={cls('username')} placeholder="Ej: JuanPerez"
+              <input type="text" className={cls('username')} placeholder={esFirma ? 'Ej: RinconAsociados' : 'Ej: JuanPerez'}
                 value={username}
                 autoCapitalize="none" autoCorrect="off" spellCheck={false} inputMode="text"
                 onChange={(e) => setUsername(limpiarUsername(e.target.value))} required />
@@ -1229,8 +1418,27 @@ export default function RegisterModal({ onClose }) {
               })()}
             </div>
 
-            {/* Cédula (obligatoria para los 3 roles) */}
-            {rol && (
+            {/* NIT de la firma, en el lugar de la cédula. */}
+            {esFirma && (
+              <div className={styles.field}>
+                <label className={styles.label}>NIT <span className={styles.req}>*</span></label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  className={cls('nit')}
+                  placeholder="900123456-7"
+                  value={nit}
+                  onChange={(e) => setNit(e.target.value.replace(/[^\d-]/g, '').slice(0, 11))}
+                  onBlur={() => setNitTouched(true)}
+                  required
+                  style={borderFor(nitVal.valid, nitTouched, nit)}
+                />
+                <FieldHint valid={nitVal.valid} msg={nitVal.msg} touched={nitTouched && !!nit} />
+              </div>
+            )}
+
+            {/* Cédula (obligatoria para las personas: abogado, contador, gestor) */}
+            {rol && !esFirma && (
               <div className={styles.field}>
                 <label className={styles.label}>Cédula <span className={styles.req}>*</span></label>
                 <input
@@ -1306,7 +1514,7 @@ export default function RegisterModal({ onClose }) {
                   value={regPassword}
                   onChange={(e) => setRegPassword(e.target.value)}
                   onFocus={() => { setPwTouched(true); setPwFocus(true) }}
-                  onBlur={() => setPwFocus(false)}
+                  onBlur={cerrarRequisitos}
                   required
                   autoComplete="new-password"
                   style={{
@@ -1378,8 +1586,22 @@ export default function RegisterModal({ onClose }) {
                         <span>{a}</span>
                       </label>
                     ))}
+                    {/* El abogado no trae "Otra" en su lista; el contador sí trae "Otro". */}
+                    {rol === 'abogado' && (
+                      <label className={extra.areaItem}>
+                        <input type="checkbox" className={extra.areaCheck}
+                          checked={areaOtraOn} onChange={() => toggleArea('Otra')} />
+                        <span>Otra</span>
+                      </label>
+                    )}
                   </div>
-                  <div className={extra.areasCount}>{areas.length} seleccionada{areas.length === 1 ? '' : 's'}</div>
+                  {areaOtraOn && (
+                    <input type="text" className={cls('areaOtra')} style={{ marginTop: '0.6rem' }} maxLength={60}
+                      placeholder={rol === 'abogado' ? 'Escribe tu otra área' : 'Escribe tu otra especialidad'}
+                      aria-label={rol === 'abogado' ? 'Otra área' : 'Otra especialidad'}
+                      value={areaOtraTexto} onChange={(e) => setAreaOtraTexto(e.target.value)} />
+                  )}
+                  <div className={extra.areasCount}>{areasFinales.length} seleccionada{areasFinales.length === 1 ? '' : 's'}</div>
                 </div>
 
                 {/* Experiencia laboral */}
@@ -1457,6 +1679,107 @@ export default function RegisterModal({ onClose }) {
                   {tarjetaFile && (
                     <div className={extra.fileName}>✓ {tarjetaFile.name}</div>
                   )}
+                </div>
+              </>
+            )}
+
+            {/* ── Campos de firma: alcance + áreas + trayectoria + sede + cámara ── */}
+            {esFirma && (
+              <>
+                {/* Alcance del servicio: tres opciones excluyentes, a la vista. */}
+                <div className={styles.field}>
+                  <span className={styles.label} id="alcance-label">
+                    ¿Cómo prestan el servicio? <span className={styles.req}>*</span>
+                  </span>
+                  <div className={extra.alcance} role="radiogroup" aria-labelledby="alcance-label"
+                    data-error={errores.alcance ? '1' : undefined}>
+                    {OPCIONES_ALCANCE.map(({ v, t, d }) => (
+                      <label key={v}
+                        className={`${extra.alcanceOp} ${alcance === v ? extra.alcanceOpActiva : ''} ${errores.alcance ? extra.alcanceOpError : ''}`}>
+                        <input type="radio" name="alcance" value={v} checked={alcance === v}
+                          onChange={() => setAlcance(v)} className={extra.alcanceRadio} />
+                        <span className={extra.alcanceTxt}>
+                          <strong>{t}</strong>
+                          <span>{d}</span>
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Áreas de práctica: una firma puede ser jurídica, contable o las dos. */}
+                <div className={styles.field}>
+                  <label className={styles.label}>Áreas en las que trabaja la firma</label>
+                  <div className={extra.areasBox}>
+                    <span className={extra.areasGrupo}>Derecho</span>
+                    {AREAS_DERECHO.map(a => (
+                      <label key={`d-${a}`} className={extra.areaItem}>
+                        <input type="checkbox" className={extra.areaCheck}
+                          checked={areas.includes(a)} onChange={() => toggleArea(a)} />
+                        <span>{a}</span>
+                      </label>
+                    ))}
+                    <span className={extra.areasGrupo}>Contaduría</span>
+                    {AREAS_CONTADURIA.filter(a => !AREAS_DERECHO.includes(a)).map(a => (
+                      <label key={`c-${a}`} className={extra.areaItem}>
+                        <input type="checkbox" className={extra.areaCheck}
+                          checked={areas.includes(a)} onChange={() => toggleArea(a)} />
+                        <span>{a}</span>
+                      </label>
+                    ))}
+                  </div>
+                  {areaOtraOn && (
+                    <input type="text" className={cls('areaOtra')} style={{ marginTop: '0.6rem' }} maxLength={60}
+                      placeholder="Escribe esa otra área" aria-label="Otra área"
+                      value={areaOtraTexto} onChange={(e) => setAreaOtraTexto(e.target.value)} />
+                  )}
+                  <div className={extra.areasCount}>{areasFinales.length} seleccionada{areasFinales.length === 1 ? '' : 's'}</div>
+                </div>
+
+                <div className={styles.field}>
+                  <label className={styles.label}>Trayectoria de la firma</label>
+                  <select className={styles.input} value={experiencia}
+                    onChange={(e) => setExperiencia(e.target.value)}>
+                    <option value="">Selecciona…</option>
+                    {EXPERIENCIA_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+                  </select>
+                </div>
+
+                {/* Sede principal — obligatoria: los clientes filtran por ciudad. */}
+                <UbicacionSelector
+                  departamento={departamento}
+                  municipio={ciudad}
+                  barrio={barrio}
+                  required
+                  classes={{ field: styles.field, label: styles.label, select: cls('ubicacion') }}
+                  onChange={({ departamento: d, municipio, barrio: b }) => {
+                    setDepartamento(d); setCiudad(municipio); setBarrio(b)
+                  }}
+                />
+
+                {/* Cámara de comercio — el documento que acredita a la firma,
+                    en el lugar de la tarjeta profesional. */}
+                <div className={styles.field}>
+                  <label className={styles.label}>
+                    Cámara de comercio <span className={styles.req}>*</span> <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0, opacity: 0.6 }}>(PDF o imagen)</span>
+                  </label>
+                  <button type="button" className={extra.uploadBtn}
+                    data-error={errores.tarjeta ? '1' : undefined}
+                    style={errores.tarjeta ? { borderColor: '#a23b3b', color: '#a23b3b' } : undefined}
+                    onClick={() => tarjetaInputRef.current?.click()}>
+                    {tarjetaFile ? 'Cambiar archivo' : 'Subir cámara de comercio'}
+                  </button>
+                  <input
+                    ref={tarjetaInputRef}
+                    type="file"
+                    accept="application/pdf,image/png,image/jpeg,image/webp"
+                    style={{ display: 'none' }}
+                    onChange={onTarjetaChange}
+                  />
+                  {tarjetaFile && <div className={extra.fileName}>✓ {tarjetaFile.name}</div>}
+                  <span className={extra.docHint}>
+                    Certificado de existencia y representación legal de la firma.
+                  </span>
                 </div>
               </>
             )}
@@ -1655,7 +1978,9 @@ export default function RegisterModal({ onClose }) {
             </button>
 
             <p className={styles.hint}>
-              Al registrarse, su perfil quedará pendiente de aprobación.
+              {esFirma
+                ? 'Al registrarse, la firma quedará pendiente de aprobación.'
+                : 'Al registrarse, su perfil quedará pendiente de aprobación.'}
             </p>
           </form>
         )}
@@ -1695,9 +2020,9 @@ export default function RegisterModal({ onClose }) {
               ¿Salir sin completar?
             </h4>
             <p style={{ margin: '0 0 20px', fontSize: '0.85rem', lineHeight: 1.6, color: '#5a4a3d' }}>
-              Tu registro quedará incompleto sin la foto, la tarjeta profesional y los dos certificados.
-              Podrás completarlos luego desde tu perfil, pero el administrador
-              no podrá revisarte hasta entonces.
+              {esFirma
+                ? 'El registro de la firma quedará incompleto sin el logo, la cámara de comercio y el certificado bancario, y el administrador no podrá revisarla hasta entonces.'
+                : 'Tu registro quedará incompleto sin la foto, la tarjeta profesional y los dos certificados. Podrás completarlos luego desde tu perfil, pero el administrador no podrá revisarte hasta entonces.'}
             </p>
             <div className={extra.confirmActions}>
               <button type="button" onClick={() => setConfirmSalir(false)}

@@ -236,6 +236,14 @@
   align-items: stretch;
 }
 .slide > * { width: 100%; height: 100%; }
+/* Fila que cabe entera (pocas firmas): centrada y sin desvanecido. */
+.cintaQuieta {
+  cursor: default;
+  -webkit-mask-image: none;
+          mask-image: none;
+}
+.cintaQuieta .track { margin: 0 auto; }
+.cintaQuieta .slide:last-child { margin-right: 0; }
 
 /* ── Flechas de navegación (centradas bajo la cinta) ── */
 .cintaNav {

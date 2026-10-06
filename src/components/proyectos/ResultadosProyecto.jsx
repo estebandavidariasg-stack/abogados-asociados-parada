@@ -42,7 +42,9 @@ const fmtDia = (iso) => {
 
 const TODOS = '__todos__'
 
-const MOTIVOS_REPORTE = ['Contenido ofensivo', 'Spam o publicidad', 'Información falsa', 'Otro']
+const MOTIVO_OTRO = 'Otro'
+const MOTIVOS_REPORTE = ['Contenido ofensivo', 'Spam o publicidad', 'Información falsa', MOTIVO_OTRO]
+const MOTIVO_OTRO_MAX = 120   // "Otro" abre un campo corto: el motivo es lo que escribe la persona
 
 /* Tarjeta de un comentario con capa social: acuerdo/desacuerdo, respuestas
    desplegables y reporte. En modo admin muestra el nº de reportes y permite
@@ -57,6 +59,8 @@ function ComentarioCard({ c, respuestas, isAdmin, autor }) {
   const [texto, setTexto]       = useState('')
   const [enviando, setEnviando] = useState(false)
   const [reportUI, setReportUI] = useState(false)
+  const [otroOn, setOtroOn]     = useState(false)   // eligió "Otro": se muestra el campo de texto
+  const [otroTexto, setOtroTexto] = useState('')
   const [reportado, setReportado] = useState(false)
   const [oculto, setOculto]     = useState(false)
   const [busyMod, setBusyMod]   = useState(false)
@@ -87,10 +91,19 @@ function ComentarioCard({ c, respuestas, isAdmin, autor }) {
     }
   }
 
+  const cerrarReporte = () => { setReportUI(false); setOtroOn(false); setOtroTexto('') }
+
   async function reportar(motivo) {
-    setReportUI(false)
+    cerrarReporte()
     const r = await reportarComentario(c.id, motivo)
     if (r.ok) setReportado(true)
+  }
+
+  // "Otro" no reporta de una vez: el motivo es el texto que escribe la persona.
+  function enviarOtro(e) {
+    e.preventDefault()
+    const t = otroTexto.trim().slice(0, MOTIVO_OTRO_MAX)
+    if (t) reportar(t)
   }
 
   async function moderar() {
@@ -143,7 +156,7 @@ function ComentarioCard({ c, respuestas, isAdmin, autor }) {
         {reportado ? (
           <span className={styles.reportedTag}>Reportado ✓</span>
         ) : (
-          <button type="button" className={styles.reportBtn} onClick={() => setReportUI(v => !v)} aria-expanded={reportUI}>
+          <button type="button" className={styles.reportBtn} onClick={() => (reportUI ? cerrarReporte() : setReportUI(true))} aria-expanded={reportUI}>
             <FlagIcon /> Reportar
           </button>
         )}
@@ -156,13 +169,31 @@ function ComentarioCard({ c, respuestas, isAdmin, autor }) {
 
       {/* Menú de motivos de reporte (inline, sin recorte) */}
       {reportUI && (
-        <div className={styles.reportMenu} role="menu">
+        <div className={styles.reportMenu} role="menu" onKeyDown={e => { if (e.key === 'Escape') cerrarReporte() }}>
           <span className={styles.reportMenuLbl}>¿Por qué reportas este comentario?</span>
           <div className={styles.reportMotivos}>
-            {MOTIVOS_REPORTE.map(mo => (
-              <button key={mo} type="button" role="menuitem" className={styles.reportMotivo} onClick={() => reportar(mo)}>{mo}</button>
-            ))}
+            {MOTIVOS_REPORTE.map(mo => {
+              const esOtro = mo === MOTIVO_OTRO
+              return (
+                <button key={mo} type="button" role="menuitem"
+                  className={`${styles.reportMotivo} ${esOtro && otroOn ? styles.reportMotivoOn : ''}`}
+                  aria-expanded={esOtro ? otroOn : undefined}
+                  onClick={() => (esOtro ? setOtroOn(true) : reportar(mo))}>
+                  {mo}
+                </button>
+              )
+            })}
           </div>
+          {otroOn && (
+            <form className={styles.reportOtro} onSubmit={enviarOtro}>
+              <input
+                type="text" className={styles.reportOtroInput} autoFocus
+                maxLength={MOTIVO_OTRO_MAX} placeholder="Cuéntanos el motivo" aria-label="Motivo del reporte"
+                value={otroTexto} onChange={e => setOtroTexto(e.target.value.slice(0, MOTIVO_OTRO_MAX))}
+              />
+              <button type="submit" className={styles.reportOtroSend} disabled={!otroTexto.trim()}>Enviar reporte</button>
+            </form>
+          )}
         </div>
       )}
 

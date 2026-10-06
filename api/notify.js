@@ -145,7 +145,7 @@ function emailInactividad({ nombreAbogado, nombreCliente, area, createdAt, ctaUr
 }
 
 function emailAprobado({ nombreAbogado, rol, ctaUrl }) {
-  const rolLabel = rol === 'contador' ? 'contador' : 'abogado'
+  const rolLabel = rol === 'contador' ? 'contador' : rol === 'firma' ? 'firma' : 'abogado'
   const subjectLine = 'Tu cuenta fue aprobada'
   return {
     subject: subjectLine,
@@ -183,6 +183,28 @@ function emailAprobacion({ nombre, rol, ctaUrl }) {
   const rolLabel = rol === 'contador' ? 'contador' : 'abogado'
   const subjectLine = 'Fuiste aprobado en Parada Bridge'
   const b = (t) => `<strong style="color:#6d3c1b;font-weight:700;">${t}</strong>`
+  // La firma no atiende consultas ella misma: se le explica el paso que sigue
+  // (mismo texto que le queda en el chat interno desde el panel).
+  if (rol === 'firma') {
+    const asunto = 'Tu firma fue aprobada en Parada Bridge'
+    return {
+      subject: asunto,
+      html: renderEmailHtml({
+        subjectLine: asunto,
+        preheader: 'El siguiente paso es registrar a tu Director.',
+        greetingHtml: `Hola ${b(esc(nombre))},`,
+        bodyHtml:
+          `${b('¡Bienvenido a Parada Bridge!')} Tu firma ya está aprobada.<br><br>` +
+          `${b('Cómo sigue desde aquí')}<br><br>` +
+          `&bull; ${b('Registra a tu Director.')} Es obligatorio y sin él la firma no aparece en el inicio.<br>` +
+          `&bull; Luego registra a tus ${b('aliados y colaboradores')}. Son perfiles informativos que se muestran en la tarjeta de tu firma.<br>` +
+          `&bull; ${b('Todas las consultas le llegan a la firma.')} Tú las atiendes y las cobras desde tu panel, con las reglas de cualquier profesional de la plataforma.<br><br>` +
+          `Este mismo mensaje te queda en tu chat interno con la administración.`,
+        ctaLabel: 'Entrar a mi firma',
+        ctaUrl,
+      }),
+    }
+  }
   // El gestor no atiende consultas: recibe solo la bienvenida (mismo texto que
   // le queda en el chat interno desde el panel de administración).
   if (rol === 'gestor') {
@@ -283,7 +305,7 @@ function emailMensajeInterno({ nombreProfesional, ctaUrl }) {
 }
 
 function emailRechazado({ nombreAbogado, rol, ctaUrl, cuentaEliminada }) {
-  const rolLabel = rol === 'contador' ? 'contador' : rol === 'gestor' ? 'gestor' : 'abogado'
+  const rolLabel = rol === 'contador' ? 'contador' : rol === 'gestor' ? 'gestor' : rol === 'firma' ? 'firma' : 'abogado'
   const subjectLine = 'Sobre tu solicitud de registro'
   return {
     subject: subjectLine,
@@ -962,6 +984,43 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true, id: user.id, sent: true })
     }
 
+    /* ══════════════ FIRMA: eliminar su cuenta ══════════════
+       Lo pide la propia firma desde su panel. Su equipo son fichas
+       informativas (firma_miembros) y se borran; la fila de profiles NO se
+       borra: pagos_profesional y otras tablas cuelgan de ella con ON DELETE
+       CASCADE y el admin conserva el historial de consultas y pagos. La base
+       la marca (cuenta_eliminada_en) y aquí se borra el usuario de acceso.
+       Requiere docs/sql/perfil-firma-v2-2026-10-05.sql. */
+    if (type === 'firma_eliminar_cuenta') {
+      const caller = await getCallerProfile(req)
+      if (caller?.rol !== 'firma') {
+        return res.status(401).json({ error: 'No autorizado.' })
+      }
+      const rp = await fetch(`${SUPABASE_URL}/rest/v1/rpc/firma_cerrar_cuenta`, {
+        method: 'POST', headers: svcHeaders(), body: JSON.stringify({ p_firma: caller.id }),
+      })
+      if (!rp.ok) {
+        const j = await rp.json().catch(() => ({}))
+        const msg = String(j?.message || '')
+        console.error('[notify] firma_eliminar_cuenta rpc:', rp.status, j?.code, msg)
+        return res.status(500).json({
+          error: /could not find the function|schema cache/i.test(msg)
+            ? 'Falta aplicar docs/sql/perfil-firma-v2-2026-10-05.sql en Supabase.'
+            : 'No se pudo eliminar la cuenta. Intenta de nuevo o escríbenos por el chat interno.',
+        })
+      }
+      const delAuth = await fetch(`${SUPABASE_URL}/auth/v1/admin/users/${encodeURIComponent(caller.id)}`, {
+        method: 'DELETE', headers: svcHeaders(),
+      })
+      if (!delAuth.ok) {
+        // La fila ya quedó marcada: la cuenta no vuelve a aparecer en ningún
+        // lado, pero el acceso sigue vivo. Se registra para revisarlo a mano.
+        console.error('[notify] firma_eliminar_cuenta auth:', delAuth.status)
+      }
+      return res.status(200).json({ ok: true, acceso_borrado: delAuth.ok })
+    }
+
+
     // ── "El administrador te escribió" (chat interno) ──
     // Exige cuenta de panel (superadmin o admin: los dos escriben en el chat
     // interno). Throttle server-side: máx. 1 correo por hora por
@@ -1088,6 +1147,8 @@ export default async function handler(req, res) {
             )
             if (!rc.ok) console.error('[notify] inhabilitar códigos del gestor falló:', rc.status)
           }
+          // FIRMA: su equipo son fichas (firma_miembros) que cuelgan de la
+          // firma con ON DELETE CASCADE: se van con ella.
           const delPerfil = await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${encodeURIComponent(lawyerId)}`, {
             method: 'DELETE',
             headers: svcHeaders({ Prefer: 'return=minimal' }),

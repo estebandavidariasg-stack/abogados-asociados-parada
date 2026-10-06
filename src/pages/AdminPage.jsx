@@ -72,9 +72,31 @@ const TEXTO_BIENVENIDA_GESTOR = [
   'Cualquier duda, escríbenos por aquí mismo.',
 ].join('\n')
 
+// La firma es quien atiende TODAS las consultas (su Director y sus aliados
+// son perfiles informativos). Se le explica el paso que sigue; api/notify.js
+// manda lo mismo por correo.
+// Sin dos puntos en el texto (pedido del dueño). El único que queda, al final
+// de "Cómo sigue desde aquí:", es la marca con la que la tarjeta reconoce el
+// subtítulo y NO se pinta (parseBienvenida / BienvenidaCard lo quitan).
+const TEXTO_BIENVENIDA_FIRMA = [
+  '¡Bienvenido a Parada Bridge! Tu firma ya está aprobada.',
+  '',
+  'Cómo sigue desde aquí:',
+  '',
+  '• Registra a tu Director. Es obligatorio y sin él la firma no aparece en el inicio.',
+  '• Luego registra a tus aliados y colaboradores. Son perfiles informativos que se muestran en la tarjeta de tu firma.',
+  '• Todas las consultas le llegan a la firma. Tú las atiendes y las cobras desde tu panel, con las reglas de cualquier profesional de la plataforma.',
+  '',
+  'Cualquier duda, escríbenos por aquí mismo.',
+].join('\n')
+
 // Texto y rotulo segun el rol aprobado.
-const textoAprobacion = (rol) => (rol === 'gestor' ? TEXTO_BIENVENIDA_GESTOR : bienvenidaProfesional(rol))
-const rotuloAprobacion = (rol) => (rol === 'gestor' ? 'Mensaje de bienvenida' : 'Compromiso del profesional')
+const textoAprobacion = (rol) => (
+  rol === 'gestor' ? TEXTO_BIENVENIDA_GESTOR
+    : rol === 'firma' ? TEXTO_BIENVENIDA_FIRMA
+    : bienvenidaProfesional(rol)
+)
+const rotuloAprobacion = (rol) => (rol === 'gestor' || rol === 'firma' ? 'Mensaje de bienvenida' : 'Compromiso del profesional')
 const ADJUNTO_MAX_BYTES = 10 * 1024 * 1024
 
 async function getAuthHeaders() {
@@ -256,11 +278,14 @@ export default function AdminPage() {
     // aplica en cliente. Los gestores entran aquí para aprobarse/rechazarse
     // igual que los profesionales (misma bandera `aprobado`).
     const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/profiles?aprobado=eq.false&rol=in.(abogado,contador,gestor)&select=*`,
+      `${SUPABASE_URL}/rest/v1/profiles?aprobado=eq.false&rol=in.(abogado,contador,gestor,firma)&select=*`,
       { headers }
     )
     const data = await res.json()
-    setPending(Array.isArray(data) ? data : [])
+    // Una firma que eliminó su cuenta queda en la base (su historial de
+    // consultas y pagos cuelga de la fila) con aprobado=false: no es una
+    // solicitud.
+    setPending(Array.isArray(data) ? data.filter(p => !p.cuenta_eliminada_en) : [])
   }
 
   // Lista de gestores para el badge de la pestaña Gestores (solo id/aprobado).
@@ -279,7 +304,7 @@ export default function AdminPage() {
   async function fetchApproved() {
     const headers = await getAuthHeaders()
     const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/profiles?aprobado=eq.true&rol=in.(abogado,contador,gestor)&select=*`,
+      `${SUPABASE_URL}/rest/v1/profiles?aprobado=eq.true&rol=in.(abogado,contador,gestor,firma)&select=*`,
       { headers }
     )
     const data = await res.json()
@@ -395,7 +420,9 @@ export default function AdminPage() {
       // contadores), así que el aviso termina en el envío.
       const aviso = rol === 'gestor'
         ? 'Aprobado. Se envió el compromiso por chat interno y correo.'
-        : 'Aprobado. Se envió el compromiso por chat interno y correo. Visible en el home en máximo 2 minutos.'
+        : rol === 'firma'
+          ? 'Firma aprobada. Se le envió la bienvenida por chat interno y correo. Saldrá en el inicio cuando registre a su Director.'
+          : 'Aprobado. Se envió el compromiso por chat interno y correo. Visible en el home en máximo 2 minutos.'
       setAvisoAprobado(aviso + avisoAdjunto)
       setAprobarModal(null); setAprobarFile(null)
       await fetchAll()
@@ -741,6 +768,7 @@ export default function AdminPage() {
     if (campos.some(c => c.includes(q))) return true
     // Cédula: comparar sin puntos/espacios (permite buscar "1.234" o "1234").
     if (qDigits && soloDigitos(p.cedula).includes(qDigits)) return true
+    if (qDigits && soloDigitos(p.nit).includes(qDigits)) return true
     return false
   }
   // Filtra por rol (incluye 'gestor') + texto instantáneo. `roles` restringe
@@ -759,7 +787,7 @@ export default function AdminPage() {
   // Barra de filtro reutilizable: chips de rol + búsqueda instantánea. Una sola
   // definición reusada en Solicitudes, Aprobados y Contratos. `roles` limita las
   // chips visibles (Contratos oculta "Gestores"); `placeholder` es opcional.
-  const PersonFilterBar = ({ roles = ['abogado', 'contador', 'gestor'], placeholder = 'Buscar por nombre o cédula…' }) => (
+  const PersonFilterBar = ({ roles = ['abogado', 'contador', 'gestor', 'firma'], placeholder = 'Buscar por nombre, cédula o NIT…' }) => (
     <div className={styles.filterBar}>
       <div className={styles.rolChipsRow}>
         <button
@@ -794,6 +822,15 @@ export default function AdminPage() {
             onClick={() => setRolFilter('gestor')}
           >
             Gestores
+          </button>
+        )}
+        {roles.includes('firma') && (
+          <button
+            type="button"
+            className={`${styles.rolChip} ${rolFilter === 'firma' ? styles.rolChipActive : ''}`}
+            onClick={() => setRolFilter('firma')}
+          >
+            Firmas
           </button>
         )}
       </div>
@@ -958,12 +995,22 @@ export default function AdminPage() {
   }
 
   // Etiqueta legible del rol para el badge de las tarjetas.
-  const rolLabel = (rol) => rol === 'contador' ? 'Contador' : rol === 'gestor' ? 'Gestor' : 'Abogado'
+  const rolLabel = (rol) => rol === 'contador' ? 'Contador' : rol === 'gestor' ? 'Gestor' : rol === 'firma' ? 'Firma' : 'Abogado'
   const rolBadgeClass = (rol) => rol === 'contador'
     ? styles.cardRolBadgeContador
     : rol === 'gestor'
     ? styles.cardRolBadgeGestor
+    : rol === 'firma'
+    ? styles.cardRolBadgeFirma
     : styles.cardRolBadgeAbogado
+  // Firma a la que pertenece un profesional (las firmas aprobadas ya están en
+  // `approved`): "Director · Nombre de la firma".
+
+  const selloAlcance = (p) => (
+    p.alcance_servicio === 'internacional' ? 'Servicio a nivel internacional'
+      : p.alcance_servicio === 'nacional' ? 'Servicio a nivel nacional'
+      : p.alcance_servicio === 'ambos' ? 'Servicio nacional e internacional' : null
+  )
 
   // ── Reasignación forzada (barrera 4h) ─────────────────────────────────
   // Candidatos de la MISMA profesión con solape de área; POST a /api/reassign.
@@ -1208,6 +1255,7 @@ export default function AdminPage() {
                   <p className={styles.emptyTxt}>
                     No hay solicitudes pendientes
                     {rolFilter === 'gestor' ? ' de gestores'
+                      : rolFilter === 'firma' ? ' de firmas'
                       : rolFilter !== 'todos' ? ` de ${rolFilter}es` : ''}
                     {personSearch.trim() ? ` para "${personSearch.trim()}"` : ''}
                   </p>
@@ -1242,6 +1290,8 @@ export default function AdminPage() {
                     </h3>
                     <span className={styles.cardMeta}>@{p.username || '—'} · {p.email}</span>
                     {p.cedula && <span className={styles.cardMeta}>CC {p.cedula}</span>}
+                    {p.rol === 'firma' && p.nit && <span className={styles.cardMeta}>NIT {p.nit}</span>}
+                    {p.rol === 'firma' && selloAlcance(p) && <span className={styles.cardMeta}>{selloAlcance(p)}</span>}
                     {esGestor ? (
                       <>
                         {p.comunidad_descripcion && <p className={styles.cardDesc}>{p.comunidad_descripcion}</p>}
@@ -1289,7 +1339,7 @@ export default function AdminPage() {
                 <div className={styles.emptyState}>
                   <span className={styles.emptyIcon} style={{ color: '#c9a84c' }}><IconUsers width={40} height={40} /></span>
                   <p className={styles.emptyTxt}>
-                    No hay {rolFilter === 'contador' ? 'contadores' : rolFilter === 'abogado' ? 'abogados' : rolFilter === 'gestor' ? 'gestores' : 'profesionales'} aprobados
+                    No hay {rolFilter === 'contador' ? 'contadores' : rolFilter === 'abogado' ? 'abogados' : rolFilter === 'gestor' ? 'gestores' : rolFilter === 'firma' ? 'firmas' : 'profesionales'} aprobados
                     {personSearch.trim() ? ` para "${personSearch.trim()}"` : ' aún'}
                   </p>
                 </div>
@@ -1326,6 +1376,8 @@ export default function AdminPage() {
                     </h3>
                     <span className={styles.cardMeta}>@{p.username || '—'} · {p.email}</span>
                     {p.cedula && <span className={styles.cardMeta}>CC {p.cedula}</span>}
+                    {p.rol === 'firma' && p.nit && <span className={styles.cardMeta}>NIT {p.nit}</span>}
+                    {p.rol === 'firma' && selloAlcance(p) && <span className={styles.cardMeta}>{selloAlcance(p)}</span>}
                     {esGestor ? (
                       <>
                         {p.comunidad_descripcion && <p className={styles.cardDesc}>{p.comunidad_descripcion}</p>}
@@ -1343,7 +1395,7 @@ export default function AdminPage() {
                     )}
                   </div>
                   <div className={`${styles.cardActions} ${styles.cardActionsFijo}`}>
-                    {!esGestor && (
+                    {!esGestor && p.rol !== 'firma' && (
                       <button
                         type="button"
                         className={`${styles.toggleDescarga} ${p.puede_descargar_archivos ? styles.toggleDescargaOn : ''}`}
@@ -1367,7 +1419,9 @@ export default function AdminPage() {
                         const quien = (p.nombre || p.apellido) ? `${p.nombre || ''} ${p.apellido || ''}`.trim() : `@${p.username || 'este usuario'}`
                         setConfirmAction({
                           title: 'Eliminar de la plataforma',
-                          message: p.rol === 'gestor'
+                          message: p.rol === 'firma'
+                            ? `Se eliminará la firma ${quien} y los perfiles de su Director y de sus aliados/colaboradores. Esta acción no se puede deshacer.`
+                            : p.rol === 'gestor'
                             ? `Se eliminará la cuenta de ${quien} de la base de datos. Su código QR queda INHABILITADO pero se conserva, para no perder el rastro de las consultas que ya llegaron con él. Esta acción no se puede deshacer.`
                             : `Se eliminará la cuenta de ${quien} de la base de datos y de Solicitudes. Dejará de aparecer en el sitio y su correo quedará libre para registrarse de nuevo. Esta acción no se puede deshacer.`,
                           confirmLabel: 'Eliminar cuenta',

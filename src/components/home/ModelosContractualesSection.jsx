@@ -9,11 +9,22 @@ import { descargarDesdeUrl, PdfVisor } from '../../lib/chatFiles'
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
 
+const CAT_OTRO = 'Otro'
 const CATEGORIAS = [
   'Todas', 'Laboral', 'Civil', 'Comercial', 'Familiar',
-  'Penal', 'Administrativo', 'Inmobiliario', 'Societario', 'Otro',
+  'Penal', 'Administrativo', 'Inmobiliario', 'Societario', CAT_OTRO,
 ]
 const CATEGORIAS_FORM = CATEGORIAS.filter(c => c !== 'Todas')
+/* "Otro" en el formulario abre un campo libre y se guarda ESE texto como
+   categoría. Por eso el chip "Otro" de la cuadrícula no filtra por el valor
+   literal, sino por todo lo que no es una categoría fija. */
+const CATEGORIAS_FIJAS = CATEGORIAS_FORM.filter(c => c !== CAT_OTRO)
+const CAT_OTRA_MAX = 40
+const esCategoriaLibre = (c) => !CATEGORIAS_FIJAS.includes(c)
+// PostgREST: categoria=not.in.("Laboral","Civil",…) — valores entre comillas y
+// codificados; los paréntesis quedan tal cual.
+const FILTRO_OTRO = `not.in.(${encodeURIComponent(CATEGORIAS_FIJAS.map(c => `"${c}"`).join(','))})`
+const FORM_VACIO = { nombre: '', descripcion: '', categoria: '', categoriaOtra: '', file: null, pdfVista: null }
 
 const PAGE_SIZE = 12
 // Modelos a la vista al llegar; "Ver más" suma de a tantos y "Ver menos" vuelve
@@ -201,7 +212,7 @@ export default function ModelosContractualesSection() {
 
   // ── Admin ────────────────────────────────────────────────────────────
   const [modalOpen, setModalOpen]         = useState(false)
-  const [form, setForm]                   = useState({ nombre: '', descripcion: '', categoria: '', file: null, pdfVista: null })
+  const [form, setForm]                   = useState(FORM_VACIO)
   const [uploading, setUploading]         = useState(false)
   const [uploadError, setUploadError]     = useState('')
   const [confirmDelete, setConfirmDelete] = useState(null)  // modelo objeto a eliminar
@@ -223,7 +234,8 @@ export default function ModelosContractualesSection() {
       const offset = pageIdx * PAGE_SIZE
       let url = `${SUPABASE_URL}/rest/v1/modelos_contractuales`
       url += `?select=*&order=created_at.desc&limit=${PAGE_SIZE}&offset=${offset}`
-      if (cat && cat !== 'Todas') url += `&categoria=eq.${encodeURIComponent(cat)}`
+      if (cat === CAT_OTRO) url += `&categoria=${FILTRO_OTRO}`
+      else if (cat && cat !== 'Todas') url += `&categoria=eq.${encodeURIComponent(cat)}`
       const res  = await fetch(url, { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } })
       const json = await res.json()
       const arr  = Array.isArray(json) ? json : []
@@ -342,7 +354,7 @@ export default function ModelosContractualesSection() {
 
   // ─────────────────────── ADMIN: alta de modelo ─────────────────────────
   function openAddModal() {
-    setForm({ nombre: '', descripcion: '', categoria: '', file: null, pdfVista: null })
+    setForm(FORM_VACIO)
     setUploadError('')
     setErroresArchivo(SIN_ERRORES)
     setModalOpen(true)
@@ -419,6 +431,10 @@ export default function ModelosContractualesSection() {
       setUploadError('Completa el nombre y la categoría.')
       return
     }
+    // "Otro" guarda lo que el admin escribió; si lo dejó vacío, queda "Otro".
+    const categoriaFinal = form.categoria === CAT_OTRO
+      ? (form.categoriaOtra.trim().slice(0, CAT_OTRA_MAX) || CAT_OTRO)
+      : form.categoria
     const formato = detectFormato(form.file)
     const pdfVista = form.pdfVista
     setUploading(true)
@@ -459,7 +475,7 @@ export default function ModelosContractualesSection() {
       .insert({
         nombre: form.nombre.trim(),
         descripcion: form.descripcion.trim() || null,
-        categoria: form.categoria,
+        categoria: categoriaFinal,
         formato,
         storage_path: filename,
       })
@@ -474,8 +490,12 @@ export default function ModelosContractualesSection() {
       return
     }
 
-    // Insert al inicio si encaja con la categoría visible
-    if (categoria === 'Todas' || categoria === inserted.categoria) {
+    // Insert al inicio si encaja con la categoría visible ("Otro" = cualquier
+    // categoría libre, igual que el filtro del servidor)
+    const encaja = categoria === 'Todas'
+      || categoria === inserted.categoria
+      || (categoria === CAT_OTRO && esCategoriaLibre(inserted.categoria))
+    if (encaja) {
       setModelos(prev => [inserted, ...prev])
     }
     setUploading(false)
@@ -719,6 +739,19 @@ export default function ModelosContractualesSection() {
                   <option value="">Seleccionar…</option>
                   {CATEGORIAS_FORM.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
+                {form.categoria === CAT_OTRO && (
+                  <input
+                    type="text"
+                    className={styles.modalInput}
+                    value={form.categoriaOtra}
+                    onChange={e => setForm(f => ({ ...f, categoriaOtra: e.target.value.slice(0, CAT_OTRA_MAX) }))}
+                    placeholder="Escribe la categoría"
+                    aria-label="Nombre de la categoría"
+                    maxLength={CAT_OTRA_MAX}
+                    disabled={uploading}
+                    autoFocus
+                  />
+                )}
               </div>
 
               <CampoArchivo

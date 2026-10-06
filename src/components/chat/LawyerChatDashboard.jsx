@@ -1920,7 +1920,9 @@ export default function LawyerChatDashboard({ lawyerId, canDownloadFiles = false
           roomId={activeRoom.id}
           abogadoId={activeRoom.id}
           modeloPath={modeloPath}
-          tipoProfesional="abogado"
+          // Una firma atiende salas de abogado y de contador desde este mismo
+          // panel: la plantilla del contrato la decide la sala.
+          tipoProfesional={activeRoom.tipo_profesional === 'contador' ? 'contador' : 'abogado'}
           inicio={firmaOpen === 'otro' ? 'otro' : 'contrato'}
           cliente={{
             nombre: activeRoom.client_nombre,

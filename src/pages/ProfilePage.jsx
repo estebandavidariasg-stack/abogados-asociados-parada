@@ -55,6 +55,7 @@ export default function ProfilePage() {
   const tarjetaInputRef = useRef(null)
 
   const [seccion, setSeccion]     = useState('perfil')
+
   const [consultasKey, setConsultasKey] = useState(0) // fuerza recargar el dashboard al tomar un caso
   // Contadores del centro de notificaciones (badges del riel + campana).
   const { badges, notis, notisNoLeidas, notiSeenTs, marcarNotisLeidas, refresh: refreshBadges } =

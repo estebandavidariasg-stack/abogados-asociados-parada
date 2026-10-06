@@ -42,6 +42,11 @@ export default function AdminStats({
   const pCont = pending.filter(p => p.rol === 'contador').length
   const aAb = approved.filter(p => p.rol === 'abogado').length
   const aCont = approved.filter(p => p.rol === 'contador').length
+  // Firmas (perfil 'firma'): se nombran aparte en el resumen. No confundir con
+  // `firmas` de más abajo, que son firmas electrónicas.
+  const pFir = pending.filter(p => p.rol === 'firma').length
+  const aFir = approved.filter(p => p.rol === 'firma').length
+  const conFirmas = (n) => (n ? ` · ${n} firma${n === 1 ? '' : 's'}` : '')
   const conDescarga = approved.filter(p => p.puede_descargar_archivos).length
 
   const rTotal = allRooms.length
@@ -63,7 +68,7 @@ export default function AdminStats({
     switch (activeTab) {
       case 'approved':
         return [
-          { n: approved.length, label: 'Profesionales aprobados', sub: `${aAb} ab · ${aCont} cont`, icon: 'users' },
+          { n: approved.length, label: 'Profesionales aprobados', sub: `${aAb} ab · ${aCont} cont${conFirmas(aFir)}`, icon: 'users' },
           { n: aAb, label: 'Abogados', icon: 'scale' },
           { n: aCont, label: 'Contadores', icon: 'calc' },
           { n: conDescarga, label: 'Con descarga habilitada', tone: 'ok', icon: 'download' },
@@ -123,13 +128,13 @@ export default function AdminStats({
       case 'pending':
       default:
         return [
-          { n: pending.length, label: 'Solicitudes pendientes', sub: (pAb || pCont) ? `${pAb} ab · ${pCont} cont` : undefined, tone: pending.length ? 'warn' : 'ok', icon: 'clock' },
+          { n: pending.length, label: 'Solicitudes pendientes', sub: (pAb || pCont || pFir) ? `${pAb} ab · ${pCont} cont${conFirmas(pFir)}` : undefined, tone: pending.length ? 'warn' : 'ok', icon: 'clock' },
           { n: approved.length, label: 'Profesionales aprobados', icon: 'users' },
           { n: approved.length + pending.length, label: 'Total registrados', icon: 'layers' },
           { n: alertas.length, label: 'Alertas inactividad', tone: alertas.length ? 'alert' : 'ok', icon: 'alert' },
         ]
     }
-  }, [activeTab, pending, approved, alertas, chatsCerrados, rTotal, rWaiting, rActive, rClosed, aAb, aCont, conDescarga, sinProf, conProf, contratos, firmas, resenasTotal, resenasAprob, codigos, codigosActivos, pAb, pCont, roles])
+  }, [activeTab, pending, approved, alertas, chatsCerrados, rTotal, rWaiting, rActive, rClosed, aAb, aCont, conDescarga, sinProf, conProf, contratos, firmas, resenasTotal, resenasAprob, codigos, codigosActivos, pAb, pCont, pFir, aFir, roles])
 
   // Serie histórica: registros (profiles) y consultas (chat_rooms) por mes.
   const chartData = useMemo(() => {
