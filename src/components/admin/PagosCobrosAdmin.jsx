@@ -4,7 +4,7 @@ import { supabase, getAuthHeaders } from '../../lib/supabase'
 import { IconCheck } from '../shared/Icons'
 import styles from './PagosCobrosAdmin.module.css'
 import { VisorArchivo } from '../../lib/chatFiles'
-import { unaComisionPorConsulta, formatMiles, parseMiles } from '../../lib/cobroAsesoria'
+import { unaComisionPorConsulta } from '../../lib/cobroAsesoria'
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
 
@@ -194,6 +194,7 @@ function EstadoPill({ estado }) {
     pendiente:  [styles.pillWarn, 'Pendiente'],
     disponible: [styles.pillGold, 'Disponible'],
     solicitado: [styles.pillReq,  'Solicitado'],
+    sin_pagar:  [styles.pillMuted, 'Sin pagar'],
   }
   const [cls, label] = map[estado] || [styles.pillMuted, estado || '—']
   return <span className={`${styles.pill} ${cls}`}>{label}</span>
@@ -291,18 +292,26 @@ export default function PagosCobrosAdmin() {
     if (!silencioso) setLoading(true)
     try {
       const headers = await getAuthHeaders()
-      const [pRes, coRes, prRes, gRes, aRes, cfgRes] = await Promise.all([
+      const [pRes, coRes, prRes, gRes, aRes, cfgRes, fRes] = await Promise.all([
         fetch(`${SUPABASE_URL}/rest/v1/pagos_profesional?select=id,room_id,profesional_id,monto,total_consulta,pct_empresa,pct_gestor,estado,comision_gestor,gestor_id,codigo,created_at,pagado_at&order=created_at.desc`, { headers }),
         fetch(`${SUPABASE_URL}/rest/v1/gestor_cobros?select=*&order=created_at.desc`, { headers }),
         fetch(`${SUPABASE_URL}/rest/v1/profiles?rol=in.(abogado,contador)&select=id,nombre,apellido,cedula,username,email,rol`, { headers }),
         fetch(`${SUPABASE_URL}/rest/v1/profiles?rol=eq.gestor&select=id,nombre,apellido,cedula,username,email,certificado_bancario_url`, { headers }),
         fetch(`${SUPABASE_URL}/rest/v1/pagos_asesoria?select=id,room_id,profesional_id,monto,estado,nota,recibo_num,pago_profesional_id,marcado_cliente_at,confirmado_at,created_at&order=created_at.desc`, { headers }),
         fetch(`${SUPABASE_URL}/rest/v1/plataforma_config?id=eq.1&select=pct_empresa,comision_gestor_pct,default_total&limit=1`, { headers }),
+        /* Las FIRMAS también atienden consultas y pagan su comisión (desde
+           2026-10-05). Antes aquí solo se traían abogados y contadores, así
+           que el pago de una firma salía con "—" en profesional, documento y
+           profesión, y ni contaba en los filtros. Va en su propia petición: si
+           en alguna base faltara la columna `nit`, falla solo esto y el resto
+           de la tabla conserva sus nombres. */
+        fetch(`${SUPABASE_URL}/rest/v1/profiles?rol=eq.firma&select=id,nombre,apellido,username,email,rol,nit`, { headers }).catch(() => null),
       ])
       const [p, co, pr, g, a, cfg] = await Promise.all([pRes.json(), coRes.json(), prRes.json(), gRes.json(), aRes.json(), cfgRes.json()])
       setPagos(Array.isArray(p) ? p : [])
       setCobros(unaComisionPorConsulta(co))
-      setProfes(Array.isArray(pr) ? pr : [])
+      const firmas = fRes && fRes.ok ? await fRes.json().catch(() => []) : []
+      setProfes([...(Array.isArray(pr) ? pr : []), ...(Array.isArray(firmas) ? firmas : [])])
       setGest(Array.isArray(g) ? g : [])
       setAsesorias(Array.isArray(a) ? a : [])
       const c0 = Array.isArray(cfg) && cfg.length ? cfg[0] : null
@@ -395,68 +404,6 @@ export default function PagosCobrosAdmin() {
     }
   }
 
-  // ── Confirmar a mano el pago de un profesional ──
-  // El estado se pinta al instante en la tabla (sin esperar el refetch) y la
-  // RPC deja la luz verde + la ficha de contacto en el chat de esa consulta.
-  const [confModal, setConfModal] = useState(null)   // { pago } | null
-  const [confBusy, setConfBusy]   = useState(false)
-
-  async function confirmarPagoProfesional() {
-    const pago = confModal?.pago
-    if (!pago || confBusy) return
-    setConfBusy(true)
-    try {
-      const headers = await getAuthHeaders()
-      const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/confirmar_pago_profesional`, {
-        method: 'POST',
-        headers: { ...headers, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ p_pago_id: pago.id }),
-      })
-      if (!res.ok) {
-        const j = await res.json().catch(() => null)
-        const msg = String(j?.message || '')
-        // Mientras el SQL no esté aplicado, PostgREST responde que la función
-        // no existe: mejor decir qué falta que repetir el error crudo.
-        if (/could not find the function/i.test(msg)) {
-          throw new Error('Falta aplicar docs/sql/fichas-contacto-2026-09-17.sql en Supabase.')
-        }
-        if (/no autorizado/i.test(msg)) throw new Error('No autorizado para confirmar este pago.')
-        throw new Error(msg || 'No se pudo confirmar el pago.')
-      }
-      // Instantáneo: no esperamos al refetch para mostrar "Pagado".
-      const ahora = new Date().toISOString()
-      setPagos(ps => ps.map(x => (x.id === pago.id ? { ...x, estado: 'pagado', pagado_at: ahora } : x)))
-      setConfModal(null)
-      flash('Pago confirmado. Se enviaron las fichas de contacto al chat.')
-      cargar({ silencioso: true })
-    } catch (err) {
-      flash(err.message || 'No se pudo confirmar el pago.')
-    } finally {
-      setConfBusy(false)
-    }
-  }
-
-  // Abre el certificado bancario del gestor (bucket privado → signed URL).
-  // Es la cuenta a la que se le consigna: el admin debe poder verla antes de
-  // marcar la comisión como pagada.
-  async function verCertificado(gestorId) {
-    const val = gestById.get(gestorId)?.certificado_bancario_url
-    if (!val) { flash('Ese gestor aún no subió su certificado bancario.'); return }
-    if (val.startsWith('http')) { setVerArchivo({ url: val, nombre: 'Certificado bancario.pdf' }); return }
-    const { data } = await supabase.storage.from('tarjetas-profesionales').createSignedUrl(val, 3600)
-    if (data?.signedUrl) setVerArchivo({ url: data.signedUrl, nombre: 'Certificado bancario.pdf' })
-    else flash('No se pudo abrir el certificado.')
-  }
-
-  // Abre el comprobante de un cobro pagado (bucket privado → signed URL).
-  async function verComprobante(c) {
-    if (!c.comprobante_path) return
-    const { data } = await supabase.storage.from('comprobantes').createSignedUrl(c.comprobante_path, 3600)
-    if (data?.signedUrl) setVerArchivo({ url: data.signedUrl, nombre: 'Comprobante de pago.pdf' })
-    else flash('No se pudo abrir el comprobante.')
-  }
-
-  // Guarda la config de comisión (pct_empresa / pct_gestor) en plataforma_config.
   async function guardarConfig() {
     const pe = Number(pctEmpresa), pg = Number(pctGestor)
     if (Number.isNaN(pe) || pe < 0 || pe > 100) { flash('El % de empresa debe estar entre 0 y 100.'); return }
@@ -490,32 +437,30 @@ export default function PagosCobrosAdmin() {
     return m
   }, [pagos])
 
-  /* Asesorías enriquecidas. `_porConfirmar`: el cliente pagó y el profesional
-     lo confirmó, pero el ADMIN todavía no ha confirmado ese valor, así que al
-     profesional aún no se le ha generado su cobro de plataforma. */
+  /* Asesorías enriquecidas. `_sinCobro`: pagada por el cliente pero todavía sin
+     su cobro de plataforma. Es un estado de paso: el cobro nace solo (ver el
+     efecto de más abajo); el admin no confirma precios. */
   const asesoriasTodas = useMemo(() => asesorias.map(a => {
     const prof = profById.get(a.profesional_id) || null
     const conCobro = !!a.pago_profesional_id || comisionPorSala.has(a.room_id)
     return {
       ...a,
       _nombre: nombreDe(prof) || '—',
-      _cedula: prof?.cedula || '',
+      _cedula: documentoDe(prof),
       _rol: prof?.rol || null,
       _comision: a.pago_profesional_id
         ? (comisionPorPagoProf.get(a.pago_profesional_id) || 0)
         : (comisionPorSala.get(a.room_id) || 0),
-      _porConfirmar: a.estado === 'pagado' && !conCobro && Number(a.monto) > 0,
+      _sinCobro: a.estado === 'pagado' && !conCobro && Number(a.monto) > 0 && !!a.room_id,
     }
   }), [asesorias, profById, comisionPorPagoProf, comisionPorSala])
-  const nPorConfirmar = useMemo(() => asesoriasTodas.filter(a => a._porConfirmar).length, [asesoriasTodas])
 
   // Filtradas (búsqueda por nombre/cédula + estado).
   const asesoriasFiltradas = useMemo(() => {
     const q = norm(qA), qc = normCedula(qA)
     return asesoriasTodas
       .filter(a => {
-        if (estadoA === 'por_confirmar') { if (!a._porConfirmar) return false }
-        else if (estadoA !== 'todos' && a.estado !== estadoA) return false
+        if (estadoA !== 'todos' && a.estado !== estadoA) return false
         if (q || qc) {
           const enTexto = norm(a._nombre).includes(q)
           const enCedula = qc && normCedula(a._cedula).includes(qc)
@@ -525,58 +470,50 @@ export default function PagosCobrosAdmin() {
       })
   }, [asesoriasTodas, qA, estadoA])
 
-  // ── El admin confirma el precio de una asesoría → nace el cobro al profesional ──
-  const [precioModal, setPrecioModal] = useState(null)   // { asesoria } | null
-  const [precioValor, setPrecioValor] = useState('')
-  const [precioBusy, setPrecioBusy]   = useState(false)
-  const [precioError, setPrecioError] = useState('')
-
-  function abrirPrecioModal(asesoria) {
-    setPrecioValor(formatMiles(String(Math.round(Number(asesoria.monto) || 0))))
-    setPrecioError('')
-    setPrecioModal({ asesoria })
-  }
-
-  async function confirmarPrecio() {
-    const a = precioModal?.asesoria
-    if (!a || precioBusy) return
-    const total = parseMiles(precioValor)
-    const pe = Number(pctEmpresa), pg = Number(pctGestor)
-    if (!(total > 0)) { setPrecioError('Escribe el valor de la consulta.'); return }
-    if (!(pe >= 0 && pe <= 100) || !(pg >= 0 && pg <= 100)) {
-      setPrecioError('Revisa los porcentajes de comisión (arriba, en esta misma pestaña).'); return
-    }
-    setPrecioBusy(true); setPrecioError('')
-    try {
-      const headers = await getAuthHeaders()
-      const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/generar_cobro`, {
-        method: 'POST',
-        headers: { ...headers, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ p_room_id: a.room_id, p_total: total, p_pct_empresa: pe, p_pct_gestor: pg }),
-      })
-      if (!res.ok) {
-        const j = await res.json().catch(() => null)
-        const msg = String(j?.message || '')
-        if (j?.code === '23505' || /ya existe un cobro/i.test(msg)) throw new Error('Esta consulta ya tiene un cobro generado.')
-        if (j?.code === '42501' || /no autorizado/i.test(msg)) throw new Error('No autorizado para generar este cobro.')
-        if (/profesional asignado/i.test(msg)) throw new Error('La consulta no tiene profesional asignado.')
-        throw new Error(msg || 'No se pudo generar el cobro. Intenta de nuevo.')
+  /* El cobro al profesional nace SOLO; el admin únicamente define los
+     porcentajes. Lo normal es que lo cree la base en el instante en que el
+     profesional confirma que el cliente le pagó (docs/sql/cobro-automatico-
+     2026-10-07.sql). Esto cubre el resto: las asesorías que quedaron pagadas
+     sin cobro (anteriores a ese SQL, o mientras no se aplique). Al abrir esta
+     pantalla se les genera con el valor reportado y los porcentajes GUARDADOS
+     (no los que estén a medio escribir). Cada una se intenta una vez por
+     visita: si la base la rechaza (ya tenía cobro, sala sin profesional), se
+     queda como está y no se insiste. */
+  const cobrosIntentados = useRef(new Set())
+  useEffect(() => {
+    if (!config) return
+    const pe = Number(config.pct_empresa), pg = Number(config.comision_gestor_pct)
+    if (!(pe >= 0 && pe <= 100) || !(pg >= 0 && pg <= 100)) return
+    const faltan = asesoriasTodas.filter(a => a._sinCobro && !cobrosIntentados.current.has(a.id))
+    if (faltan.length === 0) return
+    for (const a of faltan) cobrosIntentados.current.add(a.id)
+    ;(async () => {
+      let hechos = 0
+      try {
+        const headers = await getAuthHeaders()
+        for (const a of faltan) {
+          const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/generar_cobro`, {
+            method: 'POST',
+            headers: { ...headers, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ p_room_id: a.room_id, p_total: Number(a.monto), p_pct_empresa: pe, p_pct_gestor: pg }),
+          }).catch(() => null)
+          if (!res || !res.ok) continue
+          hechos++
+          // Trazabilidad del gestor (correo "comisión disponible"), si la consulta trae uno.
+          fetch('/api/notify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: headers.Authorization },
+            body: JSON.stringify({ type: 'gestor_trazabilidad', data: { evento: 'cierre', roomId: a.room_id } }),
+          }).catch(() => {})
+        }
+      } catch { /* sin sesión o sin red: se reintenta en la próxima visita */ }
+      if (hechos > 0) {
+        flash(hechos === 1 ? 'Se generó el cobro de 1 asesoría pagada.' : `Se generó el cobro de ${hechos} asesorías pagadas.`)
+        cargar({ silencioso: true })
       }
-      // Trazabilidad del gestor (correo "comisión disponible"), si la consulta trae uno.
-      fetch('/api/notify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: headers.Authorization },
-        body: JSON.stringify({ type: 'gestor_trazabilidad', data: { evento: 'cierre', roomId: a.room_id } }),
-      }).catch(() => {})
-      setPrecioModal(null)
-      flash('Precio confirmado. Se generó el cobro al profesional.')
-      await cargar({ silencioso: true })
-    } catch (err) {
-      setPrecioError(err.message || 'No se pudo generar el cobro.')
-    } finally {
-      setPrecioBusy(false)
-    }
-  }
+    })()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [asesoriasTodas, config])
 
   const resumenA = useMemo(() => {
     let cobrado = 0, comisiones = 0, pend = 0
@@ -606,7 +543,7 @@ export default function PagosCobrosAdmin() {
         return {
           ...p,
           _nombre: nombreDe(prof) || '—',
-          _cedula: prof?.cedula || '',
+          _cedula: documentoDe(prof),
           _rol: prof?.rol || null,
           _gestor: nombreDe(gestById.get(p.gestor_id)) || null,
         }
@@ -627,11 +564,18 @@ export default function PagosCobrosAdmin() {
   // ── Cobros de gestores: enriquecer + filtrar ──
   const cobrosFiltrados = useMemo(() => {
     const q = norm(qC), qc = normCedula(qC)
-    const estadoNorm = (e) => (e === 'pendiente' ? 'disponible' : e) // 'pendiente' se muestra como Disponible
     return cobros
       .map(c => {
         const g = gestById.get(c.gestor_id) || null
-        return { ...c, _nombre: nombreDe(g) || '—', _cedula: g?.cedula || '', _estadoUI: estadoNorm(c.estado) }
+        // Gestor eliminado: el nombre y la cédula son los que guardó la base
+        // al borrarse la cuenta. El historial de pagos no depende de que exista.
+        return {
+          ...c,
+          _nombre: nombreDe(g) || c.gestor_nombre || '—',
+          _cedula: g?.cedula || c.gestor_cedula || '',
+          _eliminado: !c.gestor_id,
+          _estadoUI: estadoCobroUI(c),
+        }
       })
       .filter(c => {
         if (estadoC !== 'todos' && c._estadoUI !== estadoC) return false
@@ -657,14 +601,15 @@ export default function PagosCobrosAdmin() {
   }, [pagosFiltrados])
 
   const resumenC = useMemo(() => {
-    let disponible = 0, solicitado = 0, pagado = 0
+    let disponible = 0, solicitado = 0, pagado = 0, nPagos = 0
     for (const c of cobrosFiltrados) {
       const m = Number(c.monto) || 0
-      if (c._estadoUI === 'pagado') pagado += m
+      if (c._estadoUI === 'pagado') { pagado += m; nPagos++ }
       else if (c._estadoUI === 'solicitado') solicitado += m
-      else disponible += m
+      else if (c._estadoUI === 'disponible') disponible += m
+      // 'sin_pagar' (gestor eliminado) no suma: ya no es dinero por pagar.
     }
-    return { disponible, solicitado, pagado, count: cobrosFiltrados.length }
+    return { disponible, solicitado, pagado, nPagos, count: cobrosFiltrados.length }
   }, [cobrosFiltrados])
 
   // Conteos por estado (para los chips) — sobre todo el dataset enriquecido, sin
@@ -680,9 +625,13 @@ export default function PagosCobrosAdmin() {
   }, [pagos, profById, gestById, qP, profFilter, desdeP, hastaP])
 
   const countsC = useMemo(() => {
-    const estadoNorm = (e) => (e === 'pendiente' ? 'disponible' : e)
     const base = cobros
-      .map(c => ({ ...c, _nombre: nombreDe(gestById.get(c.gestor_id)) || '—', _cedula: gestById.get(c.gestor_id)?.cedula || '', _estadoUI: estadoNorm(c.estado) }))
+      .map(c => ({
+        ...c,
+        _nombre: nombreDe(gestById.get(c.gestor_id)) || c.gestor_nombre || '—',
+        _cedula: gestById.get(c.gestor_id)?.cedula || c.gestor_cedula || '',
+        _estadoUI: estadoCobroUI(c),
+      }))
       .filter(c => {
         if (!enRango(c.created_at, desdeC, hastaC)) return false
         const q = norm(qC), qc = normCedula(qC)
@@ -698,6 +647,7 @@ export default function PagosCobrosAdmin() {
       disponible: base.filter(c => c._estadoUI === 'disponible').length,
       solicitado: base.filter(c => c._estadoUI === 'solicitado').length,
       pagado: base.filter(c => c._estadoUI === 'pagado').length,
+      sinPagar: base.filter(c => c._estadoUI === 'sin_pagar').length,
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cobros, gestById, qC, desdeC, hastaC])
@@ -715,6 +665,7 @@ export default function PagosCobrosAdmin() {
       todos: base.length,
       abogado: base.filter(p => p._rol === 'abogado').length,
       contador: base.filter(p => p._rol === 'contador').length,
+      firma: base.filter(p => p._rol === 'firma').length,
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pagos, profById, estadoP, desdeP, hastaP])
@@ -772,12 +723,6 @@ export default function PagosCobrosAdmin() {
         >
           <IconWallet /> Asesorías (cobro al cliente)
           <span className={styles.subTabBadge}>{asesorias.length}</span>
-          {nPorConfirmar > 0 && (
-            <span className={`${styles.subTabBadge} ${styles.subTabAlerta}`}
-              title="Asesorías pagadas cuyo precio falta confirmar">
-              {nPorConfirmar} por confirmar
-            </span>
-          )}
         </button>
       </div>
 
@@ -857,6 +802,7 @@ export default function PagosCobrosAdmin() {
                   { k: 'todos', label: 'Todas', n: profCounts.todos },
                   { k: 'abogado', label: 'Abogados', n: profCounts.abogado },
                   { k: 'contador', label: 'Contadores', n: profCounts.contador },
+                  { k: 'firma', label: 'Firmas', n: profCounts.firma },
                 ]}
                 value={profFilter}
                 onChange={setProfFilter}
@@ -896,12 +842,11 @@ export default function PagosCobrosAdmin() {
                     <tr>
                       <th>Fecha</th>
                       <th>Profesional</th>
-                      <th>Cédula</th>
+                      <th>Cédula / NIT</th>
                       <th>Profesión</th>
                       <th>Monto</th>
                       <th>Estado</th>
                       <th>Comisión gestor</th>
-                      <th>Acción</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -918,11 +863,14 @@ export default function PagosCobrosAdmin() {
                         <td className={styles.strong}>{p._nombre}</td>
                         <td className={styles.num}>{p._cedula || '—'}</td>
                         <td>
-                          {p._rol
-                            ? <span className={p._rol === 'contador' ? styles.badgeCont : styles.badgeAbog}>{p._rol === 'contador' ? 'Contador' : 'Abogado'}</span>
+                          {ROL_PRO[p._rol]
+                            ? <span className={p._rol === 'contador' ? styles.badgeCont : p._rol === 'firma' ? styles.badgeFirma : styles.badgeAbog}>{ROL_PRO[p._rol]}</span>
                             : <span className={styles.muted}>—</span>}
                         </td>
                         <td className={styles.num}>{fmtCOP(p.monto)}</td>
+                        {/* Solo el estado. Pasa a "Pagado" solo, cuando el profesional
+                            paga su comisión desde su panel: el admin no confirma
+                            pagos a mano (decisión del dueño, 2026-10-07). */}
                         <td><EstadoPill estado={p.estado === 'pagado' ? 'pagado' : 'pendiente'} /></td>
                         <td className={styles.num}>
                           {Number(p.comision_gestor) > 0 ? (
@@ -930,13 +878,6 @@ export default function PagosCobrosAdmin() {
                               {fmtCOP(p.comision_gestor)}
                               {p._gestor && <span className={styles.gestorTag}>{p._gestor}</span>}
                             </>
-                          ) : <span className={styles.muted}>—</span>}
-                        </td>
-                        <td>
-                          {p.estado === 'pendiente' ? (
-                            <button className={styles.payBtn} onClick={() => setConfModal({ pago: p })}>
-                              Confirmar pago
-                            </button>
                           ) : <span className={styles.muted}>—</span>}
                         </td>
                       </tr>
@@ -976,7 +917,11 @@ export default function PagosCobrosAdmin() {
             </div>
             <div className={styles.tile} data-tone="ok">
               <span className={styles.tileVal}>{fmtCOP(resumenC.pagado)}</span>
-              <span className={styles.tileLbl}>Pagadas</span>
+              {/* El acumulado: cuánto se ha pagado y en cuántos pagos. Sin
+                  filtros es el histórico completo, con gestores eliminados incluidos. */}
+              <span className={styles.tileLbl}>
+                Pagadas · {resumenC.nPagos} {resumenC.nPagos === 1 ? 'pago' : 'pagos'}
+              </span>
             </div>
             <div className={styles.tile} data-tone="navy">
               <span className={styles.tileVal}>{resumenC.count}</span>
@@ -1025,6 +970,8 @@ export default function PagosCobrosAdmin() {
                   { k: 'disponible', label: 'Disponibles', n: countsC.disponible },
                   { k: 'solicitado', label: 'Solicitadas', n: countsC.solicitado },
                   { k: 'pagado', label: 'Pagadas', n: countsC.pagado },
+                  // Solo aparece si hay alguna: comisiones de gestores eliminados que no se pagaron.
+                  ...(countsC.sinPagar > 0 ? [{ k: 'sin_pagar', label: 'Sin Pagar', n: countsC.sinPagar }] : []),
                 ]}
                 value={estadoC}
                 onChange={setEstadoC}
@@ -1078,13 +1025,18 @@ export default function PagosCobrosAdmin() {
                             </span>
                           )}
                         </td>
-                        <td className={styles.strong}>{c._nombre}</td>
+                        <td className={styles.strong}>
+                          {c._nombre}
+                          {c._eliminado && <span className={styles.gestorBaja}>Cuenta eliminada</span>}
+                        </td>
                         <td className={styles.num}>{c._cedula || '—'}</td>
                         <td className={styles.num}>{c.codigo || '—'}</td>
                         <td className={styles.num}>{fmtCOP(c.monto)}</td>
                         <td><EstadoPill estado={c._estadoUI} /></td>
                         <td>
-                          {gestById.get(c.gestor_id)?.certificado_bancario_url ? (
+                          {c._eliminado ? (
+                            <span className={styles.muted}>—</span>
+                          ) : gestById.get(c.gestor_id)?.certificado_bancario_url ? (
                             <button className={styles.certBtn} onClick={() => verCertificado(c.gestor_id)}>
                               Ver certificado bancario
                             </button>
@@ -1105,6 +1057,8 @@ export default function PagosCobrosAdmin() {
                             ) : (
                               <span className={styles.muted}>Sin comprobante</span>
                             )
+                          ) : c._estadoUI === 'sin_pagar' ? (
+                            <span className={styles.muted}>No se pagó</span>
                           ) : (
                             <span className={styles.muted}>Sin solicitar</span>
                           )}
@@ -1135,30 +1089,84 @@ export default function PagosCobrosAdmin() {
             <button className={styles.refresh} onClick={() => cargar()}>↻ Actualizar</button>
           </header>
 
-          {/* Config de comisión — controles a la izquierda, explicación al lado
-              (rellena el espacio; en pantallas angostas baja debajo). */}
-          <div className={styles.toolbar} style={{ display: 'flex', flexDirection: 'row', flexWrap: 'wrap', gap: 16, alignItems: 'flex-end', justifyContent: 'flex-start' }}>
-            <div className={styles.dateField} style={{ maxWidth: 150 }}>
-              <span>% Empresa (comisión)</span>
-              <input type="number" min="0" max="100" className={styles.dateInput}
-                value={pctEmpresa} onChange={e => setPctEmpresa(e.target.value)} />
-            </div>
-            <div className={styles.dateField} style={{ maxWidth: 120 }}>
-              <span>% Gestor</span>
-              <input type="number" min="0" max="100" className={styles.dateInput}
-                value={pctGestor} onChange={e => setPctGestor(e.target.value)} />
-            </div>
-            <button className={styles.payBtn} onClick={guardarConfig} disabled={savingCfg}>
-              {savingCfg ? 'Guardando…' : 'Guardar porcentajes'}
-            </button>
-            <p className={styles.sub} style={{ margin: 0, flex: '1 1 340px', minWidth: 260, alignSelf: 'center' }}>
-              Cuando el profesional reporta que el cliente pagó, la asesoría queda
-              <strong> por confirmar</strong>: tú confirmas el valor y solo entonces se le genera
-              su cobro, el <strong>{pctEmpresa || '—'}%</strong> de lo cobrado. Si la consulta trae gestor,
-              su comisión es el <strong>{pctGestor || '—'}%</strong> de esa parte de la empresa
-              (sale de la tajada de la empresa, no se le suma al profesional).
-            </p>
-          </div>
+          {/* Los porcentajes y, al lado, lo que significan en plata. Antes eran
+              dos cajitas, un botón y un párrafo flotando a media tarjeta con
+              la mitad derecha vacía; y el párrafo explicaba un paso que ya no
+              existe (el admin confirmando el precio). Ahora: a la izquierda se
+              edita, a la derecha se VE el reparto de una asesoría de ejemplo,
+              que cambia mientras se escribe. */}
+          {(() => {
+            const acotar = (v) => Math.min(100, Math.max(0, Number(v) || 0))
+            const pe = acotar(pctEmpresa), pg = acotar(pctGestor)
+            const BASE = 100000
+            const empresa = Math.round(BASE * pe / 100)
+            const gestor = Math.round(empresa * pg / 100)
+            const sinCambios = !!config &&
+              Number(pctEmpresa) === Number(config.pct_empresa) && Number(pctGestor) === Number(config.comision_gestor_pct)
+            return (
+              <div className={styles.cfg}>
+                <div className={styles.cfgForm}>
+                  <h3 className={styles.cfgTitulo}>Comisión de la plataforma</h3>
+                  <p className={styles.cfgNota}>
+                    Se cobra sola cuando el profesional confirma que el cliente le pagó.
+                  </p>
+                  <div className={styles.cfgCampos}>
+                    <label className={styles.cfgCampo}>
+                      <span className={styles.cfgRotulo}>Empresa</span>
+                      <span className={styles.cfgCaja}>
+                        <input type="number" min="0" max="100" inputMode="decimal" className={styles.cfgInput}
+                          value={pctEmpresa} onChange={e => setPctEmpresa(e.target.value)} />
+                        <span aria-hidden="true">%</span>
+                      </span>
+                      <span className={styles.cfgAyuda}>del valor de la asesoría</span>
+                    </label>
+                    <label className={styles.cfgCampo}>
+                      <span className={styles.cfgRotulo}>Gestor</span>
+                      <span className={styles.cfgCaja}>
+                        <input type="number" min="0" max="100" inputMode="decimal" className={styles.cfgInput}
+                          value={pctGestor} onChange={e => setPctGestor(e.target.value)} />
+                        <span aria-hidden="true">%</span>
+                      </span>
+                      <span className={styles.cfgAyuda}>de la parte de la empresa</span>
+                    </label>
+                  </div>
+                  <button className={`${styles.payBtn} ${styles.cfgGuardar}`} onClick={guardarConfig} disabled={savingCfg || sinCambios}>
+                    {savingCfg ? 'Guardando…' : sinCambios ? 'Porcentajes Guardados' : 'Guardar Porcentajes'}
+                  </button>
+                </div>
+
+                <div className={styles.reparto}>
+                  <p className={styles.repartoTitulo}>De cada <strong>{fmtCOP(BASE)}</strong> que cobra el profesional</p>
+                  {/* El tramo del gestor va DENTRO del de la empresa: su comisión
+                      sale de ahí, no se le suma al profesional. */}
+                  <div className={styles.repartoBarra} role="img"
+                    aria-label={`Profesional ${fmtCOP(BASE - empresa)}, empresa ${fmtCOP(empresa)}, de los cuales ${fmtCOP(gestor)} son del gestor`}>
+                    <span className={styles.repartoPro} style={{ flexGrow: 100 - pe }} />
+                    <span className={styles.repartoEmp} style={{ flexGrow: pe }}>
+                      {gestor > 0 && <span className={styles.repartoGes} style={{ width: `${pg}%` }} />}
+                    </span>
+                  </div>
+                  <dl className={styles.repartoLista}>
+                    <div>
+                      <dt><i data-tono="pro" aria-hidden="true" />Le queda al profesional</dt>
+                      <dd>{fmtCOP(BASE - empresa)}</dd>
+                    </div>
+                    <div>
+                      <dt><i data-tono="emp" aria-hidden="true" />Paga a la empresa</dt>
+                      <dd>{fmtCOP(empresa)}</dd>
+                    </div>
+                    <div>
+                      <dt><i data-tono="ges" aria-hidden="true" />De ahí, al gestor</dt>
+                      <dd>{fmtCOP(gestor)}</dd>
+                    </div>
+                  </dl>
+                  <p className={styles.repartoPie}>
+                    El gestor solo cobra si la consulta llegó con su código. Su parte sale de la de la empresa.
+                  </p>
+                </div>
+              </div>
+            )
+          })()}
 
           {/* Resumen */}
           <div className={styles.tiles}>
@@ -1201,8 +1209,6 @@ export default function PagosCobrosAdmin() {
               <EstadoChips
                 opciones={[
                   { k: 'todos', label: 'Todas', n: asesorias.length },
-                  // Pagadas por el cliente cuyo valor el admin aún no confirma.
-                  { k: 'por_confirmar', label: 'Por confirmar', n: nPorConfirmar },
                   { k: 'pagado', label: 'Pagadas', n: asesorias.filter(a => a.estado === 'pagado').length },
                   { k: 'pendiente', label: 'Pendientes', n: asesorias.filter(a => a.estado === 'pendiente').length },
                   // 'gratuita' es un estado heredado (ya no se puede crear):
@@ -1228,7 +1234,7 @@ export default function PagosCobrosAdmin() {
                   <tr>
                     <th>Fecha</th>
                     <th>Profesional</th>
-                    <th>Cédula</th>
+                    <th>Cédula / NIT</th>
                     <th>Cobrado al cliente</th>
                     <th>Estado</th>
                     <th>Comisión a empresa</th>
@@ -1253,11 +1259,7 @@ export default function PagosCobrosAdmin() {
                         ? <span className={styles.muted}>Sin valor</span>
                         : <EstadoPill estado={a.estado === 'pagado' ? 'pagado' : 'pendiente'} />}</td>
                       <td className={styles.num}>
-                        {a._porConfirmar ? (
-                          <button type="button" className={styles.payBtn} onClick={() => abrirPrecioModal(a)}>
-                            Confirmar precio
-                          </button>
-                        ) : a._comision > 0 ? fmtCOP(a._comision) : <span className={styles.muted}>—</span>}
+                        {a._comision > 0 ? fmtCOP(a._comision) : <span className={styles.muted}>—</span>}
                       </td>
                       <td className={styles.num}>{a.recibo_num || <span className={styles.muted}>—</span>}</td>
                     </tr>
@@ -1267,118 +1269,6 @@ export default function PagosCobrosAdmin() {
             </div>
           )}
         </section>
-      )}
-
-      {/* ── Modal: el admin confirma el precio de una asesoría ──
-          El valor lo reportó el profesional. Mientras el admin no lo confirme
-          (o lo corrija), al profesional no se le cobra nada. */}
-      {precioModal && createPortal(
-        (() => {
-          const a = precioModal.asesoria
-          const total = parseMiles(precioValor)
-          const pe = Number(pctEmpresa) || 0
-          const montoEmp = Math.round(total * pe / 100)
-          const cambio = total > 0 && total !== Math.round(Number(a.monto) || 0)
-          return (
-            <div
-              className={styles.payOverlay}
-              role="dialog" aria-modal="true" aria-labelledby="precioModalTitle"
-              onClick={() => !precioBusy && setPrecioModal(null)}
-            >
-              <div className={styles.payModal} onClick={(e) => e.stopPropagation()}>
-                <h3 id="precioModalTitle" className={styles.payTitle}>Confirmar el precio de la consulta</h3>
-                <p className={styles.paySub}>
-                  {a._nombre !== '—' ? <strong>{a._nombre}</strong> : 'El profesional'} reportó{' '}
-                  <strong>{fmtCOP(a.monto)}</strong>{a.recibo_num ? ` · recibo ${a.recibo_num}` : ''}
-                </p>
-                <p className={styles.payHint}>
-                  Confirma el valor que el cliente pagó, o corrígelo si no coincide. Al confirmar se
-                  genera el cobro de plataforma al profesional; antes de eso no se le cobra nada.
-                </p>
-
-                <label className={styles.precioCampo}>
-                  <span>Valor confirmado (COP)</span>
-                  <input
-                    type="text" inputMode="numeric" autoFocus
-                    className={styles.precioInput}
-                    value={precioValor}
-                    onChange={(e) => { setPrecioValor(formatMiles(e.target.value)); setPrecioError('') }}
-                  />
-                </label>
-
-                <dl className={styles.precioDesglose}>
-                  <div>
-                    <dt>Cobro al profesional ({pe}%)</dt>
-                    <dd>{fmtCOP(montoEmp)}</dd>
-                  </div>
-                  <div>
-                    <dt>Le queda al profesional</dt>
-                    <dd>{fmtCOP(Math.max(0, total - montoEmp))}</dd>
-                  </div>
-                </dl>
-                {cambio && (
-                  <p className={styles.precioAviso}>
-                    Vas a registrar un valor distinto al que reportó el profesional.
-                  </p>
-                )}
-                {precioError && <p className={styles.payError} role="alert">{precioError}</p>}
-
-                <div className={styles.payActions}>
-                  <button type="button" className={styles.payCancel} onClick={() => setPrecioModal(null)} disabled={precioBusy}>
-                    Cancelar
-                  </button>
-                  <button type="button" className={styles.payConfirm} onClick={confirmarPrecio} disabled={precioBusy || !(total > 0)}>
-                    {precioBusy ? 'Generando cobro…' : 'Confirmar y generar cobro'}
-                  </button>
-                </div>
-              </div>
-            </div>
-          )
-        })(),
-        document.body
-      )}
-
-      {/* ── Modal: confirmar el pago de un profesional ──
-          Confirmar es difícil de deshacer (habilita los datos de contacto y
-          genera la comisión del gestor), así que se pide confirmación. */}
-      {confModal && createPortal(
-        <div
-          className={styles.payOverlay}
-          role="dialog" aria-modal="true" aria-labelledby="confModalTitle"
-          onClick={() => !confBusy && setConfModal(null)}
-        >
-          <div className={styles.payModal} onClick={(e) => e.stopPropagation()}>
-            <h3 id="confModalTitle" className={styles.payTitle}>Confirmar pago del profesional</h3>
-            <p className={styles.paySub}>
-              {confModal.pago._nombre !== '—' ? <strong>{confModal.pago._nombre}</strong> : 'Profesional'} ·{' '}
-              <strong>{fmtCOP(confModal.pago.monto)}</strong>
-            </p>
-            <p className={styles.payHint}>
-              Al confirmar se habilitan los datos de contacto de esa consulta: las fichas
-              del profesional y del cliente quedan publicadas en el chat. Si hay gestor,
-              también nace su comisión.
-            </p>
-            <div className={styles.payActions}>
-              <button
-                type="button"
-                className={styles.payCancel}
-                onClick={() => setConfModal(null)}
-                disabled={confBusy}
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                className={styles.payConfirm}
-                onClick={confirmarPagoProfesional}
-                disabled={confBusy}
-              >
-                {confBusy ? 'Confirmando…' : 'Confirmar pago'}
-              </button>
-            </div>
-          </div>
-        </div>,
-        document.body
       )}
 
       {/* ── Modal: marcar comisión pagada + comprobante obligatorio ── */}
@@ -1450,13 +1340,29 @@ export default function PagosCobrosAdmin() {
 }
 
 /* Helper de conteo de estado para pagos (sin el filtro de estado). */
+/* Estado de una comisión tal como se muestra. 'pendiente' se llama Disponible.
+   Si la cuenta del gestor ya no existe (gestor_id nulo, ver docs/sql/
+   gestor-historial-2026-10-07.sql) y la comisión no se alcanzó a pagar, ya no
+   hay a quién pagársela: queda 'sin_pagar' y no suma en Disponibles ni en
+   Solicitadas. Una pagada sigue siendo pagada, exista o no la cuenta. */
+const estadoCobroUI = (c) => {
+  if (c.estado === 'pagado') return 'pagado'
+  if (!c.gestor_id) return 'sin_pagar'
+  return c.estado === 'pendiente' ? 'disponible' : c.estado
+}
+
+// Con qué se identifica quien paga: la cédula de la persona o el NIT de la firma.
+const documentoDe = (prof) => (prof?.rol === 'firma' ? (prof.nit || '') : (prof?.cedula || ''))
+// Rótulo y color del distintivo de profesión.
+const ROL_PRO = { abogado: 'Abogado', contador: 'Contador', firma: 'Firma' }
+
 function pagosFiltradosSinEstado(pagos, profById, gestById, qP, profFilter, desdeP, hastaP, enRango) {
   const q = norm(qP), qc = normCedula(qP)
   return pagos
     .map(p => {
       const prof = profById.get(p.profesional_id) || null
       const nombre = prof ? ((prof.nombre || prof.apellido ? [prof.nombre, prof.apellido].filter(Boolean).join(' ') : null) || (prof.username ? `@${prof.username}` : '—')) : '—'
-      return { ...p, _nombre: nombre, _cedula: prof?.cedula || '', _rol: prof?.rol || null }
+      return { ...p, _nombre: nombre, _cedula: documentoDe(prof), _rol: prof?.rol || null }
     })
     .filter(p => {
       if (profFilter !== 'todos' && p._rol !== profFilter) return false

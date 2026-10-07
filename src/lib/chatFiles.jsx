@@ -606,13 +606,16 @@ export function useZoom({ min = 1, max = 4, paso = 0.25, rueda = 'ctrl', doble =
     }
     const alSoltarDedos = (e) => { if (e.touches.length < 2) pellizco = null }
 
-    const alDobleClic = (e) => fijar(zoomRef.current > 1.01 ? 1 : doble, { x: e.clientX, y: e.clientY })
+    // Lo marcado con data-zoom-quieto tiene su propio gesto (la firma que se
+    // arrastra en UbicarFirma): ahí ni se amplía ni se desplaza el documento.
+    const esQuieto = (e) => !!e.target.closest?.('[data-zoom-quieto]')
+    const alDobleClic = (e) => { if (!esQuieto(e)) fijar(zoomRef.current > 1.01 ? 1 : doble, { x: e.clientX, y: e.clientY }) }
 
     // Arrastre con el ratón, solo si hay algo que mover.
     let arrastre = null
     let huboArrastre = false
     const alBajar = (e) => {
-      if (e.pointerType !== 'mouse' || e.button !== 0) return
+      if (e.pointerType !== 'mouse' || e.button !== 0 || esQuieto(e)) return
       const sobra = caja.scrollWidth > caja.clientWidth + 1 || caja.scrollHeight > caja.clientHeight + 1
       if (!sobra && zoomRef.current <= 1) return
       arrastre = { x: e.clientX, y: e.clientY, movio: false, quien: quienDesplaza(caja) }
@@ -678,7 +681,8 @@ export function useZoom({ min = 1, max = 4, paso = 0.25, rueda = 'ctrl', doble =
   return { zoom, min, max, cajaRef, hojaRef, fijar, acercar, alejar, restablecer }
 }
 
-/* Los tres botones. `z` es lo que devuelve useZoom. Por defecto se pegan al
+/* Los tres botones. `z` es lo que devuelve useZoom. Traen sus propios estilos
+   (ZOOM_CSS), así sirven también fuera de los dos visores. Por defecto se pegan al
    borde inferior de lo que se ve del documento (aunque el que desplace sea la
    página o el cuerpo de un modal); `flota` los fija al pie de un visor a
    pantalla completa. */
@@ -686,6 +690,7 @@ export function ZoomControles({ z, flota = false }) {
   const pct = Math.round(z.zoom * 100)
   return (
     <div className={flota ? 'aapZoomFlota' : 'aapZoomPie'}>
+      <style>{ZOOM_CSS}</style>
       <div className="aapZoom" role="group" aria-label="Zoom" onClick={(e) => e.stopPropagation()}>
         <button type="button" onClick={z.alejar} disabled={z.zoom <= z.min + 0.001} aria-label="Alejar" title="Alejar">
           <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
@@ -1331,7 +1336,7 @@ export function PdfVisor({ url, titulo = 'Documento', fondo = '#fff', maxPaginas
    ═══════════════════════════════════════════════════════════════════════ */
 const VISOR_CSS = `
   .aapVisor {
-    position: fixed; inset: 0; z-index: 10000;
+    position: fixed; inset: 0; z-index: var(--z-visor, 10500);
     background: rgba(30, 18, 8, 0.9);
     backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
     display: flex; flex-direction: column;
@@ -1506,7 +1511,9 @@ const ES_IMAGEN = /\.(png|jpe?g|webp|gif|avif)$/i
 const ES_PDF    = /\.pdf$/i
 
 // `archivo`: { url, nombre } o null. `nombre` decide el tipo y el nombre de
-// descarga, así que conviene pasarlo siempre.
+// descarga, así que conviene pasarlo siempre. Con `local: true` es un archivo
+// que todavía está en el equipo (un adjunto antes de enviarlo): se ve con el
+// mismo zoom, pero sin "Descargar".
 export function VisorArchivo({ archivo, onClose }) {
   const [bajando, setBajando] = useState(false)
 
@@ -1526,6 +1533,7 @@ export function VisorArchivo({ archivo, onClose }) {
   useEffect(() => {
     if (!archivo) return
     const n = archivo.nombre || archivo.url || ''
+    if (archivo.local) return
     if (!ES_IMAGEN.test(n) && !ES_PDF.test(n)) {
       downloadChatFile(archivo.url, archivo.nombre || 'documento')
       onClose?.()
@@ -1551,13 +1559,15 @@ export function VisorArchivo({ archivo, onClose }) {
         onClick={(e) => { if (e.target === e.currentTarget) onClose?.() }}>
         <div className="aapVisorBarra">
           <span className="aapVisorNombre">{nombre}</span>
-          <button type="button" className="aapVisorBtn" onClick={descargar} disabled={bajando}>
-            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"
-              strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M12 3v12M7 11l5 5 5-5M4 21h16" />
-            </svg>
-            {bajando ? 'Descargando…' : 'Descargar'}
-          </button>
+          {!archivo.local && (
+            <button type="button" className="aapVisorBtn" onClick={descargar} disabled={bajando}>
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"
+                strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M12 3v12M7 11l5 5 5-5M4 21h16" />
+              </svg>
+              {bajando ? 'Descargando…' : 'Descargar'}
+            </button>
+          )}
           <button type="button" className="aapVisorBtn" onClick={onClose} aria-label="Cerrar">✕</button>
         </div>
         <div className="aapVisorCuerpo" onClick={(e) => { if (e.target === e.currentTarget) onClose?.() }}>
@@ -1572,6 +1582,324 @@ export function VisorArchivo({ archivo, onClose }) {
           )}
         </div>
       </div>
+    </>,
+    document.body
+  )
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   MiniaturaAdjunto — el archivo que se va a enviar, antes de enviarlo.
+
+   Los cinco chats (y el comprobante de pago del cliente) muestran el adjunto
+   elegido con "revisa antes de enviar"… pero la revisión era una miniatura de
+   40 px, o un clip si era un PDF. Aquí la miniatura es un botón: abre el
+   archivo en el visor de siempre, con su zoom. Trae su propio visor, así
+   quien la monta no cablea nada.
+
+   `preview` = object URL de la imagen, si quien la monta ya lo tiene (no se
+   revoca aquí: es suyo). Para un PDF la URL se crea al abrir y se suelta al
+   cerrar. Lo que no se puede mostrar (un Word) queda como icono, sin botón.
+   ═══════════════════════════════════════════════════════════════════════ */
+const MINI_CSS = `
+  .aapMini {
+    position: relative; flex-shrink: 0; display: grid; place-items: center; padding: 0;
+    border: 1px solid rgba(109, 60, 27, 0.2); border-radius: 8px;
+    background: rgba(201, 168, 76, 0.16); color: #8a6a28; font: inherit;
+  }
+  button.aapMini { cursor: zoom-in; transition: border-color 160ms cubic-bezier(0.22, 1, 0.36, 1); }
+  button.aapMini:hover { border-color: #8a6a28; }
+  button.aapMini:focus-visible { outline: 2px solid #8a6a28; outline-offset: 2px; }
+  .aapMini img { display: block; width: 100%; height: 100%; object-fit: cover; border-radius: 7px; }
+  .aapMiniLupa {
+    position: absolute; right: -5px; bottom: -5px; width: 18px; height: 18px;
+    display: grid; place-items: center; border-radius: 50%;
+    background: #472f29; color: #fdf6e3; box-shadow: 0 0 0 2px #fffdf7;
+  }
+  @media (prefers-reduced-motion: reduce) { button.aapMini { transition: none; } }
+`
+
+export function MiniaturaAdjunto({ file, preview = null, tam = 40 }) {
+  const [abierto, setAbierto] = useState(null)   // { url, nombre, local } | null
+  const urlPropia = useRef(null)                 // la que se creó aquí (PDF)
+  const soltar = useCallback(() => {
+    if (urlPropia.current) { URL.revokeObjectURL(urlPropia.current); urlPropia.current = null }
+  }, [])
+  const cerrar = useCallback(() => { setAbierto(null); soltar() }, [soltar])
+  useEffect(() => soltar, [soltar])
+  // Otro archivo (o ninguno): lo que estuviera abierto ya no es este.
+  useEffect(() => { setAbierto(null); soltar() }, [file, soltar])
+
+  if (!file) return null
+  const nombre = file.name || 'archivo'
+  const esImagen = !!preview || ES_IMAGEN.test(nombre)
+  const sePuedeVer = esImagen || ES_PDF.test(nombre)
+  const medida = { width: tam, height: tam }
+  const icono = (
+    <svg viewBox="0 0 24 24" width={Math.round(tam * 0.45)} height={Math.round(tam * 0.45)} fill="none" stroke="currentColor"
+      strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" /><path d="M14 3v5h5M9 13h6M9 17h4" />
+    </svg>
+  )
+  if (!sePuedeVer) return <span className="aapMini" style={medida} aria-hidden="true"><style>{MINI_CSS}</style>{icono}</span>
+
+  const abrir = () => {
+    let url = preview
+    if (!url) { soltar(); url = urlPropia.current = URL.createObjectURL(file) }
+    setAbierto({ url, nombre, local: true })
+  }
+  return (
+    <>
+      <style>{MINI_CSS}</style>
+      <button type="button" className="aapMini" style={medida} onClick={abrir}
+        aria-label={`Ver ${nombre} en grande antes de enviarlo`} title="Ver en grande">
+        {preview ? <img src={preview} alt="" /> : icono}
+        <span className="aapMiniLupa" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round">
+            <circle cx="11" cy="11" r="6.5" /><path d="m20 20-4.2-4.2M11 8.4v5.2M8.4 11h5.2" />
+          </svg>
+        </span>
+      </button>
+      <VisorArchivo archivo={abierto} onClose={cerrar} />
+    </>
+  )
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   ModalPagoCliente — el profesional ve el comprobante y confirma el pago.
+
+   Eran dos botones sueltos en la franja de acciones: "Comprobante del
+   cliente" abría el visor y "Confirmar pago recibido" confirmaba de una,
+   con el recibo fuera de la vista. Aquí van juntos: el comprobante arriba
+   y la confirmación debajo, para que nadie confirme sin haberlo mirado.
+
+   El comprobante es un PATH del bucket chat-files (pagos_asesoria.
+   comprobante_path), no una URL: se firma al abrir. El botón de antes le
+   pasaba ese path crudo al visor, que lo pedía como ruta relativa del sitio.
+
+   El monto y la fecha llegan ya formateados: este módulo no conoce el cobro.
+   ═══════════════════════════════════════════════════════════════════════ */
+const PAGO_CSS = `
+  .aapPago {
+    position: fixed; inset: 0; z-index: var(--z-modal, 10000);
+    display: flex; padding: 20px; overflow-y: auto;
+    background: rgba(40, 24, 10, 0.55);
+    backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px);
+    font-family: 'Poppins', sans-serif;
+    animation: aapPagoFondo 0.2s ease-out;
+  }
+  .aapPagoTarjeta {
+    width: min(520px, 100%); margin: auto; padding: 20px 22px 18px;
+    background: #fff; border: 1px solid rgba(201, 168, 76, 0.35); border-radius: 16px;
+    box-shadow: 0 24px 70px rgba(40, 24, 10, 0.45); outline: none;
+    animation: aapPagoSube 0.26s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .aapPagoCab { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+  .aapPagoTitulo { margin: 0; font-size: 1.05rem; font-weight: 600; line-height: 1.3; color: #6d3c1b; }
+  .aapPagoX {
+    flex-shrink: 0; display: grid; place-items: center; width: 34px; height: 34px;
+    margin: -6px -8px 0 0; padding: 0; border: none; border-radius: 9px;
+    background: transparent; color: #7a6350; cursor: pointer;
+    transition: background-color 160ms cubic-bezier(0.22, 1, 0.36, 1), color 160ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .aapPagoX:hover:not(:disabled) { background: rgba(109, 60, 27, 0.08); color: #472f29; }
+  .aapPagoX:focus-visible { outline: 2px solid #8a6a28; outline-offset: 2px; }
+  .aapPagoX:disabled { opacity: 0.4; cursor: not-allowed; }
+  .aapPagoCifra { display: flex; align-items: baseline; flex-wrap: wrap; gap: 2px 12px; margin: 2px 0 14px; }
+  .aapPagoMonto {
+    margin: 0; font-size: 1.7rem; font-weight: 700; line-height: 1.15; letter-spacing: -0.01em;
+    color: #472f29; font-variant-numeric: tabular-nums;
+  }
+  .aapPagoSub { margin: 0; font-size: 0.78rem; color: #7a6350; }
+
+  /* El comprobante. Fondo oscuro, como los visores a pantalla completa:
+     una captura de banco (casi siempre blanca) se recorta sola contra él. */
+  .aapPagoLienzo {
+    position: relative; height: clamp(210px, 44dvh, 390px);
+    border-radius: 12px; overflow: hidden; background: #2f2018;
+  }
+  .aapPagoLienzo[data-estado="sin"] {
+    height: auto; background: rgba(201, 168, 76, 0.13); border: 1px solid rgba(201, 168, 76, 0.4);
+  }
+  .aapPagoCentro {
+    position: absolute; inset: 0; display: grid; place-items: center; align-content: center;
+    gap: 12px; padding: 18px; text-align: center; font-size: 0.84rem; line-height: 1.5; color: #f3e7d3;
+  }
+  .aapPagoLienzo[data-estado="sin"] .aapPagoCentro { position: static; padding: 14px 16px; color: #6b4f1c; }
+  .aapPagoCentro p { margin: 0; max-width: 34ch; }
+
+  .aapPagoArchivo {
+    display: flex; align-items: center; gap: 8px; min-width: 0;
+    margin-top: 10px; font-size: 0.78rem; color: #6d3c1b;
+  }
+  .aapPagoNombre { flex: 1 1 auto; min-width: 0; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .aapPagoArchivo .aap-accion { flex-shrink: 0; min-height: 32px; padding: 0 0.75rem; font-size: 0.74rem; }
+
+  .aapPagoAviso { margin: 14px 0 0; font-size: 0.8rem; line-height: 1.5; color: #6b513a; }
+  .aapPagoError { margin: 10px 0 0; font-size: 0.8rem; line-height: 1.45; color: #b3261e; }
+  .aapPagoAcciones { display: flex; gap: 10px; margin-top: 16px; }
+  .aapPagoAcciones .aap-accion { min-height: 44px; font-size: 0.82rem; }
+  .aapPagoAcciones .aap-accion--neutra { padding: 0 1.25rem; }
+  .aapPagoAcciones .aap-accion--exito { flex: 1 1 auto; }
+  .aapPagoGiro {
+    width: 14px; height: 14px; border-radius: 50%; flex-shrink: 0;
+    border: 2px solid rgba(255, 255, 255, 0.4); border-top-color: #fff;
+    animation: aapPagoGira 0.7s linear infinite;
+  }
+  @keyframes aapPagoFondo { from { opacity: 0 } to { opacity: 1 } }
+  @keyframes aapPagoSube { from { opacity: 0; transform: translateY(14px) scale(0.97) } to { opacity: 1; transform: none } }
+  @keyframes aapPagoGira { to { transform: rotate(360deg) } }
+  @media (max-width: 480px) {
+    .aapPago { padding: 12px; }
+    .aapPagoTarjeta { padding: 16px 16px 14px; }
+    .aapPagoMonto { font-size: 1.5rem; }
+    /* Apilados: "Confirmar Pago Recibido" no cabe al lado de "Cerrar". */
+    .aapPagoAcciones { flex-direction: column-reverse; gap: 8px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .aapPago, .aapPagoTarjeta { animation: none; }
+    .aapPagoX { transition: none; }
+    .aapPagoGiro { animation-duration: 1.8s; }
+  }
+`
+
+export function ModalPagoCliente({
+  abierto, comprobantePath, monto, informado = '',
+  ocupado = false, error = '', onConfirmar, onClose,
+}) {
+  const [url, setUrl] = useState(null)             // URL firmada del comprobante
+  const [estado, setEstado] = useState('cargando') // cargando | listo | error | sin
+  const [intento, setIntento] = useState(0)
+  const [grande, setGrande] = useState(false)      // visor a pantalla completa
+  const tarjetaRef = useRef(null)
+
+  const crudo = (comprobantePath || '').split('/').pop() || ''
+  // Se guarda como "comprobante_<marca de tiempo>_<nombre>": se muestra el nombre.
+  const nombre = crudo.replace(/^comprobante_\d+_/, '') || 'comprobante'
+  const esImagen = ES_IMAGEN.test(crudo)
+  const esPdf = ES_PDF.test(crudo)
+
+  useEffect(() => {
+    if (!abierto) return
+    setGrande(false)
+    if (!comprobantePath) { setUrl(null); setEstado('sin'); return }
+    let vivo = true
+    setUrl(null); setEstado('cargando')
+    resolveSignedUrl(comprobantePath)
+      .then(u => { if (vivo) { setUrl(u); setEstado(u ? 'listo' : 'error') } })
+      .catch(() => { if (vivo) setEstado('error') })
+    return () => { vivo = false }
+  }, [abierto, comprobantePath, intento])
+
+  useEffect(() => {
+    if (!abierto) return
+    tarjetaRef.current?.focus()
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => { document.body.style.overflow = prev }
+  }, [abierto])
+
+  // Con el visor grande abierto, Escape es suyo: cierra el visor, no el modal.
+  useEffect(() => {
+    if (!abierto) return
+    const onKey = (e) => { if (e.key === 'Escape' && !grande && !ocupado) onClose?.() }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [abierto, grande, ocupado, onClose])
+
+  const archivoGrande = useMemo(
+    () => (grande && url ? { url, nombre } : null),
+    [grande, url, nombre]
+  )
+  const cerrarGrande = useCallback(() => setGrande(false), [])
+
+  if (!abierto) return null
+  return createPortal(
+    <>
+      <style>{PAGO_CSS}</style>
+      <div className="aapPago" role="dialog" aria-modal="true" aria-labelledby="aapPagoTitulo"
+        onClick={(e) => { if (e.target === e.currentTarget && !ocupado) onClose?.() }}>
+        <div className="aapPagoTarjeta" ref={tarjetaRef} tabIndex={-1}>
+          <div className="aapPagoCab">
+            <h3 id="aapPagoTitulo" className="aapPagoTitulo">Pago del cliente</h3>
+            <button type="button" className="aapPagoX" onClick={onClose} disabled={ocupado} aria-label="Cerrar">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor"
+                strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M18 6 6 18M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+          <div className="aapPagoCifra">
+            <p className="aapPagoMonto">{monto}</p>
+            <p className="aapPagoSub">{informado ? `Informado el ${informado}` : 'El cliente informó que ya pagó'}</p>
+          </div>
+
+          <div className="aapPagoLienzo" data-estado={estado}>
+            {estado === 'listo' && esImagen && (
+              <ImagenZoom src={url} alt="Comprobante de pago del cliente" margen={10} />
+            )}
+            {estado === 'listo' && esPdf && (
+              <PdfVisor url={url} titulo="Comprobante de pago" maxPaginas={4} />
+            )}
+            {!(estado === 'listo' && (esImagen || esPdf)) && (
+              <div className="aapPagoCentro" role={estado === 'cargando' ? 'status' : undefined}>
+                {estado === 'cargando' && <p>Cargando el comprobante…</p>}
+                {estado === 'sin' && <p>El cliente informó el pago sin adjuntar comprobante.</p>}
+                {estado === 'error' && (
+                  <>
+                    <p>No se pudo cargar el comprobante.</p>
+                    <button type="button" className="aap-accion aap-accion--neutra"
+                      onClick={() => setIntento(n => n + 1)}>
+                      Reintentar
+                    </button>
+                  </>
+                )}
+                {estado === 'listo' && (
+                  <>
+                    <p>Este tipo de archivo no se puede mostrar aquí.</p>
+                    <button type="button" className="aap-accion aap-accion--neutra"
+                      onClick={() => downloadChatFile(comprobantePath, nombre)}>
+                      Descargar Comprobante
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+
+          {estado === 'listo' && (esImagen || esPdf) && (
+            <div className="aapPagoArchivo">
+              <IconClip size={15} />
+              <span className="aapPagoNombre" title={nombre}>{nombre}</span>
+              <button type="button" className="aap-accion aap-accion--neutra" onClick={() => setGrande(true)}>
+                Ver en Grande
+              </button>
+            </div>
+          )}
+
+          <p className="aapPagoAviso">
+            Comprueba en tu banco que el dinero llegó antes de confirmar.
+          </p>
+          {error && <p className="aapPagoError" role="alert">{error}</p>}
+
+          <div className="aapPagoAcciones">
+            <button type="button" className="aap-accion aap-accion--neutra" onClick={onClose} disabled={ocupado}>
+              Cerrar
+            </button>
+            <button type="button" className="aap-accion aap-accion--exito" onClick={onConfirmar} disabled={ocupado}>
+              {ocupado
+                ? <><span className="aapPagoGiro" aria-hidden="true" /> Confirmando…</>
+                : <>
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"
+                      strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="m5 12.5 4.5 4.5L19 7.5" />
+                    </svg>
+                    Confirmar Pago Recibido
+                  </>}
+            </button>
+          </div>
+        </div>
+      </div>
+      <VisorArchivo archivo={archivoGrande} onClose={cerrarGrande} />
     </>,
     document.body
   )

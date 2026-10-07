@@ -7,7 +7,7 @@ import { contieneContacto, contieneContactoHablado } from '../../lib/validacione
 import styles from './ContadorChatDashboard.module.css'
 import AudioPlayer from './AudioPlayer'
 import {
-  ChatImage, ChatLightbox, AdjuntoChat, VisorArchivo, subirArchivoChat, parseFichas, FichasContacto,
+  ChatImage, ChatLightbox, AdjuntoChat, VisorArchivo, MiniaturaAdjunto, ModalPagoCliente, subirArchivoChat, parseFichas, FichasContacto,
   validarAdjuntoChat, CHAT_FILE_ACCEPT, prepararAdjuntoChat, nombreArchivoSeguro, describirErrorSubida, revisarContactoArchivo, crearTranscriptor, AVISO_AUDIO_SIN_REVISAR,
   crearGrabadorAudio, extAudio, mimeAudioLimpio, describirErrorMicrofono, AUDIO_CONSTRAINTS, audioSinRevisar, AvisoAudioSinRevisar,
   // Visto (✓/✓✓) y presencia del cliente (Conectado / Ausente).
@@ -222,6 +222,8 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
   const [cobroNota, setCobroNota]   = useState('')
   const [cobroBusy, setCobroBusy]   = useState(false)
   const [cobroErr, setCobroErr]     = useState('')
+  // Revisar el comprobante y confirmar el pago van juntos, en un modal.
+  const [pagoOpen, setPagoOpen]     = useState(false)
   // El boton de cobro cambia de peso segun haga falta actuar o no:
   // dorado solido mientras no haya valor, discreto cuando ya esta puesto.
   const cobroDefinido = cobro?.estado === 'pagado' || Number(cobro?.monto) > 0
@@ -1003,6 +1005,7 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
 
   // ── Cobro de asesoría: cargar el cobro de la sala activa (con poll suave) ──
   useEffect(() => {
+    setPagoOpen(false)   // el modal de pago es de UNA sala: no se arrastra a la siguiente
     if (!activeRoom?.id) { setCobro(null); return }
     let cancel = false
     const load = () => fetchCobroProfesional(activeRoom.id)
@@ -1054,13 +1057,24 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
       await confirmarPagoAsesoria(cobro.id)
       const fresco = await fetchCobroProfesional(activeRoom.id)
       setCobro(fresco)
-      // El cobro de plataforma ya no nace aquí: el administrador confirma primero
-      // el valor. (Con el SQL anterior todavía se genera de una: se dice lo que pasó.)
+      setPagoOpen(false)
+      // Trazabilidad del gestor (correo "comisión disponible"). Ya no hay un admin
+      // que lo dispare al confirmar el precio: lo pide el profesional de la sala y
+      // el servidor solo lo envía si el cobro existe de verdad.
+      if (fresco?.pago_profesional_id) {
+        getAuthHeaders().then(h => fetch('/api/notify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: h.Authorization },
+          body: JSON.stringify({ type: 'gestor_trazabilidad', data: { evento: 'cierre', roomId: activeRoom.id } }),
+        })).catch(() => {})
+      }
+      // El cobro de plataforma nace solo al confirmar (cobro-automatico-2026-10-07.sql).
+      // Si esa función aún no está aplicada, lo genera el panel del admin al abrirse.
       setToast(fresco?.pago_profesional_id
         ? 'Pago confirmado. Se generó tu comisión de plataforma en “Pagos”.'
-        : 'Pago confirmado. El administrador revisará el valor y, al confirmarlo, verás tu comisión de plataforma en “Pagos”.')
+        : 'Pago confirmado. Tu comisión de plataforma quedará en “Pagos”.')
     } catch (err) {
-      setToast('No se pudo confirmar el pago. Intenta de nuevo.')
+      setCobroErr('No se pudo confirmar el pago. Intenta de nuevo.')
     } finally {
       setCobroBusy(false)
     }
@@ -1418,88 +1432,89 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
               </div>
             </div>
 
-            {/* Acciones en franja propia bajo la cabecera. Mezcladas con el
-                título competían con él y con el estado por la misma banda. */}
+            {/* Acciones en franja propia bajo la cabecera, en dos grupos: a la
+                izquierda lo que mueve el caso ahora (el cobro y la revisión del
+                administrador), a la derecha el contrato y el cierre. Antes iban
+                las cinco en fila y centradas, todas con el mismo peso. */}
             {activeRoom.status !== 'closed' && (
                 <div className={styles.headerActions}>
-                  {/* Contrato de prestación de servicios: se envía a firma ANTES de
-                      asesorar. La plantilla oficial se descarga en el propio modal
-                      y lo subido se compara con ella antes de dejarlo pasar. */}
-                  {contratoFirmado
-                    ? <span className="aap-chip aap-chip--ok"><IconCheck size={12} /> Contrato firmado</span>
-                    : <button
-                        type="button"
-                        className={contratoSolicitud ? 'aap-accion aap-accion--sutil' : 'aap-accion aap-accion--neutra'}
-                        onClick={() => setFirmaOpen('contrato')}
-                        title={contratoSolicitud
-                          ? 'El contrato está pendiente de la firma del cliente. Puedes enviar una versión corregida.'
-                          : 'Enviar el contrato de prestación de servicios para que el cliente lo firme antes de asesorar'}
-                      >
-                        <IconFirma size={14} /> {contratoSolicitud ? 'Contrato enviado' : 'Contrato de servicios'}
-                      </button>}
                   {/* Con el pago confirmado, cobrar y pedir revisión ya no son
                       acciones posibles: el dinero entró y el caso quedó cerrado
                       en lo económico. Dejarlos ahí era ofrecer callejones sin
                       salida; el estado lo cuenta la franja verde de abajo. */}
                   {!confirmClose && !pagoConfirmado && (
-                    verifiedRooms.has(activeRoom.id)
-                      ? <span className="aap-chip aap-chip--ok"><IconCheck size={12} /> Revisión solicitada</span>
-                      : <button
-                          className="aap-accion aap-accion--neutra"
-                          onClick={() => setConfirmVerificar(true)}
-                          title="Notificar al administrador para revisión de proceso"
-                        >
-                          Verificar
-                        </button>
-                  )}
-                  {!confirmClose && !pagoConfirmado && (
-                    cobro?.estado === 'pendiente' && cobro?.marcado_cliente_at ? (
-                      <>
-                        {cobro?.comprobante_path && (
-                          <button
-                            type="button"
-                            className="aap-accion aap-accion--neutra"
-                            onClick={() => setVerArchivo({ url: cobro.comprobante_path, nombre: (cobro.comprobante_path || '').split('/').pop() || 'comprobante' })}
-                            title="Ver el comprobante de pago que adjuntó el cliente"
-                          >
-                            <IconPaperclip size={14} />
-                            Comprobante del cliente
-                          </button>
-                        )}
+                    <div className={styles.accionesGrupo}>
+                      {/* Cobro de asesoría (manual, cliente → profesional). Cuando
+                          el cliente ya informó su pago, un solo botón abre el
+                          comprobante y la confirmación juntos. */}
+                      {cobro?.estado === 'pendiente' && cobro?.marcado_cliente_at ? (
                         <button
                           type="button"
-                          className="aap-accion aap-accion--exito"
-                          disabled={cobroBusy}
-                          onClick={confirmarRecibido}
-                          title="El cliente marcó que ya pagó — confirma que recibiste el pago"
+                          className="aap-accion aap-accion--primaria"
+                          onClick={() => { setCobroErr(''); setPagoOpen(true) }}
+                          title="El cliente informó su pago. Revisa el comprobante y confirma que lo recibiste"
                         >
-                          {cobroBusy ? 'Confirmando…' : <><IconCheck size={12} /> Confirmar pago recibido</>}
+                          {cobro?.comprobante_path ? <IconPaperclip size={14} /> : <IconCheck size={12} />} Confirmar Pago
                         </button>
-                      </>
-                    ) : (
-                      <button type="button" onClick={abrirCobro}
-                        className={cobroDefinido ? "aap-accion aap-accion--sutil" : "aap-accion aap-accion--primaria"}
-                        title={cobroDefinido ? "Ver o cambiar el cobro de la consulta" : "Fijar el valor de la consulta"}>
-                        {cobro?.estado === 'pagado' ? <><IconCheck size={12} /> Cobrado</>
-                          : Number(cobro?.monto) > 0 ? `Cobro · ${COP.format(Number(cobro.monto))}`
-                          : 'Definir cobro'}
-                      </button>
-                    )
+                      ) : (
+                        <button
+                          type="button"
+                          className={cobroDefinido ? "aap-accion aap-accion--sutil" : "aap-accion aap-accion--primaria"}
+                          onClick={abrirCobro}
+                          title={cobroDefinido ? "Ver o cambiar el cobro de la consulta" : "Fijar el valor de la consulta"}
+                        >
+                          {cobro?.estado === 'pagado' ? <><IconCheck size={12} /> Cobrado</>
+                            : Number(cobro?.monto) > 0 ? `Cobro · ${COP.format(Number(cobro.monto))}`
+                            : 'Definir Cobro'}
+                        </button>
+                      )}
+                      {verifiedRooms.has(activeRoom.id)
+                        ? <span className="aap-chip aap-chip--ok"><IconCheck size={12} /> Revisión Solicitada</span>
+                        : <button
+                            type="button"
+                            className="aap-accion aap-accion--tinta"
+                            onClick={() => setConfirmVerificar(true)}
+                            title="Notificar al administrador para revisión de proceso"
+                          >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                              <path d="M12 2 4 5v6c0 5 3.4 8.4 8 11 4.6-2.6 8-6 8-11V5l-8-3Z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round"/>
+                              <path d="m9 12 2 2 4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                            </svg>
+                            Verificar
+                          </button>}
+                    </div>
                   )}
-                  {!confirmClose
-                    ? <button className="aap-accion aap-accion--peligro" onClick={() => setConfirmClose(true)}>
-                        Finalizar consulta
-                      </button>
-                    : <div className={styles.confirmRow}>
-                        <span className={styles.confirmText}>¿Confirmar cierre?</span>
-                        <button className={styles.btnConfirm} onClick={closeRoom} disabled={closing}>
-                          {closing ? 'Cerrando…' : 'Sí, cerrar'}
+                  <div className={`${styles.accionesGrupo} ${styles.accionesCierre}`}>
+                    {/* Contrato de prestación de servicios: se envía a firma ANTES de
+                        asesorar. La plantilla oficial se descarga en el propio modal
+                        y lo subido se compara con ella antes de dejarlo pasar. */}
+                    {contratoFirmado
+                      ? <span className="aap-chip aap-chip--ok"><IconCheck size={12} /> Contrato Firmado</span>
+                      : <button
+                          type="button"
+                          className={contratoSolicitud ? 'aap-accion aap-accion--sutil' : 'aap-accion aap-accion--marcada'}
+                          onClick={() => setFirmaOpen('contrato')}
+                          title={contratoSolicitud
+                            ? 'El contrato está pendiente de la firma del cliente. Puedes enviar una versión corregida.'
+                            : 'Enviar el contrato de prestación de servicios para que el cliente lo firme antes de asesorar'}
+                        >
+                          <IconFirma size={14} /> {contratoSolicitud ? 'Contrato Enviado' : 'Contrato de Servicios'}
+                        </button>}
+                    {!confirmClose
+                      ? <button type="button" className="aap-accion aap-accion--peligro" onClick={() => setConfirmClose(true)}>
+                          Finalizar Consulta
                         </button>
-                        <button className={styles.btnCancel} onClick={() => setConfirmClose(false)}>
-                          Cancelar
-                        </button>
-                      </div>
-                  }
+                      : <div className={styles.confirmRow}>
+                          <span className={styles.confirmText}>¿Confirmar cierre?</span>
+                          <button className={styles.btnConfirm} onClick={closeRoom} disabled={closing}>
+                            {closing ? 'Cerrando…' : 'Sí, Cerrar'}
+                          </button>
+                          <button className={styles.btnCancel} onClick={() => setConfirmClose(false)}>
+                            Cancelar
+                          </button>
+                        </div>
+                    }
+                  </div>
                 </div>
             )}
 
@@ -1755,11 +1770,9 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
 
             {activeRoom.status !== 'closed' && pendingFile && (
               <div className={styles.adjuntoPreview}>
-                {pendingFile.preview ? (
-                  <img src={pendingFile.preview} alt="" className={styles.adjuntoThumb} />
-                ) : (
-                  <span className={styles.adjuntoIcon}><IconPaperclip size={18} /></span>
-                )}
+                {/* La miniatura abre el archivo en el visor, con zoom: "revisa antes de
+                      enviar" de verdad, también si es un PDF. */}
+                  <MiniaturaAdjunto file={pendingFile.file} preview={pendingFile.preview} />
                 <div className={styles.adjuntoInfo}>
                   <span className={styles.adjuntoNombre}>{pendingFile.file.name}</span>
                   <span className={styles.adjuntoPeso}>
@@ -1954,7 +1967,7 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
             <div className={styles.modalActions}>
               <button className={styles.btnCancel} onClick={() => setCobroOpen(false)} disabled={cobroBusy}>Cancelar</button>
               <button className={styles.btnConfirmGold} onClick={guardarCobro} disabled={cobroBusy}>
-                {cobroBusy ? 'Guardando…' : 'Enviar cobro'}
+                {cobroBusy ? 'Guardando…' : 'Enviar Cobro'}
               </button>
             </div>
           </div>
@@ -1995,7 +2008,7 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
                 onClick={enviarVerificacion}
                 disabled={sendingVerificar}
               >
-                {sendingVerificar ? 'Enviando…' : 'Sí, enviar'}
+                {sendingVerificar ? 'Enviando…' : 'Sí, Enviar'}
               </button>
             </div>
           </div>
@@ -2016,6 +2029,17 @@ export default function ContadorChatDashboard({ contadorId, canDownloadFiles = f
       {/* El visor vive en la raiz, no dentro de una burbuja: se porta a <body>
           y asi no lo recorta el scroll del chat. */}
       <VisorArchivo archivo={verArchivo} onClose={() => setVerArchivo(null)} />
+      {/* Comprobante del cliente + confirmación del pago, en un solo paso. */}
+      <ModalPagoCliente
+        abierto={pagoOpen && cobro?.estado === 'pendiente' && !!cobro?.marcado_cliente_at}
+        comprobantePath={cobro?.comprobante_path}
+        monto={COP.format(Number(cobro?.monto) || 0)}
+        informado={cobro?.marcado_cliente_at ? fmtHora(cobro.marcado_cliente_at) : ''}
+        ocupado={cobroBusy}
+        error={cobroErr}
+        onConfirmar={confirmarRecibido}
+        onClose={() => setPagoOpen(false)}
+      />
     </div>
   )
 }

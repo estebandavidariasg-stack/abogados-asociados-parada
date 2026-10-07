@@ -470,9 +470,17 @@
    auto-dismiss en 3.5s desde el JSX. Click para descartar. */
 .toast {
   position: fixed;
+  /* Anclado a los DOS lados y centrado con márgenes. Antes iba con left: 50%
+     y translateX(-50%): una caja fija puesta así solo dispone de la mitad
+     derecha de la pantalla para medir su ancho, y en el celular el aviso salía
+     en una columna de media pantalla, con dos palabras por renglón. */
+  left: 16px;
+  right: 16px;
   bottom: 32px;
-  left: 50%;
-  transform: translateX(-50%);
+  width: fit-content;
+  margin-inline: auto;
+  line-height: 1.4;
+  text-wrap: pretty;
   background: linear-gradient(135deg, #6d3c1b 0%, #8a4e1a 100%);
   color: #fef8e1;
   padding: 14px 22px;
@@ -497,10 +505,24 @@
 .toast:hover {
   background: linear-gradient(135deg, #6b401a 0%, #a5622f 100%);
 }
+/* Sin `to`: el aviso está entero por defecto y la animación solo lo trae. */
 @keyframes toastIn {
-  from { opacity: 0; transform: translate(-50%, 16px); }
-  to   { opacity: 1; transform: translate(-50%, 0); }
+  from { opacity: 0; transform: translateY(16px); }
 }
+/* En el celular va a todo el ancho y POR ENCIMA de la caja de escribir (que
+   antes tapaba mientras duraba). */
+@media (max-width: 700px) {
+  .toast {
+    left: 12px;
+    right: 12px;
+    bottom: calc(84px + env(safe-area-inset-bottom));
+    width: auto;
+    max-width: none;
+    padding: 12px 14px;
+    font-size: 0.84rem;
+  }
+}
+@media (prefers-reduced-motion: reduce) { .toast { animation: none; } }
 
 /* ── Imagen inline (WhatsApp style) ──────────────────────────── */
 .imgBtn {
@@ -638,15 +660,6 @@
   display: flex; align-items: center; gap: 10px;
   padding: 10px 12px; background: #fdf8ec;
   border-top: 1px solid rgba(201,168,76,0.4); flex-shrink: 0;
-}
-.adjuntoThumb {
-  width: 40px; height: 40px; border-radius: 8px; object-fit: cover; flex-shrink: 0;
-  border: 1px solid rgba(109,60,27,0.2);
-}
-.adjuntoIcon {
-  width: 40px; height: 40px; border-radius: 8px; flex-shrink: 0;
-  display: grid; place-items: center;
-  background: rgba(201,168,76,0.16); color: #8a6a28;
 }
 .adjuntoInfo { min-width: 0; flex: 1; display: flex; flex-direction: column; }
 .adjuntoNombre {
@@ -815,32 +828,8 @@
     margin-left: -10px;
   }
 
-  /* Acciones en una sola fila deslizable en vez de envolver a 2-3 líneas. */
-  .headerActions {
-    width: 100%;
-    padding: 8px 12px;
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    justify-content: center;
-    gap: 6px;
-    padding-bottom: 2px;
-    scrollbar-width: none;
-    -webkit-overflow-scrolling: touch;
-  }
-  .headerActions::-webkit-scrollbar { display: none; }
-  .headerActions > * { flex-shrink: 0; }
-  /* Las acciones son globales (.aap-accion, en styles/global.css).
-     En el celular suben a 38 px: la fila ya scrollea, así que el alto
-     no cuesta nada y el dedo agradece el blanco. */
-  .headerActions :global(.aap-accion) {
-    min-height: 38px;
-    padding: 0 0.75rem;
-    font-size: 0.74rem;
-  }
-  .headerActions :global(.aap-chip) {
-    min-height: 30px;
-    font-size: 0.7rem;
-  }
+  /* La franja de acciones en celular se define más abajo, con
+     .dashboardChatOpen (va DESPUÉS de su regla base, que si no le gana). */
 
   .closeActions {
     width: 100%;
@@ -1197,21 +1186,41 @@
 .btnConfirmDanger:hover:not(:disabled) { background: rgba(180, 35, 35, 1); }
 .btnConfirmDanger:disabled { opacity: 0.55; cursor: not-allowed; }
 
-/* ── Acciones del header (Verificar + Finalizar) ── */
+/* ── Franja de acciones ──
+   Dos grupos, uno a cada borde, en vez de una fila centrada donde todo pesaba
+   igual. A la izquierda, bajo el título, lo que mueve el caso AHORA (el cobro
+   y pedir revisión); a la derecha, el contrato y el cierre. El peso lo pone
+   cada variante de .aap-accion (global.css), no la posición. */
 .headerActions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  justify-content: space-between;
+  gap: 8px 12px;
   min-width: 0;
-  flex-wrap: wrap;            /* bajan de línea en vez de desbordar o cortarse */
-  /* Centradas, igual en móvil y en escritorio: la franja va a todo el ancho
-     bajo la cabecera, y pegarlas a un borde las dejaba huérfanas del título. */
-  justify-content: center;
+  flex-wrap: wrap;            /* un grupo baja entero antes que cortarse */
   /* Franja propia bajo la cabecera oscura. */
   background: #ffffff;
   border-bottom: 1px solid rgba(109,60,27,0.1);
   padding: 10px 18px;
   flex-shrink: 0;
+}
+.accionesGrupo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+/* Un punto más ceñidos que el botón global: con el menú lateral abierto en
+   un portátil de 1280 px la franja mide 647 px, y a 0.9rem de relleno las
+   cuatro acciones se pasaban por 9 px y bajaban a una segunda fila. */
+.headerActions :global(.aap-accion) { padding-inline: 0.75rem; }
+/* Si el otro grupo no está (pago ya confirmado), este sigue a la derecha. */
+.accionesCierre { margin-left: auto; }
+/* "Finalizar" hace pareja con el contrato (--marcada): mismo grosor de borde. */
+.accionesCierre :global(.aap-accion--peligro) {
+  border-width: 1.5px;
+  border-color: #a23b3b;
 }
 .modalIconGold {
   composes: modalIcon;
@@ -1275,7 +1284,11 @@
 }
 
 @media (max-width: 520px) {
-  .avisoCobro { margin: 10px 4px 12px; padding: 11px 13px; font-size: 0.8rem; }
+  /* width: auto, no el 100 % de la regla base: con 100 % MÁS los 4 px de
+     margen a cada lado el aviso medía 8 px más que la lista de mensajes, y
+     eso le sacaba a la lista una barra de desplazamiento horizontal (la
+     franja café que se veía encima de la caja de escribir). */
+  .avisoCobro { width: auto; margin: 10px 4px 12px; padding: 11px 13px; font-size: 0.8rem; }
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -1325,17 +1338,39 @@
     flex-wrap: nowrap;
     overflow: hidden;
   }
-  /* Acciones: envuelven en dos líneas antes que quedar cortadas. Se prefiere
-     esto a una fila deslizable: en el celular un botón a medias se lee como
-     error, no como "hay más a la derecha". */
+  /* Acciones en rejilla de dos columnas: los botones quedan del mismo ancho
+     y en dos filas parejas. Ni fila deslizable (un botón a medias se lee
+     como error) ni envoltura libre (dejaba uno solo en la última línea).
+     Los grupos se disuelven para que cada botón sea una celda. */
   .dashboardChatOpen .headerActions {
-    min-width: 0;
-    flex-wrap: wrap;
-    justify-content: center;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 6px;
     padding: 8px 12px;
   }
-  .dashboardChatOpen .headerActions > * { max-width: 100%; }
+  .dashboardChatOpen .accionesGrupo { display: contents; }
+  /* Las acciones son globales (.aap-accion, en styles/global.css). Aquí
+     suben a 40 px para el dedo y pueden partir el rótulo en dos líneas:
+     "Contrato de Servicios" no cabe en media pantalla de 320 px. */
+  .dashboardChatOpen .headerActions :global(.aap-accion) {
+    min-height: 40px;
+    padding: 4px 0.6rem;
+    font-size: 0.74rem;
+    line-height: 1.15;
+    white-space: normal;
+    text-align: center;
+  }
+  .dashboardChatOpen .headerActions :global(.aap-chip) {
+    min-height: 32px;
+    align-self: center;
+    justify-content: center;
+    font-size: 0.7rem;
+  }
+  /* La pregunta de cierre ocupa la fila entera. */
+  .dashboardChatOpen .confirmRow {
+    grid-column: 1 / -1;
+    justify-content: center;
+  }
 
   /* Los mensajes son lo único que scrollea. */
   .dashboardChatOpen .messages {

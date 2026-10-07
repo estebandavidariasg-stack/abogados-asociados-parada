@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { getAuthHeaders } from '../../lib/supabase'
 import { bytesDeDoc, urlFirmada } from '../../lib/firmaService'
+import { useZoom, ZoomControles } from '../../lib/chatFiles'
 import styles from './UbicarFirma.module.css'
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -36,6 +37,14 @@ export default function UbicarFirma({ origPath, firmaPath, filename = 'documento
   // Posición del bloque de firma en coords de la columna de páginas (px).
   const [pos, setPos] = useState({ left: 40, top: 40 })
   const drag = useRef(null)
+
+  /* Zoom, el mismo de los demás visores (botones, Ctrl + rueda, pellizco).
+     Aquí hace más falta que en ninguno: la hoja mide 540 px fijos, así que en
+     un celular no cabía y la firma se ubicaba a ciegas, desplazando de lado.
+     `pos` y el tamaño de la firma siguen en px SIN ampliar: el zoom solo
+     multiplica lo que se pinta y divide lo que llega del puntero. */
+  const z = useZoom({ min: 0.4, max: 3, paso: 0.25 })
+  const esc = z.zoom
 
   // puntos → px de pantalla (según la primera página; las páginas comparten ancho).
   const ptToPx = paginas[0] ? paginas[0].dispW / paginas[0].pageW_pt : 1
@@ -88,19 +97,29 @@ export default function UbicarFirma({ origPath, firmaPath, filename = 'documento
     return () => { cancel = true }
   }, [origPath, firmaPath])
 
+  // Al cargar, si la hoja no cabe a lo ancho (celular), se aleja lo justo para
+  // verla entera. Después manda la persona.
+  useEffect(() => {
+    const caja = z.cajaRef.current
+    if (paginas.length === 0 || !caja) return
+    const libre = caja.clientWidth - 2 * (parseFloat(getComputedStyle(caja).paddingLeft) || 0)
+    if (libre < DISP_W) z.fijar(Math.floor((libre / DISP_W) * 20) / 20)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paginas.length])
+
   // ── Arrastre del bloque ──
   const onDown = (e) => {
     e.preventDefault()
     const rect = colRef.current.getBoundingClientRect()
-    drag.current = { dx: e.clientX - rect.left - pos.left, dy: e.clientY - rect.top - pos.top }
+    drag.current = { dx: (e.clientX - rect.left) / esc - pos.left, dy: (e.clientY - rect.top) / esc - pos.top, esc }
     window.addEventListener('pointermove', onMove)
     window.addEventListener('pointerup', onUp)
   }
   const onMove = (e) => {
     if (!drag.current) return
     const rect = colRef.current.getBoundingClientRect()
-    let left = e.clientX - rect.left - drag.current.dx
-    let top = e.clientY - rect.top - drag.current.dy
+    let left = (e.clientX - rect.left) / drag.current.esc - drag.current.dx
+    let top = (e.clientY - rect.top) / drag.current.esc - drag.current.dy
     const maxL = DISP_W - blockW
     const maxT = (paginas.at(-1)?.top || 0) + (paginas.at(-1)?.dispH || 0) - blockH
     left = Math.max(0, Math.min(left, maxL))
@@ -162,26 +181,32 @@ export default function UbicarFirma({ origPath, firmaPath, filename = 'documento
 
         {error && <div className={styles.errBar} role="alert">{error}</div>}
 
-        <div className={styles.viewer}>
-          {paginas.length === 0 && !error ? (
-            <div className={styles.loading}><span className={styles.spinner} /> Cargando documento…</div>
-          ) : (
-            <div className={styles.col} ref={colRef} style={{ width: DISP_W }}>
-              {paginas.map((p, i) => (
-                <img key={i} src={p.dataUrl} alt={`Página ${i + 1}`} className={styles.page}
-                  style={{ width: p.dispW, height: p.dispH }} draggable={false} />
-              ))}
-              {firmaUrl && (
-                <div
-                  className={styles.firmaBlock}
-                  style={{ left: pos.left, top: pos.top, width: blockW, height: blockH }}
-                  onPointerDown={onDown}
-                >
-                  <img src={firmaUrl} alt="firma" className={styles.firmaImg} draggable={false} />
-                </div>
-              )}
-            </div>
-          )}
+        <div className={styles.viewerWrap}>
+          <div className={styles.viewer} ref={z.cajaRef}>
+            {paginas.length === 0 && !error ? (
+              <div className={styles.loading}><span className={styles.spinner} /> Cargando documento…</div>
+            ) : (
+              <div className={styles.col} ref={(el) => { colRef.current = el; z.hojaRef.current = el }}
+                style={{ width: DISP_W * esc }}>
+                {paginas.map((p, i) => (
+                  <img key={i} src={p.dataUrl} alt={`Página ${i + 1}`} className={styles.page}
+                    style={{ width: p.dispW * esc, height: p.dispH * esc, marginBottom: 14 * esc }} draggable={false} />
+                ))}
+                {firmaUrl && (
+                  /* data-zoom-quieto: arrastrar la firma no desplaza el documento. */
+                  <div
+                    className={styles.firmaBlock}
+                    data-zoom-quieto
+                    style={{ left: pos.left * esc, top: pos.top * esc, width: blockW * esc, height: blockH * esc }}
+                    onPointerDown={onDown}
+                  >
+                    <img src={firmaUrl} alt="firma" className={styles.firmaImg} draggable={false} />
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+          {paginas.length > 0 && <ZoomControles z={z} flota />}
         </div>
 
         {firmaUrl && paginas.length > 0 && (

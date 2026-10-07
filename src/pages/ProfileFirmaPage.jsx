@@ -195,7 +195,9 @@ export default function ProfileFirmaPage() {
           )}
 
           {seccion === 'consultas' && (
-            <section className={g.panel}>
+            /* `styles.panelConsultas`, no `g.panel`: ver la nota en el CSS (el
+               chat a pantalla completa quedaba debajo del riel en celular). */
+            <section className={styles.panelConsultas}>
               <div className={g.panelHead}>
                 <div>
                   <p className={g.eyebrow}>Las consultas que llegan a la firma</p>

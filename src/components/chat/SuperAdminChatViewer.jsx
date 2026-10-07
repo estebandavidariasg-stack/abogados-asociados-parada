@@ -663,10 +663,10 @@ export default function SuperAdminChatViewer({ initialRoomId = null }) {
         // chats, sin importar el nombre. getAuthHeaders() resuelve el JWT.
         const headers = await getAuthHeaders()
 
-        // 1) Buscar profesionales que matcheen (acepta abogado Y contador
-        //    porque tipo_profesional en chat_rooms los maneja a ambos).
+        // 1) Buscar profesionales que matcheen: abogados, contadores y firmas
+        //    (una firma atiende consultas con su propio perfil).
         const profRes = await fetch(
-          `${SUPABASE_URL}/rest/v1/profiles?rol=in.(abogado,contador)&or=(nombre.ilike.*${enc}*,apellido.ilike.*${enc}*)&select=id,nombre,apellido`,
+          `${SUPABASE_URL}/rest/v1/profiles?rol=in.(abogado,contador,firma)&or=(nombre.ilike.*${enc}*,apellido.ilike.*${enc}*)&select=id,nombre,apellido`,
           { headers }
         )
         const profiles = await profRes.json()

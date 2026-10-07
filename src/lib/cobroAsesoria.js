@@ -258,67 +258,194 @@ export async function subirComprobanteCliente(roomId, file, clientToken) {
 
 // ── Recibo PDF (pdf-lib, import dinámico) ───────────────────────────────────
 //  Comprobante interno — NO es factura electrónica.
-export async function descargarReciboPDF({ reciboNum, monto, nota, profesionalNombre, profesionalCedula, fecha }) {
-  const { PDFDocument, StandardFonts, rgb } = await import('pdf-lib')
+
+// "Ochenta mil pesos m/cte": la cifra en letras, como en cualquier recibo
+// colombiano. `un` y `veintiún` van apocopados porque siempre les sigue un
+// sustantivo (mil, millones, pesos).
+const UNIDADES = ['', 'un', 'dos', 'tres', 'cuatro', 'cinco', 'seis', 'siete', 'ocho', 'nueve', 'diez',
+  'once', 'doce', 'trece', 'catorce', 'quince', 'dieciséis', 'diecisiete', 'dieciocho', 'diecinueve', 'veinte',
+  'veintiún', 'veintidós', 'veintitrés', 'veinticuatro', 'veinticinco', 'veintiséis', 'veintisiete', 'veintiocho', 'veintinueve']
+const DECENAS = ['', '', '', 'treinta', 'cuarenta', 'cincuenta', 'sesenta', 'setenta', 'ochenta', 'noventa']
+const CENTENAS = ['', 'ciento', 'doscientos', 'trescientos', 'cuatrocientos', 'quinientos', 'seiscientos', 'setecientos', 'ochocientos', 'novecientos']
+function hastaMil(n) {
+  if (n === 100) return 'cien'
+  const resto = n % 100
+  const bajo = resto < 30 ? UNIDADES[resto] : DECENAS[Math.floor(resto / 10)] + (resto % 10 ? ` y ${UNIDADES[resto % 10]}` : '')
+  return [CENTENAS[Math.floor(n / 100)], bajo].filter(Boolean).join(' ')
+}
+export function montoEnLetras(valor) {
+  const n = Math.round(Number(valor) || 0)
+  if (n <= 0 || n >= 1e9) return ''
+  const millones = Math.floor(n / 1e6), miles = Math.floor((n % 1e6) / 1000), resto = n % 1000
+  const partes = []
+  if (millones) partes.push(millones === 1 ? 'un millón' : `${hastaMil(millones)} millones`)
+  if (miles) partes.push(miles === 1 ? 'mil' : `${hastaMil(miles)} mil`)
+  if (resto) partes.push(hastaMil(resto))
+  const texto = partes.join(' ')
+  const unidad = n === 1 ? 'peso' : n % 1e6 === 0 ? 'de pesos' : 'pesos'
+  return `${texto[0].toUpperCase()}${texto.slice(1)} ${unidad} m/cte`
+}
+
+/* El recibo, en una hoja de 396 × 560 pt: el ancho de media carta (el de un
+   comprobante de pago de verdad) y el alto justo para lo que lleva, que es
+   también la proporción que mejor se lee en la pantalla de un celular.
+
+   Antes eran seis renglones centrados bajo el nombre de la marca: sin logo,
+   sin quién pagó y —el fallo que lo delataba— con "Profesional —" cuando la
+   sala no estaba en 'active'. Ahora tiene partes: quién paga y quién recibe,
+   el valor en cifras y en letras, el concepto y el sello de pago confirmado.
+
+   Devuelve los BYTES; quien lo llama decide si lo muestra, lo baja o lo
+   comparte. `logoBytes` deja probarlo fuera del navegador. */
+export async function generarReciboPDF({
+  reciboNum, monto, fecha, nota,
+  cliente = {},        // { nombre, cedula }
+  profesional = {},    // { nombre, cedula, dirigidaA, cargo }
+  area,
+  logoBytes,
+} = {}) {
+  const { PDFDocument, StandardFonts, rgb, setCharacterSpacing, LineCapStyle } = await import('pdf-lib')
   const doc = await PDFDocument.create()
-  const page = doc.addPage([420, 560])
-  const font  = await doc.embedFont(StandardFonts.Helvetica)
-  const bold  = await doc.embedFont(StandardFonts.HelveticaBold)
+  const ANCHO = 396, ALTO = 560, M = 34
+  const page = doc.addPage([ANCHO, ALTO])
+  const font = await doc.embedFont(StandardFonts.Helvetica)
+  const bold = await doc.embedFont(StandardFonts.HelveticaBold)
 
-  const ink  = rgb(0.28, 0.18, 0.15)   // #472F29 aprox
-  const gold = rgb(0.79, 0.66, 0.30)   // dorado
-  const grey = rgb(0.42, 0.38, 0.34)
+  const hex = (h) => rgb(parseInt(h.slice(1, 3), 16) / 255, parseInt(h.slice(3, 5), 16) / 255, parseInt(h.slice(5, 7), 16) / 255)
+  const INK = hex('#472F29'), CAFE = hex('#6D3C1B'), MUTED = hex('#8A7563')
+  const GOLD = hex('#C9A84C'), GOLD_DK = hex('#8A6A28'), CREMA = hex('#FBF6E7'), LINEA = hex('#E9DCC3')
 
-  const { width } = page.getSize()
-  let y = 500
+  // Helvetica estándar solo trae WinAnsi: un nombre con un carácter raro (o el
+  // espacio fino que algunos navegadores ponen en "1:14 p. m." y "$ 80.000")
+  // haría fallar drawText y el recibo entero no saldría.
+  const juego = new Set(font.getCharacterSet())
+  const limpio = (t) => Array.from(String(t ?? '').replace(/[    ]/g, ' '))
+    .map(ch => (juego.has(ch.codePointAt(0)) ? ch : ' ')).join('').replace(/\s+/g, ' ').trim()
 
-  const center = (text, f, size, color) => {
-    const w = f.widthOfTextAtSize(text, size)
-    page.drawText(text, { x: (width - w) / 2, y, size, font: f, color })
+  const ancho = (t, f, size, track = 0) => f.widthOfTextAtSize(t, size) + track * Math.max(0, t.length - 1)
+  // `top` = distancia desde el borde superior a la línea base (así se piensa
+  // una hoja: de arriba abajo). `der` alinea a la derecha de ese x.
+  const escribir = (t, { x, top, size, f = font, color = INK, track = 0, der = false }) => {
+    const s = limpio(t)
+    if (!s) return
+    if (track) page.pushOperators(setCharacterSpacing(track))
+    page.drawText(s, { x: der ? x - ancho(s, f, size, track) : x, y: ALTO - top, size, font: f, color })
+    if (track) page.pushOperators(setCharacterSpacing(0))
   }
-  const line = (label, value) => {
-    page.drawText(label, { x: 40, y, size: 10, font, color: grey })
-    page.drawText(value, { x: 190, y, size: 11, font: bold, color: ink })
-    y -= 26
+  const partir = (t, f, size, max, maxLineas = 3) => {
+    const lineas = []
+    let actual = ''
+    for (const w of limpio(t).split(' ')) {
+      const prueba = actual ? `${actual} ${w}` : w
+      if (ancho(prueba, f, size) > max && actual) { lineas.push(actual); actual = w } else actual = prueba
+    }
+    if (actual) lineas.push(actual)
+    if (lineas.length > maxLineas) {
+      lineas.length = maxLineas
+      let ult = lineas[maxLineas - 1]
+      while (ult && ancho(`${ult}...`, f, size) > max) ult = ult.slice(0, -1)
+      lineas[maxLineas - 1] = `${ult.trim()}...`
+    }
+    return lineas
+  }
+  const regla = (top, color, grosor = 0.6, x0 = M, x1 = ANCHO - M) =>
+    page.drawLine({ start: { x: x0, y: ALTO - top }, end: { x: x1, y: ALTO - top }, thickness: grosor, color })
+
+  // ── Cabecera: el logo a un lado, el número y la fecha al otro ──
+  let logo = null
+  try {
+    const bytes = logoBytes || await fetch('/logo.png').then(r => (r.ok ? r.arrayBuffer() : Promise.reject()))
+    logo = await doc.embedPng(bytes)
+  } catch { /* sin logo: la marca va escrita */ }
+  if (logo) {
+    const h = 50, w = h * (logo.width / logo.height)
+    page.drawImage(logo, { x: M, y: ALTO - 34 - h, width: w, height: h })
+  } else {
+    escribir('PARADA BRIDGE', { x: M, top: 62, size: 13, f: bold, track: 1.6 })
+  }
+  const D = ANCHO - M
+  escribir('COMPROBANTE DE PAGO', { x: D, top: 44, size: 7.4, f: bold, color: GOLD_DK, track: 1.3, der: true })
+  escribir(reciboNum ? `N.° ${reciboNum}` : 'Asesoría', { x: D, top: 63, size: 15, f: bold, der: true })
+  const cuando = fecha ? new Date(fecha) : new Date()
+  const fechaTxt = Number.isNaN(cuando.getTime()) ? '' :
+    `${cuando.toLocaleDateString('es-CO', { day: 'numeric', month: 'long', year: 'numeric' })} · ` +
+    cuando.toLocaleTimeString('es-CO', { hour: 'numeric', minute: '2-digit' })
+  escribir(fechaTxt, { x: D, top: 78, size: 8.6, color: MUTED, der: true })
+  regla(100, GOLD, 1)
+
+  // ── El valor: en cifras, en letras, y el sello de pago confirmado ──
+  escribir('Valor pagado', { x: M, top: 126, size: 9, color: MUTED })
+  escribir(COP.format(Number(monto) || 0), { x: M, top: 164, size: 36, f: bold })
+  let top = 181
+  for (const l of partir(montoEnLetras(monto), font, 9.2, 214, 2)) { escribir(l, { x: M, top, size: 9.2, color: CAFE }); top += 12 }
+
+  const cx = D - 15, cTop = 143
+  page.drawCircle({ x: cx, y: ALTO - cTop, size: 15, color: INK })
+  const trazo = { thickness: 2.2, color: GOLD, lineCap: LineCapStyle.Round }
+  page.drawLine({ start: { x: cx - 6.2, y: ALTO - cTop - 0.4 }, end: { x: cx - 2, y: ALTO - cTop - 4.6 }, ...trazo })
+  page.drawLine({ start: { x: cx - 2, y: ALTO - cTop - 4.6 }, end: { x: cx + 6.4, y: ALTO - cTop + 4.4 }, ...trazo })
+  escribir('Pago confirmado', { x: D, top: 173, size: 8.8, f: bold, der: true })
+  escribir('por el profesional', { x: D, top: 184, size: 8.2, color: MUTED, der: true })
+
+  // ── Las partes: quién pagó y quién recibió ──
+  // Dos columnas dentro del panel: 16 de aire a cada lado y 16 entre ellas.
+  const COL = (ANCHO - 2 * M - 48) / 2
+  const X1 = M + 16, X2 = X1 + COL + 16
+  const bloque = (titulo, nombre, lineas) => ({
+    titulo,
+    // Hasta tres líneas: el nombre de una persona no se corta en su recibo.
+    nombre: partir(nombre || 'Sin registrar', bold, 11.2, COL, 3),
+    lineas: lineas.filter(Boolean).flatMap(l => partir(l, font, 8.8, COL, 2)),
+  })
+  const cedula = (c) => (String(c ?? '').replace(/\D/g, '') ? `C.C. ${String(c).replace(/\D/g, '').replace(/\B(?=(\d{3})+(?!\d))/g, '.')}` : '')
+  const paga = bloque('PAGADO POR', cliente.nombre || 'Cliente', [cedula(cliente.cedula)])
+  const recibe = bloque('RECIBIDO POR', profesional.nombre, [
+    cedula(profesional.cedula),
+    profesional.dirigidaA ? `Dirigida a ${profesional.dirigidaA}` : '',
+    profesional.dirigidaA ? profesional.cargo : '',
+  ])
+  const altoBloque = (b) => 30 + b.nombre.length * 14 + b.lineas.length * 12
+  const pTop = Math.max(206, top + 8)
+  const pAlto = Math.max(altoBloque(paga), altoBloque(recibe)) + 10
+  const r = 8, w = ANCHO - 2 * M
+  page.drawSvgPath(
+    `M ${r},0 H ${w - r} Q ${w},0 ${w},${r} V ${pAlto - r} Q ${w},${pAlto} ${w - r},${pAlto} H ${r} Q 0,${pAlto} 0,${pAlto - r} V ${r} Q 0,0 ${r},0 Z`,
+    { x: M, y: ALTO - pTop, color: CREMA },
+  )
+  for (const [b, x] of [[paga, X1], [recibe, X2]]) {
+    let t = pTop + 20
+    escribir(b.titulo, { x, top: t, size: 7.2, f: bold, color: GOLD_DK, track: 1.1 })
+    t += 17
+    for (const l of b.nombre) { escribir(l, { x, top: t, size: 11.2, f: bold }); t += 14 }
+    t -= 1
+    for (const l of b.lineas) { escribir(l, { x, top: t, size: 8.8, color: MUTED }); t += 12 }
   }
 
-  center('PARADA BRIDGE', bold, 18, ink); y -= 24
-  center('Comprobante de pago de asesoría', font, 11, grey); y -= 34
+  // ── El detalle, en filas con su línea ──
+  const filas = [
+    ['Concepto', nota ? `Asesoría profesional · ${nota}` : 'Asesoría profesional'],
+    area ? ['Área', area] : null,
+    ['Forma de pago', 'Directo al profesional'],
+  ].filter(Boolean)
+  top = pTop + pAlto + 26
+  filas.forEach(([rotulo, valor], i) => {
+    const lineas = partir(valor, font, 10.2, ANCHO - 2 * M - 96, 3)
+    escribir(rotulo, { x: M, top, size: 9, color: MUTED })
+    lineas.forEach((l, j) => escribir(l, { x: M + 96, top: top + j * 13.5, size: 10.2 }))
+    top += lineas.length * 13.5
+    if (i < filas.length - 1) { regla(top - 1, LINEA); top += 17 }
+  })
 
-  // Regla dorada
-  page.drawRectangle({ x: 40, y: y + 6, width: width - 80, height: 2, color: gold }); y -= 24
+  // ── El pie, anclado abajo ──
+  regla(ALTO - 88, LINEA)
+  const aviso = partir(
+    'Comprobante interno. No es factura electrónica. El servicio fue prestado y cobrado directamente por el profesional. Parada Bridge no intermedia el pago.',
+    font, 7.9, ANCHO - 2 * M, 4,
+  )
+  aviso.forEach((l, i) => escribir(l, { x: M, top: ALTO - 72 + i * 10.8, size: 7.9, color: MUTED }))
+  escribir('paradabridge.com', { x: M, top: ALTO - 30, size: 8, f: bold, color: CAFE })
 
-  line('Recibo N°', reciboNum || '—')
-  line('Fecha', fecha || new Date().toLocaleString('es-CO'))
-  line('Profesional', profesionalNombre || '—')
-  if (profesionalCedula) line('Cédula', String(profesionalCedula))
-  if (nota) line('Concepto', String(nota).slice(0, 40))
-  y -= 4
-  page.drawRectangle({ x: 40, y: y + 6, width: width - 80, height: 1, color: rgb(0.85, 0.82, 0.75) }); y -= 24
-
-  page.drawText('Valor pagado', { x: 40, y, size: 12, font: bold, color: ink })
-  const montoStr = COP.format(Number(monto) || 0)
-  const mw = bold.widthOfTextAtSize(montoStr, 16)
-  page.drawText(montoStr, { x: width - 40 - mw, y: y - 2, size: 16, font: bold, color: ink })
-  y -= 60
-
-  const disclaimer = [
-    'Comprobante interno — NO es factura electrónica.',
-    'El servicio fue prestado y cobrado directamente por el',
-    'profesional. Parada Bridge no intermedia el pago.',
-  ]
-  for (const t of disclaimer) {
-    page.drawText(t, { x: 40, y, size: 8.5, font, color: grey }); y -= 14
-  }
-
-  const bytes = await doc.save()
-  const blob = new Blob([bytes], { type: 'application/pdf' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `recibo-${reciboNum || 'asesoria'}.pdf`
-  document.body.appendChild(a)
-  a.click()
-  a.remove()
-  setTimeout(() => URL.revokeObjectURL(url), 4000)
+  doc.setTitle(`Comprobante de pago${reciboNum ? ` ${reciboNum}` : ''}`)
+  doc.setAuthor('Parada Bridge')
+  return await doc.save()
 }

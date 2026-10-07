@@ -146,6 +146,8 @@ button, input, select, textarea {
 
      --primaria  la acción que toca hacer ahora (dorado sólido)
      --exito     confirmar dinero recibido (verde sólido)
+     --tinta     secundaria que no puede pasar desapercibida (café sólido)
+     --marcada   secundaria que debe verse (contorno de tinta, más firme)
      --neutra    acciones secundarias (contorno)
      --peligro   destructivas (contorno rojo, nunca sólido)
      --sutil     un estado que además se puede abrir ("Cobrado")
@@ -199,6 +201,26 @@ button, input, select, textarea {
   color: #ffffff;
 }
 .aap-accion--exito:hover:not(:disabled) { background: #196340; border-color: #196340; }
+
+/* Tinta sólida: pesa más que el dorado sin pelearle el color. Para una
+   secundaria que la gente no veía (pedir revisión al administrador). */
+.aap-accion--tinta {
+  background: var(--navy);
+  border-color: var(--navy);
+  color: #fffef1;                          /* 12,4:1 sobre el café */
+}
+.aap-accion--tinta:hover:not(:disabled) { background: var(--navy-md); border-color: var(--navy-md); }
+
+/* Contorno de tinta: el paso intermedio entre --neutra y --tinta. */
+.aap-accion--marcada {
+  background: #fffaf0;
+  border: 1.5px solid rgba(71, 47, 41, 0.72);
+  color: var(--navy);
+}
+.aap-accion--marcada:hover:not(:disabled) {
+  background: #f6ead6;
+  border-color: var(--navy);
+}
 
 .aap-accion--neutra {
   background: #ffffff;

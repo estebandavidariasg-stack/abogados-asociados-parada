@@ -31,7 +31,6 @@
 }
 
 /* Trabajo pendiente del admin dentro de una sub-pestaña. */
-.subTabAlerta { color: #fff; background: #b5651d; white-space: nowrap; }
 
 /* ── Cabecera de sección ── */
 .section { display: flex; flex-direction: column; gap: 16px; }
@@ -48,6 +47,82 @@
   white-space: nowrap; transition: background .15s ease, border-color .15s ease;
 }
 .refresh:hover { background: #fcf8f4; border-color: rgba(109,60,27,0.28); }
+
+/* ── Porcentajes de la comisión + reparto de ejemplo (Asesorías) ──
+   Dos mitades en una misma tarjeta: a la izquierda se edita, a la derecha se
+   ve qué significa. La de la derecha crece; en pantallas angostas baja debajo
+   y la raya vertical pasa a ser horizontal. */
+.cfg {
+  display: grid; grid-template-columns: minmax(260px, 340px) minmax(0, 1fr);
+  background: #fff; border: 1px solid rgba(109,60,27,0.08); border-radius: 14px;
+}
+.cfgForm { display: flex; flex-direction: column; align-items: flex-start; padding: 18px 20px 20px; }
+.cfgTitulo { margin: 0; font-size: 0.95rem; font-weight: 700; color: #6d3c1b; line-height: 1.3; }
+.cfgNota { margin: 3px 0 0; font-size: 0.8rem; line-height: 1.5; color: #7a6655; text-wrap: pretty; }
+.cfgCampos { display: flex; gap: 12px; margin-top: 16px; }
+.cfgCampo { display: flex; flex-direction: column; gap: 5px; width: 132px; }
+.cfgRotulo { font-size: 0.76rem; font-weight: 700; color: #5b4633; }
+/* El campo y su "%" son una sola caja: el foco la rodea entera. */
+.cfgCaja {
+  display: flex; align-items: center; height: 42px; padding: 0 12px 0 0;
+  border: 1px solid rgba(109,60,27,0.2); border-radius: 10px; background: #fffdf9;
+  color: #8a735f; font-size: 0.9rem; font-weight: 600;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+.cfgCaja:focus-within { border-color: #c9a84c; box-shadow: 0 0 0 3px rgba(201,168,76,0.18); }
+.cfgInput {
+  flex: 1 1 auto; min-width: 0; width: 100%; height: 100%; padding: 0 4px 0 12px;
+  border: none; background: transparent; outline: none;
+  font-family: inherit; font-size: 1.05rem; font-weight: 700; color: #472f29;
+  font-variant-numeric: tabular-nums; color-scheme: light;
+}
+.cfgAyuda { font-size: 0.7rem; line-height: 1.35; color: #8a735f; }
+.cfgGuardar { margin-top: 16px; padding: 9px 16px; font-size: 0.8rem; }
+.cfgGuardar:disabled { cursor: default; filter: none; box-shadow: none; color: #8a735f; background: #f3ece1; }
+
+.reparto {
+  display: flex; flex-direction: column; justify-content: center; min-width: 0;
+  padding: 18px 22px 20px; border-left: 1px solid rgba(109,60,27,0.1);
+  background: linear-gradient(180deg, #fffdf8 0%, #fbf6ec 100%);
+  border-radius: 0 14px 14px 0;
+}
+.repartoTitulo { margin: 0; font-size: 0.84rem; color: #5b4633; }
+.repartoTitulo strong { font-weight: 700; color: #472f29; font-variant-numeric: tabular-nums; }
+/* La barra: profesional (arena) y empresa (café). El dorado del gestor va
+   dentro del tramo de la empresa, pegado a su borde derecho. */
+.repartoBarra {
+  display: flex; height: 14px; margin-top: 12px; border-radius: 999px; overflow: hidden;
+  background: #efe6d6;
+}
+.repartoPro { flex: 0 0 0; background: #e6d3b3; }
+.repartoEmp { flex: 0 0 0; display: flex; justify-content: flex-end; background: #6d3c1b; }
+.repartoGes { min-width: 5px; background: #c9a84c; }
+.repartoPro, .repartoEmp { transition: flex-grow .25s cubic-bezier(0.22, 1, 0.36, 1); }
+.repartoLista { display: flex; flex-wrap: wrap; gap: 10px 28px; margin: 14px 0 0; }
+.repartoLista > div { display: flex; flex-direction: column; gap: 1px; }
+.repartoLista dt { display: flex; align-items: center; gap: 7px; font-size: 0.74rem; font-weight: 600; color: #7a6655; }
+.repartoLista dt i { width: 9px; height: 9px; border-radius: 3px; flex-shrink: 0; }
+.repartoLista dt i[data-tono="pro"] { background: #e6d3b3; box-shadow: inset 0 0 0 1px rgba(109,60,27,0.18); }
+.repartoLista dt i[data-tono="emp"] { background: #6d3c1b; }
+.repartoLista dt i[data-tono="ges"] { background: #c9a84c; }
+.repartoLista dd {
+  margin: 0 0 0 16px; font-size: 1.02rem; font-weight: 700; color: #472f29;
+  font-variant-numeric: tabular-nums; letter-spacing: -0.01em;
+}
+.repartoPie { margin: 12px 0 0; font-size: 0.74rem; line-height: 1.5; color: #8a735f; text-wrap: pretty; }
+
+@media (max-width: 860px) {
+  .cfg { grid-template-columns: minmax(0, 1fr); }
+  .reparto { border-left: none; border-top: 1px solid rgba(109,60,27,0.1); border-radius: 0 0 14px 14px; padding: 16px 20px 18px; }
+}
+@media (max-width: 420px) {
+  .cfgForm { align-items: stretch; }
+  .cfgCampos { gap: 10px; }
+  .cfgCampo { flex: 1 1 0; width: auto; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cfgCaja, .repartoPro, .repartoEmp { transition: none; }
+}
 
 /* ── Tiles de resumen ── */
 .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
@@ -158,6 +233,8 @@
 .num { font-variant-numeric: tabular-nums; letter-spacing: 0.01em; }
 .muted { color: #b6a597; font-style: italic; }
 .gestorTag { display: block; font-size: 0.7rem; font-weight: 600; color: #8a6a28; margin-top: 2px; }
+/* Bajo el nombre de un gestor cuya cuenta ya no existe (historial). */
+.gestorBaja { display: block; margin-top: 2px; font-size: 0.68rem; font-weight: 600; color: #967f6b; }
 
 /* Celda de fecha+hora: creación arriba, hitos de dinero (con HORA resaltada) debajo */
 .fechaCell { font-variant-numeric: tabular-nums; letter-spacing: 0.01em; white-space: nowrap; }
@@ -172,11 +249,13 @@
 .rowSolic:hover { background: #f8f1dd; }
 
 /* Badges de profesión */
-.badgeAbog, .badgeCont {
+.badgeAbog, .badgeCont, .badgeFirma {
   display: inline-block; font-size: 0.7rem; font-weight: 700; border-radius: 999px; padding: 3px 10px;
 }
 .badgeAbog { color: #6d3c1b; background: #f7eee6; }
 .badgeCont { color: #1f6d5a; background: #e2f4ee; }
+/* La firma: tinta sobre arena, la pareja de la marca (ni el café del abogado ni el verde del contador). */
+.badgeFirma { color: #472f29; background: #ecdcc0; }
 
 /* Pills de estado */
 .pill { display: inline-block; white-space: nowrap; font-size: 0.7rem; font-weight: 700; border-radius: 999px; padding: 3px 11px; }
@@ -253,22 +332,6 @@
 }
 .payError { margin: 10px 0 0; font-size: 0.8rem; font-weight: 600; color: #b23b3b; }
 
-/* Confirmar el precio de una asesoría: el valor y lo que se le cobra al profesional. */
-.precioCampo { display: flex; flex-direction: column; gap: 6px; }
-.precioCampo > span { font-size: 0.74rem; font-weight: 700; letter-spacing: 0.04em; color: #7a6655; text-transform: uppercase; }
-.precioInput {
-  width: 100%; box-sizing: border-box;
-  border: 1.5px solid rgba(109,60,27,0.22); border-radius: 10px; background: #fff;
-  padding: 10px 14px; font-family: inherit; font-size: 1.25rem; font-weight: 700;
-  color: #472f29; font-variant-numeric: tabular-nums;
-  transition: border-color .15s ease, box-shadow .15s ease;
-}
-.precioInput:focus { outline: none; border-color: #c9a84c; box-shadow: 0 0 0 3px rgba(201,168,76,0.25); }
-.precioDesglose { margin: 14px 0 0; padding: 12px 14px; border-radius: 10px; background: #fcf9f5; display: flex; flex-direction: column; gap: 6px; }
-.precioDesglose > div { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
-.precioDesglose dt { font-size: 0.82rem; color: #7a6655; }
-.precioDesglose dd { margin: 0; font-size: 0.9rem; font-weight: 700; color: #472f29; font-variant-numeric: tabular-nums; }
-.precioAviso { margin: 10px 0 0; font-size: 0.8rem; line-height: 1.5; color: #8a5a12; }
 .payActions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
 .payCancel {
   border: 1px solid rgba(109,60,27,0.18); background: #fff; color: #5b4633; cursor: pointer;

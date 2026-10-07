@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { sondear } from '../../utils/sondeo'
 import { getAuthHeaders, timeoutSignal } from '../../lib/supabase'
 import {
-  downloadChatFile, AdjuntoChat, VisorArchivo, ChatImage, ChatLightbox,
+  downloadChatFile, AdjuntoChat, VisorArchivo, MiniaturaAdjunto, ChatImage, ChatLightbox,
   crearGrabadorAudio, AUDIO_CONSTRAINTS, describirErrorMicrofono,
 } from '../../lib/chatFiles'
 import { Visto, nuevoIdMensaje } from '../../lib/chatFiles'
@@ -593,17 +593,8 @@ export default function LawyerInternalChat({ miId }) {
           background: 'rgba(201,168,76,0.08)', border: '1px solid rgba(201,168,76,0.35)',
           display: 'flex', alignItems: 'center', gap: 12,
         }}>
-          {pendingPreview ? (
-            <img src={pendingPreview} alt="Vista previa" style={{
-              width: 64, height: 64, objectFit: 'cover', borderRadius: 8, flex: '0 0 auto',
-            }} />
-          ) : (
-            <span style={{
-              width: 44, height: 44, borderRadius: 10, flex: '0 0 auto',
-              background: 'rgba(201,168,76,0.15)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}><IconPaperclip size={18} /></span>
-          )}
+          {/* La miniatura abre el archivo en el visor, con zoom, antes de enviarlo. */}
+          <MiniaturaAdjunto file={pendingFile} preview={pendingPreview} tam={pendingPreview ? 64 : 44} />
           <div style={{ minWidth: 0, flex: 1 }}>
             <p style={{ margin: 0, fontSize: '0.8rem', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {pendingFile.name}

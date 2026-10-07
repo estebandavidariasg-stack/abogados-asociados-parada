@@ -2,7 +2,7 @@ import nodemailer from 'nodemailer'
 import crypto from 'node:crypto'
 import { renderEmailHtml, renderShell, infoBox, emailButton, codeBox, em, C, FONT_SERIF, FONT_SANS } from './_lib/emailTemplate.js'
 import { renderTrazabilidadEmail, asuntoTrazabilidad } from './_lib/emailTrazabilidad.js'
-import { getCallerProfile, lawyerAssignedToRoom } from './_lib/adminAuth.js'
+import { getCallerProfile, lawyerAssignedToRoom, esProfesional } from './_lib/adminAuth.js'
 
 const ADMIN_NOTIFY_EMAIL = process.env.ADMIN_NOTIFY_EMAIL || 'abogadosyasociados.parada@gmail.com'
 
@@ -1492,18 +1492,37 @@ export default async function handler(req, res) {
       }
 
       // Autorización por evento:
-      //  · cierre/pago: solo cuenta de panel (los dispara el panel del admin).
+      //  · cierre: cuenta de panel, o el profesional de la sala si su cobro ya existe.
+      //  · pago/rechazado/no_exitoso: solo cuenta de panel.
       //  · en_curso: profesional autenticado Y asignado a esa sala.
       //  · inicio: flujo ANÓNIMO del cliente (igual que new_consultation); el
       //    dedupe por sala limita el abuso a 1 correo por sala real con código.
       if (evento === 'cierre' || evento === 'pago' || evento === 'rechazado' || evento === 'no_exitoso') {
         const caller = await getCallerProfile(req)
-        if (!esPanel(caller)) {
+        /* 'cierre' también lo pide el PROFESIONAL de la consulta: desde
+           2026-10-07 su cobro nace solo cuando confirma el pago del cliente y
+           ya no hay un admin delante que dispare este correo. Solo vale si es
+           el asignado a la sala Y el cobro de esa sala existe de verdad: así
+           nadie le anuncia al gestor un caso exitoso que no lo es. */
+        let esElProfesionalConCobro = false
+        if (!esPanel(caller) && evento === 'cierre' && esProfesional(caller) && roomId
+            && await lawyerAssignedToRoom(caller.id, roomId)) {
+          try {
+            const r = await fetch(
+              `${SUPABASE_URL}/rest/v1/pagos_profesional?room_id=eq.${encodeURIComponent(roomId)}` +
+              `&estado=in.(pendiente,pagado)&select=id&limit=1`,
+              { headers: svcHeaders() }
+            )
+            const filas = r.ok ? await r.json() : []
+            esElProfesionalConCobro = Array.isArray(filas) && filas.length > 0
+          } catch { /* sin confirmación del cobro no se autoriza */ }
+        }
+        if (!esPanel(caller) && !esElProfesionalConCobro) {
           return res.status(401).json({ error: 'No autorizado.' })
         }
       } else if (evento === 'en_curso') {
         const caller = await getCallerProfile(req)
-        if (!caller || !['abogado', 'contador'].includes(caller.rol)) {
+        if (!esProfesional(caller)) {
           return res.status(401).json({ error: 'No autorizado.' })
         }
         if (!roomId || !(await lawyerAssignedToRoom(caller.id, roomId))) {
@@ -1750,7 +1769,7 @@ export default async function handler(req, res) {
     // con ok:false para NO romper el flujo de pago (que ya quedó registrado).
     if (type === 'alegra_factura') {
       const caller = await getCallerProfile(req)
-      if (!caller || !['abogado', 'contador'].includes(caller.rol)) {
+      if (!esProfesional(caller)) {
         return res.status(401).json({ error: 'No autorizado.' })
       }
       if (!ALEGRA_EMAIL || !ALEGRA_TOKEN) {
@@ -1785,7 +1804,7 @@ export default async function handler(req, res) {
     // calcula server-side (el integrity secret NUNCA va al navegador).
     if (type === 'wompi_firma') {
       const caller = await getCallerProfile(req)
-      if (!caller || !['abogado', 'contador'].includes(caller.rol)) {
+      if (!esProfesional(caller)) {
         return res.status(401).json({ error: 'No autorizado.' })
       }
       if (!WOMPI_PUBLIC_KEY || !WOMPI_INTEGRITY_SECRET) {

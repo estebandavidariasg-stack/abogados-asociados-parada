@@ -1,6 +1,7 @@
 /* ────────────────────────────────────────────────────────────────────────
    POST /api/verify-request
-   El abogado/contador pulsa "Verificar" → registra la solicitud de revisión.
+   El abogado, el contador o la firma pulsa "Verificar" → registra la solicitud
+   de revisión.
    Seguridad: valida que el que llama sea un profesional ASIGNADO a esa sala.
 
    Hace 3 cosas (service-role):
@@ -12,7 +13,7 @@
 
 import {
   SUPABASE_URL, serviceHeaders, getCallerProfile,
-  lawyerAssignedToRoom, getAdminId,
+  lawyerAssignedToRoom, getAdminId, esProfesional,
 } from './_lib/adminAuth.js'
 import { sendVerificationEmail } from './_lib/mailer.js'
 
@@ -29,7 +30,7 @@ export default async function handler(req, res) {
 
   // 1) Autorización: profesional asignado a la sala.
   const caller = await getCallerProfile(req)
-  if (!caller || !['abogado', 'contador'].includes(caller.rol)) {
+  if (!esProfesional(caller)) {
     return res.status(401).json({ error: 'No autorizado.' })
   }
   if (!(await lawyerAssignedToRoom(caller.id, roomId))) {

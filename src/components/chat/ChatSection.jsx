@@ -7,11 +7,12 @@ import styles from './ChatSection.module.css'
 import AudioPlayer from './AudioPlayer'
 import TriagePanel from './TriagePanel'
 import {
-  ChatImage, ChatLightbox, downloadChatFile, VisorArchivo, subirArchivoChat,
+  ChatImage, ChatLightbox, downloadChatFile, VisorArchivo, MiniaturaAdjunto, subirArchivoChat,
   parseFichas, FichasContacto,
   validarAdjuntoChat, CHAT_FILE_ACCEPT, prepararAdjuntoChat, nombreArchivoSeguro, describirErrorSubida,
   crearGrabadorAudio, extAudio, mimeAudioLimpio, describirErrorMicrofono, AUDIO_CONSTRAINTS,
   revisarContactoArchivo, crearTranscriptor, AVISO_AUDIO_SIN_REVISAR, PdfVisor, ImagenZoom,
+  precalentarPdf, descargarDesdeUrl,
   // Visto (✓/✓✓) y presencia del profesional (Conectado / Ausente).
   Visto, Presencia, usePresencia, hayNoLeidosDeOtro, marcarLeidos, aplicarLeidoLocal,
   nuevoIdMensaje, fusionarMensajes, useFirmasEstado,
@@ -21,7 +22,7 @@ import { EnlaceLegal } from '../shared/DocumentosLegales'
 // Código OTP al correo antes de crear la sala (mismo paso que el registro).
 const VerificationStep = lazy(() => import('../auth/VerificationStep'))
 import {
-  COP, fetchCobroCliente, clienteMarcoPago, subirComprobanteCliente, descargarReciboPDF,
+  COP, fetchCobroCliente, clienteMarcoPago, subirComprobanteCliente, generarReciboPDF,
   AVISO_COBRO_CLIENTE, AVISO_COSTO_ANTES,
 } from '../../lib/cobroAsesoria'
 // Lazy: arrastra ~30 kB de datos geográficos (32 departamentos + ~1.100
@@ -44,7 +45,7 @@ function renderMensaje(text) {
 function parseFirmaOk(content) {
   try { const o = JSON.parse(content); return o?.t === 'firma_ok' ? o : null } catch { return null }
 }
-import { IconPaperclip, IconMic, IconFirma, IconDownload } from '../shared/Icons'
+import { IconPaperclip, IconMic, IconFirma, IconDownload, IconUpload } from '../shared/Icons'
 import { validarCelular, validarCorreo, normalizarCelular, contieneContacto, contieneContactoHablado, contieneContactoEstricto, formatCedula, esDeptoBogota } from '../../lib/validaciones'
 import { sondear } from '../../utils/sondeo'
 import { AREAS_DERECHO } from '../../lib/areasDerecho'
@@ -1286,15 +1287,33 @@ function VisorDocumento({ titulo, url, onClose }) {
 // Tarjeta de cobro de la consulta (cliente). Aparece dentro del chat cuando el
 // profesional fija el valor. El pago es MANUAL y directo al profesional —
 // Parada Bridge no intermedia el dinero.
-function CobroClienteCard({ roomId, clientToken, profesionalNombre, onVerCertificado }) {
+function CobroClienteCard({ roomId, clientToken, profesionalNombre, profesionalCedula, dirigidaA, area, onVerCertificado }) {
   const [cobro, setCobro]   = useState(null)
-  const [busy, setBusy]     = useState(false)
   // El detalle del pago va en un modal: la tarjeta completa tapaba el chat.
   const [detalleAbierto, setDetalleAbierto] = useState(false)
-  // Comprobante de pago del cliente (obligatorio antes de "Ya realicé el pago").
+  // Comprobante de pago del cliente (obligatorio antes de confirmar).
   const [comprobanteFile, setComprobanteFile] = useState(null)
   const [comprobanteError, setComprobanteError] = useState('')
+  const [miniatura, setMiniatura] = useState(null)   // vista previa, si es imagen
   const comprobanteRef = useRef(null)
+  /* Qué está pasando al confirmar: null | 'subiendo' | 'registrando' | 'listo'.
+     Mientras tiene valor, un velo tapa el modal y lo dice; en 'listo' el modal
+     se cierra solo y la persona queda de vuelta en el chat. Antes el botón
+     decía "Confirmando…" y después el modal seguía abierto, casi igual: no se
+     sabía si había pasado algo ni que ya se podía volver a la conversación. */
+  const [fase, setFase] = useState(null)
+  const volverRef = useRef(null)
+  /* El recibo (pago ya confirmado). Antes era una pastilla verde de 12 px con
+     un enlace "Descargar recibo" que nadie veía, y el PDF bajaba sin haberlo
+     visto. Ahora se abre en un modal: se genera, se muestra y desde ahí se
+     descarga o se comparte. */
+  const [reciboAbierto, setReciboAbierto] = useState(false)
+  const [recibo, setRecibo] = useState(null)          // { url, archivo, huella }
+  const [reciboError, setReciboError] = useState(false)
+  const [reciboIntento, setReciboIntento] = useState(0)
+  const [hojaLista, setHojaLista] = useState(false)   // la página ya está pintada
+  const [bajando, setBajando] = useState(false)
+  const reciboUrlRef = useRef(null)
 
   useEffect(() => {
     if (!roomId || !clientToken) return
@@ -1305,18 +1324,125 @@ function CobroClienteCard({ roomId, clientToken, profesionalNombre, onVerCertifi
     return () => { cancel = true; parar() }
   }, [roomId, clientToken])
 
+  useEffect(() => () => clearTimeout(volverRef.current), [])
+
+  // Miniatura del archivo elegido: se ve de un vistazo si es el correcto.
+  useEffect(() => {
+    if (!comprobanteFile || !comprobanteFile.type.startsWith('image/')) { setMiniatura(null); return }
+    const u = URL.createObjectURL(comprobanteFile)
+    setMiniatura(u)
+    return () => URL.revokeObjectURL(u)
+  }, [comprobanteFile])
+
+  /* Cada modal es de UN estado del cobro. Si el estado cambia por debajo (el
+     profesional confirma mientras el cliente tiene abierto el pago), el modal
+     se cierra: si no, dejaba de pintarse pero seguía "abierto" y la página de
+     atrás se quedaba sin poder desplazarse. */
+  const estado = cobro?.estado
+  useEffect(() => {
+    if (estado !== 'pendiente') setDetalleAbierto(false)
+    if (estado !== 'pagado') setReciboAbierto(false)
+    // Con el pago confirmado se adelanta el visor de PDF (en reposo), para que
+    // abrir el recibo no espere a que baje.
+    if (estado === 'pagado') precalentarPdf()
+  }, [estado])
+  const hayModal = detalleAbierto || reciboAbierto
+
+  // Con un modal abierto la página de atrás no se desplaza, y Escape lo
+  // cierra. Solo si es la ventana de ENCIMA: con la cuenta bancaria abierta
+  // sobre él, Escape es del visor y el pago se queda donde iba.
+  useEffect(() => {
+    if (!hayModal) return
+    const onKey = (e) => {
+      if (e.key !== 'Escape' || fase) return
+      if (document.querySelectorAll('[role="dialog"][aria-modal="true"]').length > 1) return
+      setDetalleAbierto(false); setReciboAbierto(false)
+    }
+    document.addEventListener('keydown', onKey)
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      document.body.style.overflow = prev
+    }
+  }, [hayModal, fase])
+
+  /* El recibo se genera al abrirlo. La huella junta lo que va impreso: si el
+     nombre del profesional llega después (lo resuelve el servidor), el
+     siguiente "Ver Recibo" lo vuelve a generar en vez de mostrar el viejo. */
+  const huellaRecibo = [cobro?.recibo_num, cobro?.monto, cobro?.confirmado_at, profesionalNombre, profesionalCedula, dirigidaA, area].join('|')
+  useEffect(() => {
+    if (!reciboAbierto || !cobro) return
+    if (recibo && recibo.huella === huellaRecibo) return
+    let vivo = true
+    setReciboError(false); setHojaLista(false)
+    // "PRUEBA PRUEBA (Aliado/Colaborador · AG BUFFETE)" → nombre y cargo.
+    const partes = /^(.*?)\s*\(([^·)]+)/.exec(dirigidaA || '')
+    let nombreCliente = '', cedulaCliente = ''
+    try {
+      nombreCliente = localStorage.getItem('chat_nombre') || ''
+      cedulaCliente = localStorage.getItem('chat_cedula_raw') || ''
+    } catch { /* modo privado: el recibo sale sin esos dos datos */ }
+    generarReciboPDF({
+      reciboNum: cobro.recibo_num,
+      monto: cobro.monto,
+      nota: cobro.nota,
+      fecha: cobro.confirmado_at,
+      area,
+      cliente: { nombre: nombreCliente, cedula: cedulaCliente },
+      profesional: {
+        nombre: profesionalNombre,
+        cedula: profesionalCedula,
+        dirigidaA: partes ? partes[1].trim() : (dirigidaA || ''),
+        cargo: partes ? partes[2].trim() : '',
+      },
+    }).then(bytes => {
+      if (!vivo) return
+      const archivo = new File([bytes], `recibo-${cobro.recibo_num || 'asesoria'}.pdf`, { type: 'application/pdf' })
+      if (reciboUrlRef.current) URL.revokeObjectURL(reciboUrlRef.current)
+      const url = URL.createObjectURL(archivo)
+      reciboUrlRef.current = url
+      setRecibo({ url, archivo, huella: huellaRecibo })
+    }).catch(err => {
+      console.error('[recibo] no se pudo generar:', err)
+      if (vivo) setReciboError(true)
+    })
+    return () => { vivo = false }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reciboAbierto, reciboIntento, huellaRecibo])
+  useEffect(() => () => { if (reciboUrlRef.current) URL.revokeObjectURL(reciboUrlRef.current) }, [])
+  // Si el visor no llega a pintar la página (un navegador sin pdf.js), el
+  // boceto no se queda para siempre: se retira y deja ver lo que haya.
+  useEffect(() => {
+    if (!recibo || hojaLista) return
+    const t = setTimeout(() => setHojaLista(true), 12000)
+    return () => clearTimeout(t)
+  }, [recibo, hojaLista])
+
   if (!cobro) return null
 
   const marcar = async () => {
+    if (fase) return
     if (!comprobanteFile) { setComprobanteError('Adjunta el comprobante de tu pago para continuar.'); return }
-    setBusy(true); setComprobanteError('')
+    setFase('subiendo'); setComprobanteError('')
     try {
       const path = await subirComprobanteCliente(roomId, comprobanteFile, clientToken)
-      if (!path) { setComprobanteError('No se pudo subir el comprobante. Intenta de nuevo.'); setBusy(false); return }
-      await clienteMarcoPago(roomId, clientToken, path)
+      if (!path) { setComprobanteError('No se pudo subir el comprobante. Intenta de nuevo.'); setFase(null); return }
+      setFase('registrando')
+      const ok = await clienteMarcoPago(roomId, clientToken, path)
       const c = await fetchCobroCliente(roomId, clientToken)
-      setCobro(c)
-    } catch { setComprobanteError('No se pudo registrar tu pago. Intenta de nuevo.') } finally { setBusy(false) }
+      if (!ok && !c?.marcado_cliente_at) throw new Error('pago no registrado')
+      // Si la relectura falló no se espera al sondeo: el pago ya quedó informado.
+      setCobro(prev => c || { ...prev, marcado_cliente_at: new Date().toISOString(), comprobante_path: path })
+      setFase('listo')
+      // De vuelta al chat sin que la persona tenga que cerrar nada.
+      volverRef.current = setTimeout(() => {
+        setDetalleAbierto(false); setFase(null); setComprobanteFile(null)
+      }, 1700)
+    } catch {
+      setComprobanteError('No se pudo registrar tu pago. Intenta de nuevo.')
+      setFase(null)
+    }
   }
   const onComprobanteChange = (e) => {
     const f = e.target.files?.[0]
@@ -1328,45 +1454,116 @@ function CobroClienteCard({ roomId, clientToken, profesionalNombre, onVerCertifi
     setComprobanteError('')
     setComprobanteFile(f)
   }
-  const recibo = () => descargarReciboPDF({
-    reciboNum: cobro.recibo_num,
-    monto: cobro.monto,
-    nota: cobro.nota,
-    profesionalNombre,
-    fecha: cobro.confirmado_at ? new Date(cobro.confirmado_at).toLocaleString('es-CO') : undefined,
-  })
-
-  const wrap = {
-    margin: '12px 16px', padding: '14px 16px', borderRadius: 14,
-    border: '1px solid rgba(201,168,76,0.45)',
-    background: 'linear-gradient(180deg,#fffdf5 0%,#fbf6e7 100%)',
-    fontSize: '0.86rem', color: '#472F29', lineHeight: 1.5,
+  const cerrar = () => { if (!fase) setDetalleAbierto(false) }
+  const abrirRecibo = () => { setHojaLista(false); setReciboAbierto(true) }
+  const bajarRecibo = async () => {
+    if (!recibo || bajando) return
+    setBajando(true)
+    try { await descargarDesdeUrl(recibo.url, recibo.archivo.name) } finally { setBajando(false) }
+  }
+  // Compartir el archivo (a WhatsApp, al correo…) donde el navegador lo permite:
+  // en el celular es lo que de verdad se hace con un comprobante.
+  const puedeCompartir = !!recibo && typeof navigator !== 'undefined' &&
+    typeof navigator.canShare === 'function' && navigator.canShare({ files: [recibo.archivo] })
+  const compartirRecibo = async () => {
+    try { await navigator.share({ files: [recibo.archivo], title: 'Recibo de pago' }) } catch { /* cancelado por la persona */ }
   }
 
   // Consultas antiguas sin valor registrado: no se muestra tarjeta de cobro.
   if (cobro.estado === 'gratuita') return null
 
   if (cobro.estado === 'pagado') {
-    // Pago cerrado → el chat queda limpio: solo una línea discreta con el recibo.
-    return (
-      <div style={{
-        margin: '8px 16px', padding: '6px 12px', borderRadius: 999,
-        display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
-        background: 'rgba(46,158,95,0.08)', border: '1px solid rgba(46,158,95,0.25)',
-        fontSize: '0.74rem', color: '#2b6a48',
-      }}>
-        <span>✓ Asesoría pagada{cobro.recibo_num ? ` · Recibo ${cobro.recibo_num}` : ''}</span>
-        <button type="button" onClick={recibo}
-          style={{ background: 'none', border: 'none', color: '#1f5e3c', fontWeight: 700, cursor: 'pointer', fontSize: '0.74rem', textDecoration: 'underline', padding: 0 }}>
-          Descargar recibo
-        </button>
+    const valor = COP.format(Number(cobro.monto) || 0)
+    const modalRecibo = reciboAbierto && (
+      <div
+        className={styles.pagoFondo}
+        onClick={(e) => { if (e.target === e.currentTarget) setReciboAbierto(false) }}
+        role="dialog" aria-modal="true" aria-labelledby="reciboPagoTitulo"
+      >
+        <div className={`${styles.pagoTarjeta} ${styles.reciboTarjeta}`}>
+          <div className={styles.pagoCab}>
+            <h3 id="reciboPagoTitulo" className={styles.pagoTitulo}>Recibo de pago</h3>
+            <button type="button" className={styles.pagoX} onClick={() => setReciboAbierto(false)} aria-label="Cerrar y volver al chat">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor"
+                strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M18 6 6 18M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+          {/* El recibo es una imagen para quien no ve la pantalla: lo esencial
+              va también en texto. */}
+          <p className={styles.reciboSub}>
+            {valor}{cobro.recibo_num ? ` · N.° ${cobro.recibo_num}` : ''}
+          </p>
+
+          {/* La mesa: el recibo (el PDF de verdad, el mismo que se descarga) y,
+              debajo, la franja donde vive el zoom del visor. */}
+          <div className={styles.reciboMesa}>
+            {recibo && !reciboError && (
+              <div className={styles.reciboHoja} data-listo={hojaLista ? 'si' : 'no'}>
+                <PdfVisor url={recibo.url} titulo="Recibo de pago" maxPaginas={1} fondo="#efe5d3"
+                  onInfo={() => setHojaLista(true)} />
+              </div>
+            )}
+            {reciboError ? (
+              <div className={styles.reciboAviso} role="alert">
+                <p>No se pudo preparar el recibo.</p>
+                <button type="button" className="aap-accion aap-accion--neutra"
+                  onClick={() => { setRecibo(null); setReciboIntento(n => n + 1) }}>
+                  Reintentar
+                </button>
+              </div>
+            ) : !hojaLista && (
+              /* El boceto tiene la forma del recibo que viene: así la espera
+                 ya muestra dónde va a quedar cada cosa. */
+              <div className={styles.reciboEspera} role="status">
+                <div className={styles.reciboBoceto} aria-hidden="true">
+                  <i /><i /><i /><i /><i /><i /><i /><i /><i /><i /><i /><i /><i /><i /><i />
+                </div>
+                <p><span className={styles.reciboGiro} aria-hidden="true" /> Preparando tu recibo</p>
+              </div>
+            )}
+          </div>
+
+          <div className={styles.reciboAcciones}>
+            {puedeCompartir && (
+              <button type="button" className="aap-accion aap-accion--neutra" onClick={compartirRecibo}>
+                Compartir
+              </button>
+            )}
+            <button type="button" className="aap-accion aap-accion--primaria" onClick={bajarRecibo} disabled={!recibo || bajando}>
+              <IconDownload size={14} /> {bajando ? 'Descargando…' : 'Descargar PDF'}
+            </button>
+          </div>
+        </div>
       </div>
+    )
+    // Pago cerrado: una barra que se ve (café y dorado, la misma del cobro) y
+    // el recibo a un toque.
+    return (
+      <>
+        <div className={styles.pagadoBarra}>
+          <svg className={styles.pagadoSello} viewBox="0 0 56 56" aria-hidden="true">
+          <circle cx="28" cy="28" r="26" fill="#472f29" />
+          <path d="m17.5 28.5 7.2 7.2 14-14.4" fill="none" stroke="#f2d580" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+          <span className={styles.pagadoTexto}>
+            <strong>Asesoría pagada</strong>
+            <span>{valor}{cobro.recibo_num ? ` · Recibo ${cobro.recibo_num}` : ''}</span>
+          </span>
+          <button type="button" className="aap-accion aap-accion--tinta" onClick={abrirRecibo}>
+            Ver Recibo
+          </button>
+        </div>
+        {modalRecibo && typeof document !== 'undefined' ? createPortal(modalRecibo, document.body) : modalRecibo}
+      </>
     )
   }
 
   // Pendiente: en el chat va solo una barra compacta; el detalle del pago se
   // abre en un modal para no tapar la conversación.
   const informado = !!cobro.marcado_cliente_at
+  const monto = COP.format(Number(cobro.monto) || 0)
 
   const barra = (
     <div style={{
@@ -1382,13 +1579,13 @@ function CobroClienteCard({ roomId, clientToken, profesionalNombre, onVerCertifi
           {informado ? 'Pago informado' : 'Pago de la asesoría'}
         </strong>
         <span style={{ fontWeight: 800, fontSize: '1rem', color: '#472F29' }}>
-          {COP.format(Number(cobro.monto) || 0)}
+          {monto}
         </span>
       </span>
       <button type="button" onClick={() => setDetalleAbierto(true)}
         className={informado ? 'aap-accion aap-accion--neutra' : 'aap-accion aap-accion--primaria'}
         style={{ flexShrink: 0 }}>
-        {informado ? 'Ver detalle del pago' : 'Pagar la asesoría'}
+        {informado ? 'Ver Detalle del Pago' : 'Pagar la Asesoría'}
       </button>
     </div>
   )
@@ -1399,83 +1596,138 @@ function CobroClienteCard({ roomId, clientToken, profesionalNombre, onVerCertifi
   // con overflow y transform que recortarían un position:fixed anidado).
   const modal = (
     <div
-      onClick={() => !busy && setDetalleAbierto(false)}
-      role="dialog" aria-modal="true" aria-label="Pago de la asesoría"
-      style={{
-        position: 'fixed', inset: 0, zIndex: 'var(--z-modal)', padding: '5vh 16px',
-        background: 'rgba(48,27,8,0.55)', backdropFilter: 'blur(3px)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        overflowY: 'auto',
-      }}
+      className={styles.pagoFondo}
+      onClick={(e) => { if (e.target === e.currentTarget) cerrar() }}
+      role="dialog" aria-modal="true" aria-labelledby="pagoAsesoriaTitulo"
     >
-      <div onClick={e => e.stopPropagation()} style={{ ...wrap, margin: 0, width: '100%', maxWidth: 440, boxShadow: '0 24px 60px rgba(48,27,8,0.35)' }}>
-      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10 }}>
-        <strong style={{ color: '#6d3c1b', fontSize: '1.02rem' }}>Pago de la asesoría</strong>
-        <span style={{ fontWeight: 800, fontSize: '1.1rem', color: '#472F29' }}>{COP.format(Number(cobro.monto) || 0)}</span>
-      </div>
-
-      {/* La cuenta para consignar es la del certificado bancario del
-          profesional (documento verificado). Ya no hay un campo de texto
-          libre con "datos de pago". */}
-      {onVerCertificado ? (
-        <>
-          <p style={{ margin: '12px 0 6px', fontSize: '0.78rem', color: 'rgba(109,60,27,0.75)' }}>
-            Consigna a la cuenta del certificado bancario del profesional:
-          </p>
-          {/* El visor se abre ENCIMA de este modal (--z-visor), así que al
-              cerrarlo el cliente sigue en el pago y no pierde lo que llevaba. */}
-          <button type="button" onClick={onVerCertificado}
-            className="aap-accion aap-accion--neutra aap-accion--ancha">
-            Ver cuenta bancaria certificada
+      <div className={styles.pagoTarjeta}>
+        <div className={styles.pagoCab}>
+          <h3 id="pagoAsesoriaTitulo" className={styles.pagoTitulo}>Pago de la asesoría</h3>
+          <button type="button" className={styles.pagoX} onClick={cerrar} disabled={!!fase} aria-label="Cerrar y volver al chat">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor"
+              strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M18 6 6 18M6 6l12 12" />
+            </svg>
           </button>
-        </>
-      ) : (
-        <p style={{ margin: '12px 0 0', padding: '10px 12px', borderRadius: 10, background: 'rgba(201,168,76,0.12)', fontSize: '0.78rem', color: '#7a5a12' }}>
-          El profesional aún no ha cargado su certificado bancario. Pídele la cuenta por el chat antes de pagar.
-        </p>
-      )}
-
-      <p style={{ margin: '10px 0 0', fontSize: '0.74rem', color: 'rgba(109,60,27,0.7)' }}>
-        El pago es directo al profesional. Parada Bridge no intermedia el dinero.
-      </p>
-
-      {informado ? (
-        <div style={{ marginTop: 10, color: '#8a6a28', fontWeight: 600, fontSize: '0.82rem' }}>
-          ✓ Pago informado con comprobante. Esperando que el profesional lo confirme.
         </div>
-      ) : (
-        <>
-          {/* Comprobante obligatorio: transparencia para ambas partes */}
-          <div style={{ marginTop: 12 }}>
-            <button type="button" onClick={() => comprobanteRef.current?.click()}
-              className="aap-accion aap-accion--neutra aap-accion--ancha"
-              style={{ borderStyle: 'dashed', borderColor: 'rgba(109,60,27,0.4)', minHeight: 44 }}>
-              {comprobanteFile
-                ? <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    ✓ {comprobanteFile.name}
-                  </span>
-                : 'Adjuntar comprobante de pago'}
-            </button>
-            <input ref={comprobanteRef} type="file"
-              accept="application/pdf,image/png,image/jpeg,image/webp"
-              style={{ display: 'none' }} onChange={onComprobanteChange} />
-            {comprobanteError && (
-              <p style={{ margin: '6px 0 0', color: '#8f2f22', fontSize: '0.75rem' }}>{comprobanteError}</p>
-            )}
-          </div>
-          <button type="button" onClick={marcar} disabled={busy || !comprobanteFile}
-            className="aap-accion aap-accion--primaria aap-accion--ancha"
-            style={{ marginTop: 10, minHeight: 46 }}>
-            {busy ? 'Confirmando…' : 'Confirmar'}
-          </button>
-        </>
-      )}
+        <p className={styles.pagoMonto}>{monto}</p>
+        <p className={styles.pagoNota}>
+          El pago es directo al profesional. Parada Bridge no intermedia el dinero.
+        </p>
 
-        <button type="button" onClick={() => setDetalleAbierto(false)} disabled={busy}
-          className="aap-accion aap-accion--neutra aap-accion--ancha"
-          style={{ marginTop: 10, borderColor: 'transparent' }}>
-          Cerrar
-        </button>
+        {informado ? (
+          <>
+            <div className={styles.pagoEstado}>
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor"
+                strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" />
+              </svg>
+              <div>
+                <strong>Pago informado con comprobante</strong>
+                <span>
+                  Esperando que el profesional lo confirme. Cuando lo haga podrás
+                  descargar tu recibo desde el chat.
+                </span>
+              </div>
+            </div>
+            <div className={styles.pagoPie}>
+              {/* El visor se abre ENCIMA de este modal (--z-visor), así que al
+                  cerrarlo el cliente sigue aquí. */}
+              {onVerCertificado && (
+                <button type="button" onClick={onVerCertificado} className="aap-accion aap-accion--neutra">
+                  Ver Cuenta Bancaria
+                </button>
+              )}
+              <button type="button" onClick={cerrar} className="aap-accion aap-accion--primaria">
+                Volver al Chat
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            {/* Dos pasos, en el orden en que se hacen: consignar y adjuntar. */}
+            <ol className={styles.pagoPasos}>
+              <li className={styles.pagoPaso}>
+                <span className={styles.pagoNum} aria-hidden="true">1</span>
+                <div>
+                  {/* La cuenta para consignar es la del certificado bancario del
+                      profesional (documento verificado). Ya no hay un campo de
+                      texto libre con "datos de pago". */}
+                  <p className={styles.pagoPasoTitulo}>Consigna a la cuenta del certificado bancario del profesional</p>
+                  {onVerCertificado ? (
+                    /* El visor se abre ENCIMA de este modal (--z-visor), así que al
+                       cerrarlo el cliente sigue en el pago y no pierde lo que llevaba. */
+                    <button type="button" onClick={onVerCertificado}
+                      className="aap-accion aap-accion--neutra aap-accion--ancha">
+                      Ver Cuenta Bancaria Certificada
+                    </button>
+                  ) : (
+                    <p className={styles.pagoPasoTexto}>
+                      El profesional aún no ha cargado su certificado bancario. Pídele la cuenta por el chat antes de pagar.
+                    </p>
+                  )}
+                </div>
+              </li>
+              <li className={styles.pagoPaso}>
+                <span className={styles.pagoNum} aria-hidden="true">2</span>
+                <div>
+                  {/* Comprobante obligatorio: transparencia para ambas partes */}
+                  <p className={styles.pagoPasoTitulo}>Adjunta el comprobante de tu pago</p>
+                  {comprobanteFile ? (
+                    <div className={styles.pagoArchivo}>
+                      {/* Se abre en grande, con zoom: que sea el comprobante correcto. */}
+                      <MiniaturaAdjunto file={comprobanteFile} preview={miniatura} />
+                      <span className={styles.pagoArchivoDatos}>
+                        <span className={styles.pagoArchivoNombre} title={comprobanteFile.name}>{comprobanteFile.name}</span>
+                        <span className={styles.pagoArchivoPeso}>{formatSize(comprobanteFile.size)}</span>
+                      </span>
+                      <button type="button" className={styles.pagoCambiar} onClick={() => comprobanteRef.current?.click()}>
+                        Cambiar
+                      </button>
+                    </div>
+                  ) : (
+                    <button type="button" className={styles.pagoAdjuntar} onClick={() => comprobanteRef.current?.click()}>
+                      <IconUpload size={15} /> Adjuntar Comprobante de Pago
+                    </button>
+                  )}
+                  <input ref={comprobanteRef} type="file"
+                    accept="application/pdf,image/png,image/jpeg,image/webp"
+                    style={{ display: 'none' }} onChange={onComprobanteChange} />
+                  {comprobanteError
+                    ? <p className={styles.pagoError} role="alert">{comprobanteError}</p>
+                    : <p className={styles.pagoAyuda}>PDF, PNG, JPG o WEBP de hasta 10 MB</p>}
+                </div>
+              </li>
+            </ol>
+            <button type="button" onClick={marcar} disabled={!!fase || !comprobanteFile}
+              className={`aap-accion aap-accion--primaria aap-accion--ancha ${styles.pagoConfirmar}`}>
+              Confirmar Pago
+            </button>
+          </>
+        )}
+
+        {/* El letrero de carga: tapa el modal mientras se envía y, al terminar,
+            lo dice y devuelve a la persona al chat. */}
+        {fase && (
+          <div className={styles.pagoVelo} role="status" aria-live="polite">
+            {fase === 'listo' ? (
+              <svg className={styles.pagoHecho} viewBox="0 0 56 56" aria-hidden="true">
+                <circle cx="28" cy="28" r="26" />
+                <path d="m17.5 28.5 7.2 7.2 14-14.4" />
+              </svg>
+            ) : (
+              <span className={styles.pagoGiro} aria-hidden="true" />
+            )}
+            <p className={styles.pagoVeloTitulo}>
+              {fase === 'subiendo' ? 'Subiendo tu comprobante'
+                : fase === 'registrando' ? 'Registrando tu pago'
+                : 'Pago informado'}
+            </p>
+            <p className={styles.pagoVeloTexto}>
+              {fase === 'listo' ? 'Te llevamos de vuelta al chat' : 'Un momento, no cierres esta ventana'}
+            </p>
+          </div>
+        )}
       </div>
     </div>
   )
@@ -3435,7 +3687,16 @@ export default function ChatSection() {
                 <CobroClienteCard
                   roomId={roomId}
                   clientToken={localStorage.getItem('chat_cedula_hash')}
-                  profesionalNombre={profesionalNombre}
+                  /* El mismo nombre de la cabecera del chat (lo resuelve el
+                     servidor desde la asignación real). `profesionalNombre` a
+                     secas solo existe con la sala en 'active': con una firma
+                     el recibo salía con "Profesional —". */
+                  profesionalNombre={profNombreHeader || profesionalNombre}
+                  profesionalCedula={docsInfo?.ok ? docsInfo.cedula : null}
+                  dirigidaA={(/\*\*Consulta dirigida a:\*\*\s*([^\n]+)/.exec(
+                    messages.find(m => (m.content || '').includes('**Consulta dirigida a:**'))?.content || ''
+                  ) || [])[1] || ''}
+                  area={roomArea}
                   onVerCertificado={docsInfo?.docs?.certBancario
                     ? () => abrirDoc('certBancario', 'Cuenta bancaria certificada')
                     : null}
@@ -3643,11 +3904,9 @@ export default function ChatSection() {
                 {/* Adjunto en espera: previsualizar → confirmar / descartar */}
                 {pendingFile && (
                   <div className={styles.adjuntoPreview}>
-                    {pendingFile.preview ? (
-                      <img src={pendingFile.preview} alt="" className={styles.adjuntoThumb} />
-                    ) : (
-                      <span className={styles.adjuntoIcon}><IconPaperclip size={18} /></span>
-                    )}
+                    {/* La miniatura abre el archivo en el visor, con zoom: "revisa antes de
+                      enviar" de verdad, también si es un PDF. */}
+                  <MiniaturaAdjunto file={pendingFile.file} preview={pendingFile.preview} />
                     <div className={styles.adjuntoInfo}>
                       <span className={styles.adjuntoNombre}>{pendingFile.file.name}</span>
                       <span className={styles.adjuntoPeso}>

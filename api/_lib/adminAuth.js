@@ -23,6 +23,14 @@ export function serviceHeaders(extra = {}) {
   }
 }
 
+/* Roles que ATIENDEN consultas. La firma (despacho) atiende como profesional
+   desde 2026-10-05: lo que un abogado o contador puede hacer sobre una sala o
+   un pago suyo, ella también. Antes cada endpoint repetía la lista
+   [abogado, contador] y la firma recibía 401 al pedir revisión ("Verificar"),
+   al abrir el pago de su comisión y al avisar al gestor que tomó el caso. */
+export const ROLES_PROFESIONAL = ['abogado', 'contador', 'firma']
+export const esProfesional = (caller) => !!caller && ROLES_PROFESIONAL.includes(caller.rol)
+
 function bearer(req) {
   const h = req.headers?.authorization || req.headers?.Authorization || ''
   return h.startsWith('Bearer ') ? h.slice(7) : null

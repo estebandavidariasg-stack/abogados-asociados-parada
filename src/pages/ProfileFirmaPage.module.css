@@ -17,6 +17,17 @@
 
 .bloque + .bloque { margin-top: 1.25rem; }
 
+/* La sección de Consultas NO usa el `.panel` del gestor (position: relative;
+   z-index: 1). Ese z-index abre una capa propia y encierra todo lo que lleva
+   dentro: en celular el chat pasa a pantalla completa (position: fixed;
+   z-index: 1200), pero encerrado ahí valía 1 frente al riel de opciones, que
+   va en 5. El riel se le montaba encima: tapaba la cabecera y la franja de
+   acciones, y "Finalizar Consulta" ni siquiera recibía el toque. Lo mismo les
+   pasaba a los modales del chat, que no se portan a <body>.
+   Sin z-index no hay capa: el chat compite directo con el riel, igual que en
+   el perfil del abogado, donde la sección va suelta dentro de `.content`. */
+.panelConsultas { position: relative; }
+
 /* Badge numérico del riel: el mismo del panel del profesional. Va aquí y no
    reutilizando su clase, porque allá los ajustes (riel expandido, celular)
    cuelgan de SU `.sidebar`, que en este panel es el riel del gestor. */

@@ -32,14 +32,21 @@
   color: #9a2b2b; font-size: 0.85rem;
 }
 
+/* El marco no desplaza: sostiene el control de zoom al pie de lo que se ve.
+   Quien desplaza es .viewer. */
+.viewerWrap { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .viewer {
-  flex: 1; overflow: auto; padding: 1.2rem;
-  display: flex; justify-content: center;
+  flex: 1; min-height: 0; overflow: auto; padding: 1.2rem;
+  /* En columna y con la hoja centrada por márgenes (ver .col): con
+     justify-content: center, lo que sobraba por la izquierda al ampliar
+     quedaba fuera del alcance del desplazamiento. */
+  display: flex; flex-direction: column;
   background: #f3eee9;
+  overscroll-behavior: contain;
 }
 .loading { display: flex; align-items: center; gap: 0.6rem; color: var(--muted, #6f5c48); padding: 3rem 0; }
 
-.col { position: relative; }
+.col { position: relative; flex-shrink: 0; margin: 0 auto; }
 .page {
   display: block; margin: 0 auto 14px; background: #fff;
   box-shadow: 0 4px 16px -6px rgba(109,60,27, 0.35); border-radius: 2px;
@@ -108,4 +115,11 @@
 @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes pop { from { opacity: 0; transform: translateY(12px) scale(0.98); } to { opacity: 1; transform: none; } }
 @keyframes spin { to { transform: rotate(360deg); } }
+/* Celular: la pista "Arrástrala sobre el documento" no cabía junto al
+   deslizador y salía cortada contra el borde; ya lo dice el subtítulo. */
+@media (max-width: 520px) {
+  .sizeRow { padding: 0.65rem 1rem; }
+  .sizeHint { display: none; }
+  .slider { max-width: none; }
+}
 @media (prefers-reduced-motion: reduce) { .overlay, .modal { animation: none; } .btnSolid:hover:not(:disabled) { transform: none; } }
