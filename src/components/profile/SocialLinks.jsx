@@ -3,7 +3,8 @@
 //   import SocialLinks from './SocialLinks'
 //   <SocialLinks profile={lawyer} />
 
-const NETWORKS = [
+// Exportado: el footer usa los mismos glifos oficiales para las redes de la empresa.
+export const NETWORKS = [
   {
     key: 'instagram',
     label: 'Instagram',

@@ -1,12 +1,21 @@
 import { useState } from 'react'
 import styles from './Footer.module.css'
 import { DOCS_LEGALES, DOCS_FOOTER, VisorLegal } from '../shared/DocumentosLegales'
+import { NETWORKS } from '../profile/SocialLinks'
 
-const SOCIALS = [
-  { label: 'Instagram', href: '#', path: 'M7.5 2h9A5.5 5.5 0 0 1 22 7.5v9A5.5 5.5 0 0 1 16.5 22h-9A5.5 5.5 0 0 1 2 16.5v-9A5.5 5.5 0 0 1 7.5 2zm0 1.5A4 4 0 0 0 3.5 7.5v9a4 4 0 0 0 4 4h9a4 4 0 0 0 4-4v-9a4 4 0 0 0-4-4h-9zm4.5 3a5 5 0 1 1 0 10 5 5 0 0 1 0-10zm0 1.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7zm5.25-.75a.75.75 0 1 1 0 1.5.75.75 0 0 1 0-1.5z' },
-  { label: 'LinkedIn', href: '#', path: 'M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6zM2 9h4v12H2z M4 6a2 2 0 1 0 0-4 2 2 0 0 0 0 4z' },
-  { label: 'Facebook', href: '#', path: 'M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z' },
+/* Redes de la empresa, en este orden. Los glifos son los oficiales de cada
+   marca (los mismos del perfil del profesional), en los colores del sitio.
+   Solo se pintan las que tienen enlace: Facebook y LinkedIn quedan listos
+   para cuando exista la página, basta con poner su URL. */
+const REDES_EMPRESA = [
+  ['instagram', 'https://www.instagram.com/paradabridge/'],
+  ['whatsapp', 'https://wa.me/573124086734'],
+  ['facebook', null],
+  ['linkedin', null],
 ]
+const SOCIALS = REDES_EMPRESA
+  .filter(([, href]) => href)
+  .map(([key, href]) => ({ ...NETWORKS.find(n => n.key === key), href }))
 
 const IconMail = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -80,11 +89,9 @@ export default function Footer() {
 
       {/* ── Redes sociales — centradas en todo el ancho del footer ── */}
       <div className={styles.socials}>
-        {SOCIALS.map(({ label, href, path }) => (
-          <a key={label} href={href} className={styles.socialBtn} aria-label={label} target="_blank" rel="noopener noreferrer">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d={path} />
-            </svg>
+        {SOCIALS.map(({ key, label, href, icon }) => (
+          <a key={key} href={href} className={styles.socialBtn} aria-label={`Parada Bridge en ${label}`} title={label} target="_blank" rel="noopener noreferrer">
+            {icon}
           </a>
         ))}
       </div>
