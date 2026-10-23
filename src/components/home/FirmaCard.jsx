@@ -85,8 +85,19 @@ export function Profesional({ p, onPerfil, onConsulta, estado }) {
   )
 }
 
-export default function FirmaCard({ firma, delay = 0, reveal = true, ghost = false }) {
-  const [open, setOpen] = useState(false)
+export default function FirmaCard({
+  firma, delay = 0, reveal = true, ghost = false,
+  // Modo controlado (el podio del ranking abre el modal sin pintar la
+  // tarjeta), igual que en LawyerCard.
+  controlledOpen, onControlledClose, hideCard = false,
+}) {
+  const [internalOpen, setInternalOpen] = useState(false)
+  const isControlled = controlledOpen !== undefined
+  const open = isControlled ? controlledOpen : internalOpen
+  const setOpen = (v) => {
+    if (isControlled) { if (!v) onControlledClose?.() }
+    else setInternalOpen(v)
+  }
   const [verPerfil, setVerPerfil] = useState(null)   // miembro cuyo perfil completo está abierto
   const [docs, setDocs] = useState([])
   const [docsState, setDocsState] = useState('idle') // idle | loading | done
@@ -152,6 +163,7 @@ export default function FirmaCard({ firma, delay = 0, reveal = true, ghost = fal
   return (
     <>
       {/* ── Tarjeta en la cinta ── */}
+      {!hideCard && (
       <div
         className={`${lc.card}${reveal ? ' fade-up' : ''}`}
         style={reveal ? { transitionDelay: `${delay}s` } : undefined}
@@ -206,11 +218,12 @@ export default function FirmaCard({ firma, delay = 0, reveal = true, ghost = fal
             </span>
           </div>
 
-          <span className={styles.centrado}><Exitosas total={exitosas} /></span>
+          <span className={styles.centrado}><Exitosas total={exitosas} mes={firma.consultas_mes} /></span>
         </div>
 
         <div className={lc.cardHint}>Ver firma →</div>
       </div>
+      )}
 
       {/* ── Modal (portal a <body>: la cinta anima un ancestro con transform) ── */}
       {open && createPortal(
@@ -239,7 +252,7 @@ export default function FirmaCard({ firma, delay = 0, reveal = true, ghost = fal
                     <StarDisplay rating={firma.rating_promedio} total={firma.rating_total || 0} dark />
                   </div>
                 ) : null}
-                <Exitosas total={exitosas} />
+                <Exitosas total={exitosas} mes={firma.consultas_mes} />
               </div>
             </div>
 

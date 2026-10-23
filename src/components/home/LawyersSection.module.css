@@ -11,7 +11,7 @@
 /* ── Header ── */
 .header {
   text-align: center;
-  margin-bottom: 4rem;
+  margin-bottom: 4.5rem;
   padding: 0 1rem;
 }
 
@@ -49,151 +49,500 @@
 }
 
 /* ══════════════════════════════════════════
-   FILTROS
+   CARRILES — Abogados, Contadores y Firmas, uno debajo del otro.
+   Cada uno: título + ranking del mes, filtros y su cinta.
    ══════════════════════════════════════════ */
-.filtersWrap {
-  width: 100%;
-  max-width: 860px;
-  margin: 0 auto 3rem;
-  padding: 0 1rem;
-  box-sizing: border-box;
-}
-
-.filters {
-  display: flex;
-  align-items: flex-end;
-  gap: 12px;
-  width: 100%;
-  flex-wrap: nowrap;   /* en desktop no se rompe */
-}
-
-.filterGroup {
+.carriles {
+  max-width: 1200px;
+  margin: 0 auto;
   display: flex;
   flex-direction: column;
-  gap: 5px;
-  flex: 1;
-  min-width: 0;        /* permite que el flex se encoja sin desbordarse */
+  gap: clamp(3.5rem, 7vw, 5.5rem);
 }
 
-.filterLabel {
-  font-size: 0.6rem;
-  text-transform: uppercase;
-  letter-spacing: 0.2em;
-  color: var(--navy-md, #966d4a);
+.carril { min-width: 0; }
+
+/* Título de la categoría sobre un filete dorado a todo lo ancho. */
+.carrilTitulo {
+  margin: 0 0 22px;
+  padding: 0 0.25rem 14px;
+  border-bottom: 1px solid rgba(201, 168, 76, 0.5);
+  font-family: 'Cormorant Garamond', serif;
+  font-size: clamp(2rem, 3.4vw, 2.75rem);
+  font-weight: 400;
+  line-height: 1;
+  letter-spacing: -0.005em;
+  color: var(--navy);
+}
+
+/* La franja: el podio del mes a un lado y el directorio al otro, a la misma
+   altura. El lado alterna entre carriles (derecha, izquierda, derecha). En
+   pantallas angostas el podio va siempre arriba. */
+.carrilCuerpo {
+  display: grid;
+  grid-template-columns: minmax(330px, 390px) minmax(0, 1fr);
+  gap: clamp(20px, 2.6vw, 34px);
+  align-items: stretch;
+}
+.podioDerecha { grid-template-columns: minmax(0, 1fr) minmax(330px, 390px); }
+.podioDerecha > .podio { order: 2; }
+.directorio {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ══════════════════════════════════════════
+   PODIO DEL MES — 2.º · 1.º · 3.º
+   El diseño del antiguo "Mejor Valorados": corona, plata y bronce, pedestales
+   café, directo sobre el blanco de la sección (sin tarjeta).
+   ══════════════════════════════════════════ */
+/* Sin tarjeta: el podio va directo sobre el blanco de la sección. */
+.podio {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  padding: 6px 0 0;
+}
+
+.podioHead {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  text-align: center;
+}
+.podioTitulo {
+  margin-bottom: 4px;
   font-family: 'Cinzel', serif;
-  white-space: nowrap;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--navy);
+}
+.podioNota {
+  font-size: 0.72rem;
+  line-height: 1.4;
+  color: var(--muted);
+}
+/* Un filete corto entre el rótulo y el podio. */
+.podioHead::after {
+  content: '';
+  width: 36px;
+  height: 1px;
+  margin-top: 12px;
+  background: var(--gold);
 }
 
-/* Wrapper del select para el ícono custom */
+.podium {
+  list-style: none;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: clamp(6px, 1.2vw, 12px);
+  margin: auto 0 0;
+  padding: 12px 0 0;
+}
+.columna {
+  flex: 1 1 0;
+  min-width: 0;
+  max-width: 132px;
+  display: flex;
+}
+/* En el DOM van 1, 2, 3; en pantalla 2 · 1 · 3. */
+.first  { order: 2; }
+.second { order: 1; }
+.third  { order: 3; }
+
+.colBtn {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  color: var(--navy);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.libre .colBtn { cursor: default; }
+.colBtn:focus-visible { outline: 2px solid var(--gold); outline-offset: 4px; border-radius: 14px 14px 0 0; }
+
+/* Corona / medalla */
+.badge {
+  height: 32px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  margin-bottom: 0.4rem;
+}
+.badgeIcon {
+  width: 32px;
+  height: 32px;
+  color: var(--gold);
+  filter: drop-shadow(0 3px 6px rgba(201, 168, 76, 0.5));
+}
+.badgeMedal {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-family: 'Cinzel', serif;
+  font-size: 0.8rem;
+  font-weight: 700;
+  line-height: 1;
+  color: #ffffff;
+}
+.second .badgeMedal { background: #9d968a; }
+.third  .badgeMedal { background: #b0723a; }
+
+/* Avatar (las firmas en cuadro, como en su tarjeta) */
+.avatarWrap {
+  padding: 3px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--surface);
+  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.avatarFirma { border-radius: 16px; }
+.first  .avatarWrap { box-shadow: 0 0 0 2px var(--gold), 0 12px 26px -12px rgba(201, 168, 76, 0.65); }
+.second .avatarWrap { box-shadow: 0 0 0 2px #b7b0a1,     0 10px 22px -14px rgba(54, 36, 21, 0.4); }
+.third  .avatarWrap { box-shadow: 0 0 0 2px #bd7f43,     0 10px 22px -14px rgba(54, 36, 21, 0.4); }
+.colBtn:hover .avatarWrap { transform: translateY(-5px); }
+.libre .colBtn:hover .avatarWrap { transform: none; }
+
+.avatar,
+.avatarInitials,
+.avatarLibre {
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  object-fit: cover;
+}
+.avatarFirma .avatar,
+.avatarFirma .avatarInitials,
+.avatarFirma .avatarLibre { border-radius: 13px; }
+.avatarFirma .avatar { object-fit: contain; background: #ffffff; }
+.first  .avatar, .first  .avatarInitials, .first  .avatarLibre { width: 96px; height: 96px; }
+.second .avatar, .second .avatarInitials, .second .avatarLibre,
+.third  .avatar, .third  .avatarInitials, .third  .avatarLibre { width: 74px; height: 74px; }
+.avatarInitials {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 1.6rem;
+  font-weight: 600;
+  color: var(--navy-md);
+  background: linear-gradient(140deg, #efe6d6, #e5d6bf);
+}
+.libre .avatarWrap { box-shadow: none; background: transparent; }
+.avatarLibre {
+  box-sizing: border-box;
+  border: 1.5px dashed rgba(109, 60, 27, 0.28);
+  background: rgba(255, 255, 255, 0.6);
+}
+
+/* Nombre, área, cifra del mes */
+/* Hasta dos renglones: un nombre completo pesa más que uno cortado. */
+.name {
+  max-width: 100%;
+  margin-top: 0.7rem;
+  font-family: 'Poppins', sans-serif;
+  font-size: 0.86rem;
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--navy);
+  text-align: center;
+  text-wrap: balance;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+.libre .name { font-weight: 500; font-style: italic; color: #7d6650; }
+.area {
+  max-width: 100%;
+  margin-top: 0.15rem;
+  font-size: 0.7rem;
+  color: var(--muted);
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.scoreNum {
+  margin-top: 0.45rem;
+  /* Cinzel y no Cormorant: el 1 de Cormorant se lee como una I. */
+  font-family: 'Cinzel', serif;
+  font-size: 1.9rem;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--navy);
+  font-variant-numeric: lining-nums tabular-nums;
+}
+.count {
+  margin-top: 0.15rem;
+  font-size: 0.66rem;
+  line-height: 1.3;
+  color: #7d6650;
+  text-align: center;
+}
+
+/* Pedestal */
+.block {
+  width: 100%;
+  margin-top: 0.85rem;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 0.5rem;
+  border-radius: 12px 12px 0 0;
+  border-top: 3px solid transparent;
+  background: linear-gradient(180deg, #3d2917 0%, #2a1b0f 100%);
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.04);
+  transform-origin: bottom;
+}
+.first  .block { height: 132px; border-top-color: var(--gold-lt); box-shadow: inset 0 2px 0 rgba(232, 201, 106, 0.5), 0 -14px 30px -22px rgba(201, 168, 76, 0.7); }
+.second .block { height: 100px; border-top-color: #c3bdb0; }
+.third  .block { height: 76px;  border-top-color: #bd7f43; }
+/* Pedestal sin nadie: el mismo escalón, apagado. */
+.libre .block {
+  background: rgba(109, 60, 27, 0.07);
+  border-top: 2px dashed rgba(109, 60, 27, 0.22);
+  box-shadow: none;
+}
+
+/* El podio termina donde terminan las tarjetas, no a la altura de las
+   flechas: se le descuenta lo que queda debajo de la fila (el aire de la
+   cinta y, si las hay, las flechas). Solo con el podio al lado; un navegador
+   sin :has() lo deja a toda la altura. */
+@media (min-width: 1001px) {
+  .carrilCuerpo:has(.cinta) > .podio,
+  .carrilCuerpo:has(.esqueleto) > .podio { margin-bottom: 1.75rem; }
+  .carrilCuerpo:has(.cintaNav) > .podio { margin-bottom: calc(1.75rem + 0.25rem + 46px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .avatarWrap { transition: none; }
+  .colBtn:hover .avatarWrap { transform: none; }
+}
+
+/* ══════════════════════════════════════════
+   FILTROS — nombre, departamento, municipio/localidad
+   ══════════════════════════════════════════ */
+.filtros {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+}
+
+.buscar {
+  position: relative;
+  display: block;
+  min-width: 0;
+}
+.buscar svg {
+  position: absolute;
+  left: 13px;
+  top: 50%;
+  width: 17px;
+  height: 17px;
+  transform: translateY(-50%);
+  fill: none;
+  stroke: var(--navy-md);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  pointer-events: none;
+}
+
+.buscarInput,
+.filterSelect {
+  width: 100%;
+  height: 44px;
+  box-sizing: border-box;
+  background: #ffffff;
+  border: 1px solid rgba(109, 60, 27, 0.2);
+  border-radius: 10px;
+  color: var(--navy);
+  font-family: inherit;
+  font-size: 0.85rem;
+  outline: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+}
+.buscarInput {
+  padding: 0 14px 0 40px;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.buscarInput::placeholder { color: #7d6650; opacity: 1; }
+/* La X nativa del buscador, dibujada en la paleta en vez de la del sistema. */
+.buscarInput::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  margin-left: 6px;
+  cursor: pointer;
+  background: center / 16px 16px no-repeat url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236d3c1b' stroke-width='2.2' stroke-linecap='round'%3E%3Cpath d='M6 6l12 12M18 6L6 18'/%3E%3C/svg%3E");
+}
+
+.buscarInput:hover,
+.filterSelect:hover { border-color: rgba(109, 60, 27, 0.4); }
+.buscarInput:focus,
+.filterSelect:focus {
+  border-color: var(--navy-md);
+  box-shadow: 0 0 0 3px rgba(201, 168, 76, 0.22);
+}
+.buscarInput:disabled,
+.filterSelect:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* Wrapper del select para la flecha propia */
 .selectWrap {
   position: relative;
-  width: 100%;
+  min-width: 0;
 }
-
 .selectWrap::after {
   content: '';
   position: absolute;
-  right: 12px;
+  right: 14px;
   top: 50%;
   transform: translateY(-50%);
   width: 0;
   height: 0;
   border-left: 4px solid transparent;
   border-right: 4px solid transparent;
-  border-top: 5px solid var(--navy-md, #966d4a);
+  border-top: 5px solid var(--navy-md);
   pointer-events: none;
 }
 
 .filterSelect {
-  width: 100%;
   appearance: none;
   -webkit-appearance: none;
-  background: #ffffff;
-  border: 1px solid rgba(109,60,27, 0.18);
-  border-radius: 8px;
-  color: var(--navy, #6d3c1b);
-  padding: 9px 32px 9px 12px;
-  font-family: inherit;
-  font-size: 0.82rem;
+  padding: 0 34px 0 14px;
   cursor: pointer;
-  outline: none;
-  transition: border-color 0.25s, box-shadow 0.25s;
-  box-sizing: border-box;
-  /* Truncar texto largo */
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-
-.filterSelect:hover,
-.filterSelect:focus {
-  border-color: rgba(109,60,27, 0.45);
-  box-shadow: 0 0 0 3px rgba(109,60,27, 0.07);
-}
-
-.filterSelect option {
+.filterSelect option,
+.filterSelect optgroup {
   background: #ffffff;
-  color: var(--navy, #6d3c1b);
-  white-space: normal;
+  color: var(--navy);
 }
 
-.filterClear {
-  background: none;
-  border: 1px solid rgba(109,60,27, 0.18);
-  color: var(--muted, #ad927a);
-  padding: 9px 14px;
-  border-radius: 8px;
-  font-size: 0.75rem;
-  cursor: pointer;
-  transition: all 0.25s;
-  font-family: inherit;
-  white-space: nowrap;
-  flex-shrink: 0;
-  align-self: flex-end;
-}
-.filterClear:hover {
-  border-color: rgba(220, 50, 50, 0.45);
-  color: #dc3232;
-  background: rgba(220, 50, 50, 0.04);
-}
-
-/* Contador de resultados */
-.filterCount {
-  font-size: 0.72rem;
-  color: var(--muted, #ad927a);
-  text-align: center;
+/* Cuántos coinciden + limpiar. Reserva su renglón para que la cinta no
+   salte al escribir la primera letra. */
+.filtroResumen {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  min-height: 1.35rem;
   margin: 10px 0 0;
-  font-style: italic;
+  padding: 0 0.25rem;
+  font-size: 0.75rem;
+  color: var(--muted);
 }
-
-/* ══════════════════════════════════════════
-   GRID
-   ══════════════════════════════════════════ */
-.grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-  gap: 1.5rem;
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 0 0.5rem;
+.filtroLimpiar {
+  padding: 2px 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-weight: 600;
+  color: var(--navy-md);
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: rgba(201, 168, 76, 0.8);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 4px;
+  transition: color 0.2s ease, text-decoration-color 0.2s ease;
 }
+.filtroLimpiar:hover { color: var(--navy); text-decoration-color: var(--navy); }
+.filtroLimpiar:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; border-radius: 2px; }
 
-/* ── Empty state ── */
-.emptyWrap {
+/* ── Sin resultados / sin profesionales / error ── */
+.vacio {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 16px;
-  padding: 2rem 1rem;
-}
-
-.empty {
+  margin-top: 0.75rem;
+  padding: 2.75rem 1.25rem 3rem;
   text-align: center;
-  color: var(--muted);
-  font-size: 0.92rem;
-  padding: 2rem 1rem;
-  font-style: italic;
+  background: #fffdf7;
+  border: 1px dashed rgba(109, 60, 27, 0.2);
+  border-radius: 16px;
+}
+.vacio p {
   margin: 0;
+  max-width: 42ch;
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 1.25rem;
+  font-style: italic;
+  line-height: 1.4;
+  color: var(--navy-md);
+}
+.vacioBtn {
+  min-height: 40px;
+  padding: 8px 22px;
+  border: 1px solid var(--gold);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--navy);
+  font-family: 'Cinzel', serif;
+  font-size: 0.76rem;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  transition: background 0.2s ease, transform 0.12s ease;
+}
+.vacioBtn:hover { background: rgba(201, 168, 76, 0.12); }
+.vacioBtn:active { transform: scale(0.97); }
+.vacioBtn:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+
+/* ── Esqueleto mientras llega la lista ── */
+.esqueleto {
+  display: flex;
+  gap: 1.5rem;
+  overflow: hidden;
+  padding: 1.25rem 0 1.75rem;
+  -webkit-mask-image: linear-gradient(90deg, #000 0, #000 85%, transparent 100%);
+          mask-image: linear-gradient(90deg, #000 0, #000 85%, transparent 100%);
+}
+.esqueletoCard {
+  flex: 0 0 clamp(240px, 25vw, 280px);
+  height: 330px;
+  box-sizing: border-box;
+  padding: 2rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  border: 1px solid rgba(109, 60, 27, 0.1);
+  border-top: 3px solid rgba(201, 168, 76, 0.3);
+  border-radius: 16px;
+  background: linear-gradient(145deg, #fff7f0 0%, #fcf1e8 100%);
+}
+.esqCirculo,
+.esqLinea,
+.esqLineaCorta {
+  display: block;
+  background: linear-gradient(90deg, rgba(109,60,27,0.06) 0%, rgba(109,60,27,0.12) 50%, rgba(109,60,27,0.06) 100%);
+  background-size: 200% 100%;
+  animation: brillo 1.5s ease-in-out infinite;
+}
+.esqCirculo { width: 96px; height: 96px; border-radius: 50%; margin-bottom: 8px; }
+.esqLinea { width: 70%; height: 14px; border-radius: 7px; }
+.esqLineaCorta { width: 45%; height: 11px; border-radius: 6px; }
+
+@keyframes brillo {
+  from { background-position: 100% 0; }
+  to   { background-position: -100% 0; }
 }
 
 /* ══════════════════════════════════════════
@@ -201,12 +550,10 @@
    ══════════════════════════════════════════ */
 .cintaWrap {
   position: relative;
-  max-width: 1200px;
-  margin: 0 auto;
 }
 .cinta {
   /* padding vertical: deja aire para el "lift" y la sombra de la tarjeta en hover */
-  padding: 1.25rem 0 1.75rem;
+  padding: 1rem 0 1.75rem;
   overflow-x: auto;
   overflow-y: hidden;
   cursor: grab;
@@ -220,6 +567,12 @@
   /* desvanece los bordes izq/der para que las tarjetas entren y salgan suave */
   -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 5%, #000 95%, transparent 100%);
           mask-image: linear-gradient(90deg, transparent 0, #000 5%, #000 95%, transparent 100%);
+}
+/* Al principio de la fila no hay nada que entre por la izquierda: sin
+   desvanecido de ese lado, que tapaba el listón del 1.º. */
+.cinta[data-inicio="true"] {
+  -webkit-mask-image: linear-gradient(90deg, #000 0, #000 95%, transparent 100%);
+          mask-image: linear-gradient(90deg, #000 0, #000 95%, transparent 100%);
 }
 .cinta::-webkit-scrollbar { display: none; }
 .cinta:active { cursor: grabbing; }
@@ -236,8 +589,8 @@
   align-items: stretch;
 }
 .slide > * { width: 100%; height: 100%; }
-/* Fila que cabe entera (pocas firmas): centrada y sin desvanecido. */
-.cintaQuieta {
+/* Fila que cabe entera: centrada y sin desvanecido. */
+.cinta.cintaQuieta {
   cursor: default;
   -webkit-mask-image: none;
           mask-image: none;
@@ -250,7 +603,7 @@
   display: flex;
   justify-content: center;
   gap: 16px;
-  margin-top: 0.5rem;
+  margin-top: 0.25rem;
 }
 .cintaArrow {
   width: 46px;
@@ -292,6 +645,7 @@
 @media (prefers-reduced-motion: reduce) {
   .cintaArrow { transition: none; }
   .cintaArrow:hover { transform: none; }
+  .esqCirculo, .esqLinea, .esqLineaCorta { animation: none; }
 }
 
 /* ══════════════════════════════════════════
@@ -299,122 +653,39 @@
    ══════════════════════════════════════════ */
 
 /* Tablet */
-@media (max-width: 860px) {
-  .section { padding: 5rem 1.5rem; }
-  .filters { flex-wrap: wrap; gap: 10px; }
-  .filterGroup { flex: 1 1 calc(50% - 10px); min-width: calc(50% - 10px); }
-  .filterClear { flex: 0 0 auto; align-self: center; margin-top: 2px; }
-  .grid { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 1.2rem; }
+@media (max-width: 1000px) {
+  .carrilCuerpo,
+  .podioDerecha { grid-template-columns: minmax(0, 1fr); }
+  .podioDerecha > .podio { order: 0; }
+  .podio { max-width: 520px; width: 100%; margin: 0 auto; box-sizing: border-box; }
 }
 
-/* Móvil grande */
+@media (max-width: 860px) {
+  .section { padding: 5rem 1.5rem; }
+  .filtros { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .buscar { grid-column: 1 / -1; }
+}
+
+/* Móvil */
 @media (max-width: 600px) {
   .section { padding: 4rem 1rem; }
-  .filtersWrap { padding: 0; }
-
-  .filters {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 10px;
-    width: 100%;
-  }
-
-  .filterGroup {
-    flex: unset;
-    width: 100%;
-    min-width: unset;
-  }
-
-  .filterSelect { font-size: 0.85rem; padding: 11px 32px 11px 12px; }
-  .filterClear  { width: 100%; text-align: center; padding: 10px; }
-
-  .grid {
-    grid-template-columns: 1fr 1fr;
-    gap: 1rem;
-  }
+  .header { margin-bottom: 3rem; }
+  .carrilTitulo { padding-left: 0; padding-right: 0; margin-bottom: 18px; }
+  .first  .avatar, .first  .avatarInitials, .first  .avatarLibre { width: 80px; height: 80px; }
+  .second .avatar, .second .avatarInitials, .second .avatarLibre,
+  .third  .avatar, .third  .avatarInitials, .third  .avatarLibre { width: 60px; height: 60px; }
+  .first  .block { height: 104px; }
+  .second .block { height: 80px; }
+  .third  .block { height: 62px; }
+  .scoreNum { font-size: 1.6rem; }
+  .filtros { gap: 8px; }
+  .filterSelect { padding-left: 12px; font-size: 0.82rem; }
 
   /* En celular las tarjetas van más angostas → asoma la siguiente */
   .slide { flex-basis: 66vw; width: 66vw; margin-right: 1rem; }
+  .esqueletoCard { flex-basis: 66vw; }
 }
 
-/* Móvil pequeño */
 @media (max-width: 400px) {
   .section { padding: 3.5rem 0.85rem; }
-  .grid    { grid-template-columns: 1fr; }
-}
-
-/* ══════════════════════════════════════════
-   SWITCH PROFESIÓN — chips Abogados / Contadores
-   ══════════════════════════════════════════ */
-.profesionLabel {
-  display: block;
-  text-align: center;
-  font-family: 'Poppins', sans-serif;
-  font-size: 0.65rem;
-  font-weight: 600;
-  letter-spacing: 0.35em;
-  text-transform: uppercase;
-  color: var(--gold);
-  margin: 0 auto 0.9rem;
-  padding: 0 1rem;
-}
-
-.profesionRow {
-  display: flex;
-  justify-content: center;
-  gap: 8px;
-  margin: 0 auto 2rem;
-  padding: 0 1rem;
-  flex-wrap: nowrap;
-  overflow-x: auto;
-  scrollbar-width: none;       /* Firefox */
-  -ms-overflow-style: none;    /* Edge antiguo */
-  -webkit-overflow-scrolling: touch;
-}
-.profesionRow::-webkit-scrollbar { display: none; }
-
-.profesionChip {
-  flex-shrink: 0;
-  background: transparent;
-  border: 1px solid var(--gold);
-  color: var(--navy);
-  padding: 8px 22px;
-  border-radius: 999px;
-  font-family: 'Cinzel', serif;
-  font-size: 0.78rem;
-  letter-spacing: 0.06em;
-  cursor: pointer;
-  transition: background 0.2s, color 0.2s, transform 0.12s;
-  min-height: 36px;
-  white-space: nowrap;
-}
-.profesionChip:hover  { background: rgba(201, 168, 76, 0.08); }
-.profesionChip:active { transform: scale(0.97); }
-
-.profesionChipActive {
-  background: var(--gold);
-  color: var(--navy);
-  font-weight: 700;
-  border-color: var(--gold);
-}
-.profesionChipActive:hover { background: var(--gold-lt); }
-
-@media (max-width: 600px) {
-  /* Solo dos chips: que quepan centrados sin recortarse (antes el row hacía
-     scroll y dejaba "Contadores" cortado). */
-  .profesionRow {
-    justify-content: center;
-    overflow-x: visible;
-    flex-wrap: wrap;
-    padding: 0 1rem 4px;
-  }
-  .profesionChip {
-    padding: 8px 16px;
-    font-size: 0.72rem;
-    letter-spacing: 0.04em;
-  }
-}
-
-@media (max-width: 360px) {
-  .profesionChip { padding: 7px 13px; font-size: 0.68rem; letter-spacing: 0.02em; }
 }

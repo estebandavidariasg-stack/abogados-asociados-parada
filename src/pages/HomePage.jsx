@@ -2,7 +2,6 @@ import Navbar from '../components/layout/Navbar'
 import IntroSection from '../components/home/IntroSection'
 import LawyersSection from '../components/home/LawyersSection'
 import TestimoniosSection from '../components/home/TestimoniosSection'
-import RankingSection from '../components/home/RankingSection'
 import NoticiasSection from '../components/home/NoticiasSection'
 import ChatSection from '../components/chat/ChatSection'
 import Footer from '../components/layout/Footer'
@@ -92,7 +91,6 @@ export default function HomePage() {
       <IntroSection onUnirse={() => setRegisterOpen(true)} />
       <ChatSection />
       <LawyersSection />
-      <RankingSection />
       {/* Visitantes: solo el primer video, grande tipo publicidad al abrir la
           página. Administradores: además el bloque para gestionar los videos. */}
       <VideoCarousel/>
@@ -101,7 +99,7 @@ export default function HomePage() {
       <NoticiasSection />
       <DeferredMap />
       <Footer />
-      <WhatsAppButton phone="573124086734" />
+      <WhatsAppButton phone="573108886571" />
       <Suspense fallback={null}>
         {modal && (
           <AuthModal

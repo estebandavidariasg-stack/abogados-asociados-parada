@@ -26,15 +26,18 @@ function prefiereMenosMovimiento() {
  * @param {number}  opts.speed      px/seg del auto-avance (default 42)
  * @param {number}  opts.direction  1 = avanza hacia la izquierda; -1 hacia la derecha
  * @param {boolean} opts.loop       bucle infinito + auto-avance (requiere contenido duplicado)
+ * @param {number}  opts.espera     ms que la cinta se queda quieta, ya a la vista (60 %), antes
+ *                                  de empezar a avanzar. Sirve a las cintas ordenadas (ranking):
+ *                                  primero se lee quién va adelante. 0 = arranca de una.
  */
-export function useCarrusel({ speed = 42, direction = 1, loop = true } = {}) {
+export function useCarrusel({ speed = 42, direction = 1, loop = true, espera = 0 } = {}) {
   const ref = useRef(null)
   const S = useRef({
     pos: 0, half: 0, loopable: false,
     paused: false, dragging: false, dragged: false, captured: false,
     startX: 0, startLeft: 0,
     tween: null, raf: null, last: 0, visible: true,
-    reduce: false,
+    reduce: false, arranque: 0,
   })
 
   /* Normaliza una posición al rango [0, half) — el bucle perfecto. */
@@ -69,6 +72,7 @@ export function useCarrusel({ speed = 42, direction = 1, loop = true } = {}) {
     const el = ref.current
     if (!el) return
     S.current.reduce = prefiereMenosMovimiento()
+    S.current.arranque = espera > 0 ? Infinity : 0
     medir()
 
     const tick = (t) => {
@@ -84,7 +88,7 @@ export function useCarrusel({ speed = 42, direction = 1, loop = true } = {}) {
         aplicar()
         if (p >= 1) { s.tween = null; s.last = 0 }
       } else if (
-        s.loopable && !s.reduce && !s.paused && !s.dragging && s.visible
+        s.loopable && !s.reduce && !s.paused && !s.dragging && s.visible && t >= s.arranque
       ) {
         s.pos += direction * speed * dt
         aplicar()
@@ -101,10 +105,20 @@ export function useCarrusel({ speed = 42, direction = 1, loop = true } = {}) {
     let io = null
     if ('IntersectionObserver' in window) {
       io = new IntersectionObserver(
-        (entries) => { S.current.visible = entries.some((e) => e.isIntersecting) },
-        { threshold: 0.01 }
+        (entries) => {
+          const s = S.current
+          s.visible = entries.some((e) => e.isIntersecting)
+          // La espera corre desde que la cinta se ve de verdad, no desde que
+          // asoma un borde por abajo de la pantalla.
+          if (s.arranque === Infinity && entries.some((e) => e.intersectionRatio >= 0.6)) {
+            s.arranque = performance.now() + espera
+          }
+        },
+        { threshold: espera > 0 ? [0.01, 0.6] : 0.01 }
       )
       io.observe(el)
+    } else if (espera > 0) {
+      S.current.arranque = performance.now() + espera
     }
 
     const onResize = () => medir()
@@ -130,7 +144,7 @@ export function useCarrusel({ speed = 42, direction = 1, loop = true } = {}) {
       window.removeEventListener('resize', onResize)
       mq?.removeEventListener?.('change', onMq)
     }
-  }, [aplicar, medir, direction, speed])
+  }, [aplicar, medir, direction, speed, espera])
 
   /* ── Arrastre con el puntero ──────────────────────────────────────────── */
   const onPointerDown = useCallback((e) => {

@@ -250,8 +250,19 @@ async function handleDocs(req, res, id) {
    así no depende de que exista la llave foránea entre las dos tablas (el
    esquema del chat se aplicó a mano). Van con la clave privilegiada porque
    la anon no lee estas tablas; de aquí solo sale un número por profesional.
-   Devuelve Map(id → total), o null si no se pudo leer. */
+
+   Ranking mensual: además del total histórico se cuenta lo del MES EN CURSO
+   (`resultado_at` desde el día 1 a medianoche de Colombia). El inicio ordena
+   cada carrusel por esa cifra, que vuelve a cero cada mes; la tarjeta sigue
+   mostrando el total. Devuelve { total, mes } (dos Map id → número), o null
+   si no se pudo leer. */
 const PAGINA = 1000
+
+// Colombia no cambia de hora: UTC-5 todo el año. 00:00 del día 1 en Bogotá.
+function inicioMesBogota(ahora = new Date()) {
+  const b = new Date(ahora.getTime() - 5 * 3600e3)
+  return Date.UTC(b.getUTCFullYear(), b.getUTCMonth(), 1, 5)
+}
 const MAX_PAGINAS = 20
 
 async function leerTodo(ruta) {
@@ -274,16 +285,28 @@ async function contarExitosas(ids, rol) {
   // Sin `rol` (firmas) cuentan las salas de los dos tipos.
   const porTipo = rol ? `&tipo_profesional=eq.${rol}` : ''
   const [salas, atendidas] = await Promise.all([
-    leerTodo(`chat_rooms?resultado=eq.exito${porTipo}&select=id&order=id`),
+    leerTodo(`chat_rooms?resultado=eq.exito${porTipo}&select=id,resultado_at&order=id`),
     leerTodo(`chat_room_lawyers?lawyer_id=in.(${inList})&status=eq.active&select=lawyer_id,room_id&order=room_id`),
   ])
   if (!salas || !atendidas) return null
-  const exitosas = new Set(salas.map(s => s.id))
+  const desde = inicioMesBogota()
+  const exitosas = new Map(salas.map(s => [s.id, Date.parse(s.resultado_at || '') >= desde]))
   const total = new Map()
+  const mes = new Map()
   for (const a of atendidas) {
-    if (exitosas.has(a.room_id)) total.set(a.lawyer_id, (total.get(a.lawyer_id) || 0) + 1)
+    if (!exitosas.has(a.room_id)) continue
+    total.set(a.lawyer_id, (total.get(a.lawyer_id) || 0) + 1)
+    if (exitosas.get(a.room_id)) mes.set(a.lawyer_id, (mes.get(a.lawyer_id) || 0) + 1)
   }
-  return total
+  return { total, mes }
+}
+
+function anotarExitosas(lista, conteo) {
+  if (!conteo) return
+  for (const p of lista) {
+    p.consultas_exitosas = conteo.total.get(p.id) || 0
+    p.consultas_mes      = conteo.mes.get(p.id) || 0
+  }
 }
 
 /* GET ?rol=firma → [{...firma, director, miembros[]}]. Solo firmas APROBADAS
@@ -306,7 +329,7 @@ async function handleFirmas(req, res) {
       anotarCalificaciones(firmas),
       ids.length ? contarExitosas(ids, null).catch(() => null) : null,
     ])
-    for (const f of firmas) if (exitosas) f.consultas_exitosas = exitosas.get(f.id) || 0
+    anotarExitosas(firmas, exitosas)
 
     const lista = []
     for (const f of firmas) {
@@ -402,10 +425,10 @@ export default async function handler(req, res) {
         }
       } catch { /* si falla, las tarjetas caen a su propia query */ }
 
-      // Consultas exitosas de cada profesional, para la tarjeta. Si falla, el
-      // campo no viaja y la tarjeta simplemente no pinta la cifra.
-      const exitosas = await exitosasP
-      if (exitosas) for (const p of lista) p.consultas_exitosas = exitosas.get(p.id) || 0
+      // Consultas exitosas (total para la tarjeta, del mes para el ranking).
+      // Si falla, los campos no viajan: la tarjeta no pinta la cifra y el
+      // carrusel ordena por nombre.
+      anotarExitosas(lista, await exitosasP)
     }
 
     // Cache en el CDN de Vercel: 1 min fresco + 1 min sirviendo stale mientras

@@ -109,7 +109,8 @@
    en la tarjeta de la cinta todo va centrado. */
 .centrado {
   display: flex;
-  justify-content: center;
+  flex-direction: column;
+  align-items: center;
 }
 
 /* ── Modal ── */

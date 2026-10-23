@@ -132,19 +132,63 @@ export function Descripcion({ texto }) {
    dos renglones al lado y un filete dorado entre los dos. Sin pastilla ni
    color de "éxito": en esta tarjeta todo es café y dorado, y un verde ahí se
    leía como una etiqueta genérica pegada encima. */
-export function Exitosas({ total }) {
+export function Exitosas({ total, mes }) {
   if (!(total > 0)) return null
   const una = total === 1
   return (
-    <span className={styles.exitosas}>
-      <span className={styles.exitosasNum}>{Number(total).toLocaleString('es-CO')}</span>
-      <span className={styles.exitosasLbl}>
-        <span>{una ? 'consulta' : 'consultas'}</span>
-        <span>{una ? 'exitosa' : 'exitosas'}</span>
+    <>
+      <span className={styles.exitosas}>
+        <span className={styles.exitosasNum}>{Number(total).toLocaleString('es-CO')}</span>
+        <span className={styles.exitosasLbl}>
+          <span>{una ? 'consulta' : 'consultas'}</span>
+          <span>{una ? 'exitosa' : 'exitosas'}</span>
+        </span>
       </span>
-    </span>
+      {/* Lo del mes en curso, que es lo que ordena el ranking del inicio. */}
+      {mes > 0 && (
+        <span className={styles.exitosasMes}>
+          <strong>{Number(mes).toLocaleString('es-CO')}</strong> en {mesRanking().actual}
+        </span>
+      )}
+    </>
   )
 }
+
+/* ── Ranking mensual ─────────────────────────────────────────────────────
+   El inicio ordena cada carrusel por las consultas exitosas del MES EN CURSO
+   (`consultas_mes`, que /api/professionals cuenta desde el día 1 a la
+   medianoche de Colombia) y la cifra vuelve a cero cada mes. Colombia no
+   cambia de hora, así que el mes se calcula a UTC-5 fijo, igual que en el
+   servidor. */
+export function mesRanking(ahora = new Date()) {
+  const b = new Date(ahora.getTime() - 5 * 3600e3)
+  const nombre = (m) => new Date(Date.UTC(b.getUTCFullYear(), m, 15))
+    .toLocaleDateString('es-CO', { month: 'long', timeZone: 'UTC' })
+  return { actual: nombre(b.getUTCMonth()) }
+}
+
+/* Ordena una lista (profesionales o firmas) por el ranking del mes y le pone
+   a cada quien su `puesto`. Empatados en el mes comparten puesto (1, 1, 3);
+   quien no tiene consultas este mes no tiene puesto y va detrás, por total
+   histórico, calificación y nombre. */
+export function ordenarPorRanking(lista) {
+  const n = (v) => Number(v) || 0
+  const ordenada = [...lista].sort((a, b) =>
+    n(b.consultas_mes) - n(a.consultas_mes) ||
+    n(b.consultas_exitosas) - n(a.consultas_exitosas) ||
+    n(b.rating_promedio) - n(a.rating_promedio) ||
+    `${a.nombre || ''} ${a.apellido || ''}`.localeCompare(`${b.nombre || ''} ${b.apellido || ''}`, 'es'))
+  let puesto = 0
+  let previo = null
+  return ordenada.map((p, i) => {
+    const mes = n(p.consultas_mes)
+    if (!mes) return { ...p, puesto: null }
+    if (mes !== previo) { puesto = i + 1; previo = mes }
+    return { ...p, puesto }
+  })
+}
+
+
 
 /* Lleva a la Consulta Privada con este profesional ya elegido. ChatSection
    lee el hash (#chat?abogado=<id>&tipo=<rol>) en el paso de cédula: tras la
@@ -400,7 +444,7 @@ export default function LawyerCard({
             </div>
           )}
 
-          <Exitosas total={lawyer.consultas_exitosas} />
+          <Exitosas total={lawyer.consultas_exitosas} mes={lawyer.consultas_mes} />
 
           {/* Iconos de redes en la tarjeta (pequeños) */}
           {isSuperAdmin && (
@@ -509,7 +553,7 @@ export default function LawyerCard({
                     </span>
                   </button>
                 </div>
-                <Exitosas total={lawyer.consultas_exitosas} />
+                <Exitosas total={lawyer.consultas_exitosas} mes={lawyer.consultas_mes} />
               </div>
             </div>
 

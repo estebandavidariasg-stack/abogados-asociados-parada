@@ -205,6 +205,30 @@
 /* En la tarjeta todo va centrado: la cifra y su rótulo, como un bloque. */
 .info > .exitosas { align-self: center; }
 
+/* Lo del mes en curso, bajo la cifra total: la razón del puesto. */
+.exitosasMes {
+  align-self: flex-start;
+  margin-top: 7px;
+  font-family: 'Poppins', sans-serif;
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #7a5a1e;
+  white-space: nowrap;
+}
+.exitosasMes strong {
+  font-family: 'Cinzel', serif;
+  font-size: 0.86rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #472f29;
+  margin-right: 2px;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+.info > .exitosasMes { align-self: center; }
+
+
 /* ══════════════════════════════════════════════
    Modal — limpio y blanco
    ══════════════════════════════════════════════ */

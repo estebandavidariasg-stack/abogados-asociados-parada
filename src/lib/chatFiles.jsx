@@ -2,7 +2,7 @@ import { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } fr
 import { createPortal } from 'react-dom'
 import { supabase, getAuthHeaders } from './supabase'
 import { compressImage } from '../utils/compressMedia'
-import { contieneContacto } from './validaciones'
+import { contieneContacto, esDeptoBogota, etiquetaCiudad } from './validaciones'
 import { pedirIA } from './aiClient'
 import { sondear } from '../utils/sondeo'
 
@@ -846,6 +846,14 @@ const FICHAS_CSS = `
 .aapFichaDato a { color: #6d3c1b; text-decoration: none; border-bottom: 1px solid rgba(109,60,27,0.25); }
 .aapFichaDato a:hover { border-bottom-color: #6d3c1b; }
 .aapFichaVacio { font-size: 0.75rem; color: #b8a89a; font-style: italic; }
+.aapFichaUbic { margin-top: 11px; padding-top: 10px; border-top: 1px solid rgba(109,60,27,0.1); }
+.aapFichaUbicTit { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; font-size: 0.6rem; font-weight: 700; letter-spacing: 0.11em; text-transform: uppercase; color: #8a6a28; }
+.aapFichaUbicTit svg { flex-shrink: 0; }
+.aapFichaUbicLista { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 12px; row-gap: 3px; margin: 0; }
+.aapFichaUbicLista > div { display: contents; }
+.aapFichaUbicLista dt { font-size: 0.7rem; line-height: 1.55; color: #7d6650; }
+.aapFichaUbicLista dd { margin: 0; font-size: 0.78rem; line-height: 1.5; color: #4a3726; overflow-wrap: anywhere; }
+.aapFichaUbicLista dd.aapFichaSinDato { color: #7d6650; font-style: italic; }
 @media (max-width: 560px) {
   .aapFicha + .aapFicha { border-left: none; border-top: 1px solid rgba(109,60,27,0.1); }
 }
@@ -869,7 +877,14 @@ const IconUnlock = () => (
   </svg>
 )
 
-function FichaBloque({ rol, nombre, area, email, celular }) {
+const IconPinMini = () => (
+  <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+    <path d="M8 14.5s4.75-4.2 4.75-8A4.75 4.75 0 0 0 3.25 6.5c0 3.8 4.75 8 4.75 8Z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
+    <circle cx="8" cy="6.4" r="1.6" stroke="currentColor" strokeWidth="1.3" />
+  </svg>
+)
+
+function FichaBloque({ rol, nombre, area, email, celular, ubicacion }) {
   return (
     <div className="aapFicha">
       <span className="aapFichaRol">{rol}</span>
@@ -882,8 +897,30 @@ function FichaBloque({ rol, nombre, area, email, celular }) {
         <span className="aapFichaDato"><IconPhoneMini /><a href={`tel:${celular.replace(/[^\d+]/g, '')}`}>{celular}</a></span>
       ) : null}
       {!email && !celular && <span className="aapFichaVacio">Sin datos de contacto registrados.</span>}
+      {ubicacion && (
+        <div className="aapFichaUbic">
+          <span className="aapFichaUbicTit"><IconPinMini />{ubicacion.titulo}</span>
+          <dl className="aapFichaUbicLista">
+            {ubicacion.filas.map(f => (
+              <div key={f.etiqueta}>
+                <dt>{f.etiqueta}</dt>
+                <dd className={f.valor ? undefined : 'aapFichaSinDato'}>{f.valor || 'Sin registrar'}</dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+      )}
     </div>
   )
+}
+
+/* Ubicación de cada parte (docs/sql/fichas-ubicacion-2026-10-22.sql). Las
+   fichas enviadas antes de ese SQL no traen estas claves y se ven como antes.
+   En Bogotá D.C. el "municipio" del cliente es una localidad. */
+const tieneUbicacion = (o) => ['direccion', 'municipio', 'departamento', 'barrio'].some(k => k in o)
+function rotuloMunicipio(departamento, municipio) {
+  if (etiquetaCiudad(departamento, municipio || '') === 'Localidad') return 'Localidad'
+  return esDeptoBogota(departamento) ? 'Ciudad' : 'Municipio'
 }
 
 /* Tarjeta de las dos fichas. `data` es lo que devuelve parseFichas(). */
@@ -891,6 +928,22 @@ export function FichasContacto({ data }) {
   if (!data) return null
   const pro = data.profesional || {}
   const cli = data.cliente || {}
+  const ubicPro = tieneUbicacion(pro) ? {
+    titulo: 'Oficina',
+    filas: [
+      { etiqueta: 'Dirección', valor: pro.direccion },
+      { etiqueta: rotuloMunicipio(pro.departamento, pro.municipio), valor: pro.municipio },
+      { etiqueta: 'Departamento', valor: pro.departamento },
+    ],
+  } : null
+  const ubicCli = tieneUbicacion(cli) ? {
+    titulo: 'Ubicación',
+    filas: [
+      ...(cli.barrio ? [{ etiqueta: 'Barrio', valor: cli.barrio }] : []),
+      { etiqueta: rotuloMunicipio(cli.departamento, cli.municipio), valor: cli.municipio },
+      { etiqueta: 'Departamento', valor: cli.departamento },
+    ],
+  } : null
   return (
     <>
       <style>{FICHAS_CSS}</style>
@@ -911,12 +964,14 @@ export function FichasContacto({ data }) {
             area={pro.area}
             email={pro.email}
             celular={pro.celular}
+            ubicacion={ubicPro}
           />
           <FichaBloque
             rol="Cliente"
             nombre={cli.nombre}
             email={cli.email}
             celular={cli.celular}
+            ubicacion={ubicCli}
           />
         </div>
       </div>
