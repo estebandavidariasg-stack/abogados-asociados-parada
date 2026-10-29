@@ -37,14 +37,13 @@ const PUBLIC_COLS = [
   'instagram', 'linkedin', 'facebook', 'twitter', 'whatsapp', 'tiktok',
 ].join(',')
 
-/* Los tres carruseles del inicio, uno debajo del otro. Cada uno tiene su
-   propio ranking del mes y sus propios filtros (nombre y ubicación). El
-   podio alterna de lado (derecha, izquierda, derecha) para que las tres
-   franjas no se lean como la misma repetida. */
+/* Las tres listas del inicio. El visitante elige una en el selector y debajo
+   aparecen su carrusel y su ranking del mes, con sus propios filtros (nombre
+   y ubicación). */
 const CARRILES = [
-  { rol: 'abogado',  titulo: 'Abogados',   uno: 'abogado',  varios: 'abogados',   ninguno: 'Ningún abogado',  buscar: 'Buscar abogado por nombre', podio: 'derecha' },
-  { rol: 'contador', titulo: 'Contadores', uno: 'contador', varios: 'contadores', ninguno: 'Ningún contador', buscar: 'Buscar contador por nombre', podio: 'izquierda' },
-  { rol: 'firma',    titulo: 'Firmas',     uno: 'firma',    varios: 'firmas',     ninguno: 'Ninguna firma',   buscar: 'Buscar firma o miembro de su equipo', femenino: true, podio: 'derecha' },
+  { rol: 'abogado',  titulo: 'Abogados',   uno: 'abogado',  varios: 'abogados',   ninguno: 'Ningún abogado',  buscar: 'Buscar abogado por nombre' },
+  { rol: 'contador', titulo: 'Contadores', uno: 'contador', varios: 'contadores', ninguno: 'Ningún contador', buscar: 'Buscar contador por nombre' },
+  { rol: 'firma',    titulo: 'Firmas',     uno: 'firma',    varios: 'firmas',     ninguno: 'Ninguna firma',   buscar: 'Buscar firma o miembro de su equipo', femenino: true },
 ]
 
 const CARGANDO = { estado: 'cargando', lista: [] }
@@ -109,6 +108,7 @@ export default function LawyersSection() {
   const sectionRef = useRef(null)
   const [shouldFetch, setShouldFetch] = useState(false)
   const [datos, setDatos] = useState({ abogado: CARGANDO, contador: CARGANDO, firma: CARGANDO })
+  const [activo, setActivo] = useState('abogado')
   const { profile } = useAuth()
   // Vista de administración del listado: superadmin o admin, sin distinción.
   const isSuperAdmin = profile?.rol === 'superadmin' || profile?.rol === 'admin'
@@ -148,7 +148,8 @@ export default function LawyersSection() {
     }
   }, [isSuperAdmin])
 
-  // Los tres a la vez, en paralelo: cada carril se pinta cuando llega el suyo.
+  // Los tres a la vez, en paralelo: así cambiar de opción en el selector es
+  // instantáneo, sin esperar la lista.
   useEffect(() => {
     if (!shouldFetch) return
     for (const c of CARRILES) cargar(c.rol)
@@ -177,8 +178,10 @@ export default function LawyersSection() {
         </motion.p>
       </motion.div>
 
+      <SelectorProfesion activo={activo} onCambiar={setActivo} />
+
       <div className={styles.carriles}>
-        {CARRILES.map(c => (
+        {CARRILES.filter(c => c.rol === activo).map(c => (
           <Carril
             key={c.rol}
             conf={c}
@@ -192,7 +195,61 @@ export default function LawyersSection() {
   )
 }
 
-/* ── Un carril: título, podio del mes y directorio (filtros + cinta) ─────── */
+/* ── Selector Abogados · Contadores · Firmas ─────────────────────────────
+   Pestañas (tablist): el fondo dorado se desliza hasta la opción elegida, y
+   las flechas del teclado, Inicio y Fin recorren las opciones. */
+function SelectorProfesion({ activo, onCambiar }) {
+  const reduce = useReducedMotion()
+  const botones = useRef({})
+  const mover = (e) => {
+    const i = CARRILES.findIndex(c => c.rol === activo)
+    const destino = {
+      ArrowRight: (i + 1) % CARRILES.length,
+      ArrowLeft: (i - 1 + CARRILES.length) % CARRILES.length,
+      Home: 0,
+      End: CARRILES.length - 1,
+    }[e.key]
+    if (destino === undefined) return
+    e.preventDefault()
+    const rol = CARRILES[destino].rol
+    onCambiar(rol)
+    botones.current[rol]?.focus()
+  }
+
+  return (
+    <div className={styles.selector} role="tablist" aria-label="Tipo de profesional" onKeyDown={mover}>
+      {CARRILES.map(c => {
+        const sel = c.rol === activo
+        return (
+          <button
+            key={c.rol}
+            ref={el => { botones.current[c.rol] = el }}
+            type="button"
+            role="tab"
+            id={`tab-${c.rol}`}
+            aria-selected={sel}
+            aria-controls={`panel-${c.rol}`}
+            tabIndex={sel ? 0 : -1}
+            className={`${styles.selectorBtn}${sel ? ` ${styles.selectorActivo}` : ''}`}
+            onClick={() => onCambiar(c.rol)}
+          >
+            {sel && (
+              <motion.span
+                layoutId="profesionActiva"
+                className={styles.selectorFondo}
+                transition={reduce ? { duration: 0 } : { type: 'spring', stiffness: 420, damping: 36 }}
+                aria-hidden="true"
+              />
+            )}
+            <span className={styles.selectorTexto}>{c.titulo}</span>
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+/* ── Un carril: directorio (filtros + cinta) y podio del mes ───────────── */
 function Carril({ conf, datos, isSuperAdmin, onReintentar }) {
   const { rol, titulo, varios, ninguno } = conf
   const esFirmas = rol === 'firma'
@@ -285,16 +342,16 @@ function Carril({ conf, datos, isSuperAdmin, onReintentar }) {
   return (
     <motion.section
       className={styles.carril}
-      aria-labelledby={`carril-${rol}`}
+      role="tabpanel"
+      id={`panel-${rol}`}
+      aria-labelledby={`tab-${rol}`}
       aria-busy={datos.estado === 'cargando' || undefined}
       variants={fadeUp}
       initial="hidden"
       whileInView="visible"
       viewport={VIEWPORT}
     >
-      <h3 id={`carril-${rol}`} className={styles.carrilTitulo}>{titulo}</h3>
-
-      <div className={`${styles.carrilCuerpo}${conf.podio === 'derecha' ? ` ${styles.podioDerecha}` : ''}`}>
+      <div className={styles.carrilCuerpo}>
         <PodioMes
           items={podio}
           mes={mes}

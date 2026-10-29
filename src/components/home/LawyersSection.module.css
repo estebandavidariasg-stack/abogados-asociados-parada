@@ -49,8 +49,55 @@
 }
 
 /* ══════════════════════════════════════════
-   CARRILES — Abogados, Contadores y Firmas, uno debajo del otro.
-   Cada uno: título + ranking del mes, filtros y su cinta.
+   SELECTOR — Abogados · Contadores · Firmas
+   Un solo control segmentado; el fondo dorado se desliza a la opción
+   elegida (framer-motion, layoutId).
+   ══════════════════════════════════════════ */
+.selector {
+  display: flex;
+  gap: 4px;
+  width: fit-content;
+  max-width: 100%;
+  box-sizing: border-box;
+  margin: 0 auto clamp(2.25rem, 4vw, 3rem);
+  padding: 5px;
+  border: 1px solid rgba(109, 60, 27, 0.16);
+  border-radius: 999px;
+  background: #fffdf8;
+  box-shadow: 0 10px 24px -16px rgba(71, 47, 41, 0.35);
+}
+.selectorBtn {
+  position: relative;
+  min-height: 44px;
+  padding: 0 28px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  font-family: 'Cinzel', serif;
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--navy);
+  cursor: pointer;
+  white-space: nowrap;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+.selectorBtn:not(.selectorActivo):hover { background: rgba(201, 168, 76, 0.12); }
+.selectorBtn:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.selectorActivo { font-weight: 700; }
+.selectorFondo {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background: var(--gold);
+  box-shadow: 0 6px 14px -6px rgba(201, 168, 76, 0.75);
+}
+.selectorTexto { position: relative; z-index: 1; }
+
+/* ══════════════════════════════════════════
+   CARRIL — el de la opción elegida: filtros + cinta y su podio del mes.
    ══════════════════════════════════════════ */
 .carriles {
   max-width: 1200px;
@@ -62,30 +109,16 @@
 
 .carril { min-width: 0; }
 
-/* Título de la categoría sobre un filete dorado a todo lo ancho. */
-.carrilTitulo {
-  margin: 0 0 22px;
-  padding: 0 0.25rem 14px;
-  border-bottom: 1px solid rgba(201, 168, 76, 0.5);
-  font-family: 'Cormorant Garamond', serif;
-  font-size: clamp(2rem, 3.4vw, 2.75rem);
-  font-weight: 400;
-  line-height: 1;
-  letter-spacing: -0.005em;
-  color: var(--navy);
-}
-
-/* La franja: el podio del mes a un lado y el directorio al otro, a la misma
-   altura. El lado alterna entre carriles (derecha, izquierda, derecha). En
-   pantallas angostas el podio va siempre arriba. */
+/* La franja: el directorio (lo que se viene a hacer) a la izquierda y el
+   podio del mes a la derecha, a la misma altura. En pantallas angostas el
+   podio va arriba (va primero en el DOM). */
 .carrilCuerpo {
   display: grid;
-  grid-template-columns: minmax(330px, 390px) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) minmax(330px, 390px);
   gap: clamp(20px, 2.6vw, 34px);
   align-items: stretch;
 }
-.podioDerecha { grid-template-columns: minmax(0, 1fr) minmax(330px, 390px); }
-.podioDerecha > .podio { order: 2; }
+.carrilCuerpo > .podio { order: 2; }
 .directorio {
   min-width: 0;
   display: flex;
@@ -654,9 +687,8 @@
 
 /* Tablet */
 @media (max-width: 1000px) {
-  .carrilCuerpo,
-  .podioDerecha { grid-template-columns: minmax(0, 1fr); }
-  .podioDerecha > .podio { order: 0; }
+  .carrilCuerpo { grid-template-columns: minmax(0, 1fr); }
+  .carrilCuerpo > .podio { order: 0; }
   .podio { max-width: 520px; width: 100%; margin: 0 auto; box-sizing: border-box; }
 }
 
@@ -670,7 +702,8 @@
 @media (max-width: 600px) {
   .section { padding: 4rem 1rem; }
   .header { margin-bottom: 3rem; }
-  .carrilTitulo { padding-left: 0; padding-right: 0; margin-bottom: 18px; }
+  .selector { width: 100%; }
+  .selectorBtn { flex: 1 1 0; min-width: 0; padding: 0 6px; font-size: 0.74rem; letter-spacing: 0.04em; }
   .first  .avatar, .first  .avatarInitials, .first  .avatarLibre { width: 80px; height: 80px; }
   .second .avatar, .second .avatarInitials, .second .avatarLibre,
   .third  .avatar, .third  .avatarInitials, .third  .avatarLibre { width: 60px; height: 60px; }
