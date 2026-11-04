@@ -1,36 +1,84 @@
-import { useEffect, useState, useCallback, useRef } from 'react'
-import { motion } from 'framer-motion'
+import { useEffect, useId, useLayoutEffect, useMemo, useState, useRef } from 'react'
+import { motion, useReducedMotion } from 'framer-motion'
 import { headerStagger, eyebrowReveal, fadeUp, VIEWPORT } from '../../lib/motionVariants'
 import { useAuth } from '../../context/AuthContext'
 import { supabase } from '../../lib/supabase'
 import styles from './ModelosContractualesSection.module.css'
 import { descargarDesdeUrl, PdfVisor } from '../../lib/chatFiles'
+import CarpetaVidrio, { GUARDAS, BACK_PATH, hashString, Marmol, MARMOL_W, MARMOL_H, densidadPara } from './CarpetaVidrio'
+import { useCarrusel } from '../../lib/useCarrusel'
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
 
 const CAT_OTRO = 'Otro'
-const CATEGORIAS = [
-  'Todas', 'Laboral', 'Civil', 'Comercial', 'Familiar',
+const CATEGORIAS_FORM = [
+  'Laboral', 'Civil', 'Comercial', 'Familiar',
   'Penal', 'Administrativo', 'Inmobiliario', 'Societario', CAT_OTRO,
 ]
-const CATEGORIAS_FORM = CATEGORIAS.filter(c => c !== 'Todas')
 /* "Otro" en el formulario abre un campo libre y se guarda ESE texto como
-   categoría. Por eso el chip "Otro" de la cuadrícula no filtra por el valor
-   literal, sino por todo lo que no es una categoría fija. */
+   categoría. Por eso la carpeta "Otros" no junta el valor literal, sino todo
+   lo que no es una categoría fija. */
 const CATEGORIAS_FIJAS = CATEGORIAS_FORM.filter(c => c !== CAT_OTRO)
 const CAT_OTRA_MAX = 40
 const esCategoriaLibre = (c) => !CATEGORIAS_FIJAS.includes(c)
-// PostgREST: categoria=not.in.("Laboral","Civil",…) — valores entre comillas y
-// codificados; los paréntesis quedan tal cual.
-const FILTRO_OTRO = `not.in.(${encodeURIComponent(CATEGORIAS_FIJAS.map(c => `"${c}"`).join(','))})`
+const CARPETA_OTROS = 'Otros'
 const FORM_VACIO = { nombre: '', descripcion: '', categoria: '', categoriaOtra: '', file: null, pdfVista: null }
 
-const PAGE_SIZE = 12
-// Modelos a la vista al llegar; "Ver más" suma de a tantos y "Ver menos" vuelve
-// aquí. La lista completa de una categoría empujaba el resto del inicio muy abajo.
-const MODELOS_INICIO = 6
-const FORMAT_LABEL = { docx: 'WORD', xlsx: 'EXCEL', pdf: 'PDF' }
+/* Se leen todos de una vez: cada carpeta muestra cuántos guarda y el índice
+   los filtra en el navegador. Son plantillas que sube el admin, decenas, no
+   miles; el tope es solo una baranda. */
+const LIMITE_MODELOS = 500
+const FORMAT_LABEL = { docx: 'Word', xlsx: 'Excel', pdf: 'PDF' }
+const GAP_CARPETAS = 44   // espacio entre carpetas; en el teléfono, GAP_CARPETAS_MOVIL
+const GAP_CARPETAS_MOVIL = 26
+
+const contarModelos = (n) => `${n} ${n === 1 ? 'modelo' : 'modelos'}`
+
+/* Las carpetas: una por categoría fija que tenga modelos, en el orden del
+   formulario, y una "Otros" con las categorías libres. Una carpeta vacía no
+   se dibuja. `modelos` llega del más nuevo al más viejo. */
+function armarCarpetas(modelos) {
+  const grupos = new Map()
+  for (const m of modelos) {
+    const clave = esCategoriaLibre(m.categoria) ? CARPETA_OTROS : m.categoria
+    if (!grupos.has(clave)) grupos.set(clave, [])
+    grupos.get(clave).push(m)
+  }
+  return [...CATEGORIAS_FIJAS, CARPETA_OTROS]
+    .filter(c => grupos.has(c))
+    .map((c, i) => ({
+      clave: c,
+      modelos: grupos.get(c),
+      receta: GUARDAS[i % GUARDAS.length],
+      semilla: (hashString(c) % 97) + 1,
+    }))
+}
+
+// Hoja de la carpeta: nombre del modelo y su formato (la categoría libre, en "Otros").
+const hojaDe = (m, enOtros) => ({
+  id: m.id,
+  nombre: m.nombre,
+  meta: enOtros ? m.categoria : (FORMAT_LABEL[m.formato] || m.formato || '').toUpperCase(),
+})
+
+function DownloadIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M12 4v11" /><path d="m7 10 5 5 5-5" /><path d="M5 20h14" />
+    </svg>
+  )
+}
+
+function TrashIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M4 7h16" /><path d="M9 7V4.5h6V7" /><path d="M6.5 7l1 13h9l1-13" /><path d="M10 11v5.5M14 11v5.5" />
+    </svg>
+  )
+}
 
 // MIME → formato (cubre los 3 formatos del bucket)
 const MIME_TO_FORMATO = {
@@ -203,11 +251,7 @@ export default function ModelosContractualesSection() {
   const { isPanelAdmin: puedeEditar } = useAuth()
   const [modelos, setModelos]         = useState([])
   const [loading, setLoading]         = useState(true)
-  const [loadingMore, setLoadingMore] = useState(false)
-  const [hasMore, setHasMore]         = useState(false)
-  const [categoria, setCategoria]     = useState('Todas')
-  const [page, setPage]               = useState(0)
-  const [verN, setVerN]               = useState(MODELOS_INICIO)   // cuántos se muestran
+  const [abierta, setAbierta]         = useState(null)   // { clave, ancho } de la carpeta abierta en grande
   const [error, setError]             = useState('')
 
   // ── Admin ────────────────────────────────────────────────────────────
@@ -226,29 +270,23 @@ export default function ModelosContractualesSection() {
   const [previewLoading, setPreviewLoading] = useState(true)
   const [vista, setVista]                   = useState(null)   // { tipo: 'pdf'|'office', url }
 
-  // Fetch paginado vía REST (offset/limit) — 12 en 12
-  const fetchPage = useCallback(async (cat, pageIdx, append) => {
-    if (pageIdx === 0) setLoading(true); else setLoadingMore(true)
+  async function cargarModelos() {
+    setLoading(true)
     setError('')
     try {
-      const offset = pageIdx * PAGE_SIZE
-      let url = `${SUPABASE_URL}/rest/v1/modelos_contractuales`
-      url += `?select=*&order=created_at.desc&limit=${PAGE_SIZE}&offset=${offset}`
-      if (cat === CAT_OTRO) url += `&categoria=${FILTRO_OTRO}`
-      else if (cat && cat !== 'Todas') url += `&categoria=eq.${encodeURIComponent(cat)}`
-      const res  = await fetch(url, { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } })
+      const url = `${SUPABASE_URL}/rest/v1/modelos_contractuales`
+        + `?select=*&order=created_at.desc&limit=${LIMITE_MODELOS}`
+      const res = await fetch(url, { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } })
+      if (!res.ok) throw new Error(String(res.status))
       const json = await res.json()
-      const arr  = Array.isArray(json) ? json : []
-      setModelos(prev => append ? [...prev, ...arr] : arr)
-      setHasMore(arr.length === PAGE_SIZE)
+      setModelos(Array.isArray(json) ? json : [])
     } catch (_err) {
       setError('No se pudieron cargar los modelos.')
-      if (!append) setModelos([])
+      setModelos([])
     } finally {
       setLoading(false)
-      setLoadingMore(false)
     }
-  }, [])
+  }
 
   // Diferir la primera carga hasta que la sección se acerque al viewport:
   // es de las últimas secciones y su query directa a Postgres corría en
@@ -267,39 +305,24 @@ export default function ModelosContractualesSection() {
   }, [])
 
   useEffect(() => {
-    if (!visible) return
-    setPage(0)
-    setVerN(MODELOS_INICIO)
-    fetchPage(categoria, 0, false)
-  }, [visible, categoria, fetchPage])
+    if (visible) cargarModelos()
+  }, [visible])
 
-  function handleCategoria(cat) {
-    if (cat !== categoria) setCategoria(cat)
-  }
+  const carpetas = useMemo(() => armarCarpetas(modelos), [modelos])
+  // La carpeta abierta en grande. Si el admin borra su último modelo, se cierra sola.
+  const carpetaAbierta = carpetas.find(c => c.clave === abierta?.clave) || null
 
-  function handleLoadMore() {
-    const next = page + 1
-    setPage(next)
-    fetchPage(categoria, next, true)
+  // El vidrio que la abrió: al cerrar, el foco vuelve ahí.
+  const origenRef = useRef(null)
+  function abrirCarpeta(clave, origen, ancho) {
+    origenRef.current = origen || null
+    setAbierta({ clave, ancho })
   }
-
-  // Ver más: muestra otra tanda y, si ya no alcanzan los que hay cargados,
-  // trae la siguiente página. Ver menos: vuelve a la tanda inicial y sube al
-  // comienzo de la sección (si no, uno queda mirando lo que venía después).
-  function handleVerMas() {
-    const objetivo = verN + MODELOS_INICIO
-    setVerN(objetivo)
-    if (objetivo > modelos.length && hasMore && !loadingMore) handleLoadMore()
-  }
-  function handleVerMenos() {
-    setVerN(MODELOS_INICIO)
-    const suave = !window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    // En dos tiempos, como el botón "Iniciar consulta" del perfil: la lista
-    // se recoge y las secciones de arriba aún se están acomodando, así que el
-    // primer desplazamiento queda corto; el segundo lo deja en su sitio.
-    const ir = (behavior) => sectionRef.current?.scrollIntoView({ behavior, block: 'start' })
-    requestAnimationFrame(() => ir(suave ? 'smooth' : 'auto'))
-    setTimeout(() => ir('auto'), 700)
+  function cerrarCarpeta() {
+    setAbierta(null)
+    const o = origenRef.current
+    origenRef.current = null
+    if (o?.isConnected) o.focus({ preventScroll: true })
   }
 
   /* Bucket público: URL directa, sin firmar. NO pasa por downloadChatFile:
@@ -353,8 +376,10 @@ export default function ModelosContractualesSection() {
   }, [previewModelo])
 
   // ─────────────────────── ADMIN: alta de modelo ─────────────────────────
-  function openAddModal() {
-    setForm(FORM_VACIO)
+  // Desde la tecla "+" de una carpeta llega su categoría ya elegida.
+  function openAddModal(categoriaInicial = '') {
+    const cat = typeof categoriaInicial === 'string' ? categoriaInicial : ''
+    setForm({ ...FORM_VACIO, categoria: cat === CARPETA_OTROS ? CAT_OTRO : cat })
     setUploadError('')
     setErroresArchivo(SIN_ERRORES)
     setModalOpen(true)
@@ -490,14 +515,8 @@ export default function ModelosContractualesSection() {
       return
     }
 
-    // Insert al inicio si encaja con la categoría visible ("Otro" = cualquier
-    // categoría libre, igual que el filtro del servidor)
-    const encaja = categoria === 'Todas'
-      || categoria === inserted.categoria
-      || (categoria === CAT_OTRO && esCategoriaLibre(inserted.categoria))
-    if (encaja) {
-      setModelos(prev => [inserted, ...prev])
-    }
+    // Al inicio: es el más reciente, y cae dentro de su carpeta.
+    setModelos(prev => [inserted, ...prev])
     setUploading(false)
     setModalOpen(false)
   }
@@ -549,134 +568,58 @@ export default function ModelosContractualesSection() {
           "Editar noticias" y "Editar videos". Antes iba anclado a la fila de
           categorías y tapaba el último chip ("Otro"). */}
       {puedeEditar && (
-        <button type="button" className={styles.fab} onClick={openAddModal} aria-haspopup="dialog">
-          ＋ Agregar modelo
+        <button type="button" className={styles.fab} onClick={() => openAddModal()} aria-haspopup="dialog">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+          Agregar Modelo
         </button>
       )}
 
-      {/* ── Filtros (chips horizontales, scroll en móvil) ── */}
-      <div className={styles.filtersWrap}>
-        <div className={styles.filters}>
-          {CATEGORIAS.map(cat => (
-            <button
-              key={cat}
-              type="button"
-              className={`${styles.chip} ${categoria === cat ? styles.chipActive : ''}`}
-              onClick={() => handleCategoria(cat)}
-            >
-              {cat}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* ── Subtítulo de categoría seleccionada ── */}
-      {categoria !== 'Todas' && (
-        <div className={styles.categoriaTitle}>
-          <h3>{categoria}</h3>
-          <span className={styles.categoriaSeparator} />
-        </div>
-      )}
-
-      {/* ── Grid / estados ── */}
+      {/* ── Estados ── */}
       {loading ? (
-        <div className={styles.list}>
-          <div className={styles.rowSkeleton} />
-          <div className={styles.rowSkeleton} />
-          <div className={styles.rowSkeleton} />
-          <div className={styles.rowSkeleton} />
-        </div>
+        <>
+          {/* La silueta de las carpetas, no un texto suelto: la página no salta. */}
+          <div className={styles.mesa} aria-hidden="true">
+            <div className={styles.esqueletoCarril}>
+              {[0, 1, 2].map(i => (
+                <svg key={i} className={styles.esqueletoCarpeta} viewBox="0 0 340 272">
+                  <path d={BACK_PATH} />
+                </svg>
+              ))}
+            </div>
+          </div>
+        </>
       ) : error ? (
-        <p className={styles.error}>{error}</p>
+        <div className={styles.emptyWrap}>
+          <p className={styles.error}>{error}</p>
+          <button type="button" className={styles.reintentar} onClick={cargarModelos}>Reintentar</button>
+        </div>
       ) : modelos.length === 0 ? (
         <div className={styles.emptyWrap}>
           <span className={styles.emptyIcon}><EmptyDocIcon /></span>
-          <p className={styles.empty}>
-            No hay modelos disponibles{categoria !== 'Todas' ? ` en ${categoria}` : ''}.
-          </p>
+          <p className={styles.empty}>Aún no hay modelos disponibles.</p>
         </div>
       ) : (
-        <>
-          <div className={styles.list}>
-            {modelos.slice(0, verN).map((m, i) => (
-              <motion.article
-                key={m.id}
-                className={styles.row}
-                // Cada fila se anima al MONTARSE, de forma independiente. Así,
-                // un modelo recién subido (insertado al inicio) aparece siempre,
-                // sin depender de la orquestación del contenedor.
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1], delay: Math.min(i, 8) * 0.035 }}
-              >
-                {/* Ícono de formato (pequeño) — no es previsualización */}
-                <span className={styles.rowIcon}><FormatIcon formato={m.formato} /></span>
+        <CarpetasCinta
+          carpetas={carpetas}
+          onAbrir={abrirCarpeta}
+          onAgregar={puedeEditar ? openAddModal : undefined}
+        />
+      )}
 
-                <div className={styles.rowInfo}>
-                  <span className={styles.cardCategoria}>{m.categoria}</span>
-                  <h4 className={styles.rowNombre} title={m.nombre}>{m.nombre}</h4>
-                  {m.descripcion && (
-                    <p className={styles.rowDescripcion} title={m.descripcion}>
-                      {m.descripcion}
-                    </p>
-                  )}
-                </div>
-
-                <div className={styles.rowActions}>
-                  <button
-                    type="button"
-                    className={styles.rowPreview}
-                    onClick={() => openPreview(m)}
-                  >
-                    <EyeIcon /> Previsualizar
-                  </button>
-                  <button
-                    type="button"
-                    className={styles.rowDownload}
-                    onClick={() => handleDownload(m)}
-                  >
-                    ⬇ Descargar {FORMAT_LABEL[m.formato] || m.formato.toUpperCase()}
-                  </button>
-                  {puedeEditar && (
-                    <button
-                      type="button"
-                      className={styles.rowDeleteBtn}
-                      onClick={() => setConfirmDelete(m)}
-                      title="Eliminar modelo"
-                      aria-label="Eliminar modelo"
-                    >
-                      ✕
-                    </button>
-                  )}
-                </div>
-              </motion.article>
-            ))}
-          </div>
-
-          {(modelos.length > verN || hasMore || verN > MODELOS_INICIO) && (
-            <div className={styles.loadMoreWrap}>
-              {(modelos.length > verN || hasMore) && (
-                <button
-                  type="button"
-                  className={styles.loadMoreBtn}
-                  onClick={handleVerMas}
-                  disabled={loadingMore}
-                >
-                  {loadingMore ? 'Cargando…' : 'Ver más'}
-                </button>
-              )}
-              {verN > MODELOS_INICIO && (
-                <button
-                  type="button"
-                  className={`${styles.loadMoreBtn} ${styles.loadLessBtn}`}
-                  onClick={handleVerMenos}
-                >
-                  Ver menos
-                </button>
-              )}
-            </div>
-          )}
-        </>
+      {/* ── La carpeta abierta en grande: todos sus modelos como hojas ── */}
+      {carpetaAbierta && (
+        <CarpetaAbierta
+          carpeta={carpetaAbierta}
+          ancho={abierta.ancho}
+          puedeEditar={puedeEditar}
+          bloqueado={!!(previewModelo || modalOpen || confirmDelete)}
+          onCerrar={cerrarCarpeta}
+          onVer={openPreview}
+          onDescargar={handleDownload}
+          onAgregar={() => openAddModal(carpetaAbierta.clave)}
+          onEliminar={setConfirmDelete}
+        />
       )}
 
       {/* ─────────────── Modal: agregar modelo ─────────────── */}
@@ -915,5 +858,227 @@ export default function ModelosContractualesSection() {
         </div>
       )}
     </section>
+  )
+}
+
+/* ── Cinta de carpetas ─────────────────────────────────────────────────────
+   Como las demás cintas del inicio (useCarrusel): avanza sola en bucle,
+   se arrastra con el dedo o el mouse y tiene flechas. Al entrar en pantalla
+   se queda quieta un momento, mientras las primeras carpetas se arman. Si
+   todas caben, no hay bucle: la fila queda quieta y centrada. */
+function CarpetasCinta({ carpetas, onAbrir, onAgregar }) {
+  const reduce = useReducedMotion()
+  const wrapRef = useRef(null)
+  const [anchoVisible, setAnchoVisible] = useState(0)
+
+  useEffect(() => {
+    const el = wrapRef.current
+    if (!el) return
+    setAnchoVisible(el.clientWidth)
+    if (!('ResizeObserver' in window)) return
+    const ro = new ResizeObserver(([e]) => setAnchoVisible(e.contentRect.width))
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+
+  // En el teléfono la carpeta ocupa casi todo y asoma la siguiente; en
+  // escritorio caben tres.
+  const movil = anchoVisible > 0 && anchoVisible <= 600
+  const ancho = Math.round(Math.min(330, Math.max(248, (anchoVisible || 1100) * (movil ? 0.76 : 0.8))))
+  const gap = movil ? GAP_CARPETAS_MOVIL : GAP_CARPETAS
+  const desborda = anchoVisible > 0 && carpetas.length * (ancho + gap) > anchoVisible + 8
+  const loop = !reduce && desborda && carpetas.length >= 2
+  const { scrollerRef, step, handlers } = useCarrusel({ speed: 30, loop, espera: 1600 })
+  const copias = loop ? [0, 1] : [0]
+  const quieta = anchoVisible > 0 && !desborda
+
+  // Arranca con las carpetas centradas: en el teléfono, la primera en el
+  // medio con la anterior y la siguiente asomando; en escritorio, las que
+  // caben enteras, centradas. Sin esto la primera quedaba pegada al borde,
+  // cortada por el desvanecido ("ABORAL"). El carrusel adopta esta posición
+  // mientras espera para arrancar.
+  useLayoutEffect(() => {
+    const el = scrollerRef.current
+    if (!el || !loop || !anchoVisible) return
+    const paso = ancho + gap
+    const caben = Math.max(1, Math.floor((anchoVisible + gap) / paso))
+    const sobra = (anchoVisible - (caben * ancho + (caben - 1) * gap)) / 2
+    el.scrollLeft = carpetas.length * paso - sobra
+  }, [loop, ancho, gap, anchoVisible, carpetas.length, scrollerRef])
+
+  return (
+    <div className={styles.mesa} ref={wrapRef}>
+      <div
+        className={`${styles.carril}${quieta ? ` ${styles.carrilQuieto}` : ''}`}
+        ref={scrollerRef}
+        role="group"
+        aria-label="Carpetas de modelos por área"
+        {...handlers}
+      >
+        <div className={styles.carrilPista} style={{ '--gap': `${gap}px` }}>
+          {copias.flatMap(copia => carpetas.map((c, i) => {
+            const enOtros = c.clave === CARPETA_OTROS
+            return (
+              <div key={`${copia}-${c.clave}`} className={styles.carrilItem} data-carpeta={copia === 0 ? c.clave : undefined}>
+                <CarpetaVidrio
+                  titulo={c.clave}
+                  meta={contarModelos(c.modelos.length)}
+                  receta={c.receta}
+                  semilla={c.semilla}
+                  archivos={c.modelos.slice(0, 4).reverse().map(m => hojaDe(m, enOtros))}
+                  onAbrir={(origen) => onAbrir(c.clave, origen, ancho)}
+                  onAgregar={onAgregar ? () => onAgregar(c.clave) : undefined}
+                  ancho={ancho}
+                  retrasoEntrada={copia === 0 ? Math.min(i, 3) * 140 : 0}
+                  fantasma={copia === 1}
+                />
+              </div>
+            )
+          }))}
+        </div>
+      </div>
+
+      {!quieta && (
+        <div className={styles.carrilNav}>
+          <button type="button" className={styles.carrilFlecha} onClick={() => step(-1)} aria-label="Carpetas anteriores">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6" /></svg>
+          </button>
+          <button type="button" className={styles.carrilFlecha} onClick={() => step(1)} aria-label="Más carpetas">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6" /></svg>
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/* ── La carpeta abierta ────────────────────────────────────────────────────
+   La carpeta en grande: arriba su mismo mármol (sale de la caché, al
+   instante) con el rótulo en una placa de vidrio, y debajo TODOS sus modelos
+   como hojas de papel que salen de la carpeta, cada una con su sello de
+   formato, Ver y Descargar. Escape, la X o un clic afuera la cierran; el
+   foco vuelve a la carpeta del carrusel. */
+const FOCUSABLES = 'button:not([disabled]):not([tabindex="-1"]), [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+
+function CarpetaAbierta({ carpeta, ancho, puedeEditar, bloqueado, onCerrar, onVer, onDescargar, onAgregar, onEliminar }) {
+  const idTitulo = useId()
+  const panelRef = useRef(null)
+  const cerrarRef = useRef(null)
+  const enOtros = carpeta.clave === CARPETA_OTROS
+  const n = carpeta.modelos.length
+
+  useEffect(() => { cerrarRef.current?.focus({ preventScroll: true }) }, [])
+
+  // La página de atrás no se desplaza mientras la carpeta está abierta.
+  useEffect(() => {
+    const previo = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => { document.body.style.overflow = previo }
+  }, [])
+
+  // Escape cierra, salvo que encima haya otra ventana (vista previa, alta, borrado).
+  useEffect(() => {
+    if (bloqueado) return
+    const onKey = (e) => { if (e.key === 'Escape') onCerrar() }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [bloqueado, onCerrar])
+
+  // El Tab da la vuelta dentro de la carpeta.
+  const atraparTab = (e) => {
+    if (e.key !== 'Tab') return
+    const f = [...(panelRef.current?.querySelectorAll(FOCUSABLES) || [])]
+    if (!f.length) return
+    const primero = f[0], ultimo = f[f.length - 1]
+    if (e.shiftKey && document.activeElement === primero) { e.preventDefault(); ultimo.focus() }
+    else if (!e.shiftKey && document.activeElement === ultimo) { e.preventDefault(); primero.focus() }
+  }
+
+  return (
+    <div className={styles.carpetaFondo} onClick={onCerrar}>
+      <div
+        ref={panelRef}
+        className={styles.carpetaPanel}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={idTitulo}
+        onClick={e => e.stopPropagation()}
+        onKeyDown={atraparTab}
+      >
+        <header className={styles.carpetaHead}>
+          <div className={styles.carpetaMarmol} aria-hidden="true">
+            <Marmol
+              receta={carpeta.receta}
+              semilla={carpeta.semilla}
+              w={MARMOL_W}
+              h={MARMOL_H}
+              densidad={densidadPara(ancho)}
+              cubrir
+            />
+          </div>
+          <div className={styles.carpetaPlaca}>
+            <h3 id={idTitulo} className={styles.carpetaTitulo}>{carpeta.clave}</h3>
+            <p className={styles.carpetaMeta}>{contarModelos(n)}</p>
+          </div>
+          <div className={styles.carpetaAcciones}>
+            {puedeEditar && (
+              <button type="button" className={styles.carpetaAgregar} onClick={onAgregar} aria-haspopup="dialog">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                  strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+                Agregar Modelo
+              </button>
+            )}
+            <button ref={cerrarRef} type="button" className={styles.carpetaCerrar} onClick={onCerrar} aria-label="Cerrar carpeta">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
+            </button>
+          </div>
+        </header>
+
+        <ul className={styles.hojas}>
+          {carpeta.modelos.map((m, i) => {
+            const formato = FORMAT_LABEL[m.formato] || (m.formato || '').toUpperCase()
+            return (
+              <li
+                key={m.id}
+                className={styles.hojaItem}
+                style={{ '--i': Math.min(i, 12), '--r': `${((hashString(String(m.id)) % 7) - 3) * 0.4}deg` }}
+              >
+                <article className={styles.hoja}>
+                  {/* Toda la hoja abre la vista previa; para el teclado está el botón Ver. */}
+                  <button type="button" className={styles.hojaAbrir} onClick={() => onVer(m)} tabIndex={-1} aria-hidden="true" />
+                  <div className={styles.hojaSellos}>
+                    <span className={styles.hojaSello}>{formato}</span>
+                    {enOtros && <span className={styles.hojaCategoria}>{m.categoria}</span>}
+                  </div>
+                  <h4 className={styles.hojaNombre} title={m.nombre}>{m.nombre}</h4>
+                  <span className={styles.hojaFilete} aria-hidden="true" />
+                  {m.descripcion
+                    ? <p className={styles.hojaTexto}>{m.descripcion}</p>
+                    : (
+                      <span className={styles.hojaRenglones} aria-hidden="true">
+                        <i style={{ width: '92%' }} /><i style={{ width: '78%' }} /><i style={{ width: '86%' }} />
+                      </span>
+                    )}
+                  <div className={styles.hojaAcciones}>
+                    <button type="button" className={styles.hojaVer} onClick={() => onVer(m)} aria-label={`Ver ${m.nombre}`}>
+                      <EyeIcon /> Ver
+                    </button>
+                    <button type="button" className={styles.hojaBajar} onClick={() => onDescargar(m)} aria-label={`Descargar ${m.nombre} en ${formato}`}>
+                      <DownloadIcon /> Descargar
+                    </button>
+                  </div>
+                  {puedeEditar && (
+                    <button type="button" className={styles.hojaBorrar} onClick={() => onEliminar(m)} aria-label={`Eliminar ${m.nombre}`}>
+                      <TrashIcon />
+                    </button>
+                  )}
+                </article>
+              </li>
+            )
+          })}
+        </ul>
+      </div>
+    </div>
   )
 }

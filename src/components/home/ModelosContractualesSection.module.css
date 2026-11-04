@@ -49,296 +49,477 @@
 }
 
 /* ══════════════════════════════════════════
-   FILTROS — chips
+   MESA DE CARPETAS — cinta que avanza sola, una carpeta por área
+   Las carpetas descansan sobre un punteado café muy tenue (la "mesa"), que
+   se desvanece hacia los bordes.
    ══════════════════════════════════════════ */
-.filtersWrap {
-  width: 100%;
-  margin: 0 auto 2.5rem;
-  padding: 0 2rem;        /* coincide con section padding-x */
-  box-sizing: border-box;
-}
-
-.filters {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 8px;
-  max-width: 1100px;
-  margin: 0 auto;         /* centra el bloque de chips dentro del wrap full-width */
-}
-
-.chip {
-  background: transparent;
-  border: 1px solid var(--gold);
-  color: var(--navy);
-  padding: 8px 16px;
-  border-radius: 999px;
-  font-size: 0.78rem;
-  font-family: 'Cinzel', serif;
-  letter-spacing: 0.06em;
-  cursor: pointer;
-  transition: background 0.2s, color 0.2s, transform 0.15s;
-  min-height: 36px;
-  white-space: nowrap;
-}
-.chip:hover {
-  background: rgba(201, 168, 76, 0.1);
-}
-.chip:active { transform: scale(0.97); }
-
-.chipActive {
-  background: var(--gold);
-  color: var(--navy);
-  font-weight: 700;
-  border-color: var(--gold);
-}
-.chipActive:hover { background: var(--gold-lt); }
-
-/* ══════════════════════════════════════════
-   SUBTÍTULO DE CATEGORÍA SELECCIONADA
-   ══════════════════════════════════════════ */
-.categoriaTitle {
-  text-align: center;
-  margin: 0 auto 2rem;
-}
-.categoriaTitle h3 {
-  font-family: 'Cinzel', serif;
-  font-size: 1.4rem;
-  font-weight: 600;
-  color: var(--navy);
-  letter-spacing: 0.08em;
-  margin: 0 0 10px;
-}
-.categoriaSeparator {
-  display: inline-block;
-  width: 80px;
-  height: 2px;
-  background: var(--gold);
-  border-radius: 2px;
-}
-
-/* ══════════════════════════════════════════
-   LISTADO — filas (sin cuadro de previsualización)
-   ══════════════════════════════════════════ */
-.list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  max-width: 920px;
-  margin: 0 auto;
-  padding: 0 0.5rem;
-}
-
-/* ── Fila ── */
-.row {
+.mesa {
   position: relative;
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  background: var(--ivory);
-  border: 1px solid rgba(109,60,27, 0.08);
-  border-radius: 10px;
-  padding: 14px 18px;
-  transition: box-shadow 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+  max-width: 1200px;
+  margin: -1.5rem auto 0;
 }
-.row:hover {
-  border-color: rgba(201, 168, 76, 0.5);
-  box-shadow: 0 6px 18px rgba(201, 168, 76, 0.16);
-  transform: translateY(-1px);
+.mesa::before {
+  content: '';
+  position: absolute;
+  inset: 0 -2rem;
+  pointer-events: none;
+  background-image: radial-gradient(rgba(109, 60, 27, 0.16) 1.1px, transparent 1.5px);
+  background-size: 22px 22px;
+  -webkit-mask-image: radial-gradient(ellipse 60% 70% at 50% 55%, #000 30%, transparent 75%);
+          mask-image: radial-gradient(ellipse 60% 70% at 50% 55%, #000 30%, transparent 75%);
 }
 
-/* Tile con el ícono del formato (W / X / PDF) — pequeño, no es previsualización */
-.rowIcon {
-  flex-shrink: 0;
-  width: 44px;
-  height: 44px;
+/* La cinta: el gesto horizontal lo maneja el puntero (useCarrusel) y el
+   vertical hace scroll de la página. Sin relleno a los lados, para que las
+   dos copias del bucle midan exactamente lo mismo. Arriba, aire para que las
+   hojas suban con el puntero; abajo, para la sombra de la carpeta. */
+.carril {
+  position: relative;
+  padding: 10px 0 34px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  cursor: grab;
+  touch-action: pan-y;
+  scroll-behavior: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 4%, #000 96%, transparent 100%);
+          mask-image: linear-gradient(90deg, transparent 0, #000 4%, #000 96%, transparent 100%);
+}
+.carril::-webkit-scrollbar { display: none; }
+.carril:active { cursor: grabbing; }
+.carrilPista {
   display: flex;
+  width: max-content;
+}
+/* Margen (no gap) para que las dos copias encajen perfecto en el bucle. */
+.carrilItem {
+  flex: none;
+  margin-right: var(--gap, 44px);
+}
+/* Si caben todas: quieta, centrada y sin desvanecido. */
+.carril.carrilQuieto {
+  cursor: default;
+  -webkit-mask-image: none;
+          mask-image: none;
+}
+.carrilQuieto .carrilPista { margin: 0 auto; }
+.carrilQuieto .carrilItem:last-child { margin-right: 0; }
+
+.carrilNav {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  margin-top: -0.25rem;
+}
+.carrilFlecha {
+  width: 46px;
+  height: 46px;
+  border-radius: 999px;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   background: #ffffff;
-  border: 1px solid rgba(109,60,27, 0.1);
-  border-radius: 8px;
+  border: 1px solid rgba(109, 60, 27, 0.16);
+  color: var(--navy);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  box-shadow: 0 4px 14px rgba(109, 60, 27, 0.10);
+  transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1),
+              background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, color 0.2s ease;
 }
-.rowIcon svg { width: 26px; height: 26px; }
+.carrilFlecha svg {
+  width: 21px;
+  height: 21px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.carrilFlecha:hover {
+  background: var(--navy);
+  color: #ffffff;
+  border-color: var(--navy);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 22px rgba(109, 60, 27, 0.20);
+}
+.carrilFlecha:active { transform: translateY(0) scale(0.94); }
+.carrilFlecha:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
 
-.rowInfo {
-  flex: 1;
-  min-width: 0;
+/* Silueta de las carpetas mientras llegan los modelos. */
+.esqueletoCarril {
+  display: flex;
+  justify-content: center;
+  gap: 44px;
+  padding: 10px 0 34px;
+  overflow: hidden;
+}
+.esqueletoCarpeta {
+  flex: none;
+  width: min(320px, 76vw);
+  height: auto;
+  margin-top: 54px;
+  fill: #f3ebdc;
+  animation: latido 1.6s ease-in-out infinite;
+}
+.esqueletoCarpeta:nth-child(2) { animation-delay: 0.15s; }
+.esqueletoCarpeta:nth-child(3) { animation-delay: 0.3s; }
+@keyframes latido {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.55; }
+}
+
+/* ══════════════════════════════════════════
+   LA CARPETA ABIERTA — en grande, con todos sus modelos como hojas
+   ══════════════════════════════════════════ */
+.carpetaFondo {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(30, 19, 14, 0.62);
+  -webkit-backdrop-filter: blur(6px);
+          backdrop-filter: blur(6px);
+  animation: fondoEntra 0.25s ease both;
+}
+@keyframes fondoEntra { from { opacity: 0; } to { opacity: 1; } }
+
+.carpetaPanel {
+  position: relative;
+  width: min(1060px, 100%);
+  max-height: calc(100dvh - 48px);
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  overflow: hidden;
+  border-radius: 24px;
+  background: #fffdf8;
+  box-shadow:
+    0 0 0 1px rgba(201, 168, 76, 0.35),
+    0 40px 90px -30px rgba(20, 12, 8, 0.65);
+  animation: panelEntra 0.5s cubic-bezier(.16, 1, .3, 1) both;
+}
+@keyframes panelEntra {
+  from { opacity: 0; transform: translateY(28px) scale(0.96); }
+  to   { opacity: 1; transform: none; }
 }
 
-.cardCategoria {
-  display: inline-block;
-  width: max-content;
-  background: rgba(201, 168, 76, 0.13);   /* #c9a84c con alpha ≈20 */
-  color: var(--gold);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  padding: 2px 8px;
-  border-radius: 4px;
+/* Cabecera: el mismo mármol de la carpeta, con el rótulo en una placa de
+   vidrio crema y filete dorado (la cara de la carpeta). */
+.carpetaHead {
+  position: relative;
+  flex: none;
+  height: 156px;
+  overflow: hidden;
 }
-
-.rowNombre {
+.carpetaMarmol {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, #f3e7d3 0%, #e4d2b4 100%);
+}
+.carpetaMarmol::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(20, 12, 8, 0) 40%, rgba(20, 12, 8, 0.28) 100%);
+}
+.carpetaPlaca {
+  position: absolute;
+  left: 28px;
+  bottom: 20px;
+  max-width: calc(100% - 56px);
+  padding: 14px 24px 15px;
+  border-radius: 16px;
+  background: rgba(255, 251, 238, 0.86);
+  -webkit-backdrop-filter: blur(14px) saturate(1.3);
+          backdrop-filter: blur(14px) saturate(1.3);
+  box-shadow:
+    inset 0 1px 0 rgba(232, 201, 106, 0.9),
+    0 0 0 1px rgba(201, 168, 76, 0.45),
+    0 14px 30px -14px rgba(20, 12, 8, 0.55);
+  box-sizing: border-box;
+}
+.carpetaTitulo {
+  margin: 0;
   font-family: 'Cinzel', serif;
-  font-size: 15px;
-  font-weight: 600;
+  font-size: 1.55rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  line-height: 1.15;
   color: var(--navy);
-  line-height: 1.3;
-  margin: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
 }
-
-.rowDescripcion {
-  color: var(--muted);
-  font-size: 12.5px;
-  line-height: 1.4;
-  margin: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.carpetaMeta {
+  margin: 6px 0 0;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #7d6650;
 }
-
-/* ── Acciones (previsualizar + descargar) ── */
-.rowActions {
-  flex-shrink: 0;
+.carpetaAcciones {
+  position: absolute;
+  top: 18px;
+  right: 18px;
   display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.carpetaCerrar {
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  color: var(--navy);
+  background: rgba(255, 251, 238, 0.88);
+  -webkit-backdrop-filter: blur(10px);
+          backdrop-filter: blur(10px);
+  box-shadow: 0 0 0 1px rgba(201, 168, 76, 0.5), 0 8px 18px -8px rgba(20, 12, 8, 0.5);
+  cursor: pointer;
+  transition: transform 0.3s cubic-bezier(.16, 1, .3, 1), background 0.2s ease;
+}
+.carpetaCerrar:hover { transform: rotate(90deg); background: #fffef1; }
+.carpetaCerrar:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
+.carpetaAgregar {
+  min-height: 40px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 999px;
+  display: inline-flex;
   align-items: center;
   gap: 8px;
-}
-
-.rowPreview {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  background: transparent;
-  border: 1px solid rgba(109,60,27, 0.25);
-  color: var(--navy);
-  border-radius: 6px;
-  padding: 9px 14px;
-  font-family: 'Poppins', sans-serif;
-  font-weight: 600;
-  font-size: 12px;
-  letter-spacing: 0.06em;
-  cursor: pointer;
-  min-height: 40px;
-  white-space: nowrap;
-  transition: background 0.2s, border-color 0.2s, color 0.2s;
-}
-.rowPreview:hover { background: rgba(109,60,27, 0.05); border-color: var(--navy); }
-.rowPreview svg { flex-shrink: 0; }
-
-.rowDownload {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  background: var(--gold);
-  color: var(--navy);
-  border: 1px solid var(--gold);
-  border-radius: 6px;
-  padding: 9px 16px;
-  font-family: 'Poppins', sans-serif;
+  font-family: inherit;
+  font-size: 0.8rem;
   font-weight: 700;
-  font-size: 12px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  color: #ffffff;
+  background: var(--navy);
+  box-shadow: 0 8px 18px -8px rgba(20, 12, 8, 0.6);
   cursor: pointer;
-  min-height: 40px;
-  white-space: nowrap;
-  transition: background 0.2s;
 }
-.rowDownload:hover { background: var(--gold-lt); }
-.rowDownload:active { transform: scale(0.99); }
+.carpetaAgregar:hover { background: var(--navy-md); }
+.carpetaAgregar:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
 
-/* Eliminar (solo superadmin) */
-.rowDeleteBtn {
-  flex-shrink: 0;
-  width: 34px;
-  height: 40px;
-  background: transparent;
-  border: 1px solid rgba(192, 57, 43, 0.3);
-  color: #c0392b;
-  border-radius: 6px;
-  font-size: 14px;
-  font-weight: 700;
-  cursor: pointer;
+/* Las hojas, sobre la misma mesa punteada. */
+.hojas {
+  flex: 1 1 auto;
+  min-height: 0;
+  margin: 0;
+  padding: 30px 30px 36px;
+  list-style: none;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(212px, 1fr));
+  gap: 28px 24px;
+  align-content: start;
+  background-image: radial-gradient(rgba(109, 60, 27, 0.11) 1px, transparent 1.4px);
+  background-size: 22px 22px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(109, 60, 27, 0.35) transparent;
+}
+
+/* Cada hoja sale de la carpeta (desde arriba, girada) y se asienta con una
+   inclinación leve y propia, como papeles sueltos sobre la mesa. */
+.hojaItem {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  line-height: 1;
+  transform: rotate(var(--r, 0deg));
+  filter: drop-shadow(0 12px 18px rgba(71, 47, 41, 0.16)) drop-shadow(0 1px 1px rgba(71, 47, 41, 0.12));
+  animation: hojaSale 0.7s cubic-bezier(.34, 1.36, .5, 1) both;
+  animation-delay: calc(0.16s + var(--i, 0) * 45ms);
+}
+@keyframes hojaSale {
+  from { opacity: 0; transform: translateY(-70px) rotate(calc(var(--r, 0deg) - 7deg)) scale(0.92); }
+  to   { opacity: 1; transform: rotate(var(--r, 0deg)); }
+}
+
+/* La hoja: papel crema con la esquina superior doblada. */
+.hoja {
+  position: relative;
+  width: 100%;
+  min-height: 286px;
+  box-sizing: border-box;
+  padding: 22px 20px 18px;
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(180deg, #fffefa 0%, #f8f0e2 100%);
+  border-radius: 4px;
+  clip-path: polygon(0 0, calc(100% - 28px) 0, 100% 28px, 100% 100%, 0 100%);
+  transition: transform 0.4s cubic-bezier(.34, 1.36, .5, 1);
+}
+.hoja::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 28px;
+  height: 28px;
+  pointer-events: none;
+  background: linear-gradient(to bottom left, transparent 50%, #eadcc0 50%, #f4e9d4 100%);
+  border-bottom-left-radius: 4px;
+}
+.hojaItem:hover .hoja,
+.hojaItem:focus-within .hoja { transform: translateY(-6px) rotate(calc(var(--r, 0deg) * -1)); }
+
+/* Toda la hoja abre la vista previa; los controles van encima. */
+.hojaAbrir {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
   padding: 0;
-  transition: background 0.2s, color 0.2s, border-color 0.2s;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
 }
-.rowDeleteBtn:hover { background: #dc3545; color: #fff; border-color: #dc3545; }
+.hojaSellos,
+.hojaNombre,
+.hojaFilete,
+.hojaTexto,
+.hojaRenglones,
+.hojaAcciones,
+.hojaBorrar { position: relative; z-index: 1; }
+.hojaNombre,
+.hojaFilete,
+.hojaTexto,
+.hojaRenglones { pointer-events: none; }
 
-/* Skeleton de fila (listado cargando) */
-.rowSkeleton {
-  height: 72px;
-  border: 1px solid rgba(109,60,27, 0.08);
-  border-radius: 10px;
-  background: linear-gradient(90deg, var(--ivory) 0%, #f0e8d6 50%, var(--ivory) 100%);
-  background-size: 200% 100%;
-  animation: shimmer 1.4s linear infinite;
-}
-
-/* ══════════════════════════════════════════
-   LOAD MORE
-   ══════════════════════════════════════════ */
-.loadMoreWrap {
+.hojaSellos {
   display: flex;
   flex-wrap: wrap;
-  justify-content: center;
-  gap: 12px;
-  margin-top: 2.5rem;
+  gap: 6px;
+  padding-right: 22px;
+  pointer-events: none;
 }
-/* "Ver menos": la acción secundaria, sin borde dorado, para que "Ver más"
-   siga siendo la que llama. */
-.loadLessBtn {
-  border-color: rgba(109, 60, 27, 0.22);
-  color: var(--muted);
-}
-.loadLessBtn:hover {
-  background: rgba(109, 60, 27, 0.06);
-  font-weight: inherit;
-}
-.loadMoreBtn:focus-visible {
-  outline: 2px solid var(--gold);
-  outline-offset: 2px;
-}
-.loadMoreBtn {
-  background: transparent;
-  border: 1px solid var(--gold);
-  color: var(--navy);
-  padding: 12px 32px;
-  border-radius: 4px;
+.hojaSello,
+.hojaCategoria {
+  display: inline-block;
+  padding: 3px 10px 2px;
+  border-radius: 999px;
   font-family: 'Cinzel', serif;
-  font-size: 0.85rem;
-  letter-spacing: 0.06em;
-  cursor: pointer;
-  transition: background 0.2s, color 0.2s;
-  min-height: 44px;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  line-height: 1.5;
+  color: var(--gold-dk);
+  box-shadow: inset 0 0 0 1px rgba(201, 168, 76, 0.7);
 }
-.loadMoreBtn:hover {
-  background: var(--gold);
+.hojaCategoria {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--navy-md);
+  box-shadow: inset 0 0 0 1px rgba(109, 60, 27, 0.25);
+}
+.hojaNombre {
+  margin: 16px 0 0;
+  font-family: 'Poppins', sans-serif;
+  font-size: 0.98rem;
   font-weight: 600;
+  line-height: 1.35;
+  color: var(--navy);
+  text-wrap: balance;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
 }
-.loadMoreBtn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
+.hojaFilete {
+  display: block;
+  width: 36px;
+  height: 1.5px;
+  margin: 14px 0 12px;
+  background: var(--gold);
+}
+.hojaTexto {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.6;
+  color: var(--muted);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  overflow: hidden;
+}
+.hojaRenglones {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding-top: 4px;
+}
+.hojaRenglones i {
+  display: block;
+  height: 5px;
+  border-radius: 3px;
+  background: rgba(71, 47, 41, 0.09);
 }
 
-/* ══════════════════════════════════════════
-   SKELETON (shimmer dorado/ivory)
-   ══════════════════════════════════════════ */
-/* (el skeleton del listado es .rowSkeleton, definido arriba) */
-@keyframes shimmer {
-  0%   { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
+.hojaAcciones {
+  margin-top: auto;
+  padding-top: 18px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
 }
+.hojaVer,
+.hojaBajar {
+  min-height: 38px;
+  padding: 0 8px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-family: 'Poppins', sans-serif;
+  font-size: 0.74rem;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+.hojaVer {
+  border: 1px solid rgba(109, 60, 27, 0.28);
+  background: rgba(255, 255, 255, 0.7);
+  color: var(--navy);
+}
+.hojaVer:hover { border-color: var(--navy); background: #ffffff; }
+.hojaBajar {
+  border: 1px solid var(--gold);
+  background: var(--gold);
+  color: var(--navy);
+}
+.hojaBajar:hover { background: var(--gold-lt); border-color: var(--gold-lt); }
+.hojaVer:focus-visible,
+.hojaBajar:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.hojaVer svg,
+.hojaBajar svg { flex-shrink: 0; }
+
+/* Eliminar (admin): un botón pequeño junto a la esquina doblada. */
+.hojaBorrar {
+  position: absolute;
+  top: 14px;
+  right: 34px;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid rgba(192, 57, 43, 0.3);
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background: #ffffff;
+  color: #c0392b;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+.hojaBorrar:hover { background: #c0392b; color: #ffffff; }
+.hojaBorrar:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
 
 /* ══════════════════════════════════════════
    ESTADO VACÍO Y ERROR
@@ -365,8 +546,51 @@
 .error {
   text-align: center;
   color: #c33;
-  padding: 2rem 1rem;
+  padding: 0 1rem;
+  margin: 0;
   font-size: 0.9rem;
+}
+.reintentar {
+  min-height: 44px;
+  padding: 0 28px;
+  border: 1px solid var(--gold);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--navy);
+  font-family: 'Cinzel', serif;
+  font-size: 0.82rem;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+.reintentar:hover { background: rgba(201, 168, 76, 0.14); }
+.reintentar:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+
+/* Etiqueta de categoría (cabecera de la vista previa). */
+.cardCategoria {
+  display: inline-block;
+  width: max-content;
+  background: rgba(201, 168, 76, 0.13);
+  color: var(--gold-dk);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .carpetaFondo,
+  .carpetaPanel,
+  .hojaItem,
+  .esqueletoCarpeta { animation: none; }
+  .hoja,
+  .carpetaCerrar,
+  .carrilFlecha { transition: none; }
+  .hojaItem:hover .hoja,
+  .hojaItem:focus-within .hoja { transform: none; }
+  .carpetaCerrar:hover,
+  .carrilFlecha:hover { transform: none; }
 }
 
 /* ══════════════════════════════════════════
@@ -376,64 +600,53 @@
 /* Tablet */
 @media (max-width: 860px) {
   .section { padding: 5rem 1.5rem; }
+  .mesa { margin-inline: -1.5rem; }
 }
 
-/* Móvil — chips con scroll horizontal táctil */
+/* Móvil */
 @media (max-width: 600px) {
   .section { padding: 4rem 1rem; }
-  .filtersWrap { padding: 0; }
 
-  .filters {
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    overflow-y: hidden;
-    justify-content: flex-start;
-    padding: 0 1rem 4px;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;       /* Firefox */
-    -ms-overflow-style: none;    /* IE/Edge */
+  /* La cinta llega al borde de la pantalla: la carpeta siguiente asoma. */
+  .mesa { margin-inline: -1rem; }
+  .esqueletoCarril { justify-content: flex-start; padding-left: 1rem; }
+
+  /* La carpeta abierta ocupa la pantalla. */
+  .carpetaFondo { padding: 0; place-items: stretch; }
+  .carpetaPanel {
+    width: 100%;
+    max-height: none;
+    height: 100dvh;
+    border-radius: 0;
   }
-  .filters::-webkit-scrollbar { display: none; }
+  .carpetaHead { height: 128px; }
+  .carpetaPlaca { left: 16px; bottom: 14px; max-width: calc(100% - 32px); padding: 11px 18px 12px; }
+  .carpetaTitulo { font-size: 1.25rem; }
+  .carpetaAcciones { top: 12px; right: 12px; }
+  .carpetaAgregar { min-height: 38px; padding: 0 14px; font-size: 0.74rem; }
 
-  .chip { flex-shrink: 0; }
-
-  .list { padding: 0; gap: 8px; }
-
-  .row {
-    flex-wrap: wrap;
-    gap: 10px 14px;
-    padding: 14px 16px;
+  /* Dos hojas por fila, más bajas: sello, nombre y las dos acciones. */
+  .hojas {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px 12px;
+    padding: 20px 14px 28px;
   }
-
-  /* En móvil el nombre se ENVUELVE (hasta 2 líneas) en vez de cortarse con "…" */
-  .rowNombre {
-    white-space: normal;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-  }
-
-  /* Acciones a lo ancho, ambos botones exactamente del mismo tamaño */
-  .rowActions { width: 100%; gap: 10px; }
-  .rowPreview,
-  .rowDownload {
-    flex: 1 1 0;
-    min-width: 0;
-    justify-content: center;
-    font-size: 11px;
-    letter-spacing: 0.04em;
-    padding: 11px 8px;
-  }
+  .hoja { min-height: 232px; padding: 16px 12px 12px; clip-path: polygon(0 0, calc(100% - 20px) 0, 100% 20px, 100% 100%, 0 100%); }
+  .hoja::after { width: 20px; height: 20px; }
+  .hojaNombre { margin-top: 12px; font-size: 0.84rem; -webkit-line-clamp: 4; }
+  .hojaFilete { margin: 10px 0; }
+  .hojaTexto { display: none; }
+  .hojaRenglones { gap: 7px; }
+  .hojaAcciones { grid-template-columns: 1fr; gap: 6px; padding-top: 14px; }
+  .hojaVer,
+  .hojaBajar { min-height: 36px; font-size: 0.72rem; }
+  .hojaBorrar { top: 10px; right: 24px; width: 28px; height: 28px; }
 }
 
 /* Móvil pequeño */
 @media (max-width: 400px) {
   .section { padding: 3.5rem 0.85rem; }
-  .rowNombre { font-size: 14px; }
-  .row { padding: 13px 14px; gap: 10px 12px; }
-  .rowIcon { width: 40px; height: 40px; }
-  .rowIcon svg { width: 24px; height: 24px; }
+  .mesa { margin-inline: -0.85rem; }
 }
 
 /* ══════════════════════════════════════════
@@ -455,6 +668,9 @@
   font-weight: 700;
   font-size: 0.82rem;
   letter-spacing: 0.5px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   cursor: pointer;
   box-shadow: 0 4px 20px rgba(109,60,27,0.25);
   transition: transform 0.2s, box-shadow 0.2s;
@@ -470,12 +686,15 @@
 @media (max-width: 768px) {
   .fab {
     position: static;
-    display: block;
+    display: flex;
     margin: -1.5rem auto 2rem;   /* pegado al encabezado, antes de los filtros */
     width: fit-content;
   }
 }
 @media (prefers-reduced-motion: reduce) {
+  .esqueletoCarpeta { animation: none; }
+  .carrilFlecha { transition: none; }
+  .carrilFlecha:hover:not(:disabled) { transform: none; }
   .fab { transition: none; }
   .fab:hover { transform: none; }
 }
