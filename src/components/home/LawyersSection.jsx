@@ -37,14 +37,36 @@ const PUBLIC_COLS = [
   'instagram', 'linkedin', 'facebook', 'twitter', 'whatsapp', 'tiktok',
 ].join(',')
 
-/* Las tres listas del inicio. El visitante elige una en el selector y debajo
-   aparecen su carrusel y su ranking del mes, con sus propios filtros (nombre
-   y ubicación). */
+/* Las tres listas del inicio. El visitante elige una en el primer filtro (un
+   desplegable) y debajo aparecen su carrusel y su ranking del mes; los demás
+   filtros (nombre y ubicación) afinan esa lista. */
 const CARRILES = [
   { rol: 'abogado',  titulo: 'Abogados',   uno: 'abogado',  varios: 'abogados',   ninguno: 'Ningún abogado',  buscar: 'Buscar abogado por nombre' },
   { rol: 'contador', titulo: 'Contadores', uno: 'contador', varios: 'contadores', ninguno: 'Ningún contador', buscar: 'Buscar contador por nombre' },
   { rol: 'firma',    titulo: 'Firmas',     uno: 'firma',    varios: 'firmas',     ninguno: 'Ninguna firma',   buscar: 'Buscar firma o miembro de su equipo', femenino: true },
 ]
+
+/* Ícono del desplegable de profesión: balanza, calculadora o edificio de
+   columnas, en el mismo trazo que la lupa del buscador. */
+const ICONO_PROFESION = {
+  abogado: (
+    <>
+      <path d="M12 4.5V19M8.5 19.5h7M5 7.5h14" />
+      <path d="M5 7.5l-2.5 6M5 7.5l2.5 6M19 7.5l-2.5 6M19 7.5l2.5 6" />
+      <path d="M2.5 13.5a2.5 2.5 0 0 0 5 0M16.5 13.5a2.5 2.5 0 0 0 5 0" />
+    </>
+  ),
+  contador: (
+    <>
+      <rect x="5" y="3" width="14" height="18" rx="2.2" />
+      <path d="M8.5 7h7v3h-7z" />
+      <path d="M8.75 13.5h.01M12 13.5h.01M15.25 13.5h.01M8.75 17h.01M12 17h.01M15.25 17h.01" />
+    </>
+  ),
+  firma: (
+    <path d="M3.5 9L12 4.5 20.5 9M4.5 9h15M6.5 9v8M10 9v8M14 9v8M17.5 9v8M3.5 20h17M4.5 17h15" />
+  ),
+}
 
 const CARGANDO = { estado: 'cargando', lista: [] }
 
@@ -148,8 +170,8 @@ export default function LawyersSection() {
     }
   }, [isSuperAdmin])
 
-  // Los tres a la vez, en paralelo: así cambiar de opción en el selector es
-  // instantáneo, sin esperar la lista.
+  // Los tres a la vez, en paralelo: así cambiar de opción en el desplegable
+  // es instantáneo, sin esperar la lista.
   useEffect(() => {
     if (!shouldFetch) return
     for (const c of CARRILES) cargar(c.rol)
@@ -178,86 +200,41 @@ export default function LawyersSection() {
         </motion.p>
       </motion.div>
 
-      <SelectorProfesion activo={activo} onCambiar={setActivo} />
-
-      <div className={styles.carriles}>
-        {CARRILES.filter(c => c.rol === activo).map(c => (
-          <Carril
-            key={c.rol}
-            conf={c}
-            datos={datos[c.rol]}
-            isSuperAdmin={isSuperAdmin}
-            onReintentar={() => cargar(c.rol)}
-          />
-        ))}
-      </div>
+      {/* Sin key por profesión: la fila de filtros se queda montada al
+          cambiar de lista, y el desplegable no pierde el foco. */}
+      <Carril
+        conf={CARRILES.find(c => c.rol === activo)}
+        datos={datos[activo]}
+        isSuperAdmin={isSuperAdmin}
+        onCambiarRol={setActivo}
+        onReintentar={() => cargar(activo)}
+      />
     </section>
   )
 }
 
-/* ── Selector Abogados · Contadores · Firmas ─────────────────────────────
-   Pestañas (tablist): el fondo dorado se desliza hasta la opción elegida, y
-   las flechas del teclado, Inicio y Fin recorren las opciones. */
-function SelectorProfesion({ activo, onCambiar }) {
-  const reduce = useReducedMotion()
-  const botones = useRef({})
-  const mover = (e) => {
-    const i = CARRILES.findIndex(c => c.rol === activo)
-    const destino = {
-      ArrowRight: (i + 1) % CARRILES.length,
-      ArrowLeft: (i - 1 + CARRILES.length) % CARRILES.length,
-      Home: 0,
-      End: CARRILES.length - 1,
-    }[e.key]
-    if (destino === undefined) return
-    e.preventDefault()
-    const rol = CARRILES[destino].rol
-    onCambiar(rol)
-    botones.current[rol]?.focus()
-  }
-
-  return (
-    <div className={styles.selector} role="tablist" aria-label="Tipo de profesional" onKeyDown={mover}>
-      {CARRILES.map(c => {
-        const sel = c.rol === activo
-        return (
-          <button
-            key={c.rol}
-            ref={el => { botones.current[c.rol] = el }}
-            type="button"
-            role="tab"
-            id={`tab-${c.rol}`}
-            aria-selected={sel}
-            aria-controls={`panel-${c.rol}`}
-            tabIndex={sel ? 0 : -1}
-            className={`${styles.selectorBtn}${sel ? ` ${styles.selectorActivo}` : ''}`}
-            onClick={() => onCambiar(c.rol)}
-          >
-            {sel && (
-              <motion.span
-                layoutId="profesionActiva"
-                className={styles.selectorFondo}
-                transition={reduce ? { duration: 0 } : { type: 'spring', stiffness: 420, damping: 36 }}
-                aria-hidden="true"
-              />
-            )}
-            <span className={styles.selectorTexto}>{c.titulo}</span>
-          </button>
-        )
-      })}
-    </div>
-  )
-}
-
-/* ── Un carril: directorio (filtros + cinta) y podio del mes ───────────── */
-function Carril({ conf, datos, isSuperAdmin, onReintentar }) {
+/* ── El carril elegido: directorio (filtros + cinta) y podio del mes ───── */
+function Carril({ conf, datos, isSuperAdmin, onCambiarRol, onReintentar }) {
   const { rol, titulo, varios, ninguno } = conf
   const esFirmas = rol === 'firma'
   const [nombre, setNombre] = useState('')
   const [departamento, setDepartamento] = useState('')
   const [municipio, setMunicipio] = useState('')
   const [elegido, setElegido] = useState(null)   // abierto desde el podio
+  // La lista nueva entra con un fundido solo cuando el visitante cambió de
+  // profesión; la primera vez ya la presenta la entrada de la sección.
+  const [cambioRol, setCambioRol] = useState(false)
   const mes = mesRanking()
+
+  // Cambiar de profesión es el primer eslabón de la cascada, como el
+  // departamento lo es del municipio: la ubicación elegida se suelta (sus
+  // opciones salen de la otra lista) y el nombre escrito se conserva.
+  const cambiarRol = (nuevo) => {
+    setDepartamento('')
+    setMunicipio('')
+    setCambioRol(true)
+    onCambiarRol(nuevo)
+  }
 
   // El puesto se calcula sobre TODOS los del carril: filtrar por Antioquia no
   // convierte en "1.º" a quien va cuarto en el país. El podio tampoco se
@@ -342,27 +319,32 @@ function Carril({ conf, datos, isSuperAdmin, onReintentar }) {
   return (
     <motion.section
       className={styles.carril}
-      role="tabpanel"
-      id={`panel-${rol}`}
-      aria-labelledby={`tab-${rol}`}
+      aria-label={`Directorio de ${varios}`}
       aria-busy={datos.estado === 'cargando' || undefined}
       variants={fadeUp}
       initial="hidden"
       whileInView="visible"
       viewport={VIEWPORT}
     >
+      {/* Primero el directorio y después el podio, también en el DOM: en
+          escritorio quedan lado a lado (podio a la derecha) y en pantallas
+          angostas el ranking va debajo del carrusel. */}
       <div className={styles.carrilCuerpo}>
-        <PodioMes
-          items={podio}
-          mes={mes}
-          titulo={titulo}
-          esFirmas={esFirmas}
-          cargando={datos.estado === 'cargando'}
-          onAbrir={setElegido}
-        />
-
         <div className={styles.directorio}>
-      <div className={styles.filtros} role="search" aria-label={`Filtrar ${varios}`}>
+      <div className={styles.filtros} role="search" aria-label="Filtrar profesionales">
+        {/* El filtro que decide la lista: nunca se deshabilita, para poder
+            salir de una lista vacía o que no cargó. */}
+        <div className={`${styles.selectWrap} ${styles.profesion}`}>
+          <svg viewBox="0 0 24 24" aria-hidden="true">{ICONO_PROFESION[rol]}</svg>
+          <select
+            className={`${styles.filterSelect} ${styles.profesionSelect}`}
+            aria-label="Tipo de profesional"
+            value={rol}
+            onChange={e => cambiarRol(e.target.value)}
+          >
+            {CARRILES.map(c => <option key={c.rol} value={c.rol}>{c.titulo}</option>)}
+          </select>
+        </div>
         <label className={styles.buscar}>
           <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5" /><path d="M16 16l4.5 4.5" /></svg>
           <input
@@ -421,9 +403,25 @@ function Carril({ conf, datos, isSuperAdmin, onReintentar }) {
           </>
         )}
       </p>
+      {/* Quien no ve la cinta se entera de que la lista cambió. */}
+      <p className={styles.srOnly} aria-live="polite">
+        {cambioRol && listo ? `${total} ${total === 1 ? conf.uno : varios} en la red` : ''}
+      </p>
 
-      {cuerpo}
+      <div key={rol} className={`${styles.cuerpoLista}${cambioRol ? ` ${styles.aparece}` : ''}`}>
+        {cuerpo}
+      </div>
         </div>
+
+        <PodioMes
+          key={rol}
+          items={podio}
+          mes={mes}
+          titulo={titulo}
+          esFirmas={esFirmas}
+          cargando={datos.estado === 'cargando'}
+          onAbrir={setElegido}
+        />
       </div>
 
       {elegido && (esFirmas ? (

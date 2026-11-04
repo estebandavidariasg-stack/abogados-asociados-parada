@@ -49,76 +49,23 @@
 }
 
 /* ══════════════════════════════════════════
-   SELECTOR — Abogados · Contadores · Firmas
-   Un solo control segmentado; el fondo dorado se desliza a la opción
-   elegida (framer-motion, layoutId).
+   CARRIL — el de la profesión elegida: filtros + cinta y su podio del mes.
    ══════════════════════════════════════════ */
-.selector {
-  display: flex;
-  gap: 4px;
-  width: fit-content;
-  max-width: 100%;
-  box-sizing: border-box;
-  margin: 0 auto clamp(2.25rem, 4vw, 3rem);
-  padding: 5px;
-  border: 1px solid rgba(109, 60, 27, 0.16);
-  border-radius: 999px;
-  background: #fffdf8;
-  box-shadow: 0 10px 24px -16px rgba(71, 47, 41, 0.35);
-}
-.selectorBtn {
-  position: relative;
-  min-height: 44px;
-  padding: 0 28px;
-  border: 0;
-  border-radius: 999px;
-  background: transparent;
-  font-family: 'Cinzel', serif;
-  font-size: 0.82rem;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  color: var(--navy);
-  cursor: pointer;
-  white-space: nowrap;
-  -webkit-tap-highlight-color: transparent;
-  touch-action: manipulation;
-  transition: background-color 0.2s ease, color 0.2s ease;
-}
-.selectorBtn:not(.selectorActivo):hover { background: rgba(201, 168, 76, 0.12); }
-.selectorBtn:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
-.selectorActivo { font-weight: 700; }
-.selectorFondo {
-  position: absolute;
-  inset: 0;
-  border-radius: 999px;
-  background: var(--gold);
-  box-shadow: 0 6px 14px -6px rgba(201, 168, 76, 0.75);
-}
-.selectorTexto { position: relative; z-index: 1; }
-
-/* ══════════════════════════════════════════
-   CARRIL — el de la opción elegida: filtros + cinta y su podio del mes.
-   ══════════════════════════════════════════ */
-.carriles {
+.carril {
   max-width: 1200px;
+  min-width: 0;
   margin: 0 auto;
-  display: flex;
-  flex-direction: column;
-  gap: clamp(3.5rem, 7vw, 5.5rem);
 }
-
-.carril { min-width: 0; }
 
 /* La franja: el directorio (lo que se viene a hacer) a la izquierda y el
    podio del mes a la derecha, a la misma altura. En pantallas angostas el
-   podio va arriba (va primero en el DOM). */
+   podio va debajo del carrusel (es el orden del DOM). */
 .carrilCuerpo {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(330px, 390px);
   gap: clamp(20px, 2.6vw, 34px);
   align-items: stretch;
 }
-.carrilCuerpo > .podio { order: 2; }
 .directorio {
   min-width: 0;
   display: flex;
@@ -365,11 +312,12 @@
 }
 
 /* ══════════════════════════════════════════
-   FILTROS — nombre, departamento, municipio/localidad
+   FILTROS — profesión, nombre, departamento, municipio/localidad
+   Dos por fila: profesión y nombre arriba, la ubicación debajo.
    ══════════════════════════════════════════ */
 .filtros {
   display: grid;
-  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 10px;
 }
 
@@ -467,6 +415,69 @@
 .filterSelect optgroup {
   background: #ffffff;
   color: var(--navy);
+}
+
+/* El desplegable de profesión: el filtro que decide qué lista se ve. Mismo
+   alto y misma flecha que los demás, con la voz de los títulos (Cinzel), el
+   fondo crema y el filete dorado que lo ponen primero. */
+.profesion svg {
+  position: absolute;
+  left: 13px;
+  top: 50%;
+  z-index: 1;
+  width: 18px;
+  height: 18px;
+  transform: translateY(-50%);
+  fill: none;
+  stroke: var(--gold-dk);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+.filterSelect.profesionSelect {
+  padding-left: 42px;
+  border-color: rgba(201, 168, 76, 0.85);
+  background: #fffaf0;
+  font-family: 'Cinzel', serif;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  box-shadow: 0 8px 18px -14px rgba(71, 47, 41, 0.45);
+}
+.filterSelect.profesionSelect:hover {
+  border-color: var(--gold);
+  background: #fff5e2;
+}
+.filterSelect.profesionSelect:focus {
+  border-color: var(--navy-md);
+  box-shadow: 0 0 0 3px rgba(201, 168, 76, 0.28), 0 8px 18px -14px rgba(71, 47, 41, 0.45);
+}
+/* La lista que abre el sistema, en la letra del cuerpo. */
+.filterSelect.profesionSelect option {
+  font-family: 'Poppins', sans-serif;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+
+/* Al cambiar de profesión la lista nueva sube con un fundido corto. Solo
+   "backwards": terminado, no deja transform en el contenedor. */
+.aparece { animation: aparece 0.45s cubic-bezier(0.16, 1, 0.3, 1) backwards; }
+@keyframes aparece {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: none; }
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 /* Cuántos coinciden + limpiar. Reserva su renglón para que la cinta no
@@ -679,31 +690,30 @@
   .cintaArrow { transition: none; }
   .cintaArrow:hover { transform: none; }
   .esqCirculo, .esqLinea, .esqLineaCorta { animation: none; }
+  .aparece { animation: none; }
 }
 
 /* ══════════════════════════════════════════
    RESPONSIVE
    ══════════════════════════════════════════ */
 
-/* Tablet */
+/* Tablet: una sola columna, primero el carrusel y debajo el ranking. */
 @media (max-width: 1000px) {
-  .carrilCuerpo { grid-template-columns: minmax(0, 1fr); }
-  .carrilCuerpo > .podio { order: 0; }
+  .carrilCuerpo { grid-template-columns: minmax(0, 1fr); row-gap: clamp(2.25rem, 7vw, 3rem); }
   .podio { max-width: 520px; width: 100%; margin: 0 auto; box-sizing: border-box; }
 }
 
 @media (max-width: 860px) {
   .section { padding: 5rem 1.5rem; }
-  .filtros { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
-  .buscar { grid-column: 1 / -1; }
 }
 
 /* Móvil */
 @media (max-width: 600px) {
   .section { padding: 4rem 1rem; }
   .header { margin-bottom: 3rem; }
-  .selector { width: 100%; }
-  .selectorBtn { flex: 1 1 0; min-width: 0; padding: 0 6px; font-size: 0.74rem; letter-spacing: 0.04em; }
+  /* Profesión y nombre a todo el ancho; la ubicación, de a dos. */
+  .profesion,
+  .buscar { grid-column: 1 / -1; }
   .first  .avatar, .first  .avatarInitials, .first  .avatarLibre { width: 80px; height: 80px; }
   .second .avatar, .second .avatarInitials, .second .avatarLibre,
   .third  .avatar, .third  .avatarInitials, .third  .avatarLibre { width: 60px; height: 60px; }
