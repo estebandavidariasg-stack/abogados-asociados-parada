@@ -37,36 +37,14 @@ const PUBLIC_COLS = [
   'instagram', 'linkedin', 'facebook', 'twitter', 'whatsapp', 'tiktok',
 ].join(',')
 
-/* Las tres listas del inicio. El visitante elige una en el primer filtro (un
-   desplegable) y debajo aparecen su carrusel y su ranking del mes; los demás
-   filtros (nombre y ubicación) afinan esa lista. */
+/* Las tres listas del inicio. El visitante elige una en el selector de arriba
+   y debajo aparecen su carrusel y su ranking del mes; los filtros (nombre,
+   ubicación y especialidad) afinan esa lista. */
 const CARRILES = [
   { rol: 'abogado',  titulo: 'Abogados',   uno: 'abogado',  varios: 'abogados',   ninguno: 'Ningún abogado',  buscar: 'Buscar abogado por nombre' },
   { rol: 'contador', titulo: 'Contadores', uno: 'contador', varios: 'contadores', ninguno: 'Ningún contador', buscar: 'Buscar contador por nombre' },
   { rol: 'firma',    titulo: 'Firmas',     uno: 'firma',    varios: 'firmas',     ninguno: 'Ninguna firma',   buscar: 'Buscar firma o miembro de su equipo', femenino: true },
 ]
-
-/* Ícono del desplegable de profesión: balanza, calculadora o edificio de
-   columnas, en el mismo trazo que la lupa del buscador. */
-const ICONO_PROFESION = {
-  abogado: (
-    <>
-      <path d="M12 4.5V19M8.5 19.5h7M5 7.5h14" />
-      <path d="M5 7.5l-2.5 6M5 7.5l2.5 6M19 7.5l-2.5 6M19 7.5l2.5 6" />
-      <path d="M2.5 13.5a2.5 2.5 0 0 0 5 0M16.5 13.5a2.5 2.5 0 0 0 5 0" />
-    </>
-  ),
-  contador: (
-    <>
-      <rect x="5" y="3" width="14" height="18" rx="2.2" />
-      <path d="M8.5 7h7v3h-7z" />
-      <path d="M8.75 13.5h.01M12 13.5h.01M15.25 13.5h.01M8.75 17h.01M12 17h.01M15.25 17h.01" />
-    </>
-  ),
-  firma: (
-    <path d="M3.5 9L12 4.5 20.5 9M4.5 9h15M6.5 9v8M10 9v8M14 9v8M17.5 9v8M3.5 20h17M4.5 17h15" />
-  ),
-}
 
 const CARGANDO = { estado: 'cargando', lista: [] }
 
@@ -79,6 +57,16 @@ function textoDeBusqueda(p, esFirma) {
   const partes = [p.nombre, p.apellido]
   if (esFirma) for (const m of [p.director, ...(p.miembros || [])]) if (m) partes.push(m.nombre, m.apellido)
   return plano(partes.filter(Boolean).join(' '))
+}
+
+// Especialidades de un perfil: `area_derecho` es la lista separada por comas
+// (áreas del derecho o contables, según el rol). Una firma ofrece también las
+// de su Director y sus aliados: quien busca "Derecho Penal" encuentra la firma
+// que tiene un penalista.
+function areasDe(p, esFirma) {
+  const fuentes = [p.area_derecho]
+  if (esFirma) for (const m of [p.director, ...(p.miembros || [])]) if (m) fuentes.push(m.area_derecho)
+  return fuentes.flatMap(t => String(t || '').split(',')).map(a => a.trim()).filter(Boolean)
 }
 
 const porNombre = (a, b) => a.localeCompare(b, 'es')
@@ -170,8 +158,8 @@ export default function LawyersSection() {
     }
   }, [isSuperAdmin])
 
-  // Los tres a la vez, en paralelo: así cambiar de opción en el desplegable
-  // es instantáneo, sin esperar la lista.
+  // Los tres a la vez, en paralelo: así cambiar de opción en el selector es
+  // instantáneo, sin esperar la lista.
   useEffect(() => {
     if (!shouldFetch) return
     for (const c of CARRILES) cargar(c.rol)
@@ -200,8 +188,9 @@ export default function LawyersSection() {
         </motion.p>
       </motion.div>
 
-      {/* Sin key por profesión: la fila de filtros se queda montada al
-          cambiar de lista, y el desplegable no pierde el foco. */}
+      {/* Sin key por profesión: el selector y los filtros se quedan montados
+          al cambiar de lista (el fondo dorado se desliza y el foco no se
+          pierde). */}
       <Carril
         conf={CARRILES.find(c => c.rol === activo)}
         datos={datos[activo]}
@@ -213,6 +202,60 @@ export default function LawyersSection() {
   )
 }
 
+/* ── Selector Abogados · Contadores · Firmas ─────────────────────────────
+   Pestañas (tablist): el fondo dorado se desliza hasta la opción elegida, y
+   las flechas del teclado, Inicio y Fin recorren las opciones. */
+function SelectorProfesion({ activo, onCambiar }) {
+  const reduce = useReducedMotion()
+  const botones = useRef({})
+  const mover = (e) => {
+    const i = CARRILES.findIndex(c => c.rol === activo)
+    const destino = {
+      ArrowRight: (i + 1) % CARRILES.length,
+      ArrowLeft: (i - 1 + CARRILES.length) % CARRILES.length,
+      Home: 0,
+      End: CARRILES.length - 1,
+    }[e.key]
+    if (destino === undefined) return
+    e.preventDefault()
+    const rol = CARRILES[destino].rol
+    if (rol !== activo) onCambiar(rol)
+    botones.current[rol]?.focus()
+  }
+
+  return (
+    <div className={styles.selector} role="tablist" aria-label="Tipo de profesional" onKeyDown={mover}>
+      {CARRILES.map(c => {
+        const sel = c.rol === activo
+        return (
+          <button
+            key={c.rol}
+            ref={el => { botones.current[c.rol] = el }}
+            type="button"
+            role="tab"
+            id={`tab-${c.rol}`}
+            aria-selected={sel}
+            aria-controls="panel-profesionales"
+            tabIndex={sel ? 0 : -1}
+            className={`${styles.selectorBtn}${sel ? ` ${styles.selectorActivo}` : ''}`}
+            onClick={() => { if (!sel) onCambiar(c.rol) }}
+          >
+            {sel && (
+              <motion.span
+                layoutId="profesionActiva"
+                className={styles.selectorFondo}
+                transition={reduce ? { duration: 0 } : { type: 'spring', stiffness: 420, damping: 36 }}
+                aria-hidden="true"
+              />
+            )}
+            <span className={styles.selectorTexto}>{c.titulo}</span>
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
 /* ── El carril elegido: directorio (filtros + cinta) y podio del mes ───── */
 function Carril({ conf, datos, isSuperAdmin, onCambiarRol, onReintentar }) {
   const { rol, titulo, varios, ninguno } = conf
@@ -220,18 +263,19 @@ function Carril({ conf, datos, isSuperAdmin, onCambiarRol, onReintentar }) {
   const [nombre, setNombre] = useState('')
   const [departamento, setDepartamento] = useState('')
   const [municipio, setMunicipio] = useState('')
+  const [especialidad, setEspecialidad] = useState('')
   const [elegido, setElegido] = useState(null)   // abierto desde el podio
   // La lista nueva entra con un fundido solo cuando el visitante cambió de
   // profesión; la primera vez ya la presenta la entrada de la sección.
   const [cambioRol, setCambioRol] = useState(false)
   const mes = mesRanking()
 
-  // Cambiar de profesión es el primer eslabón de la cascada, como el
-  // departamento lo es del municipio: la ubicación elegida se suelta (sus
-  // opciones salen de la otra lista) y el nombre escrito se conserva.
+  // Cambiar de profesión suelta la ubicación y la especialidad (sus opciones
+  // salen de la otra lista); el nombre escrito se conserva.
   const cambiarRol = (nuevo) => {
     setDepartamento('')
     setMunicipio('')
+    setEspecialidad('')
     setCambioRol(true)
     onCambiarRol(nuevo)
   }
@@ -259,6 +303,29 @@ function Carril({ conf, datos, isSuperAdmin, onCambiarRol, onReintentar }) {
   const fueraDeBogota = departamento ? [] : municipios.filter(c => !localidadesBogota.includes(c))
   const esLocalidad = esDeptoBogota(departamento)
 
+  // Cuarto eslabón de la cascada: las especialidades que ofrece la gente de la
+  // ubicación elegida (todas las del carril si no hay ubicación). Sin
+  // repetidos aunque cambien tildes o mayúsculas.
+  const especialidadesEn = useCallback((depto, muni) => {
+    const vistas = new Map()
+    for (const p of ranking) {
+      if (depto && p.departamento !== depto) continue
+      if (muni && p.ciudad !== muni) continue
+      for (const a of areasDe(p, esFirmas)) if (!vistas.has(plano(a))) vistas.set(plano(a), a)
+    }
+    return [...vistas.values()].sort(porNombre)
+  }, [ranking, esFirmas])
+  const especialidades = useMemo(
+    () => especialidadesEn(departamento, municipio),
+    [especialidadesEn, departamento, municipio])
+  // Al mover la ubicación, la especialidad elegida se conserva si allí hay
+  // quien la ofrezca; si no, se suelta (no deja la lista vacía a escondidas).
+  const ajustarEspecialidad = (depto, muni) => {
+    if (especialidad && !especialidadesEn(depto, muni).some(a => plano(a) === plano(especialidad))) {
+      setEspecialidad('')
+    }
+  }
+
   const palabras = plano(nombre).split(/\s+/).filter(Boolean)
   const filtrada = ranking.filter(p => {
     if (palabras.length) {
@@ -267,10 +334,11 @@ function Carril({ conf, datos, isSuperAdmin, onCambiarRol, onReintentar }) {
     }
     if (departamento && p.departamento !== departamento) return false
     if (municipio && p.ciudad !== municipio) return false
+    if (especialidad && !areasDe(p, esFirmas).some(a => plano(a) === plano(especialidad))) return false
     return true
   })
-  const hayFiltros = palabras.length > 0 || !!departamento || !!municipio
-  const limpiar = () => { setNombre(''); setDepartamento(''); setMunicipio('') }
+  const hayFiltros = palabras.length > 0 || !!departamento || !!municipio || !!especialidad
+  const limpiar = () => { setNombre(''); setDepartamento(''); setMunicipio(''); setEspecialidad('') }
 
   const listo = datos.estado === 'listo'
   const total = datos.lista.length
@@ -311,7 +379,7 @@ function Carril({ conf, datos, isSuperAdmin, onCambiarRol, onReintentar }) {
         calm={hayFiltros}
         firmas={esFirmas}
         varios={varios}
-        reinicio={`${palabras.join(' ')}|${departamento}|${municipio}`}
+        reinicio={`${palabras.join(' ')}|${departamento}|${municipio}|${especialidad}`}
       />
     )
   }
@@ -326,25 +394,16 @@ function Carril({ conf, datos, isSuperAdmin, onCambiarRol, onReintentar }) {
       whileInView="visible"
       viewport={VIEWPORT}
     >
+      {/* Nunca se deshabilita: sirve para salir de una lista vacía o que no
+          cargó. */}
+      <SelectorProfesion activo={rol} onCambiar={cambiarRol} />
+
       {/* Primero el directorio y después el podio, también en el DOM: en
           escritorio quedan lado a lado (podio a la derecha) y en pantallas
           angostas el ranking va debajo del carrusel. */}
-      <div className={styles.carrilCuerpo}>
+      <div className={styles.carrilCuerpo} role="tabpanel" id="panel-profesionales" aria-labelledby={`tab-${rol}`}>
         <div className={styles.directorio}>
-      <div className={styles.filtros} role="search" aria-label="Filtrar profesionales">
-        {/* El filtro que decide la lista: nunca se deshabilita, para poder
-            salir de una lista vacía o que no cargó. */}
-        <div className={`${styles.selectWrap} ${styles.profesion}`}>
-          <svg viewBox="0 0 24 24" aria-hidden="true">{ICONO_PROFESION[rol]}</svg>
-          <select
-            className={`${styles.filterSelect} ${styles.profesionSelect}`}
-            aria-label="Tipo de profesional"
-            value={rol}
-            onChange={e => cambiarRol(e.target.value)}
-          >
-            {CARRILES.map(c => <option key={c.rol} value={c.rol}>{c.titulo}</option>)}
-          </select>
-        </div>
+      <div className={styles.filtros} role="search" aria-label={`Filtrar ${varios}`}>
         <label className={styles.buscar}>
           <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5" /><path d="M16 16l4.5 4.5" /></svg>
           <input
@@ -364,7 +423,11 @@ function Carril({ conf, datos, isSuperAdmin, onCambiarRol, onReintentar }) {
             className={styles.filterSelect}
             aria-label="Departamento"
             value={departamento}
-            onChange={e => { setDepartamento(e.target.value); setMunicipio('') }}
+            onChange={e => {
+              setDepartamento(e.target.value)
+              setMunicipio('')
+              ajustarEspecialidad(e.target.value, '')
+            }}
             disabled={sinControles}
           >
             <option value="">Departamento</option>
@@ -376,7 +439,10 @@ function Carril({ conf, datos, isSuperAdmin, onCambiarRol, onReintentar }) {
             className={styles.filterSelect}
             aria-label={esLocalidad ? 'Localidad' : 'Municipio o localidad'}
             value={municipio}
-            onChange={e => setMunicipio(e.target.value)}
+            onChange={e => {
+              setMunicipio(e.target.value)
+              ajustarEspecialidad(departamento, e.target.value)
+            }}
             disabled={sinControles}
           >
             <option value="">{esLocalidad ? 'Localidad' : 'Municipio'}</option>
@@ -390,6 +456,20 @@ function Carril({ conf, datos, isSuperAdmin, onCambiarRol, onReintentar }) {
                     </optgroup>
                   )}
                 </>}
+          </select>
+        </div>
+        <div className={`${styles.selectWrap} ${styles.especialidad}`}>
+          <select
+            className={styles.filterSelect}
+            aria-label={departamento || municipio
+              ? `Especialidad en ${municipio || departamento}`
+              : 'Especialidad'}
+            value={especialidad}
+            onChange={e => setEspecialidad(e.target.value)}
+            disabled={sinControles || especialidades.length === 0}
+          >
+            <option value="">Especialidad</option>
+            {especialidades.map(a => <option key={a} value={a}>{a}</option>)}
           </select>
         </div>
       </div>
