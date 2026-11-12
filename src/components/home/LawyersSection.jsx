@@ -39,7 +39,7 @@ const PUBLIC_COLS = [
 
 /* Las tres listas del inicio. El visitante elige una en el selector de arriba
    y debajo aparecen su carrusel y su ranking del mes; los filtros (nombre,
-   ubicación y especialidad) afinan esa lista. */
+   especialidad y ubicación) afinan esa lista. */
 const CARRILES = [
   { rol: 'abogado',  titulo: 'Abogados',   uno: 'abogado',  varios: 'abogados',   ninguno: 'Ningún abogado',  buscar: 'Buscar abogado por nombre' },
   { rol: 'contador', titulo: 'Contadores', uno: 'contador', varios: 'contadores', ninguno: 'Ningún contador', buscar: 'Buscar contador por nombre' },
@@ -270,7 +270,7 @@ function Carril({ conf, datos, isSuperAdmin, onCambiarRol, onReintentar }) {
   const [cambioRol, setCambioRol] = useState(false)
   const mes = mesRanking()
 
-  // Cambiar de profesión suelta la ubicación y la especialidad (sus opciones
+  // Cambiar de profesión suelta la especialidad y la ubicación (sus opciones
   // salen de la otra lista); el nombre escrito se conserva.
   const cambiarRol = (nuevo) => {
     setDepartamento('')
@@ -286,55 +286,61 @@ function Carril({ conf, datos, isSuperAdmin, onCambiarRol, onReintentar }) {
   const ranking = useMemo(() => ordenarPorRanking(datos.lista), [datos.lista])
   const podio = ranking.filter(p => p.puesto).slice(0, 3)
 
-  const departamentos = useMemo(
-    () => [...new Set(ranking.map(p => p.departamento).filter(Boolean))].sort(porNombre),
-    [ranking])
-  const municipios = useMemo(
-    () => [...new Set(ranking.map(p => p.ciudad).filter(Boolean))].sort(porNombre),
-    [ranking])
-  // Opciones del tercer filtro. En Bogotá D.C. son LOCALIDADES; sin
-  // departamento elegido van en su propio grupo para que "Engativá" no se
-  // lea como un municipio más al lado de "Medellín".
-  const delDepto = departamento
-    ? municipios.filter(c => ranking.some(p => p.departamento === departamento && p.ciudad === c))
-    : []
-  const localidadesBogota = departamento ? [] : municipios.filter(c =>
-    ranking.some(p => p.ciudad === c && etiquetaCiudad(p.departamento, c) === 'Localidad'))
-  const fueraDeBogota = departamento ? [] : municipios.filter(c => !localidadesBogota.includes(c))
-  const esLocalidad = esDeptoBogota(departamento)
-
-  // Cuarto eslabón de la cascada: las especialidades que ofrece la gente de la
-  // ubicación elegida (todas las del carril si no hay ubicación). Sin
+  // Primer eslabón de la cascada: la especialidad. Elegida sola, muestra a
+  // todos los del país que la ofrecen, en el orden del ranking; departamento y
+  // municipio solo ofrecen los lugares donde hay alguien con ella. Sin
   // repetidos aunque cambien tildes o mayúsculas.
-  const especialidadesEn = useCallback((depto, muni) => {
+  const especialidades = useMemo(() => {
     const vistas = new Map()
-    for (const p of ranking) {
-      if (depto && p.departamento !== depto) continue
-      if (muni && p.ciudad !== muni) continue
-      for (const a of areasDe(p, esFirmas)) if (!vistas.has(plano(a))) vistas.set(plano(a), a)
-    }
+    for (const p of ranking) for (const a of areasDe(p, esFirmas)) if (!vistas.has(plano(a))) vistas.set(plano(a), a)
     return [...vistas.values()].sort(porNombre)
   }, [ranking, esFirmas])
-  const especialidades = useMemo(
-    () => especialidadesEn(departamento, municipio),
-    [especialidadesEn, departamento, municipio])
-  // Al mover la ubicación, la especialidad elegida se conserva si allí hay
-  // quien la ofrezca; si no, se suelta (no deja la lista vacía a escondidas).
-  const ajustarEspecialidad = (depto, muni) => {
-    if (especialidad && !especialidadesEn(depto, muni).some(a => plano(a) === plano(especialidad))) {
-      setEspecialidad('')
+  const ofrece = useCallback(
+    (p, esp) => !esp || areasDe(p, esFirmas).some(a => plano(a) === plano(esp)),
+    [esFirmas])
+  const conEspecialidad = useMemo(
+    () => ranking.filter(p => ofrece(p, especialidad)),
+    [ranking, ofrece, especialidad])
+
+  // Al cambiar de especialidad, la ubicación elegida se conserva si allí hay
+  // quien ofrezca la nueva; si no, se suelta (un departamento sin nadie ya no
+  // está entre las opciones).
+  const cambiarEspecialidad = (esp) => {
+    setEspecialidad(esp)
+    const hay = (en) => ranking.some(p => ofrece(p, esp) && en(p))
+    if (departamento && !hay(p => p.departamento === departamento)) {
+      setDepartamento('')
+      setMunicipio('')
+    } else if (municipio && !hay(p => p.ciudad === municipio && (!departamento || p.departamento === departamento))) {
+      setMunicipio('')
     }
   }
 
+  const departamentos = useMemo(
+    () => [...new Set(conEspecialidad.map(p => p.departamento).filter(Boolean))].sort(porNombre),
+    [conEspecialidad])
+  const municipios = useMemo(
+    () => [...new Set(conEspecialidad.map(p => p.ciudad).filter(Boolean))].sort(porNombre),
+    [conEspecialidad])
+  // Opciones del municipio. En Bogotá D.C. son LOCALIDADES; sin departamento
+  // elegido van en su propio grupo para que "Engativá" no se lea como un
+  // municipio más al lado de "Medellín".
+  const delDepto = departamento
+    ? municipios.filter(c => conEspecialidad.some(p => p.departamento === departamento && p.ciudad === c))
+    : []
+  const localidadesBogota = departamento ? [] : municipios.filter(c =>
+    conEspecialidad.some(p => p.ciudad === c && etiquetaCiudad(p.departamento, c) === 'Localidad'))
+  const fueraDeBogota = departamento ? [] : municipios.filter(c => !localidadesBogota.includes(c))
+  const esLocalidad = esDeptoBogota(departamento)
+
   const palabras = plano(nombre).split(/\s+/).filter(Boolean)
-  const filtrada = ranking.filter(p => {
+  const filtrada = conEspecialidad.filter(p => {
     if (palabras.length) {
       const texto = textoDeBusqueda(p, esFirmas)
       if (!palabras.every(w => texto.includes(w))) return false
     }
     if (departamento && p.departamento !== departamento) return false
     if (municipio && p.ciudad !== municipio) return false
-    if (especialidad && !areasDe(p, esFirmas).some(a => plano(a) === plano(especialidad))) return false
     return true
   })
   const hayFiltros = palabras.length > 0 || !!departamento || !!municipio || !!especialidad
@@ -379,7 +385,7 @@ function Carril({ conf, datos, isSuperAdmin, onCambiarRol, onReintentar }) {
         calm={hayFiltros}
         firmas={esFirmas}
         varios={varios}
-        reinicio={`${palabras.join(' ')}|${departamento}|${municipio}|${especialidad}`}
+        reinicio={`${especialidad}|${palabras.join(' ')}|${departamento}|${municipio}`}
       />
     )
   }
@@ -418,16 +424,24 @@ function Carril({ conf, datos, isSuperAdmin, onCambiarRol, onReintentar }) {
             enterKeyHint="search"
           />
         </label>
+        <div className={`${styles.selectWrap} ${styles.especialidad}`}>
+          <select
+            className={styles.filterSelect}
+            aria-label="Especialidad"
+            value={especialidad}
+            onChange={e => cambiarEspecialidad(e.target.value)}
+            disabled={sinControles || especialidades.length === 0}
+          >
+            <option value="">Especialidad</option>
+            {especialidades.map(a => <option key={a} value={a}>{a}</option>)}
+          </select>
+        </div>
         <div className={styles.selectWrap}>
           <select
             className={styles.filterSelect}
             aria-label="Departamento"
             value={departamento}
-            onChange={e => {
-              setDepartamento(e.target.value)
-              setMunicipio('')
-              ajustarEspecialidad(e.target.value, '')
-            }}
+            onChange={e => { setDepartamento(e.target.value); setMunicipio('') }}
             disabled={sinControles}
           >
             <option value="">Departamento</option>
@@ -439,10 +453,7 @@ function Carril({ conf, datos, isSuperAdmin, onCambiarRol, onReintentar }) {
             className={styles.filterSelect}
             aria-label={esLocalidad ? 'Localidad' : 'Municipio o localidad'}
             value={municipio}
-            onChange={e => {
-              setMunicipio(e.target.value)
-              ajustarEspecialidad(departamento, e.target.value)
-            }}
+            onChange={e => setMunicipio(e.target.value)}
             disabled={sinControles}
           >
             <option value="">{esLocalidad ? 'Localidad' : 'Municipio'}</option>
@@ -456,20 +467,6 @@ function Carril({ conf, datos, isSuperAdmin, onCambiarRol, onReintentar }) {
                     </optgroup>
                   )}
                 </>}
-          </select>
-        </div>
-        <div className={`${styles.selectWrap} ${styles.especialidad}`}>
-          <select
-            className={styles.filterSelect}
-            aria-label={departamento || municipio
-              ? `Especialidad en ${municipio || departamento}`
-              : 'Especialidad'}
-            value={especialidad}
-            onChange={e => setEspecialidad(e.target.value)}
-            disabled={sinControles || especialidades.length === 0}
-          >
-            <option value="">Especialidad</option>
-            {especialidades.map(a => <option key={a} value={a}>{a}</option>)}
           </select>
         </div>
       </div>

@@ -360,9 +360,9 @@
 }
 
 /* ══════════════════════════════════════════
-   FILTROS — nombre, departamento, municipio/localidad, especialidad
+   FILTROS — nombre, especialidad, departamento, municipio/localidad
    El nombre a todo el ancho; debajo la cascada en el orden en que se
-   elige: departamento → municipio → especialidad.
+   elige: especialidad → departamento → municipio.
    ══════════════════════════════════════════ */
 .filtros {
   display: grid;
